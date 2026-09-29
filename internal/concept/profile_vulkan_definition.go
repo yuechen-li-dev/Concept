@@ -1,25 +1,18 @@
 package concept
 
+// The Vulkan profile no longer adds builtins: Vulkan handles are
+// `extern "C" handle` declarations and VkResult mapping lives in
+// libraries/Vulkan. What remains is the domain-import admission, pending
+// the VK9 decision on the profile itself.
 func evt1NewVulkanProfileDefinition() ProfileDefinition {
-	builtinTypes := evt1CoreBuiltinDefinitions()
-	builtinTypes["VulkanError"] = BuiltinTypeDefinition{
-		Name:         "VulkanError",
-		CType:        "concept_vulkan_error",
-		CDeclaration: "typedef struct concept_vulkan_error {\n  int Code;\n} concept_vulkan_error;\n",
-		Fields: map[string]Type{
-			"Code": {Name: "int", Kind: TypeBuiltin},
-		},
-	}
 	return ProfileDefinition{
 		Name:         "Vulkan",
-		BuiltinTypes: builtinTypes,
+		BuiltinTypes: evt1CoreBuiltinDefinitions(),
 		BuiltinEnums: []EnumDecl{
 			evt1BuiltinStepOutcomeEnum(),
 			evt1BuiltinNumericCastErrorEnum(),
 		},
-		AdmittedImports: map[string]struct{}{
-			"Prometheus.Vulkan": {},
-		},
+		AdmittedImports:    map[string]struct{}{},
 		AllowDomainImports: true,
 	}
 }

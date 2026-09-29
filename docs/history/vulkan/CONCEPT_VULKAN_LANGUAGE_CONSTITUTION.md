@@ -1,3 +1,11 @@
+> **Historical.** Superseded by the Concept Vulkan reconciliation
+> (`docs/design/CONCEPT-VULKAN-RECONCILIATION-LADDER.md`). What survived:
+> step machines with `on` input reactions, `terminal state`, and
+> `StepOutcome` in Core; effects as a `Standard.Collection.Outbox`;
+> `extern "C" handle`; and `libraries/Vulkan`. The signal dialect, effect
+> system, actuators, and Vulkan builtin types were removed. See
+> `docs/library/VULKAN.md`.
+
 # Concept/Vulkan language constitution
 
 Status: **normative EVT1 M1B-D constitution in success state; kernel-54 proof accepted; payload enums, exhaustive match, mutable structs, named concept requirements, constrained template monomorphization, bounded pure comptime evaluation, foundational control flow, fixed-size compile-time arrays, and finite structural validation implemented; the current worktree now carries an experimental DragonGod M3 typed-automata control-and-effect vertical with fixed local instances, one exact optional borrowed context binding, guarded candidates, explicit fallback, deterministic ambiguity reporting, ordered typed effect emission, and strict-C11 lowering; production remains handwritten**

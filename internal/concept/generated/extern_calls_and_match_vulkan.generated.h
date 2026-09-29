@@ -5,12 +5,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct concept_vulkan_error {
-  int Code;
-} concept_vulkan_error;
-
 typedef struct VkPipelineLayout_T* concept_vk_pipeline_layout;
 typedef struct VkPipeline_T* concept_vk_pipeline;
+typedef struct concept_vulkan_error {
+  int32_t Code;
+} concept_vulkan_error;
+
 typedef enum concept_pipeline_state_tag {
   CONCEPT_PIPELINE_STATE_EMPTY = 0,
   CONCEPT_PIPELINE_STATE_LAYOUT_CREATED = 1,

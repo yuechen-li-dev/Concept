@@ -8,6 +8,12 @@ _Noreturn static void concept_abort_invalid_tag(const char* enum_name) {
   abort();
 }
 
+static concept_vulkan_error concept_vulkan_error_make(int32_t Code) {
+  concept_vulkan_error out;
+  out.Code = Code;
+  return out;
+}
+
 static concept_pipeline_state concept_pipeline_state_make_empty(void) {
   concept_pipeline_state out;
   out.tag = CONCEPT_PIPELINE_STATE_EMPTY;

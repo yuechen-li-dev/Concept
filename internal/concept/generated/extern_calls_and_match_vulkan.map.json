@@ -7,7 +7,7 @@
     {
       "name": "DestroyPipeline",
       "span": {
-        "line": 16,
+        "line": 22,
         "column": 6
       },
       "symbol": "concept_extern_calls_and_match_vulkan_destroy_pipeline"
@@ -15,7 +15,7 @@
     {
       "name": "DestroyPipelineLayout",
       "span": {
-        "line": 17,
+        "line": 23,
         "column": 6
       },
       "symbol": "concept_extern_calls_and_match_vulkan_destroy_pipeline_layout"
@@ -23,7 +23,7 @@
     {
       "name": "RecordFailure",
       "span": {
-        "line": 18,
+        "line": 24,
         "column": 6
       },
       "symbol": "concept_extern_calls_and_match_vulkan_record_failure"
@@ -31,7 +31,7 @@
     {
       "name": "MakeEmptyState",
       "span": {
-        "line": 20,
+        "line": 26,
         "column": 15
       },
       "symbol": "concept_extern_calls_and_match_vulkan_make_empty_state"
@@ -39,7 +39,7 @@
     {
       "name": "MakeLayoutCreatedState",
       "span": {
-        "line": 25,
+        "line": 31,
         "column": 15
       },
       "symbol": "concept_extern_calls_and_match_vulkan_make_layout_created_state"
@@ -47,7 +47,7 @@
     {
       "name": "MakeReadyState",
       "span": {
-        "line": 30,
+        "line": 36,
         "column": 15
       },
       "symbol": "concept_extern_calls_and_match_vulkan_make_ready_state"
@@ -55,7 +55,7 @@
     {
       "name": "MakeFailedState",
       "span": {
-        "line": 35,
+        "line": 41,
         "column": 15
       },
       "symbol": "concept_extern_calls_and_match_vulkan_make_failed_state"
@@ -63,7 +63,7 @@
     {
       "name": "GetStatusCode",
       "span": {
-        "line": 40,
+        "line": 46,
         "column": 5
       },
       "symbol": "concept_extern_calls_and_match_vulkan_get_status_code"
@@ -71,7 +71,7 @@
     {
       "name": "DestroyPipelineState",
       "span": {
-        "line": 51,
+        "line": 57,
         "column": 6
       },
       "symbol": "concept_extern_calls_and_match_vulkan_destroy_pipeline_state"
@@ -85,7 +85,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 16,
+          "line": 22,
           "column": 1
         }
       },
@@ -96,7 +96,7 @@
             "name": "VkPipeline",
             "kind": "handle",
             "span": {
-              "line": 16,
+              "line": 22,
               "column": 22
             }
           }
@@ -104,7 +104,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 16,
+        "line": 22,
         "column": 6
       }
     },
@@ -114,7 +114,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 17,
+          "line": 23,
           "column": 1
         }
       },
@@ -125,7 +125,7 @@
             "name": "VkPipelineLayout",
             "kind": "handle",
             "span": {
-              "line": 17,
+              "line": 23,
               "column": 28
             }
           }
@@ -133,7 +133,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 17,
+        "line": 23,
         "column": 6
       }
     },
@@ -143,7 +143,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 18,
+          "line": 24,
           "column": 1
         }
       },
@@ -152,9 +152,9 @@
           "name": "error",
           "type": {
             "name": "VulkanError",
-            "kind": "builtin",
+            "kind": "struct",
             "span": {
-              "line": 18,
+              "line": 24,
               "column": 20
             }
           }
@@ -162,7 +162,7 @@
       ],
       "operations": null,
       "source_span": {
-        "line": 18,
+        "line": 24,
         "column": 6
       }
     },
@@ -172,7 +172,7 @@
         "name": "PipelineState",
         "kind": "enum",
         "span": {
-          "line": 20,
+          "line": 26,
           "column": 1
         }
       },
@@ -182,7 +182,7 @@
           "kind": "return",
           "type": "PipelineState",
           "source_span": {
-            "line": 22,
+            "line": 28,
             "column": 5
           }
         },
@@ -191,13 +191,13 @@
           "kind": "enum_construct",
           "detail": "PipelineState::Empty",
           "source_span": {
-            "line": 22,
+            "line": 28,
             "column": 12
           }
         }
       ],
       "source_span": {
-        "line": 20,
+        "line": 26,
         "column": 15
       }
     },
@@ -207,7 +207,7 @@
         "name": "PipelineState",
         "kind": "enum",
         "span": {
-          "line": 25,
+          "line": 31,
           "column": 1
         }
       },
@@ -218,7 +218,7 @@
             "name": "VkPipelineLayout",
             "kind": "handle",
             "span": {
-              "line": 25,
+              "line": 31,
               "column": 38
             }
           }
@@ -230,7 +230,7 @@
           "kind": "return",
           "type": "PipelineState",
           "source_span": {
-            "line": 27,
+            "line": 33,
             "column": 5
           }
         },
@@ -239,7 +239,7 @@
           "kind": "enum_construct",
           "detail": "PipelineState::LayoutCreated",
           "source_span": {
-            "line": 27,
+            "line": 33,
             "column": 12
           }
         },
@@ -248,13 +248,13 @@
           "kind": "name",
           "detail": "layout",
           "source_span": {
-            "line": 27,
+            "line": 33,
             "column": 41
           }
         }
       ],
       "source_span": {
-        "line": 25,
+        "line": 31,
         "column": 15
       }
     },
@@ -264,7 +264,7 @@
         "name": "PipelineState",
         "kind": "enum",
         "span": {
-          "line": 30,
+          "line": 36,
           "column": 1
         }
       },
@@ -275,7 +275,7 @@
             "name": "VkPipelineLayout",
             "kind": "handle",
             "span": {
-              "line": 30,
+              "line": 36,
               "column": 30
             }
           }
@@ -286,7 +286,7 @@
             "name": "VkPipeline",
             "kind": "handle",
             "span": {
-              "line": 30,
+              "line": 36,
               "column": 55
             }
           }
@@ -298,7 +298,7 @@
           "kind": "return",
           "type": "PipelineState",
           "source_span": {
-            "line": 32,
+            "line": 38,
             "column": 5
           }
         },
@@ -307,7 +307,7 @@
           "kind": "enum_construct",
           "detail": "PipelineState::Ready",
           "source_span": {
-            "line": 32,
+            "line": 38,
             "column": 12
           }
         },
@@ -316,7 +316,7 @@
           "kind": "name",
           "detail": "layout",
           "source_span": {
-            "line": 32,
+            "line": 38,
             "column": 33
           }
         },
@@ -325,13 +325,13 @@
           "kind": "name",
           "detail": "pipeline",
           "source_span": {
-            "line": 32,
+            "line": 38,
             "column": 41
           }
         }
       ],
       "source_span": {
-        "line": 30,
+        "line": 36,
         "column": 15
       }
     },
@@ -341,7 +341,7 @@
         "name": "PipelineState",
         "kind": "enum",
         "span": {
-          "line": 35,
+          "line": 41,
           "column": 1
         }
       },
@@ -350,9 +350,9 @@
           "name": "error",
           "type": {
             "name": "VulkanError",
-            "kind": "builtin",
+            "kind": "struct",
             "span": {
-              "line": 35,
+              "line": 41,
               "column": 31
             }
           }
@@ -364,7 +364,7 @@
           "kind": "return",
           "type": "PipelineState",
           "source_span": {
-            "line": 37,
+            "line": 43,
             "column": 5
           }
         },
@@ -373,7 +373,7 @@
           "kind": "enum_construct",
           "detail": "PipelineState::Failed",
           "source_span": {
-            "line": 37,
+            "line": 43,
             "column": 12
           }
         },
@@ -382,13 +382,13 @@
           "kind": "name",
           "detail": "error",
           "source_span": {
-            "line": 37,
+            "line": 43,
             "column": 34
           }
         }
       ],
       "source_span": {
-        "line": 35,
+        "line": 41,
         "column": 15
       }
     },
@@ -398,7 +398,7 @@
         "name": "int",
         "kind": "builtin",
         "span": {
-          "line": 40,
+          "line": 46,
           "column": 1
         }
       },
@@ -409,7 +409,7 @@
             "name": "PipelineState",
             "kind": "enum",
             "span": {
-              "line": 40,
+              "line": 46,
               "column": 19
             }
           }
@@ -421,7 +421,7 @@
           "kind": "return",
           "type": "int",
           "source_span": {
-            "line": 42,
+            "line": 48,
             "column": 5
           }
         },
@@ -430,7 +430,7 @@
           "kind": "match_expr",
           "detail": "4 arms",
           "source_span": {
-            "line": 42,
+            "line": 48,
             "column": 12
           }
         },
@@ -439,7 +439,7 @@
           "kind": "name",
           "detail": "state",
           "source_span": {
-            "line": 42,
+            "line": 48,
             "column": 19
           }
         },
@@ -448,7 +448,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Empty",
           "source_span": {
-            "line": 44,
+            "line": 50,
             "column": 9
           }
         },
@@ -457,7 +457,7 @@
           "kind": "literal",
           "detail": "0",
           "source_span": {
-            "line": 44,
+            "line": 50,
             "column": 33
           }
         },
@@ -466,7 +466,7 @@
           "kind": "pattern",
           "detail": "PipelineState::LayoutCreated",
           "source_span": {
-            "line": 45,
+            "line": 51,
             "column": 9
           }
         },
@@ -475,7 +475,7 @@
           "kind": "literal",
           "detail": "1",
           "source_span": {
-            "line": 45,
+            "line": 51,
             "column": 49
           }
         },
@@ -484,7 +484,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Ready",
           "source_span": {
-            "line": 46,
+            "line": 52,
             "column": 9
           }
         },
@@ -493,7 +493,7 @@
           "kind": "literal",
           "detail": "2",
           "source_span": {
-            "line": 46,
+            "line": 52,
             "column": 51
           }
         },
@@ -502,7 +502,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Failed",
           "source_span": {
-            "line": 47,
+            "line": 53,
             "column": 9
           }
         },
@@ -511,7 +511,7 @@
           "kind": "field_access",
           "detail": "Code",
           "source_span": {
-            "line": 47,
+            "line": 53,
             "column": 47
           }
         },
@@ -520,13 +520,13 @@
           "kind": "name",
           "detail": "error",
           "source_span": {
-            "line": 47,
+            "line": 53,
             "column": 41
           }
         }
       ],
       "source_span": {
-        "line": 40,
+        "line": 46,
         "column": 5
       }
     },
@@ -536,7 +536,7 @@
         "name": "void",
         "kind": "builtin",
         "span": {
-          "line": 51,
+          "line": 57,
           "column": 1
         }
       },
@@ -547,7 +547,7 @@
             "name": "PipelineState",
             "kind": "enum",
             "span": {
-              "line": 51,
+              "line": 57,
               "column": 27
             }
           }
@@ -559,7 +559,7 @@
           "kind": "match_stmt",
           "detail": "4 arms",
           "source_span": {
-            "line": 53,
+            "line": 59,
             "column": 5
           }
         },
@@ -568,7 +568,7 @@
           "kind": "name",
           "detail": "state",
           "source_span": {
-            "line": 53,
+            "line": 59,
             "column": 12
           }
         },
@@ -577,7 +577,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Empty",
           "source_span": {
-            "line": 55,
+            "line": 61,
             "column": 9
           }
         },
@@ -586,7 +586,7 @@
           "kind": "pattern",
           "detail": "PipelineState::LayoutCreated",
           "source_span": {
-            "line": 59,
+            "line": 65,
             "column": 9
           }
         },
@@ -594,7 +594,7 @@
           "id": "DestroyPipelineState.05",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 61,
+            "line": 67,
             "column": 13
           }
         },
@@ -603,7 +603,7 @@
           "kind": "call",
           "detail": "DestroyPipelineLayout",
           "source_span": {
-            "line": 61,
+            "line": 67,
             "column": 13
           }
         },
@@ -612,7 +612,7 @@
           "kind": "name",
           "detail": "layout",
           "source_span": {
-            "line": 61,
+            "line": 67,
             "column": 35
           }
         },
@@ -621,7 +621,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Ready",
           "source_span": {
-            "line": 64,
+            "line": 70,
             "column": 9
           }
         },
@@ -629,7 +629,7 @@
           "id": "DestroyPipelineState.09",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 66,
+            "line": 72,
             "column": 13
           }
         },
@@ -638,7 +638,7 @@
           "kind": "call",
           "detail": "DestroyPipeline",
           "source_span": {
-            "line": 66,
+            "line": 72,
             "column": 13
           }
         },
@@ -647,7 +647,7 @@
           "kind": "name",
           "detail": "pipeline",
           "source_span": {
-            "line": 66,
+            "line": 72,
             "column": 29
           }
         },
@@ -655,7 +655,7 @@
           "id": "DestroyPipelineState.12",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 67,
+            "line": 73,
             "column": 13
           }
         },
@@ -664,7 +664,7 @@
           "kind": "call",
           "detail": "DestroyPipelineLayout",
           "source_span": {
-            "line": 67,
+            "line": 73,
             "column": 13
           }
         },
@@ -673,7 +673,7 @@
           "kind": "name",
           "detail": "layout",
           "source_span": {
-            "line": 67,
+            "line": 73,
             "column": 35
           }
         },
@@ -682,7 +682,7 @@
           "kind": "pattern",
           "detail": "PipelineState::Failed",
           "source_span": {
-            "line": 70,
+            "line": 76,
             "column": 9
           }
         },
@@ -690,7 +690,7 @@
           "id": "DestroyPipelineState.16",
           "kind": "expr_stmt",
           "source_span": {
-            "line": 72,
+            "line": 78,
             "column": 13
           }
         },
@@ -699,7 +699,7 @@
           "kind": "call",
           "detail": "RecordFailure",
           "source_span": {
-            "line": 72,
+            "line": 78,
             "column": 13
           }
         },
@@ -708,13 +708,13 @@
           "kind": "name",
           "detail": "error",
           "source_span": {
-            "line": 72,
+            "line": 78,
             "column": 27
           }
         }
       ],
       "source_span": {
-        "line": 51,
+        "line": 57,
         "column": 6
       }
     }
@@ -722,6 +722,33 @@
   "schema": "concept-evt1-source-map.v1",
   "source": "examples/evt1/extern_calls_and_match_vulkan.concept",
   "static_asserts": null,
-  "structs": null,
+  "structs": [
+    {
+      "name": "VulkanError",
+      "c_name": "concept_vulkan_error",
+      "immovable": false,
+      "record": true,
+      "copyable": true,
+      "movable": true,
+      "has_drop": false,
+      "fields": [
+        {
+          "name": "Code",
+          "type": {
+            "name": "int",
+            "kind": "builtin",
+            "span": {
+              "line": 11,
+              "column": 5
+            }
+          }
+        }
+      ],
+      "source_span": {
+        "line": 9,
+        "column": 1
+      }
+    }
+  ],
   "templates": null
 }

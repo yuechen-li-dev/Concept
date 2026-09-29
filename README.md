@@ -104,8 +104,9 @@ New readers should start with `examples/tour/`.
   primary PoC3 corpus and defines the differential migration strategy.
 - `docs/compiler/EVT1-COMPILER-ARCHITECTURE.md` describes the active Go
   pipeline and the Core/Vulkan boundary.
-- `docs/reference/CONCEPT_VULKAN_LANGUAGE_CONSTITUTION.md` preserves the source
-  constitution used for extraction.
+- `docs/library/VULKAN.md` describes Vulkan in ordinary Concept
+  (`libraries/Vulkan`); `docs/history/vulkan/` preserves the M-era Concept
+  Vulkan constitution and profile audit.
 
 ## Libraries
 

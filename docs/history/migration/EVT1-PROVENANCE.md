@@ -26,7 +26,7 @@ recursive EVT1 compiler line. R0 extracted the latter. The narrow M1 parser and
 its handwritten kernel-54 generator were not copied into the general compiler.
 
 The Concept/Vulkan constitution was copied without reinterpretation to
-`docs/reference/CONCEPT_VULKAN_LANGUAGE_CONSTITUTION.md`. Its source status was
+`docs/history/vulkan/CONCEPT_VULKAN_LANGUAGE_CONSTITUTION.md`. Its source status was
 normative through EVT1 M1B-D, with experimental DragonGod typed-automata,
 ordered-effect, and actuator extensions beyond that accepted base.
 

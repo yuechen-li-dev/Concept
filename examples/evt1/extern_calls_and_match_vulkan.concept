@@ -1,9 +1,15 @@
-profile Vulkan;
+profile Core;
 
 // Vulkan object handles are ordinary foreign handles.
 extern "C" handle VkPipelineLayout;
 extern "C" handle VkPipeline;
 
+// The failing VkResult, as a plain record (the full mapping lives in
+// libraries/Vulkan).
+record struct VulkanError
+{
+    int Code;
+};
 
 enum PipelineState
 {

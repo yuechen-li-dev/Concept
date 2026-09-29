@@ -1,3 +1,11 @@
+> **Historical.** Superseded by the Concept Vulkan reconciliation
+> (`docs/design/CONCEPT-VULKAN-RECONCILIATION-LADDER.md`). What survived:
+> step machines with `on` input reactions, `terminal state`, and
+> `StepOutcome` in Core; effects as a `Standard.Collection.Outbox`;
+> `extern "C" handle`; and `libraries/Vulkan`. The signal dialect, effect
+> system, actuators, and Vulkan builtin types were removed. See
+> `docs/library/VULKAN.md`.
+
 # EVT1 Vulkan profile isolation
 
 Status: audited, executable, and preserved at the R5 freeze

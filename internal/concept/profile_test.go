@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestProfileDefinitionsOwnBuiltinAdmissions(t *testing.T) {
+func TestVulkanProfileAddsNoBuiltins(t *testing.T) {
 	core, ok := evt1ProfileDefinition("Core")
 	if !ok {
 		t.Fatal("Core profile is not registered")
@@ -14,65 +14,16 @@ func TestProfileDefinitionsOwnBuiltinAdmissions(t *testing.T) {
 	if !ok {
 		t.Fatal("Vulkan profile is not registered")
 	}
-	for _, name := range []string{"VulkanError"} {
-		if _, admitted := core.BuiltinTypes[name]; admitted {
-			t.Fatalf("Core profile admits Vulkan type %s", name)
-		}
-		if _, admitted := vulkan.BuiltinTypes[name]; !admitted {
-			t.Fatalf("Vulkan profile does not own type %s", name)
-		}
+	if len(vulkan.BuiltinTypes) != len(core.BuiltinTypes) {
+		t.Fatalf("Vulkan profile adds builtins beyond Core: %d vs %d", len(vulkan.BuiltinTypes), len(core.BuiltinTypes))
 	}
-	if _, ok := vulkan.AdmittedImports["Prometheus.Vulkan"]; !ok {
-		t.Fatal("Vulkan profile does not own the Prometheus.Vulkan import admission")
+	for name := range vulkan.BuiltinTypes {
+		if _, ok := core.BuiltinTypes[name]; !ok {
+			t.Fatalf("Vulkan-only builtin %s", name)
+		}
 	}
 	if core.AllowDomainImports {
 		t.Fatal("Core profile admits domain imports")
-	}
-	if !vulkan.AllowDomainImports {
-		t.Fatal("Vulkan profile admissions are incomplete")
-	}
-	for name := range vulkan.BuiltinTypes {
-		if strings.Contains(name, "Prometheus") {
-			t.Fatalf("Prometheus application type leaked into compiler builtins: %s", name)
-		}
-	}
-}
-
-func TestVulkanProfileBuiltinLoweringUsesRegistration(t *testing.T) {
-	source := `profile Vulkan;
-import Prometheus.Vulkan;
-
-extern "C" handle VkBuffer;
-
-struct Handles
-{
-    VkBuffer buffer;
-    VulkanError error;
-};
-
-int Read(VulkanError error)
-{
-    return error.Code;
-}
-`
-	module, err := Parse("registered-vulkan.concept", source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(module, []byte(source))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var header string
-	for name, body := range outputs {
-		if strings.HasSuffix(name, ".generated.h") {
-			header = string(body)
-		}
-	}
-	for _, required := range []string{"typedef struct VkBuffer_T* concept_vk_buffer;", "concept_vulkan_error"} {
-		if !strings.Contains(header, required) {
-			t.Fatalf("registered Vulkan header is missing %q", required)
-		}
 	}
 }
 

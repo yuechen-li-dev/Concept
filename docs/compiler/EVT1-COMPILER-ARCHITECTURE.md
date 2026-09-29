@@ -789,7 +789,7 @@ bounded differential harness and canonical source corpus. The evidence covers
 structs, payload enums, exhaustive match, ordinary control flow, concepts,
 templates, deterministic monomorphization, bounded comptime, and compile-time
 fixed arrays. `docs/history/milestones/EVT1-R1-CONFORMANCE.md` records classifications
-and provenance; `docs/compiler/EVT1-VULKAN-PROFILE-ISOLATION.md` records the complete
+and provenance; `docs/history/vulkan/EVT1-VULKAN-PROFILE-ISOLATION.md` (historical) records the complete
 foundation conformance leakage audit.
 
 ## Values and records executable evidence
