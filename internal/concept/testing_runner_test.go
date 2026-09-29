@@ -102,7 +102,7 @@ func TestDiscoveryIgnoresHistoricalConTestAndRejectsMissingArtifact(t *testing.T
 	}
 }
 
-func TestR8gNestedTestSelectionRetainsSiblingModuleRoots(t *testing.T) {
+func TestNestedTestSelectionRetainsSiblingModuleRoots(t *testing.T) {
 	root := filepath.Join("..", "..", "libraries", "Golden", "Claude", "Storage")
 	manifest, err := DiscoverTests(root)
 	if err != nil {

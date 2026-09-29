@@ -1,4 +1,4 @@
-module R6h.FactAllocatorReadiness;
+module Facts.FactAllocatorReadiness;
 profile Core;
 import Standard.MemoryGeometry;
 import Standard.Generic;

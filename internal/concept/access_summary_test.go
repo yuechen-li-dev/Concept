@@ -51,7 +51,7 @@ func r7d4Env(t *testing.T, source string) (*semanticEnv, Module) {
 	return env, module
 }
 
-func TestR7d4LocalCallAndContextAccessSummary(t *testing.T) {
+func TestLocalCallAndContextAccessSummary(t *testing.T) {
 	env, module := r7d4Env(t, r7d4AccessSource)
 	if mir := buildMIR(module, env); len(mir.AccessSummaries) == 0 {
 		t.Fatal("demanded MIR omitted access summaries")
@@ -82,7 +82,7 @@ func TestR7d4LocalCallAndContextAccessSummary(t *testing.T) {
 	}
 }
 
-func TestR7d4TwoWritersDisproveAndContradictDeclaration(t *testing.T) {
+func TestTwoWritersDisproveAndContradictDeclaration(t *testing.T) {
 	source := strings.Replace(r7d4AccessSource, `[[execution_context(AgentA)]]
 [[semantic_access("Publish", queue)]]`, `[[execution_context(AgentB)]]
 void AgentBEntry(ref Slot slot)
@@ -110,7 +110,7 @@ void CheckDerivedAuthority()
 	}
 }
 
-func TestR7d4DynamicIndexIsOpaqueAndAtomicKindsRemainDistinct(t *testing.T) {
+func TestDynamicIndexIsOpaqueAndAtomicKindsRemainDistinct(t *testing.T) {
 	source := `module Access.Opaque;
 profile Core;
 record struct Agent {}
@@ -145,7 +145,7 @@ void Dynamic(ref int[4] values, int index)
 	}
 }
 
-func TestR7d4AccessSummaryArtifactTransportAndDeterminism(t *testing.T) {
+func TestAccessSummaryArtifactTransportAndDeterminism(t *testing.T) {
 	first, err := CompileSemanticModule("access.concept", r7d4AccessSource, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +231,7 @@ void CheckImportedAccess()
 	}
 }
 
-func TestR7d4NoMethodNameRecognition(t *testing.T) {
+func TestNoMethodNameRecognition(t *testing.T) {
 	source := `module Access.Names;
 profile Core;
 record struct Agent {}
@@ -246,7 +246,7 @@ void Publish(ref Queue queue) {}`
 	}
 }
 
-func TestR7d4ForeignBoundaryAndRecursiveFixpoint(t *testing.T) {
+func TestForeignBoundaryAndRecursiveFixpoint(t *testing.T) {
 	source := `module Access.Foreign;
 profile Core;
 record struct Agent {}
@@ -293,7 +293,7 @@ void Entry(byte* opaque, int* queue, ref Slot slot)
 	}
 }
 
-func TestR7d4FixedDisjointSlotsDoNotCreateFalseContradiction(t *testing.T) {
+func TestFixedDisjointSlotsDoNotCreateFalseContradiction(t *testing.T) {
 	source := `module Access.Disjoint;
 profile Core;
 record struct AgentA {}
@@ -316,7 +316,7 @@ void WriteOne(ref int[2] slots)
 	}
 }
 
-func TestR7d4GenericParameterSubjectClosesAtCall(t *testing.T) {
+func TestGenericParameterSubjectClosesAtCall(t *testing.T) {
 	source := `module Access.Generic;
 profile Core;
 record struct Agent {}

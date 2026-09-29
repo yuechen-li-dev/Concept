@@ -2,7 +2,7 @@ package concept
 
 import "testing"
 
-func TestR8e3CanonicalNameSuggestions(t *testing.T) {
+func TestFormatCanonicalNameSuggestions(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		style string

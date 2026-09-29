@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestR7x2RangeValueAndCountedLoopNativeC11(t *testing.T) {
+func TestRangeValueAndCountedLoopNativeC11(t *testing.T) {
 	source := `profile Core;
 
 int Sum(Range<int> values)
@@ -44,7 +44,7 @@ int Main()
 	}
 }
 
-func TestR7x2RangeInvalid(t *testing.T) {
+func TestRangeInvalid(t *testing.T) {
 	for _, source := range []string{
 		"profile Core; int Main() { for (i in 0..10 step 0) { } return 0; }",
 		"profile Core; int Main() { for (i in 10..0) { } return 0; }",
@@ -57,7 +57,7 @@ func TestR7x2RangeInvalid(t *testing.T) {
 	}
 }
 
-func TestR7x2RangeAsyncNativeC11(t *testing.T) {
+func TestRangeAsyncNativeC11(t *testing.T) {
 	source := `profile Core;
 async int Child(int value) { return value; }
 async int Sum()
@@ -86,7 +86,7 @@ int Main()
 	runFoundationNativeHarness(t, outputs, "range_async_harness.c", "#include \"range_async.generated.h\"\nint main(void) { return concept_range_async_main() == 12 ? 0 : 1; }\n")
 }
 
-func TestR7x2RangeMachineNativeC11(t *testing.T) {
+func TestRangeMachineNativeC11(t *testing.T) {
 	source := `profile Core;
 automata Counter with state { int total; }
 {
@@ -116,7 +116,7 @@ int Main()
 	runFoundationNativeHarness(t, outputs, "range_machine_harness.c", "#include \"range_machine.generated.h\"\nint main(void) { return concept_range_machine_main() == 10 ? 0 : 1; }\n")
 }
 
-func TestR7x2RangeMIRComparisonAndDeterminism(t *testing.T) {
+func TestRangeMIRComparisonAndDeterminism(t *testing.T) {
 	source := `profile Core;
 int Main()
 {

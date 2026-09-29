@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestR7x2MutationShortcutsNativeC11(t *testing.T) {
+func TestMutationShortcutsNativeC11(t *testing.T) {
 	source := `profile Core;
 
 int Next(ref int calls)
@@ -53,7 +53,7 @@ int Main()
 	}
 }
 
-func TestR7x2MutationShortcutsRejectInvalid(t *testing.T) {
+func TestMutationShortcutsRejectInvalid(t *testing.T) {
 	for _, source := range []string{
 		"profile Core; int Main() { const int n = 1; n++; return n; }",
 		"profile Core; int Main() { int n = 1; int value = n++; return value; }",

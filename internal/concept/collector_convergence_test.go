@@ -16,7 +16,7 @@ func r7fRCollectionArtifacts(t *testing.T) map[string][]byte {
 	return artifacts
 }
 
-func TestR7fRCollectorHundredRunDeterminism(t *testing.T) {
+func TestCollectorHundredRunDeterminism(t *testing.T) {
 	if os.Getenv("CONCEPT_R7FR_DETERMINISM") != "1" {
 		t.Skip("run explicitly for the R7fR 100-run gate")
 	}
@@ -62,7 +62,7 @@ int Main() { PoolAllocator pool = MakePoolAllocator(SizeOf<int>(), AlignOf<int>(
 	}
 }
 
-func TestR7fRCollectorPackageFactRunsNative(t *testing.T) {
+func TestCollectorPackageFactRunsNative(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	if _, err := BuildPackage(root, t.TempDir(), "Standard"); err != nil {
@@ -86,7 +86,7 @@ func TestR7fRCollectorPackageFactRunsNative(t *testing.T) {
 	}
 }
 
-func TestR7fRCollectorArtifactOnlyConsumer(t *testing.T) {
+func TestCollectorArtifactOnlyConsumer(t *testing.T) {
 	artifacts := r7fRCollectionArtifacts(t)
 	source := `module ArtifactCollectorConsumer;
 profile Core;
@@ -157,7 +157,7 @@ async int Work(ref const MarkSweepCollector<int, 2, PoolAllocator> collector, Co
 	}
 }
 
-func TestR7fRCollectorExactDropAndRelease(t *testing.T) {
+func TestCollectorExactDropAndRelease(t *testing.T) {
 	artifacts := r7fRCollectionArtifacts(t)
 	source := `module CollectorDropProof;
 profile Core;
@@ -209,7 +209,7 @@ int main(void) { int result = concept_collector_drop_proof_main(); return result
 	runFoundationNativeHarness(t, outputs, "collector_drop_proof_harness.c", harness)
 }
 
-func TestR7fRIndexedAuthorityReplacement(t *testing.T) {
+func TestIndexedAuthorityReplacement(t *testing.T) {
 	source := `module IndexedAuthority;
 profile Core;
 extern "C" void ObserveDrop(int value);
@@ -244,7 +244,7 @@ int main(void) { return concept_indexed_authority_main() == 0 && count == 2 && f
 	runFoundationNativeHarness(t, outputs, "indexed_authority_harness.c", harness)
 }
 
-func TestR7fRAppliedFailureArrayCOrder(t *testing.T) {
+func TestAppliedFailureArrayCOrder(t *testing.T) {
 	source := `module AppliedArrayOrder;
 profile Core;
 struct Holder { Option<int><array>[3] values; }
@@ -266,7 +266,7 @@ int Main()
 	runFoundationNativeHarness(t, outputs, "applied_array_order_harness.c", "#include \"appliedarrayorder.generated.h\"\nint main(void) { return concept_applied_array_order_main() == 7 ? 0 : 1; }\n")
 }
 
-func TestR7fRRepeatedArrayInsideAggregateC11(t *testing.T) {
+func TestRepeatedArrayInsideAggregateC11(t *testing.T) {
 	source := `module NestedRepeatedArray;
 profile Core;
 struct Payload { int<array>[3] values; }
@@ -282,7 +282,7 @@ int Main() { Payload payload = Payload{[4 ...]}; return payload.values[2]; }`
 	runFoundationNativeHarness(t, outputs, "nested_repeated_array_harness.c", "#include \"nestedrepeatedarray.generated.h\"\nint main(void) { return concept_nested_repeated_array_main() == 4 ? 0 : 1; }\n")
 }
 
-func TestR7fRGenericBorrowProvenanceAndConstraintClosure(t *testing.T) {
+func TestGenericBorrowProvenanceAndConstraintClosure(t *testing.T) {
 	source := `module GenericBorrowClosure;
 profile Core;
 concept Readable<T> { requires int Read(ref const T value); }

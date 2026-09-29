@@ -14,7 +14,7 @@ struct ActuationSlot { ActuationId id; AtomicInt status; Reason reason; };
 class ActuationClaim
 {
 public:
-    // Construction is library-policy authority in R7d5. The atomic slot
+    // Construction is library-policy authority. The atomic slot
     // transition remains the runtime arbiter even if a value is forged.
     ActuationId id;
     owned int authority;

@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase5-sum-types/invalid/enum_match_duplicate_variant.invalid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase5-sum-types/invalid/enum_match_duplicate_variant.invalid.conception
 profile Core;
 
 enum Status

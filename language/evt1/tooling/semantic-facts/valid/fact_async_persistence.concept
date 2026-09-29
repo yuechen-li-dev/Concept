@@ -1,4 +1,4 @@
-module R6h.FactAsyncPersistence;
+module Facts.FactAsyncPersistence;
 profile Core;
 async int Child() { return 2; }
 async int Work()

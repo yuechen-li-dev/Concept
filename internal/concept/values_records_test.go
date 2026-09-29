@@ -20,9 +20,9 @@ type valuesRecordsConformanceCase struct {
 }
 
 var valuesRecordsConformanceCases = []valuesRecordsConformanceCase{
-	{name: "mutable struct field assignment", source: "valid/struct_mutable_field.concept", expected: ConformancePass, reference: "language/phase7-runtime-structs/valid/field_assignment_run.valid.conception", accepted: true},
-	{name: "whole-value struct copy", source: "valid/struct_value_copy.concept", expected: ConformanceExpectedDivergence, reference: "language/phase10-ownership/invalid/implicit_copy_struct_local.invalid.conception", accepted: true},
-	{name: "whole-value struct assignment", source: "valid/struct_value_assignment.concept", expected: ConformanceExpectedDivergence, reference: "language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception", accepted: true},
+	{name: "mutable struct field assignment", source: "valid/struct_mutable_field.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase7-runtime-structs/valid/field_assignment_run.valid.conception", accepted: true},
+	{name: "whole-value struct copy", source: "valid/struct_value_copy.concept", expected: ConformanceExpectedDivergence, reference: "legacy/poc3-zig/language/phase10-ownership/invalid/implicit_copy_struct_local.invalid.conception", accepted: true},
+	{name: "whole-value struct assignment", source: "valid/struct_value_assignment.concept", expected: ConformanceExpectedDivergence, reference: "legacy/poc3-zig/language/phase10-ownership/invalid/implicit_copy_struct_assignment.invalid.conception", accepted: true},
 	{name: "const copy to mutable", source: "valid/const_copy_to_mutable.concept", expected: ConformancePass, reference: "EVT1 R2 const place decision", accepted: true},
 	{name: "record construction", source: "valid/record_construct.concept", expected: ConformancePass, reference: "EVT1-new record syntax", accepted: true},
 	{name: "record copy", source: "valid/record_copy.concept", expected: ConformancePass, reference: "EVT1-new record syntax", accepted: true},
@@ -40,10 +40,10 @@ var valuesRecordsConformanceCases = []valuesRecordsConformanceCase{
 	{name: "record field mutation", source: "invalid/record_field_mutation.concept", expected: ConformancePass, reference: "EVT1-new record syntax", diagnosticFamily: "RECORD_FIELD_MUTATION"},
 	{name: "with on struct", source: "invalid/record_with_on_struct.concept", expected: ConformancePass, reference: "EVT1-new with syntax", diagnosticFamily: "WITH_REQUIRES_RECORD"},
 	{name: "with on non-record", source: "invalid/record_with_on_non_record.concept", expected: ConformancePass, reference: "EVT1-new with syntax", diagnosticFamily: "WITH_REQUIRES_RECORD"},
-	{name: "unknown with field", source: "invalid/record_with_unknown_field.concept", expected: ConformancePass, reference: "language/phase7-runtime-structs/invalid/struct_literal_unknown_field.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "UNKNOWN_FIELD"},
-	{name: "duplicate with field", source: "invalid/record_with_duplicate_field.concept", expected: ConformancePass, reference: "language/phase7-runtime-structs/invalid/struct_literal_duplicate_field.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "DUPLICATE_WITH_FIELD"},
-	{name: "with field type mismatch", source: "invalid/record_with_type_mismatch.concept", expected: ConformancePass, reference: "language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "WITH_FIELD_TYPE_MISMATCH"},
-	{name: "with non-copyable record", source: "invalid/record_with_noncopyable.concept", expected: ConformancePass, reference: "language/phase10-ownership/invalid/implicit_copy_noncopy_field_argument.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "WITH_NONCOPYABLE_RECORD"},
+	{name: "unknown with field", source: "invalid/record_with_unknown_field.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase7-runtime-structs/invalid/struct_literal_unknown_field.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "UNKNOWN_FIELD"},
+	{name: "duplicate with field", source: "invalid/record_with_duplicate_field.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase7-runtime-structs/invalid/struct_literal_duplicate_field.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "DUPLICATE_WITH_FIELD"},
+	{name: "with field type mismatch", source: "invalid/record_with_type_mismatch.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "WITH_FIELD_TYPE_MISMATCH"},
+	{name: "with non-copyable record", source: "invalid/record_with_noncopyable.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase10-ownership/invalid/implicit_copy_noncopy_field_argument.invalid.conception plus EVT1-new with syntax", diagnosticFamily: "WITH_NONCOPYABLE_RECORD"},
 	{name: "immovable copy", source: "invalid/immovable_copy.concept", expected: ConformancePass, reference: "Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_COPY"},
 	{name: "immovable assignment", source: "invalid/immovable_assignment.concept", expected: ConformancePass, reference: "Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_ASSIGNMENT"},
 	{name: "immovable parameter", source: "invalid/immovable_parameter_by_value.concept", expected: ConformancePass, reference: "Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_BY_VALUE_PARAMETER"},
@@ -51,7 +51,7 @@ var valuesRecordsConformanceCases = []valuesRecordsConformanceCase{
 	{name: "immovable embedding", source: "invalid/immovable_embed_by_value.concept", expected: ConformancePass, reference: "Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_EMBEDDING"},
 	{name: "immovable record embedding", source: "invalid/immovable_record_embed_by_value.concept", expected: ConformancePass, reference: "EVT1-new record syntax plus Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_EMBEDDING"},
 	{name: "immovable enum payload", source: "invalid/immovable_enum_payload_by_value.concept", expected: ConformancePass, reference: "Concept Vulkan constitution M1B-A", diagnosticFamily: "IMMOVABLE_ENUM_PAYLOAD"},
-	{name: "mutable field type mismatch", source: "invalid/struct_field_type_mismatch.concept", expected: ConformancePass, reference: "language/phase7-runtime-structs/invalid/field_assignment_type_mismatch.invalid.conception", diagnosticFamily: "VALUE_TYPE_MISMATCH"},
+	{name: "mutable field type mismatch", source: "invalid/struct_field_type_mismatch.concept", expected: ConformancePass, reference: "legacy/poc3-zig/language/phase7-runtime-structs/invalid/field_assignment_type_mismatch.invalid.conception", diagnosticFamily: "VALUE_TYPE_MISMATCH"},
 	{name: "let requires explicit type", source: "invalid/let_without_type.concept", expected: ConformancePass, reference: "EVT1 R2 optional alias", diagnosticFamily: "EXPLICIT_LOCAL_TYPE_REQUIRED"},
 }
 

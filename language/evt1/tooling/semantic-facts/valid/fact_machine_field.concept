@@ -1,4 +1,4 @@
-module R6h.FactMachineField;
+module Facts.FactMachineField;
 profile Core;
 automata Worker with state { Span<int> values; }
 {

@@ -1,5 +1,5 @@
-// PoC3 reference: language/phase9-compile-time/valid/static_assert_compile_time_while.valid.conception
-// PoC3 reference: language/phase21-arrays-slices-fixed-buffers/valid/array_literal_nested.valid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase9-compile-time/valid/static_assert_compile_time_while.valid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase21-arrays-slices-fixed-buffers/valid/array_literal_nested.valid.conception
 profile Core;
 
 comptime int[3] Values = [1, 2, 4];

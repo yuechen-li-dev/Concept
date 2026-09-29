@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "guarded_transitions_vulkan.generated.h",
+      "sha256": "878028f222fcf7b9529a0b42a64fb67202ef9d981ed093abe6af339faacc5805"
+    },
+    {
+      "path": "guarded_transitions_vulkan.generated.c",
+      "sha256": "42c67f8182524df7527095d8b9d0d1f284b391b615f87cdd4b0194737a3a6257"
+    },
+    {
+      "path": "guarded_transitions_vulkan.mir.json",
+      "sha256": "f21ca0ce143126a1a1cd1f5074908314ec6d1674aaf17c41da7c8f68118cd3ac"
+    },
+    {
+      "path": "guarded_transitions_vulkan.map.json",
+      "sha256": "0ab08f27f251b810a64e5c84b4c41b07bfe9eb616bd1c39d6ea4c8baabefc3b0"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Vulkan",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "Examples/Concept-Vulkan/guarded_transitions_vulkan.concept",
+  "source_sha256": "2427f146775ab5afb861150d24dae9c97f06d9d11445bc5c519a563fc7cb4e34"
+}

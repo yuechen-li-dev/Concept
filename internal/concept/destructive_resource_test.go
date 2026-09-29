@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestR7f2DestructiveReferenceContract(t *testing.T) {
+func TestDestructiveReferenceContract(t *testing.T) {
 	provider := `module Library.Resource; profile Core;
 struct Store { int value; };
 ref const int Borrow(ref const Store store) { return ref const store.value; }
@@ -76,7 +76,7 @@ int Main() { Store first = Store{7}; Store second = Store{9}; int result = 0; { 
 	}
 }
 
-func TestR7f2OrdinaryMutationIsNotLifetimeInvalidation(t *testing.T) {
+func TestOrdinaryMutationIsNotLifetimeInvalidation(t *testing.T) {
 	source := `profile Core; struct Store { int value; };
 ref const int Borrow(ref const Store store) { return ref const store.value; }
 void Update(ref Store store) { store.value = 8; }
@@ -93,7 +93,7 @@ int Main() { Store store = Store{7}; ref const int held = Borrow(ref const store
 	runFoundationNativeHarness(t, outputs, "ordinary_mutation_harness.c", "#include \"ordinary_mutation.generated.h\"\nint main(void) { return concept_ordinary_mutation_main() == 8 ? 0 : 1; }\n")
 }
 
-func TestR7f2InvalidDestructiveContractTarget(t *testing.T) {
+func TestInvalidDestructiveContractTarget(t *testing.T) {
 	for _, source := range []string{
 		`profile Core; void Reset(int value) { } requires compiler.InvalidatesBorrows(Reset, value);`,
 		`profile Core; struct Store { int value; }; void Reset(ref Store store) { } requires compiler.InvalidatesBorrows(Reset, missing);`,
@@ -105,7 +105,7 @@ func TestR7f2InvalidDestructiveContractTarget(t *testing.T) {
 	}
 }
 
-func TestR7f2GenericDestructiveReferenceContract(t *testing.T) {
+func TestGenericDestructiveReferenceContract(t *testing.T) {
 	source := `profile Core; template <typename T> struct Store { T value; };
 template <typename T> ref const T Borrow(ref const Store<T> store) { return ref const store.value; }
 template <typename T> void Reset(ref Store<T> store) { }
@@ -118,7 +118,7 @@ int Main() { Store<int> store = Store<int>{7}; ref const int item = Borrow<int>(
 	}
 }
 
-func TestR7f2GenericForwardedEffect(t *testing.T) {
+func TestGenericForwardedEffect(t *testing.T) {
 	base := `profile Core; template <typename T> struct Store { T value; };
 template <typename T> ref const T Borrow(ref const Store<T> store) { return ref const store.value; }
 template <typename T> void Reset(ref Store<T> store) { }
@@ -137,7 +137,7 @@ int Main() { Store<int> store = Store<int>{7}; ref const int held = Borrow<int>(
 	}
 }
 
-func TestR7f2ForwardedDestructiveEffectMustBeDeclared(t *testing.T) {
+func TestForwardedDestructiveEffectMustBeDeclared(t *testing.T) {
 	base := `profile Core; struct Store { int value; };
 ref const int Borrow(ref const Store store) { return ref const store.value; }
 void Reset(ref Store store) { store.value = 0; }
@@ -156,7 +156,7 @@ int Main() { Store store = Store{7}; ref const int held = Borrow(ref const store
 	}
 }
 
-func TestR7f2ScopedLeaseCannotSilentlyCrossSuspension(t *testing.T) {
+func TestScopedLeaseCannotSilentlyCrossSuspension(t *testing.T) {
 	base := `profile Core; struct Store { int value; };
 ref struct Lease { ref const Store owner; };
 Lease Borrow(ref const Store store) { return Lease{ref const store}; }
@@ -185,7 +185,7 @@ int Main() { instance Worker worker(); Step(worker, Run); return 0; }
 	}
 }
 
-func TestR7f2AwaitedDestructiveOperationConflictsBeforeSuspension(t *testing.T) {
+func TestAwaitedDestructiveOperationConflictsBeforeSuspension(t *testing.T) {
 	source := `profile Core; struct Store { int value; };
 ref struct Lease { ref const Store owner; };
 Lease Borrow(ref const Store store) { return Lease{ref const store}; }

@@ -109,7 +109,7 @@ allocator:
 | semantic fact transport | Resolved for value facts; operational initialized state does not survive owner fields |
 | trusted external storage authority | Resolved |
 
-Concrete evidence is pinned by `r6k_allocator_feasibility_test.go`:
+Concrete evidence is pinned by `allocator_owner_boundary_test.go`:
 
 - an ordinary template body calling `bind<T>` rejects its open type parameter
   with `CV4148` before consumer instantiation;
@@ -176,7 +176,7 @@ each allocator policy would encode the exact specialization and capability lie
 the milestone forbids. Compiler recognition of allocator or owner names would
 also violate the architectural rule.
 
-`r6n_allocator_feasibility_test.go` pins all three general cases without
+`allocator_type_parameter_test.go` pins all three general cases without
 changing compiler semantics. R6n therefore publishes no partial
 `Standard.Memory` API. The next prerequisite is general constraints on any
 type parameter, with required-operation closure using that binding through

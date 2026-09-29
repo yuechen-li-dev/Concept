@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestR8e2BoundDeclarationKindsAndProvenance(t *testing.T) {
-	const source = `module R8e2.Subjects; profile Core;
+func TestBoundDeclarationKindsAndProvenance(t *testing.T) {
+	const source = `module Subjects.Subjects; profile Core;
 struct Widget { int ItemCount; int ReadValue(int InputValue) { int LocalValue = InputValue; return LocalValue; } }
 concept Marker<T> {}
 interface Resettable<T> { requires void Reset(ref T value); }
@@ -59,8 +59,8 @@ int terrible_name(int SomeParameter) { int SomeLocal = SomeParameter; return Som
 	}
 }
 
-func TestR8e2ProjectSubjectsExcludeArtifactDeclarations(t *testing.T) {
-	const provider = `module R8e2.Provider; profile Core;
+func TestProjectSubjectsExcludeArtifactDeclarations(t *testing.T) {
+	const provider = `module Subjects.Provider; profile Core;
 struct foreign_type { int ForeignField; }
 concept ProviderRule<T> {}
 int provider_name() { return 1; }
@@ -73,10 +73,10 @@ derive DeriveField reflect<foreign_type>;
 	if err != nil {
 		t.Fatal(err)
 	}
-	const consumer = `module R8e2.Consumer; profile Core; import R8e2.Provider;
+	const consumer = `module Subjects.Consumer; profile Core; import Subjects.Provider;
 int consumer_name() { return provider_name(); }
 `
-	module, err := ParseWithSemanticModules("consumer.concept", consumer, map[string][]byte{"R8e2.Provider": artifact})
+	module, err := ParseWithSemanticModules("consumer.concept", consumer, map[string][]byte{"Subjects.Provider": artifact})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ int consumer_name() { return provider_name(); }
 	for _, wanted := range []string{"foreign_type", "ProviderRule", "provider_name", "native_status", "generated_helper"} {
 		found := false
 		for _, subject := range all {
-			if subject.Name == wanted && subject.Owner == "R8e2.Provider" {
+			if subject.Name == wanted && subject.Owner == "Subjects.Provider" {
 				found = true
 			}
 		}
@@ -115,7 +115,7 @@ int consumer_name() { return provider_name(); }
 	}
 }
 
-func TestR8e2StandaloneSourceHasProjectSubjects(t *testing.T) {
+func TestStandaloneSourceHasProjectSubjects(t *testing.T) {
 	module, err := Parse("standalone.concept", "profile Core; void terrible_name() {}")
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestR8e2StandaloneSourceHasProjectSubjects(t *testing.T) {
 	}
 }
 
-func TestR8e2MachineUsesBoundAutomataDeclaration(t *testing.T) {
+func TestMachineUsesBoundAutomataDeclaration(t *testing.T) {
 	const source = `profile Core;
 automata Worker {
     machine Run returns int {

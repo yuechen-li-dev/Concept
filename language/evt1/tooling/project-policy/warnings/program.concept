@@ -1,0 +1,3 @@
+module Policies.Warnings;
+profile Core;
+void terrible_name() {}

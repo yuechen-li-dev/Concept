@@ -2,7 +2,7 @@
 
 R7f2 adds the operation contract `requires compiler.InvalidatesBorrows(Operation, resourceParameter);`. It describes possible lifetime invalidation through a reference parameter; ordinary mutation has no such implication. See [destructive resource effects](../design/EVT1-DESTRUCTIVE-RESOURCE-EFFECTS.md).
 
-R7f1: An operation requirement may itself have `template <typename U>` parameters. These are scoped within that requirement and structurally matched to a concrete generic function. Multi-type-parameter concepts support value and reference parameters. R8e2b also adds the bounded `declaration D` concept parameter category; see [declaration concept parameters](../design/R8-DECLARATION-CONCEPT-PARAMETERS.md) and [generic library closure](../design/EVT1-GENERIC-LIBRARY-CLOSURE.md).
+R7f1: An operation requirement may itself have `template <typename U>` parameters. These are scoped within that requirement and structurally matched to a concrete generic function. Multi-type-parameter concepts support value and reference parameters. R8e2b also adds the bounded `declaration D` concept parameter category; see [declaration concept parameters](../design/DECLARATION-CONCEPT-PARAMETERS.md) and [generic library closure](../design/EVT1-GENERIC-LIBRARY-CLOSURE.md).
 
 Concept concepts are named semantic requirement structures. They can describe
 types, operations, fields, lifetimes, regions, effects, foreign boundaries, and

@@ -1,0 +1,43 @@
+// Concepts and templates: a concept names the operations a type must
+// provide; a template states which concept it requires.
+// Replaces PoC3 examples phase8 (constrained_equatable, generic_identity).
+profile Core;
+
+record struct Meters
+{
+    int value;
+}
+
+concept Measurable<T>
+{
+    requires int Measure(T value);
+}
+
+int Measure(Meters value)
+{
+    return value.value;
+}
+
+requires Measurable<Meters>;
+
+template <typename T>
+T Identity(T value)
+{
+    return value;
+}
+
+template <typename T>
+requires Measurable<T>
+int Longer(T left, T right)
+{
+    int a = Measure(left);
+    int b = Measure(right);
+    return if (a > b) a else b;
+}
+
+int Main()
+{
+    Meters short = Meters{3};
+    Meters long = Meters{8};
+    return Longer<Meters>(Identity<Meters>(short), long);
+}

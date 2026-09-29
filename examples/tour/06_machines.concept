@@ -1,0 +1,75 @@
+// Machines: automata with persistent state, explicit transitions, `yield`
+// to suspend until the next Step, and `transition decide` for utility
+// selection. Replaces PoC3 examples phase13, phase18, phase19 and the
+// phase5a judgment examples.
+profile Core;
+
+enum DoorCommand
+{
+    Push,
+    Wait
+}
+
+automata Door
+with state
+{
+    DoorCommand command;
+    int ticksOpen;
+}
+{
+    machine Run
+    {
+        state Closed
+        {
+            transition match (command)
+            {
+                DoorCommand::Push => Open;
+                DoorCommand::Wait => Closed;
+            }
+        }
+
+        // Stays open for two steps, suspending between them.
+        state Open
+        {
+            if (ticksOpen == 2)
+            {
+                ticksOpen = 0;
+                transition Closed;
+            }
+            ticksOpen += 1;
+            yield;
+        }
+    }
+}
+
+automata Guard
+with state
+{
+    int threat;
+}
+{
+    machine Choose
+    {
+        state Deciding
+        {
+            transition decide
+            {
+                Alert when threat > 5 score threat;
+                Patrol score 3;
+            }
+        }
+
+        state Alert { }
+        state Patrol { }
+    }
+}
+
+int Main()
+{
+    instance Door door(DoorCommand::Push, 0);
+    Step(door, Run);
+    Step(door, Run);
+    instance Guard guard(8);
+    Step(guard, Choose);
+    return State(door, Run) + State(guard, Choose);
+}

@@ -123,7 +123,7 @@ in kelvin. It does not mean a 32-bit floating type parameterized by K.
 `float<32>` is invalid because brackets here require a unit expression.
 Binary16 currently uses an extension and has no strict-C11 or C ABI claim;
 the qualified backend boundary is in
-[R8 floating representations](../design/R8-FLOATING-REPRESENTATIONS.md).
+[R8 floating representations](../design/FLOATING-REPRESENTATIONS.md).
 
 **Deferred EVT1.** `string` is available to bounded compile-time evaluation
 and diagnostics but does not establish a general runtime string model.

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func r6hMemoryArtifact(t *testing.T) []byte {
+func semanticFactMemoryArtifact(t *testing.T) []byte {
 	t.Helper()
 	source, err := os.ReadFile("../../libraries/Standard/MemoryGeometry.concept")
 	if err != nil {
@@ -20,7 +20,7 @@ func r6hMemoryArtifact(t *testing.T) []byte {
 }
 
 func TestSemanticValueFactsSurviveResultReturnLocalsAndCopies(t *testing.T) {
-	artifact := r6hMemoryArtifact(t)
+	artifact := semanticFactMemoryArtifact(t)
 	generic := buildSemanticArtifact(t, "Standard/Generic.concept", genericSemanticModule, nil)
 	source := `module App;
 profile Core;
@@ -71,7 +71,7 @@ Result<int, RegionError> Verify()
 }
 
 func TestSemanticValueFactsDisproveKnownOverlapAndKeepUnknownOrigin(t *testing.T) {
-	artifact := r6hMemoryArtifact(t)
+	artifact := semanticFactMemoryArtifact(t)
 	overlap := `module App; profile Core; import Standard.MemoryGeometry;
 Result<int, RegionError> Verify()
 {
@@ -109,9 +109,9 @@ int Verify(usize bits)
 
 func TestSemanticModuleValueSummariesAreDeterministicAndChecked(t *testing.T) {
 	t.Parallel()
-	first := r6hMemoryArtifact(t)
+	first := semanticFactMemoryArtifact(t)
 	for run := 1; run < determinismRuns(); run++ {
-		if next := r6hMemoryArtifact(t); !bytes.Equal(first, next) {
+		if next := semanticFactMemoryArtifact(t); !bytes.Equal(first, next) {
 			t.Fatalf("semantic value summaries changed on build %d", run)
 		}
 	}
@@ -162,7 +162,7 @@ int Verify(usize bits)
 		t.Fatalf("unknown alignment was accidentally strengthened: %v", err)
 	}
 
-	artifact := r6hMemoryArtifact(t)
+	artifact := semanticFactMemoryArtifact(t)
 	source := `module App; profile Core; import Standard.MemoryGeometry;
 Result<int, RegionError> Verify()
 {
@@ -267,9 +267,9 @@ func TestSemanticFactTransportCorpusCompilesAndHasNoRuntimeProofBaggage(t *testi
 		t.Fatal(err)
 	}
 	if len(paths) != 22 {
-		t.Fatalf("R6h valid fixture count = %d, want 22", len(paths))
+		t.Fatalf("semantic-fact valid fixture count = %d, want 22", len(paths))
 	}
-	memory := r6hMemoryArtifact(t)
+	memory := semanticFactMemoryArtifact(t)
 	genericSource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/Generic.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -323,9 +323,9 @@ func TestSemanticFactTransportUnknownCorpusStaysConservative(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(paths) != 6 {
-		t.Fatalf("R6h unknown fixture count = %d, want 6", len(paths))
+		t.Fatalf("semantic-fact unknown fixture count = %d, want 6", len(paths))
 	}
-	memory := r6hMemoryArtifact(t)
+	memory := semanticFactMemoryArtifact(t)
 	genericSource, err := os.ReadFile("../../language/evt1/tooling/modules/Standard/Generic.concept")
 	if err != nil {
 		t.Fatal(err)
@@ -380,19 +380,19 @@ func TestSemanticFactTransportDogfoodExecutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(manifest.Tests) != 4 {
-		t.Fatalf("R6h dogfood test count = %d, want 4", len(manifest.Tests))
+		t.Fatalf("semantic-fact dogfood test count = %d, want 4", len(manifest.Tests))
 	}
 	run, err := RunTests(manifest, TestRunOptions{ResultsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if run.Failed != 0 || run.Passed != 4 {
-		t.Fatalf("R6h dogfood run = %+v", run)
+		t.Fatalf("semantic-fact dogfood run = %+v", run)
 	}
 }
 
 func TestSemanticFactTransportProofGoldens(t *testing.T) {
-	memory := r6hMemoryArtifact(t)
+	memory := semanticFactMemoryArtifact(t)
 	artifacts := map[string][]byte{"Standard.MemoryGeometry": memory}
 	root := "../../language/evt1/tooling/semantic-facts"
 	renderValid := func(name string) string {
@@ -437,12 +437,12 @@ func TestSemanticFactTransportProofGoldens(t *testing.T) {
 		golden string
 		output string
 	}{
-		{"r6h-alignment-transport.txt", renderValid("fact_region_alignment_degrade.concept")},
-		{"r6h-disjoint-transport.txt", renderValid("fact_region_disjoint.concept")},
-		{"r6h-overlap-transport.txt", renderInvalid("valid", "fact_region_overlap.concept", func(body string) string {
+		{"alignment-transport.txt", renderValid("fact_region_alignment_degrade.concept")},
+		{"disjoint-transport.txt", renderValid("fact_region_disjoint.concept")},
+		{"overlap-transport.txt", renderInvalid("valid", "fact_region_overlap.concept", func(body string) string {
 			return strings.Replace(body, "Assert.Concept<SameRegion>(left, right, \"overlapping views retain their common origin\")", "Assert.Concept<Disjoint>(left, right, \"known overlap is disproven\")", 1)
 		})},
-		{"r6h-opaque-boundary.txt", renderInvalid("unknown", "fact_opaque_extern_unknown.concept", nil)},
+		{"opaque-boundary.txt", renderInvalid("unknown", "fact_opaque_extern_unknown.concept", nil)},
 	}
 	for _, tc := range cases {
 		golden, err := os.ReadFile(filepath.Join("../../language/evt1/tooling/proofs/golden", tc.golden))

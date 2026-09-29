@@ -1,0 +1,29 @@
+{
+  "compiler": "concept-evt1-stage0-go",
+  "files": [
+    {
+      "path": "lifecycle_effects_core.generated.h",
+      "sha256": "44fab99063d0dfafbf8ffb5ebead022c4b19ac4dbe39072d62c6a0c0187707d4"
+    },
+    {
+      "path": "lifecycle_effects_core.generated.c",
+      "sha256": "f3ae1cb95b79091f753adc7df2a698866e71865bb5f271f24ef742d259926a38"
+    },
+    {
+      "path": "lifecycle_effects_core.mir.json",
+      "sha256": "7869583f361cb1b1de99329d28fc55791478d3c8db870c747f03aab6949de810"
+    },
+    {
+      "path": "lifecycle_effects_core.map.json",
+      "sha256": "e11bf917476f6fd32954efcfbb0d0c870496d01e8e9d5d91cd4fc595a51656e7"
+    }
+  ],
+  "options": {
+    "paths": "repository-relative",
+    "timestamps": "forbidden"
+  },
+  "profile": "Vulkan",
+  "schema": "concept-evt1-generation-manifest.v1",
+  "source": "Examples/Concept-Vulkan/lifecycle_effects_core.concept",
+  "source_sha256": "5b0d9668470aaec8e4b48b669e66836d0ae1e29e82628e7de43697dcaf6f692c"
+}

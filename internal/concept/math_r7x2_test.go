@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestR7x2StandardMathGeneration(t *testing.T) {
+func TestStandardMathGeneration(t *testing.T) {
 	path := filepath.Join("..", "..", "libraries", "Standard", "Math.concept")
 	source, err := os.ReadFile(path)
 	if err != nil {

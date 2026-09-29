@@ -1,3 +1,0 @@
-module R8e2b.InvalidManifestProgram;
-profile Core;
-void GoodFunction() {}

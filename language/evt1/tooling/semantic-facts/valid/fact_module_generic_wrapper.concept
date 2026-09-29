@@ -1,4 +1,4 @@
-module R6h.FactModuleGeneric;
+module Facts.FactModuleGeneric;
 profile Core;
 import Standard.MemoryGeometry;
 import Standard.Generic;

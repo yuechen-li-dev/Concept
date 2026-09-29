@@ -2,7 +2,7 @@ package concept
 
 import "testing"
 
-func TestR7x2RangeSignedUnsignedOverflowEdgesNativeC11(t *testing.T) {
+func TestRangeSignedUnsignedOverflowEdgesNativeC11(t *testing.T) {
 	source := `profile Core;
 int Main()
 {

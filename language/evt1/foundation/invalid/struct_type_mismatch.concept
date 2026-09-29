@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase7-runtime-structs/invalid/struct_literal_type_mismatch.invalid.conception
 profile Core;
 
 struct Point

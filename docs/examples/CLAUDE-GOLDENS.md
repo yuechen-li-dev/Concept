@@ -1,6 +1,6 @@
 # Claude reinterpretations of the Golden programs
 
-**R8g follow-up (2026-09-28):** The final original and Claude sources now run together: 130 passed, 0 failed, 2 benchmarks in both Normal and Verify. All 61 final `.concept` and `.concept_test` files pass per-file `concept format --check`; first drafts remain historical evidence. The original behavior bugs described below have been fixed and pinned in original runtime tests. The resolved/deferred issue ledger is [R8G-CONVERGENCE.md](../conformance/R8G-CONVERGENCE.md). The comparison below records what the Claude pass found at first contact; superseded limitations remain as historical evidence.
+**R8g follow-up (2026-09-28):** The final original and Claude sources now run together: 130 passed, 0 failed, 2 benchmarks in both Normal and Verify. All 61 final `.concept` and `.concept_test` files pass per-file `concept format --check`; first drafts remain historical evidence. The original behavior bugs described below have been fixed and pinned in original runtime tests. The resolved/deferred issue ledger is [R8G-CONVERGENCE.md](../history/milestones/R8G-CONVERGENCE.md). The comparison below records what the Claude pass found at first contact; superseded limitations remain as historical evidence.
 
 All thirteen Golden domains, the eight R7p migration goldens and the five R8f
 differentiators, rewritten the way Claude would write them. They live in
@@ -14,7 +14,7 @@ feedback, next to the final source.
 | Normal / Verify | pass / pass | pass / pass |
 | Final runtime results | 42 facts + 2 benchmarks | 88 facts; combined tree: 130 facts + 2 benchmarks |
 
-`TestR7pDomainGoldensNormalAndVerify` passes over the combined tree. Its
+`TestDomainGoldensNormalAndVerify` passes over the combined tree. Its
 accounting compared raw result counts with discovered tests, which a
 `[[theory]]` breaks (six row results, one test). It now requires every
 discovered test ID to report and none to fail, the same class of fix R8f
@@ -28,7 +28,7 @@ The final sources now pass `concept format --check`; only first-draft `.txt` fil
 $env:CONCEPT_MODULE_ROOTS = (Resolve-Path 'libraries').Path
 go run ./cmd/concept test libraries/Golden --filter Claude --verbose
 go run ./cmd/concept test libraries/Golden --filter Claude --verify
-go test ./internal/concept -run '^TestR7p' -count=1
+go test ./internal/concept -run 'Golden' -count=1
 ```
 
 ## What changed, and why
@@ -226,4 +226,4 @@ The stricter quantity rule also required old layout-test callers of scalar
 `usize` APIs to write `Magnitude(SizeOf<T>())`; F4 required regeneration of
 the checked EVT1 C outputs and manifests.
 The remaining R8g queue and gate evidence are recorded in
-`docs/conformance/R8G-CONVERGENCE.md` and `R8G-CONFORMANCE.md`.
+`docs/history/milestones/R8G-CONVERGENCE.md` and `R8G-CONFORMANCE.md`.

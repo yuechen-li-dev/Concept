@@ -1,3 +1,0 @@
-module R8e2b.Warnings;
-profile Core;
-void terrible_name() {}

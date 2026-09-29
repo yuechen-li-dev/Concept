@@ -1,0 +1,11 @@
+module MotionTests;
+profile Core;
+import Geometry;
+import Motion;
+
+[[fact]]
+void ImportedTypesAndFunctionsComposeAcrossModules()
+{
+    Body body = Body{Vector{0, 0}, Vector{2, -1}};
+    Assert.Equal(DistanceAfter(body, 3), 9, "6 across and 3 down");
+}

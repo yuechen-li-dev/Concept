@@ -1,0 +1,43 @@
+// The module under test for stack.concept_test: a fixed-capacity stack
+// whose failures are typed Results rather than sentinel values.
+module Stack;
+profile Core;
+
+enum StackError
+{
+    Empty,
+    Full
+}
+
+struct IntStack
+{
+    int[4] items;
+    int depth;
+}
+
+IntStack NewStack()
+{
+    int[4] items = [0 ... 4];
+    return IntStack{items, 0};
+}
+
+Result<void, StackError> Push(ref IntStack stack, int value)
+{
+    if (stack.depth == 4)
+    {
+        return Result::Error(StackError::Full);
+    }
+    stack.items[stack.depth] = value;
+    stack.depth += 1;
+    return Result::Ok();
+}
+
+Result<int, StackError> Pop(ref IntStack stack)
+{
+    if (stack.depth == 0)
+    {
+        return Result::Error(StackError::Empty);
+    }
+    stack.depth -= 1;
+    return Result::Ok(stack.items[stack.depth]);
+}

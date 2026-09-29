@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase8-concepts-templates/valid/template_constrained_equal.valid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase8-concepts-templates/valid/template_constrained_equal.valid.conception
 profile Core;
 
 struct Sample

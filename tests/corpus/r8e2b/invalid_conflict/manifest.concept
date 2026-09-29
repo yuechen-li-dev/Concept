@@ -1,7 +1,0 @@
-module R8e2b.ConflictManifest;
-profile Core;
-record struct LintPolicy { string concept; string severity; string kind; string subject; }
-concept ProjectNaming<declaration D> { requires compiler.CanonicalName(D); }
-concept SnakeFunctions<declaration D> { requires compiler.SnakeCase(D); }
-comptime LintPolicy Canonical = LintPolicy{"ProjectNaming", "warning", "FunctionDeclaration", ""};
-comptime LintPolicy Snake = LintPolicy{"SnakeFunctions", "error", "FunctionDeclaration", ""};

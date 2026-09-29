@@ -1,4 +1,4 @@
-module R6h.FactModuleResult;
+module Facts.FactModuleResult;
 profile Core;
 import Standard.MemoryGeometry;
 Result<int, RegionError> Main()

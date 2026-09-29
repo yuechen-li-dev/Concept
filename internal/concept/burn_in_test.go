@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestR7d3IntegerLiteralBoundaries(t *testing.T) {
+func TestBurnInIntegerLiteralBoundaries(t *testing.T) {
 	tests := []struct {
 		name       string
 		typeName   string
@@ -57,7 +57,7 @@ func TestR7d3IntegerLiteralBoundaries(t *testing.T) {
 	}
 }
 
-func TestR7d3CallSiteContextualIntegerLiteral(t *testing.T) {
+func TestBurnInCallSiteContextualIntegerLiteral(t *testing.T) {
 	source := `profile Core;
 uint Select(uint X) { return X; }
 uint Use() { return Select(4294967295); }
@@ -75,7 +75,7 @@ uint Use() { return Select(4294967295); }
 	}
 }
 
-func TestR7d3CPrecedenceBands(t *testing.T) {
+func TestBurnInCPrecedenceBands(t *testing.T) {
 	cases := map[string]string{
 		"A ^ B & C":  "(A ^ (B & C))",
 		"A | B & C":  "(A | (B & C))",
@@ -99,7 +99,7 @@ func TestR7d3CPrecedenceBands(t *testing.T) {
 	}
 }
 
-func TestR7d3ComparisonEqualityAndBitwisePrecedence(t *testing.T) {
+func TestBurnInComparisonEqualityAndBitwisePrecedence(t *testing.T) {
 	var shape func(Expr) string
 	shape = func(expr Expr) string {
 		switch value := expr.(type) {
@@ -130,7 +130,7 @@ func TestR7d3ComparisonEqualityAndBitwisePrecedence(t *testing.T) {
 	}
 }
 
-func TestR7d3ConstantUBDiagnostics(t *testing.T) {
+func TestBurnInConstantUBDiagnostics(t *testing.T) {
 	tests := []struct {
 		source string
 		code   string
@@ -146,7 +146,7 @@ func TestR7d3ConstantUBDiagnostics(t *testing.T) {
 	}
 }
 
-func TestR7d3DirectedLogicalOperatorDiagnostic(t *testing.T) {
+func TestBurnInDirectedLogicalOperatorDiagnostic(t *testing.T) {
 	for _, test := range []struct{ token, replacement string }{{"&&", "and"}, {"||", "or"}} {
 		source := "profile Core; bool Bad(bool A, bool B) { return A " + test.token + " B; }"
 		if _, err := Parse("logical.concept", source); err == nil || !strings.Contains(err.Error(), "use '"+test.replacement+"'") {
@@ -155,7 +155,7 @@ func TestR7d3DirectedLogicalOperatorDiagnostic(t *testing.T) {
 	}
 }
 
-func TestR7d3SemanticSymbolIdentityAndCase(t *testing.T) {
+func TestBurnInSemanticSymbolIdentityAndCase(t *testing.T) {
 	for _, moduleName := range []string{"A", "B"} {
 		source := "module " + moduleName + "; profile Core; int Value() { return 1; }"
 		module, err := Parse(filepath.ToSlash(filepath.Join(strings.ToLower(moduleName), "shared.concept")), source)
@@ -191,7 +191,7 @@ int value() { return 2; }
 	}
 }
 
-func TestR7d3DeterministicLiteralOracle(t *testing.T) {
+func TestBurnInDeterministicLiteralOracle(t *testing.T) {
 	rng := rand.New(rand.NewSource(0x7d3))
 	values := []uint32{0, 1, 2147483647, 2147483648, 2654435761, 4294967295}
 	for i := 0; i < 24; i++ {
@@ -223,7 +223,7 @@ func TestR7d3DeterministicLiteralOracle(t *testing.T) {
 	}
 }
 
-func TestR7d3HundredRunArtifactCAndMIRDeterminism(t *testing.T) {
+func TestBurnInLiteralArtifactCAndMIRDeterminism100(t *testing.T) {
 	source := []byte(`module BurnIn.Determinism; profile Core;
 uint Mix(uint X, uint Shift) { return (X ^ 0xFF000000) + (2654435761 << Shift); }
 int Boundary() { return -2147483648; }
@@ -252,7 +252,7 @@ int Boundary() { return -2147483648; }
 	}
 }
 
-func TestR7d3GeneratedCStrictC11(t *testing.T) {
+func TestBurnInLiteralGeneratedCStrictC11(t *testing.T) {
 	compiler, err := exec.LookPath("clang")
 	if err != nil {
 		t.Skip("clang is not installed")
@@ -284,7 +284,7 @@ int Checked(int X, int Y) { return (X * 3) / Y; }
 	}
 }
 
-func TestR7d3LiteralRuntimeOracle(t *testing.T) {
+func TestBurnInLiteralRuntimeOracle(t *testing.T) {
 	compiler, err := exec.LookPath("clang")
 	if err != nil {
 		t.Skip("clang is not installed")
@@ -340,7 +340,7 @@ int main(void) {
 	}
 }
 
-func TestR7d3DeterministicLiteralExecutionOracle(t *testing.T) {
+func TestBurnInDeterministicLiteralExecutionOracle(t *testing.T) {
 	compiler, err := exec.LookPath("clang")
 	if err != nil {
 		t.Skip("clang is not installed")
@@ -395,7 +395,7 @@ func TestR7d3DeterministicLiteralExecutionOracle(t *testing.T) {
 	}
 }
 
-func TestR7d3CrossModuleSameStemLinks(t *testing.T) {
+func TestBurnInCrossModuleSameStemLinks(t *testing.T) {
 	compiler, err := exec.LookPath("clang")
 	if err != nil {
 		t.Skip("clang is not installed")

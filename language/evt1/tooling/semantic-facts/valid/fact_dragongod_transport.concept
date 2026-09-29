@@ -1,4 +1,4 @@
-module R6h.FactDragonGod;
+module Facts.FactDragonGod;
 profile Core;
 struct SystemMemory {}
 struct BootInfo { int code; }

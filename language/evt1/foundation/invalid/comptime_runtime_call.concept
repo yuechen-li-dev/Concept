@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase9-compile-time/invalid/compile_time_function_runtime_call.invalid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase9-compile-time/invalid/compile_time_function_runtime_call.invalid.conception
 profile Core;
 
 int RuntimeValue();

@@ -33,14 +33,14 @@ is erased before C lowering.
 | Test tooling | `testing_metadata.go`, `testing_assert.go`, `testing_lowering.go`, `testing_runner.go` | section 24 | `EVT1-TEST-PROPHECY-DIRECTION.md` | `language/evt1/tooling/tests`, `internal/concept/testdata/testing` | `testing_runner_test.go` |
 | Concept assertions and proof debugging | `concept_assert.go`, `proof_graph.go` | sections 17 and 24 | `CONCEPT-PROOFS.md` | `language/evt1/tooling/proofs` | `proof_graph_test.go` |
 | Generic runtime types and layout queries | `generic_types.go`, `layout.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d specimens | `operation_effects_test.go` |
-| Generic structural substitution | `type_substitution.go`, `generic_types.go` | post-freeze R6m extension | `EVT1-GENERIC-SUBSTITUTION-DIRECTION.md` | nested carriers and closed imported owners | `type_substitution_test.go`, `r6l_initialized_storage_test.go` |
+| Generic structural substitution | `type_substitution.go`, `generic_types.go` | post-freeze R6m extension | `EVT1-GENERIC-SUBSTITUTION-DIRECTION.md` | nested carriers and closed imported owners | `type_substitution_test.go`, `initialized_storage_test.go` |
 | External C ABI | `parse.go`, `validate.go`, `generate.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | focused R6d hosted specimen | `operation_effects_test.go` |
 | Operation effects | `concept_assert.go`, `semantic_facts.go` | post-freeze R6d extension | `EVT1-GENERIC-LIBRARY-DIRECTION.md` | R6b proofs plus focused R6d specimens | `operation_effects_test.go`, `proof_graph_test.go` |
 | Reusable semantic modules | `module_artifact.go`, `parse.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `language/evt1/tooling/modules`, `libraries` | `module_artifact_test.go` |
 | Packages and namespaces | `package.go`, `namespace.go`, `parse.go` | post-freeze R7a extension | `LIBRARY-AND-PACKAGE-DIRECTION.md` | `libraries/Standard`, `libraries/DragonGod` | `package_test.go`, `namespace_test.go` |
 | Cross-module generics and effects | `generic_types.go`, `concept_assert.go`, `validate.go` | post-freeze R6e extension | `EVT1-SEMANTIC-MODULE-DIRECTION.md` | `libraries/Standard` | `module_artifact_test.go`, `standard_memory_test.go` |
-| Quantities and units | `quantity.go`, `parse.go`, `validate.go` | `QUANTITIES-AND-UNITS.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | focused R6g specimens | `r6g_quantity_address_test.go` |
-| Address and typed storage | `quantity.go`, `validate.go`, `generate.go` | `ADDRESS-AND-STORAGE.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | `libraries/Standard/MemoryGeometry.concept` | `r6g_quantity_address_test.go` |
+| Quantities and units | `quantity.go`, `parse.go`, `validate.go` | `QUANTITIES-AND-UNITS.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | focused R6g specimens | `quantity_address_test.go` |
+| Address and typed storage | `quantity.go`, `validate.go`, `generate.go` | `ADDRESS-AND-STORAGE.md` | `EVT1-QUANTITY-ADDRESS-STORAGE-DIRECTION.md` | `libraries/Standard/MemoryGeometry.concept` | `quantity_address_test.go` |
 | Standard.Memory | `libraries/Standard/Memory`, ordinary compiler semantics | R6p/R7a library extension | `EVT1-ALLOCATOR-DIRECTION.md`, `STANDARD-MEMORY.md` | `libraries/Standard` | `standard_memory_test.go`, package tests |
 
 The three explicit state-bearing forms remain distinct: `automata with state`

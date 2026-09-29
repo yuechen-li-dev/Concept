@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestR7aManifestsAreOrdinaryImmutableConceptData(t *testing.T) {
+func TestManifestsAreOrdinaryImmutableConceptData(t *testing.T) {
 	root := filepath.Join("..", "..", "libraries")
 	manifests, err := DiscoverPackageManifests(root)
 	if err != nil {
@@ -29,7 +29,7 @@ func TestR7aManifestsAreOrdinaryImmutableConceptData(t *testing.T) {
 	}
 }
 
-func TestR7aPackageCycleDiagnosticIsBounded(t *testing.T) {
+func TestPackageCycleDiagnosticIsBounded(t *testing.T) {
 	manifests := map[string]PackageManifestValue{
 		"A": {Name: "A", Dependencies: []string{"B"}},
 		"B": {Name: "B", Dependencies: []string{"A"}},
@@ -40,7 +40,7 @@ func TestR7aPackageCycleDiagnosticIsBounded(t *testing.T) {
 	}
 }
 
-func TestR7aStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
+func TestStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
@@ -69,7 +69,7 @@ func TestR7aStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
 	}
 }
 
-func TestR7aPromotedStandardMemoryArtifactIsEquivalent(t *testing.T) {
+func TestPromotedStandardMemoryArtifactIsEquivalent(t *testing.T) {
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "Standard"); err != nil {
@@ -85,14 +85,14 @@ func TestR7aPromotedStandardMemoryArtifactIsEquivalent(t *testing.T) {
 	}
 }
 
-func TestR7aArtifactOnlyDragonGodConsumerRunsStrictC11(t *testing.T) {
+func TestArtifactOnlyDragonGodConsumerRunsStrictC11(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
 		t.Fatal(err)
 	}
-	source := `module R7a.ArtifactConsumer;
+	source := `module Consumers.ArtifactConsumer;
 profile Core;
 import DragonGod.Memory.Boot;
 import Standard.Memory.Bump;
@@ -114,17 +114,17 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "r7a_artifact_consumer_harness.c", "#include \"artifactconsumer.generated.h\"\nint main(void) { return concept_r7a__artifact_consumer_main() == 42 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "artifact_consumer_harness.c", "#include \"artifactconsumer.generated.h\"\nint main(void) { return concept_consumers__artifact_consumer_main() == 42 ? 0 : 1; }\n")
 }
 
-func TestR7bArtifactOnlyAgenticConsumerIsBoundedStrictC11(t *testing.T) {
+func TestArtifactOnlyAgenticConsumerIsBoundedStrictC11(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
 		t.Fatal(err)
 	}
-	source := `module R7b.AgenticArtifactConsumer;
+	source := `module Consumers.AgenticArtifactConsumer;
 profile Core;
 import DragonGod.Memory.State;
 import DragonGod.Events.Core;
@@ -156,17 +156,17 @@ int Main()
 			t.Fatalf("agentic artifact consumer emitted forbidden runtime artifact %q", forbidden)
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "r7b_agentic_artifact_consumer_harness.c", "#include \"agenticartifactconsumer.generated.h\"\nint main(void) { return concept_r7b__agentic_artifact_consumer_main() == 8 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "agentic_artifact_consumer_harness.c", "#include \"agenticartifactconsumer.generated.h\"\nint main(void) { return concept_consumers__agentic_artifact_consumer_main() == 8 ? 0 : 1; }\n")
 }
 
-func TestR7cArtifactOnlySchedulerConsumerIsBoundedStrictC11(t *testing.T) {
+func TestArtifactOnlySchedulerConsumerIsBoundedStrictC11(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
 		t.Fatal(err)
 	}
-	source := `module R7c.SchedulerArtifactConsumer;
+	source := `module Consumers.SchedulerArtifactConsumer;
 profile Core;
 import DragonGod.Scheduling.Core;
 import DragonGod.Scheduling.Queue;
@@ -222,10 +222,10 @@ int Main()
 			t.Fatalf("scheduler artifact consumer emitted forbidden runtime artifact %q", forbidden)
 		}
 	}
-	runFoundationNativeHarness(t, outputs, "r7c_scheduler_artifact_consumer_harness.c", "#include \"schedulerartifactconsumer.generated.h\"\nint main(void) { return concept_r7c__scheduler_artifact_consumer_main() == 8 ? 0 : 1; }\n")
+	runFoundationNativeHarness(t, outputs, "scheduler_artifact_consumer_harness.c", "#include \"schedulerartifactconsumer.generated.h\"\nint main(void) { return concept_consumers__scheduler_artifact_consumer_main() == 8 ? 0 : 1; }\n")
 }
 
-func TestR7aPackageErrorsRemainTyped(t *testing.T) {
+func TestPackageErrorsRemainTyped(t *testing.T) {
 	_, err := PackageBuildOrder(map[string]PackageManifestValue{}, "Missing")
 	if err == nil {
 		t.Fatal("expected missing package error")

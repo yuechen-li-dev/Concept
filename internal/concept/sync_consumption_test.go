@@ -85,7 +85,7 @@ void CheckSynchronizationProofs()
 	return module
 }
 
-func TestR7d5DerivesSynchronizedAccessPublishedBeforeAndExactlyOnce(t *testing.T) {
+func TestDerivesSynchronizedAccessPublishedBeforeAndExactlyOnce(t *testing.T) {
 	module := r7d5SynchronizationModule(t)
 	env, err := analyzeModule(module)
 	if err != nil {
@@ -108,7 +108,7 @@ func TestR7d5DerivesSynchronizedAccessPublishedBeforeAndExactlyOnce(t *testing.T
 	}
 }
 
-func TestR7d5MissingOrderingAndPartialSynchronizationDoNotOverprove(t *testing.T) {
+func TestMissingOrderingAndPartialSynchronizationDoNotOverprove(t *testing.T) {
 	source := strings.ReplaceAll(r7d5SynchronizationSource, "MemoryOrder::Release", "MemoryOrder::Relaxed")
 	source = strings.ReplaceAll(source, "MemoryOrder::Acquire);\n    if (ready", "MemoryOrder::Relaxed);\n    if (ready")
 	atomic := buildSemanticArtifact(t, "Standard/Synchronization/Atomic.concept", standardMemorySource(t, "Standard/Synchronization/Atomic.concept"), nil)
@@ -143,7 +143,7 @@ struct A {} struct B {} struct Slot { int value; }
 	}
 }
 
-func TestR7d5SynchronizationOrderingSurvivesArtifactOnlyConsumption(t *testing.T) {
+func TestSynchronizationOrderingSurvivesArtifactOnlyConsumption(t *testing.T) {
 	atomic := buildSemanticArtifact(t, "Standard/Synchronization/Atomic.concept", standardMemorySource(t, "Standard/Synchronization/Atomic.concept"), nil)
 	artifact := buildSemanticArtifact(t, "sync_consumption.concept", r7d5SynchronizationSource, map[string][]byte{"Standard.Synchronization.Atomic": atomic})
 	var decoded SemanticModuleArtifact
@@ -179,7 +179,7 @@ void CheckImportedOrdering()
 	}
 }
 
-func TestR7d5SameSourceVerificationRetainsAndOptimizedSimplifiesPrivateAtomic(t *testing.T) {
+func TestSameSourceVerificationRetainsAndOptimizedSimplifiesPrivateAtomic(t *testing.T) {
 	t.Parallel()
 	atomic := buildSemanticArtifact(t, "Standard/Synchronization/Atomic.concept", standardMemorySource(t, "Standard/Synchronization/Atomic.concept"), nil)
 	source := `module Sync.PrivateAtomic;
@@ -246,7 +246,7 @@ func equalOutputs(left Outputs, right Outputs) bool {
 	return true
 }
 
-func TestR7d5GuardElisionRequiresExactSingleContextConjunction(t *testing.T) {
+func TestGuardElisionRequiresExactSingleContextConjunction(t *testing.T) {
 	atomic := buildSemanticArtifact(t, "Standard/Synchronization/Atomic.concept", standardMemorySource(t, "Standard/Synchronization/Atomic.concept"), nil)
 	guard := buildSemanticArtifact(t, "Standard/Synchronization/Guard.concept", standardMemorySource(t, "Standard/Synchronization/Guard.concept"), map[string][]byte{"Standard.Synchronization.Atomic": atomic})
 	artifacts := map[string][]byte{"Standard.Synchronization.Atomic": atomic, "Standard.Synchronization.Guard": guard}
@@ -314,7 +314,7 @@ int Observe(ref const Shared shared) { return shared.value; }
 	}
 }
 
-func TestR7d5ActuationClaimRaceIsExactlyOnceInNativeThreads(t *testing.T) {
+func TestActuationClaimRaceIsExactlyOnceInNativeThreads(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
@@ -398,7 +398,7 @@ int main(void) {
 	runFoundationNativeHarness(t, outputs, "r7d5_actuation_race.c", harness)
 }
 
-func TestR7d5BlackboardPublicationDisjointWritersAndMPSCNativeThreads(t *testing.T) {
+func TestBlackboardPublicationDisjointWritersAndMPSCNativeThreads(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()

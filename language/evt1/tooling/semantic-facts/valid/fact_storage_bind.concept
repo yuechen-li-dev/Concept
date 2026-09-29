@@ -1,4 +1,4 @@
-module R6h.FactStorageBind;
+module Facts.FactStorageBind;
 profile Core;
 struct SystemMemory {}
 int Main()

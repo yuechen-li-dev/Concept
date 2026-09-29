@@ -1,0 +1,41 @@
+// Ownership: an owned value is moved, never copied, and its Drop runs
+// exactly once. Replaces PoC3 examples phase10 (copy_and_move, drop_cleanup,
+// move_and_use_after_move) and phase6 (unsafe ownership notes).
+profile Core;
+
+struct Handle
+{
+    int id;
+}
+
+void Drop(owned Handle handle)
+{
+    assert(handle.id > 0, "a live handle has a positive id");
+}
+
+owned Handle Open(int id)
+{
+    owned Handle handle = Handle{id};
+    return move handle;
+}
+
+// Taking an owned parameter consumes the caller's value.
+int Close(owned Handle handle)
+{
+    int id = handle.id;
+    Drop(move handle);
+    return id;
+}
+
+// Borrowing reads without taking ownership.
+int Peek(ref const Handle handle)
+{
+    return handle.id;
+}
+
+int Main()
+{
+    owned Handle handle = Open(7);
+    int seen = Peek(ref const handle);
+    return seen + Close(move handle);
+}

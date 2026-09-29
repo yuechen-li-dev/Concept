@@ -124,7 +124,7 @@ void SchedulerMatchesDirectDominatusBatchOutcome()
     ContextId id = scheduler.Register(move machine)!;
     scheduler.RunUntilIdle(2)!;
 
-    Assert.True(batch.complete, "the R7b direct batch completes");
+    Assert.True(batch.complete, "the direct batch completes");
     Assert.Equals(scheduler.State(id)!, ExecutionState::Completed, "the scheduler completes the same bounded work");
     Assert.Equals(scheduler.contexts.machines[0].mind.CurrentState().value, direct.CurrentState().value, "direct and scheduled execution reach the same authored state");
     Assert.Equals(scheduler.contexts.machines[0].mind.status, direct.status, "direct and scheduled execution have the same terminal status");

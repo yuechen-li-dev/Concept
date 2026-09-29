@@ -1,4 +1,4 @@
-module R6h.FactGenericWrapper;
+module Facts.FactGenericWrapper;
 profile Core;
 import Standard.MemoryGeometry;
 import Standard.Generic;

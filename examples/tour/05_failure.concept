@@ -1,0 +1,79 @@
+// Failure: Result for recoverable errors, `?` to propagate them, try/except
+// to handle several error types, `!` and assert for broken invariants (both
+// end in the terminal panic path), and `discard` for results that are
+// deliberately ignored.
+// Replaces PoC3 examples phase5 (result_try, must_use_discard) and phase17.
+profile Core;
+
+enum ParseError
+{
+    Empty,
+    OutOfRange
+}
+
+enum StoreError
+{
+    Full
+}
+
+Result<int, ParseError> ParseDigit(int code)
+{
+    if (code < 48 or code > 57)
+    {
+        return Result::Error(ParseError::OutOfRange);
+    }
+    return Result::Ok(code - 48);
+}
+
+Result<int, ParseError> ParsePair(int tens, int ones)
+{
+    int high = ParseDigit(tens)?;
+    int low = ParseDigit(ones)?;
+    return Result::Ok(high * 10 + low);
+}
+
+Result<int, StoreError> Store(int value)
+{
+    if (value > 50)
+    {
+        return Result::Error(StoreError::Full);
+    }
+    return Result::Ok(value);
+}
+
+int ParseAndStore(int tens, int ones)
+{
+    int outcome = 0;
+    try
+    {
+        int value = ParsePair(tens, ones)?;
+        outcome = Store(value)?;
+    }
+    except (ParseError error)
+    {
+        outcome = -1;
+    }
+    except (StoreError error)
+    {
+        outcome = -2;
+    }
+    return outcome;
+}
+
+int Checked(int value)
+{
+    assert(value >= 0, "callers pass non-negative values");
+    return value;
+}
+
+// `!` asserts success: an error here is a bug, not a condition to handle.
+int KnownDigit()
+{
+    return ParseDigit(55)!;
+}
+
+int Main()
+{
+    discard Store(99);
+    return Checked(ParseAndStore(52, 55)) + KnownDigit();
+}

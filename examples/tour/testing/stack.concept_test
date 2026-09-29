@@ -1,0 +1,50 @@
+// Tests live in .concept_test files and import the module under test.
+// [[fact]] is one case; [[theory]] runs once per row of a JSON artifact;
+// Assert.Concept checks a compile-time proof such as NoAllocation.
+// Replaces PoC3 examples phase11 (fact_basic, theory_inline_data,
+// assert_vs_expect, expect_that_relations).
+module StackTests;
+profile Core;
+import Stack;
+
+[[fact]]
+void PopReturnsTheLastPushedValue()
+{
+    IntStack stack = NewStack();
+    Assert.LGTM(Push(ref stack, 1), "push one");
+    Assert.LGTM(Push(ref stack, 2), "push two");
+    Assert.Equal(Pop(ref stack)!, 2, "last in, first out");
+    Assert.Equal(Pop(ref stack)!, 1, "then the one below");
+}
+
+[[fact]]
+void EmptyAndFullAreDistinctErrors()
+{
+    IntStack stack = NewStack();
+    Assert.FailsWith(Pop(ref stack), StackError::Empty, "nothing to pop");
+    for (i in 0..4)
+    {
+        Assert.LGTM(Push(ref stack, i), "fill to capacity");
+    }
+    Assert.FailsWith(Push(ref stack, 9), StackError::Full, "one past capacity");
+}
+
+// Each row of pushes.json is [count, expectedDepth].
+[[theory]]
+[[artifact("pushes.json")]]
+void DepthNeverExceedsCapacity(int count, int expectedDepth)
+{
+    IntStack stack = NewStack();
+    for (i in 0..count)
+    {
+        discard Push(ref stack, i);
+    }
+    Assert.Equal(stack.depth, expectedDepth, "pushes beyond capacity are refused");
+}
+
+[[fact]]
+void StackOperationsAllocateNothing()
+{
+    Assert.Concept<NoAllocation>(Push, "fixed inline storage");
+    Assert.Concept<NoAllocation>(Pop, "fixed inline storage");
+}

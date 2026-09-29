@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase2-execution/valid/while_with_if.valid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase2-execution/valid/while_with_if.valid.conception
 profile Core;
 
 int Count(bool addTwo, int limit)

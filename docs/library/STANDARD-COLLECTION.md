@@ -45,7 +45,7 @@ borrow blocks it; the same call succeeds after the borrow's scope ends.
 R7f2 also rejects resource-sensitive leases across await and yield. The
 collector exposes no async borrow exception.
 
-See [EVT1-R7FR-CONVERGENCE.md](../conformance/EVT1-R7FR-CONVERGENCE.md) for
+See [EVT1-R7FR-CONVERGENCE.md](../history/milestones/EVT1-R7FR-CONVERGENCE.md) for
 native, artifact-only, graph, ownership, and determinism evidence. DragonGod
 rendezvous, heterogeneous objects, moving or concurrent collection, weak
 references, and finalizers remain outside this first library.

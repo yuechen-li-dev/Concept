@@ -166,10 +166,10 @@ package metadata shape remains separate. Local lint severity is not exported
 semantic contract and does not change module artifact or generated C identity.
 `concept lint` applies root policy to root declarations, while imported
 dependency contracts remain available to proofs. See
-[R8 project policy](../design/R8-PROJECT-POLICY.md).
+[R8 project policy](../design/PROJECT-POLICY.md).
 
 The root `manifest.concept` may also set `FormatIndentWidth`,
 `FormatMaxLineLength`, and `FormatBraceStyle` as immutable literal declarations.
-See [R8 source trivia and formatting](../design/R8-SOURCE-TRIVIA-AND-FORMAT.md)
+See [R8 source trivia and formatting](../design/SOURCE-TRIVIA-AND-FORMAT.md)
 for bounds, defaults, and project scope. Formatting changes presentation;
 lint checks semantic project policy.

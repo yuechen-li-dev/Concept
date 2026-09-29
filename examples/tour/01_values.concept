@@ -1,0 +1,63 @@
+// Values: records, structs, payload enums, and exhaustive match.
+// Replaces PoC3 examples phase2 (function_call, match_control, sum_loop),
+// phase5 (payload_match), and phase7-style struct places.
+profile Core;
+
+// A record is an immutable value; a struct is a mutable aggregate.
+record struct Point
+{
+    int x;
+    int y;
+}
+
+struct Counter
+{
+    int count;
+}
+
+enum Shape
+{
+    Dot(Point at),
+    Box(Point low, Point high),
+    Empty
+}
+
+int Area(Shape shape)
+{
+    return match (shape)
+    {
+        Shape::Dot(at) => 0,
+        Shape::Box(low, high) => (high.x - low.x) * (high.y - low.y),
+        Shape::Empty => 0,
+    };
+}
+
+// Integer match with a wildcard arm.
+int Sides(int corners)
+{
+    return match (corners)
+    {
+        3 => 3,
+        4 => 4,
+        _ => 0,
+    };
+}
+
+int SumTo(int limit)
+{
+    int total = 0;
+    for (value in 1..limit + 1)
+    {
+        total += value;
+    }
+    return total;
+}
+
+int Main()
+{
+    Counter counter = Counter{0};
+    counter.count += 1;
+    Point origin = Point{0, 0};
+    Point corner = Point{3, 4};
+    return Area(Shape::Box(origin, corner)) + SumTo(4) + Sides(4) + counter.count;
+}

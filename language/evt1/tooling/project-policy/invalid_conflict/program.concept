@@ -1,0 +1,3 @@
+module Policies.Conflict;
+profile Core;
+void FastFunction() {}

@@ -1,7 +1,7 @@
 module Standard.Synchronization.Atomic;
 profile Core;
 
-// AtomicInt is the deliberately small R7d machine-atomic surface. The
+// AtomicInt is the deliberately small machine-atomic surface. The
 // compiler gives its sole field C11 _Atomic representation; all operations
 // remain ordinary library functions over this explicit authority.
 // AtomicInt remains a value so bounded, quiescent checkpoint values keep their

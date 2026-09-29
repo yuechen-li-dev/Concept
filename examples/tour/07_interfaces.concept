@@ -1,0 +1,51 @@
+// Interfaces and dyn: an interface is a concept whose requirements can be
+// called through a non-owning `dyn` reference. No heap, no inheritance.
+// Replaces PoC3 examples phase14 (dyn-counter, dyn-sink, dyn-two-impls).
+profile Core;
+
+interface Sink<T>
+{
+    requires void Write(ref T self, int value);
+}
+
+struct Total
+{
+    int sum;
+
+    void Write(ref Total self, int value)
+    {
+        self.sum = self.sum + value;
+    }
+}
+
+struct Last
+{
+    int value;
+
+    void Write(ref Last self, int value)
+    {
+        self.value = value;
+    }
+}
+
+requires Sink<Total>;
+requires Sink<Last>;
+
+void Feed(dyn Sink sink, int count)
+{
+    for (i in 1..count + 1)
+    {
+        sink.Write(i);
+    }
+}
+
+int Main()
+{
+    Total total = Total{0};
+    Last last = Last{0};
+    dyn Sink toTotal = ref total;
+    dyn Sink toLast = ref last;
+    Feed(toTotal, 4);
+    Feed(toLast, 4);
+    return total.sum + last.value;
+}

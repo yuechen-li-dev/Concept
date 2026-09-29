@@ -1,0 +1,27 @@
+// Compile-time evaluation: constants, functions, bounded loops, and
+// static_assert. Replaces PoC3 examples phase9.
+profile Core;
+
+comptime int Lanes = 4;
+
+comptime int Factorial(int n)
+{
+    int result = 1;
+    int i = 2;
+    while (i <= n) bounded(16)
+    {
+        result = result * i;
+        i = i + 1;
+    }
+    return result;
+}
+
+comptime int Permutations = Factorial(Lanes);
+
+static_assert(Permutations == 24, "four lanes have 24 orderings");
+
+int Main()
+{
+    int[Lanes] lanes = [0 ... Lanes];
+    return Permutations + Len(lanes);
+}

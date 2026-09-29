@@ -1,0 +1,28 @@
+module Policies.Demo;
+profile Core;
+
+struct lower_type { int BadField; }
+
+generator <typename T> DeriveField
+int generated_helper(ref const T item) { return item.BadField; }
+derive DeriveField reflect<lower_type>;
+
+extern "C" byte* Acquire(usize size);
+requires compiler.Allocates(Acquire);
+extern "C" void ForeignOrIncompleteFunction();
+[[must_use]] extern "C" int sqlite3_open();
+
+void FastFunction() {}
+
+int AllocatingFunction(usize size)
+{
+    byte* storage = Acquire(size);
+    return 1;
+}
+
+void do_work()
+{
+    int SomeLocal = 0;
+}
+
+void GoodFunction() {}

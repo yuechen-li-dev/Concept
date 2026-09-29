@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestR7f1ClosedGenericLocalArrayIsFixedC11Storage(t *testing.T) {
+func TestClosedGenericLocalArrayIsFixedC11Storage(t *testing.T) {
 	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "local_array_generic.concept")
 	source, err := os.ReadFile(path)
 	if err != nil {
@@ -29,7 +29,7 @@ func TestR7f1ClosedGenericLocalArrayIsFixedC11Storage(t *testing.T) {
 	runFoundationNativeHarness(t, outputs, "generic_local_array_harness.c", "#include \"local_array_generic.generated.h\"\nint main(void) { return concept_local_array_generic_main() == 50 ? 0 : 1; }\n")
 }
 
-func TestR7f1GenericClosureIsByteIdenticalAcross100Runs(t *testing.T) {
+func TestGenericClosureIsByteIdenticalAcross100Runs(t *testing.T) {
 	provider := `module Library.Closure; profile Core;
 concept Transformable<T> { requires template <typename U> U Transform(ref const T value, U seed); }
 template <typename T> requires Transformable<T>
@@ -67,7 +67,7 @@ int Main() { Item item = Item{3}; return Apply<Item>(ref const item); }
 	}
 }
 
-func TestR7f1GenericCallsGenericInStrictC11(t *testing.T) {
+func TestGenericCallsGenericInStrictC11(t *testing.T) {
 	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "generic_calls_generic.concept")
 	source, err := os.ReadFile(path)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestR7f1GenericCallsGenericInStrictC11(t *testing.T) {
 	runFoundationNativeHarness(t, outputs, "generic_call_harness.c", "#include \"generic_calls_generic.generated.h\"\nint main(void) { return concept_generic_calls_generic_main() == 42 ? 0 : 1; }\n")
 }
 
-func TestR7f1ValueShapedConceptAlreadyWorks(t *testing.T) {
+func TestValueShapedConceptAlreadyWorks(t *testing.T) {
 	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "value_shaped_concept.concept")
 	source, err := os.ReadFile(path)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestR7f1ValueShapedConceptAlreadyWorks(t *testing.T) {
 	runFoundationNativeHarness(t, outputs, "value_shaped_concept_harness.c", "#include \"value_shaped_concept.generated.h\"\nint main(void) { return concept_value_shaped_concept_main() == 5 ? 0 : 1; }\n")
 }
 
-func TestR7f1GenericRequiredOperationInStrictC11(t *testing.T) {
+func TestGenericRequiredOperationInStrictC11(t *testing.T) {
 	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "generic_required_operation.concept")
 	source, err := os.ReadFile(path)
 	if err != nil {
@@ -118,7 +118,7 @@ func TestR7f1GenericRequiredOperationInStrictC11(t *testing.T) {
 	runFoundationNativeHarness(t, outputs, "generic_required_operation_harness.c", "#include \"generic_required_operation.generated.h\"\nint main(void) { return concept_generic_required_operation_main() == 7 ? 0 : 1; }\n")
 }
 
-func TestR7f1DirectedGenericRejections(t *testing.T) {
+func TestDirectedGenericRejections(t *testing.T) {
 	cases := []struct {
 		name   string
 		source string
@@ -145,7 +145,7 @@ func TestR7f1DirectedGenericRejections(t *testing.T) {
 	}
 }
 
-func TestR7f1NestedGenericCallFromArtifact(t *testing.T) {
+func TestNestedGenericCallFromArtifact(t *testing.T) {
 	provider := `module Library.Nested;
 profile Core;
 template <typename U> U Identity(U value) { return value; }
@@ -168,7 +168,7 @@ int Main() { return Forward<int>(42); }
 	runFoundationNativeHarness(t, outputs, "nested_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 42 ? 0 : 1; }\n")
 }
 
-func TestR7f1GenericLocalArrayFromArtifact(t *testing.T) {
+func TestGenericLocalArrayFromArtifact(t *testing.T) {
 	provider := `module Library.Storage;
 profile Core;
 template <usize N> int Work() { int<array>[N] values = [7 ...]; return values[0] + Len(values); }
@@ -190,7 +190,7 @@ int Main() { return Work<4>() + Work<32>(); }
 	runFoundationNativeHarness(t, outputs, "storage_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 50 ? 0 : 1; }\n")
 }
 
-func TestR7f1GenericRequiredOperationFromArtifact(t *testing.T) {
+func TestGenericRequiredOperationFromArtifact(t *testing.T) {
 	provider := `module Library.Visit;
 profile Core;
 concept Transformable<T> { requires template <typename U> U Transform(ref const T value, U seed); }
@@ -217,7 +217,7 @@ int Main() { Item item = Item{3}; return Apply<Item>(ref const item); }
 	runFoundationNativeHarness(t, outputs, "required_artifact_harness.c", "#include \"app.generated.h\"\nint main(void) { return concept_app_main() == 7 ? 0 : 1; }\n")
 }
 
-func TestR7f1CombinedLibraryProbeFromArtifact(t *testing.T) {
+func TestCombinedLibraryProbeFromArtifact(t *testing.T) {
 	provider := `module Library.Probe; profile Core;
 concept Transformable<T> { requires template <typename U> U Transform(ref const T value, U seed); }
 struct Store { int value; };
@@ -250,7 +250,7 @@ int Main() { owned Store store = Store{5}; Item item = Item{3}; int result = 0; 
 	}
 }
 
-func TestR7f1ScopedReclamationExclusion(t *testing.T) {
+func TestScopedReclamationExclusion(t *testing.T) {
 	valid := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "scoped_reclaim.concept")
 	source, err := os.ReadFile(valid)
 	if err != nil {
@@ -276,7 +276,7 @@ func TestR7f1ScopedReclamationExclusion(t *testing.T) {
 	}
 }
 
-func TestR7f1ImportedScopedReclamationExclusion(t *testing.T) {
+func TestImportedScopedReclamationExclusion(t *testing.T) {
 	provider := `module Library.Access;
 profile Core;
 struct Store { int value; };
@@ -307,7 +307,7 @@ int Main() { owned Store store = Store{7}; Lease lease = Borrow(ref const store)
 	}
 }
 
-func TestR7f1BorrowSourcesSurviveAssignmentAndJoin(t *testing.T) {
+func TestBorrowSourcesSurviveAssignmentAndJoin(t *testing.T) {
 	cases := []string{
 		`profile Core; struct Store { int value; }; ref struct Lease { ref const Store owner; }; Lease Borrow(ref const Store store) { return Lease{ref const store}; } void Reclaim(owned Store store) { } int Main() { owned Store first = Store{1}; owned Store second = Store{2}; Lease held = Borrow(ref const first); held = Borrow(ref const second); Reclaim(move second); return held.owner.value; }`,
 		`profile Core; struct Store { int value; }; ref struct Lease { ref const Store owner; }; Lease Borrow(ref const Store store) { return Lease{ref const store}; } void Reclaim(owned Store store) { } int Main() { owned Store first = Store{1}; owned Store second = Store{2}; Lease held = Borrow(ref const first); if (true) { held = Borrow(ref const second); } Reclaim(move second); return held.owner.value; }`,

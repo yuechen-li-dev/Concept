@@ -1,4 +1,4 @@
-module R6h.FactCopyMove;
+module Facts.FactCopyMove;
 profile Core;
 import Standard.MemoryGeometry;
 int Main()

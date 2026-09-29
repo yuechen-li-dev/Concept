@@ -10,7 +10,7 @@ import (
 // This fixture deliberately uses no library-specific names. The imported
 // generic's access contract must survive artifact transport and close at the
 // consumer's concrete application.
-func TestR7d6ImportedGenericAccessProof(t *testing.T) {
+func TestImportedGenericAccessProof(t *testing.T) {
 	library := `module Proof.Channel;
 profile Core;
 record struct AgentA {}
@@ -70,7 +70,7 @@ struct Use { Channel<QueueX> channel; }
 	}
 }
 
-func TestR7d6GenericInstancesKeepIndependentProducerSets(t *testing.T) {
+func TestGenericInstancesKeepIndependentProducerSets(t *testing.T) {
 	library := `module Proof.Channel;
 profile Core;
 record struct AgentA {}
@@ -112,7 +112,7 @@ void Compete(ref Channel<QueueY> other) {}
 	}
 }
 
-func TestR7d6GenericValueArgumentAndOpaqueProducer(t *testing.T) {
+func TestGenericValueArgumentAndOpaqueProducer(t *testing.T) {
 	library := `module Proof.Channel;
 profile Core;
 record struct AgentA {}
@@ -155,7 +155,7 @@ void Opaque(ref Channel<QueueX, 16> queue) {}
 	}
 }
 
-func TestR7d6GenericExecutionContextClosesFromArtifact(t *testing.T) {
+func TestGenericExecutionContextClosesFromArtifact(t *testing.T) {
 	library := `module Proof.Channel;
 profile Core;
 record struct AgentA {}
@@ -208,7 +208,7 @@ struct Use { Channel<AgentA, AgentB, QueueX> channel; }
 	}
 }
 
-func TestR7d6ConcreteContractContradiction(t *testing.T) {
+func TestConcreteContractContradiction(t *testing.T) {
 	library := `module Proof.Channel;
 profile Core;
 record struct AgentA {}
@@ -236,7 +236,7 @@ void Compete(ref Channel<QueueY> other) {}
 	}
 }
 
-func TestR7d6PlannerScopesGenericGuardEvidence(t *testing.T) {
+func TestPlannerScopesGenericGuardEvidence(t *testing.T) {
 	entry := func(instance, context string, operation AccessKind) MIRAccessEntry {
 		owner := Type{Name: instance, Kind: TypeStruct}
 		return evt1FinalizeAccessEntry(MIRAccessEntry{

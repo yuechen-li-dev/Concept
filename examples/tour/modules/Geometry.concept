@@ -1,0 +1,24 @@
+// A library module. Other modules use it by importing its name; the
+// compiler reads its semantic artifact, not its source.
+// Replaces PoC3 examples phase16 (cross-module-add, imported-types,
+// same-names-qualified).
+module Geometry;
+profile Core;
+
+record struct Vector
+{
+    int x;
+    int y;
+}
+
+Vector Add(Vector a, Vector b)
+{
+    return Vector{a.x + b.x, a.y + b.y};
+}
+
+int Length1(Vector v)
+{
+    int ax = if (v.x < 0) -v.x else v.x;
+    int ay = if (v.y < 0) -v.y else v.y;
+    return ax + ay;
+}

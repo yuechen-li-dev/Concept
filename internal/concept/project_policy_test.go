@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestR8e2bManifestNamingLint(t *testing.T) {
+func TestManifestNamingLint(t *testing.T) {
 	root := t.TempDir()
 	manifest := `module Policy.Manifest; profile Core;
 record struct LintPolicy { string concept; string severity; string kind; string subject; }
@@ -69,7 +69,7 @@ void GoodFunction() {}
 	}
 }
 
-func TestR8e2bPolicySeverityDoesNotChangeArtifact(t *testing.T) {
+func TestPolicySeverityDoesNotChangeArtifact(t *testing.T) {
 	root := t.TempDir()
 	manifestPath := filepath.Join(root, "manifest.concept")
 	manifest := `module Policy.Manifest; profile Core;
@@ -139,21 +139,21 @@ comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "warning", "", ""};`
 	}
 }
 
-func TestR8e2bMustUseArtifactExplanation(t *testing.T) {
+func TestMustUseArtifactExplanation(t *testing.T) {
 	root := t.TempDir()
-	const provider = `module R8e2b.Provider; profile Core; [[must_use]] extern "C" int native_status();`
+	const provider = `module Policies.Provider; profile Core; [[must_use]] extern "C" int native_status();`
 	artifact, err := CompileSemanticModule("provider.concept", provider, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifactPath := filepath.Join(root, "R8e2b", "Provider.concept-module.json")
+	artifactPath := filepath.Join(root, "Policies", "Provider.concept-module.json")
 	if err := os.MkdirAll(filepath.Dir(artifactPath), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(artifactPath, artifact, 0600); err != nil {
 		t.Fatal(err)
 	}
-	const consumer = `module R8e2b.Consumer; profile Core; import R8e2b.Provider;
+	const consumer = `module Policies.Consumer; profile Core; import Policies.Provider;
 void Good() { discard native_status(); }`
 	consumerPath := filepath.Join(root, "consumer.concept")
 	if err := os.WriteFile(consumerPath, []byte(consumer), 0600); err != nil {
@@ -166,13 +166,13 @@ void Good() { discard native_status(); }`
 	if graph.Outcome != FactProven || !strings.Contains(RenderProofVerbose(graph), "DeclaredForeign") || !strings.Contains(RenderProofVerbose(graph), "semantic artifact") {
 		t.Fatalf("MustUse origin: %+v", graph)
 	}
-	_, err = ParseWithSemanticModules(consumerPath, strings.Replace(consumer, "discard native_status();", "native_status();", 1), map[string][]byte{"R8e2b.Provider": artifact})
+	_, err = ParseWithSemanticModules(consumerPath, strings.Replace(consumer, "discard native_status();", "native_status();", 1), map[string][]byte{"Policies.Provider": artifact})
 	if err == nil || !strings.Contains(err.Error(), "MUST_USE_RESULT_IGNORED") {
 		t.Fatalf("ignored foreign result: %v", err)
 	}
 }
 
-func TestR8e2bConflictingPolicyStyles(t *testing.T) {
+func TestConflictingPolicyStyles(t *testing.T) {
 	root := t.TempDir()
 	manifest := `module Policy.Manifest; profile Core;
 record struct LintPolicy { string concept; string severity; string kind; string subject; }
@@ -192,7 +192,7 @@ comptime LintPolicy Snake = LintPolicy{"SnakeFunctions", "error", "FunctionDecla
 	}
 }
 
-func TestR8e2bRootPolicyExcludesDependencyImplementation(t *testing.T) {
+func TestRootPolicyExcludesDependencyImplementation(t *testing.T) {
 	root := t.TempDir()
 	const dependency = `module Policy.Dependency; profile Core;
 void noncanonical_dependency() {}`
@@ -239,7 +239,7 @@ void RootFunction() { noncanonical_dependency(); }`
 	}
 }
 
-func TestR8e2bMalformedManifestPolicy(t *testing.T) {
+func TestMalformedManifestPolicy(t *testing.T) {
 	root := t.TempDir()
 	manifest := `module Policy.Manifest; profile Core;
 record struct LintPolicy { string concept; string severity; string kind; string subject; }
@@ -257,7 +257,7 @@ comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "fatal", "", ""};`
 	}
 }
 
-func TestR8e2bImportedPolicyValueDoesNotActivateRootLint(t *testing.T) {
+func TestImportedPolicyValueDoesNotActivateRootLint(t *testing.T) {
 	root := t.TempDir()
 	settings := `module Policy.Settings; profile Core;
 record struct LintPolicy { string concept; string severity; string kind; string subject; }
@@ -286,8 +286,8 @@ comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "error", "", ""};`
 	}
 }
 
-func TestR8e2bHotPathProofOutcomes(t *testing.T) {
-	path := filepath.Join("..", "..", "tests", "corpus", "r8e2b", "demo", "program.concept")
+func TestHotPathProofOutcomes(t *testing.T) {
+	path := filepath.Join("..", "..", "language", "evt1", "tooling", "project-policy", "demo", "program.concept")
 	for _, test := range []struct {
 		name     string
 		outcome  SemanticFactCertainty

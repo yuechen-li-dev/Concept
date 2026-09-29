@@ -40,7 +40,7 @@
     { "subsystem": "Generic library closure", "path": "generic-library-closure", "valid": 5, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7f1"] },
     { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R7f2", "R7fR"] },
     { "subsystem": "C ABI layout", "path": "abi-layout", "valid": 2, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7j"] },
-    { "subsystem": "SFIAEAIMTOPII", "path": "tooling/sfiaea", "valid": 0, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7p"] },
+    { "subsystem": "Substitution failure", "path": "tooling/substitution-failure", "valid": 0, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7p"] },
     { "subsystem": "Quantity boundary", "path": "tooling/quantity-boundary", "valid": 2, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7p"] },
     { "subsystem": "Multiplicative unit algebra", "path": "units/r8c", "valid": 4, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R8c"] },
     { "subsystem": "Explicit semantic interpretation", "path": "units/r8d", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R8d"] }

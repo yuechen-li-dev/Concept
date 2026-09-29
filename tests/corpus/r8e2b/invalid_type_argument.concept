@@ -1,5 +1,0 @@
-module R8e2b.InvalidTypeArgument;
-profile Core;
-concept TypeOnly<T> {}
-void Function() {}
-void Check() { Assert.Concept<TypeOnly>(Function, "function is not a type"); }

@@ -1,0 +1,25 @@
+// A module that builds on Geometry's types and functions.
+module Motion;
+profile Core;
+import Geometry;
+
+record struct Body
+{
+    Vector position;
+    Vector velocity;
+}
+
+Body Advance(Body body)
+{
+    return Body{Add(body.position, body.velocity), body.velocity};
+}
+
+int DistanceAfter(Body body, int steps)
+{
+    Body moved = body;
+    for (i in 0..steps)
+    {
+        moved = Advance(moved);
+    }
+    return Length1(moved.position);
+}

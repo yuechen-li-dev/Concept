@@ -1,0 +1,31 @@
+// The C boundary: `[[repr(C)]]` fixes a record's layout, static_assert pins
+// it, and `extern "C"` declares a foreign function. Layout claims can also
+// be required as concepts. Replaces PoC3 examples phase15 (extern-abs,
+// extern-repr-prototype, repr-point-export).
+profile Core;
+
+[[repr(C)]] record struct Point
+{
+    int x;
+    int y;
+}
+
+static_assert(SizeOf<Point>() == 8, "two 32-bit fields, no padding");
+static_assert(OffsetOf<Point>(Point.y) == 4, "y follows x");
+
+concept CAbiValue<T> { requires compiler.CAbiLayout<T>(); }
+requires CAbiValue<Point>;
+
+extern "C" int abs(int value);
+extern "C" Point MirrorPoint(Point point);
+
+int ManhattanFromOrigin(Point point)
+{
+    return abs(point.x) + abs(point.y);
+}
+
+int Main()
+{
+    Point p = Point{-3, 4};
+    return ManhattanFromOrigin(MirrorPoint(p));
+}

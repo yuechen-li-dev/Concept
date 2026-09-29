@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestR8e3CommentsIdempotenceAndSemantics(t *testing.T) {
+func TestFormatCommentsIdempotenceAndSemantics(t *testing.T) {
 	source := `// heading
 module Format.Core; profile Core;
 
@@ -131,7 +131,7 @@ func stripSourceSpans(value any) {
 	}
 }
 
-func TestR8e3ProjectScopeAndConfig(t *testing.T) {
+func TestFormatProjectScopeAndConfig(t *testing.T) {
 	root := t.TempDir()
 	if _, err := FormatPath(root); err == nil || !strings.Contains(err.Error(), "FORMAT_MANIFEST_MISSING") {
 		t.Fatalf("directory without manifest: %v", err)
@@ -171,7 +171,7 @@ comptime string FormatBraceStyle = "same-line";
 	}
 }
 
-func TestR8e3CurrentSyntaxRoundTrips(t *testing.T) {
+func TestFormatCurrentSyntaxRoundTrips(t *testing.T) {
 	paths := []string{
 		"../../language/evt1/units/r8c/valid/scientific_literals.concept",
 		"../../language/evt1/units/r8c/valid/tensor_units.concept",
@@ -202,7 +202,7 @@ func TestR8e3CurrentSyntaxRoundTrips(t *testing.T) {
 	}
 }
 
-func TestR8e3ValidCorpusRoundTrips(t *testing.T) {
+func TestFormatValidCorpusRoundTrips(t *testing.T) {
 	count := 0
 	err := filepath.WalkDir("../../language/evt1", func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
@@ -238,7 +238,7 @@ func TestR8e3ValidCorpusRoundTrips(t *testing.T) {
 	t.Logf("formatted %d valid corpus sources twice", count)
 }
 
-func TestR8e3BlockCommentsAndInvalidSource(t *testing.T) {
+func TestFormatBlockCommentsAndInvalidSource(t *testing.T) {
 	source := `/* lead
  * detail */
 module Block.Core; profile Core;
@@ -266,7 +266,7 @@ int Run(){int x=1; /* interior */ return x;} // tail
 	}
 }
 
-func TestR8e3MalformedFormatConfig(t *testing.T) {
+func TestFormatMalformedConfig(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "manifest.concept")
 	for _, declaration := range []string{
@@ -285,7 +285,7 @@ func TestR8e3MalformedFormatConfig(t *testing.T) {
 	}
 }
 
-func TestR8e3AllmanOption(t *testing.T) {
+func TestFormatAllmanOption(t *testing.T) {
 	options := DefaultFormatOptions()
 	options.BraceStyle = "allman"
 	formatted, err := FormatSource("allman.concept", "module Brace.Core; profile Core; int Run(){return 0;}", options)
@@ -297,7 +297,7 @@ func TestR8e3AllmanOption(t *testing.T) {
 	}
 }
 
-func TestR8e3SourceTokenAnchors(t *testing.T) {
+func TestFormatSourceTokenAnchors(t *testing.T) {
 	source := "// lead\nmodule Anchor.Core; // trailing\nprofile Core;\n"
 	doc, err := ParseSourceDocument(source)
 	if err != nil {
@@ -316,7 +316,7 @@ func TestR8e3SourceTokenAnchors(t *testing.T) {
 	}
 }
 
-func TestR8e3MatchMachineCommentOrder(t *testing.T) {
+func TestFormatMatchMachineCommentOrder(t *testing.T) {
 	source := `profile Core;
 // signal declaration
 enum Signal{Start,Fault(int code),}
@@ -360,7 +360,7 @@ automata Controller{
 	}
 }
 
-func TestR8e3R8SemanticMIR(t *testing.T) {
+func TestFormatPreservesSemanticMIR(t *testing.T) {
 	for _, path := range []string{
 		"../../language/evt1/units/r8c/valid/scientific_literals.concept",
 		"../../language/evt1/units/r8d/valid/protocol_interpretation.concept",
@@ -399,7 +399,7 @@ func TestR8e3R8SemanticMIR(t *testing.T) {
 	}
 }
 
-func TestR8e3ProofTruth(t *testing.T) {
+func TestFormatPreservesProofTruth(t *testing.T) {
 	path := "../../language/evt1/tooling/proofs/assert_concept_fact.concept_test"
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -423,7 +423,7 @@ func TestR8e3ProofTruth(t *testing.T) {
 	}
 }
 
-func TestR8gFormatterKeepsCompactNaturalForms(t *testing.T) {
+func TestFormatterKeepsCompactNaturalForms(t *testing.T) {
 	const source = `profile Core;
 struct Point { int x; int y; }
 int Check(int used, int count) {

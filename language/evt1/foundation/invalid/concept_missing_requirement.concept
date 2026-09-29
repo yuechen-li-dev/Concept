@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase8-concepts-templates/invalid/impl_missing_requirement.invalid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase8-concepts-templates/invalid/impl_missing_requirement.invalid.conception
 profile Core;
 
 struct Sample

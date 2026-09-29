@@ -1,4 +1,4 @@
-// PoC3 reference: language/phase21-arrays-slices-fixed-buffers/invalid/array_index_constant_high.invalid.conception
+// PoC3 reference: legacy/poc3-zig/language/phase21-arrays-slices-fixed-buffers/invalid/array_index_constant_high.invalid.conception
 profile Core;
 
 comptime int[2] Values = [1, 2];

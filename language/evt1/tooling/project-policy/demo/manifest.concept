@@ -1,0 +1,25 @@
+module Policies.Manifest;
+profile Core;
+
+record struct LintPolicy
+{
+    string concept;
+    string severity;
+    string kind;
+    string subject;
+}
+
+concept ProjectNaming<declaration D>
+{
+    requires compiler.CanonicalName(D);
+}
+
+concept HotPathPolicy<declaration F>
+{
+    requires compiler.NoAllocation(F);
+}
+
+comptime LintPolicy Naming = LintPolicy{"ProjectNaming", "warning", "", ""};
+comptime LintPolicy Fast = LintPolicy{"HotPathPolicy", "error", "FunctionDeclaration", "FastFunction"};
+comptime LintPolicy Allocating = LintPolicy{"HotPathPolicy", "error", "FunctionDeclaration", "AllocatingFunction"};
+comptime LintPolicy Unknown = LintPolicy{"HotPathPolicy", "error", "FunctionDeclaration", "ForeignOrIncompleteFunction"};

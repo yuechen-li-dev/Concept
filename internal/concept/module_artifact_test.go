@@ -189,7 +189,7 @@ usize Main() { return Magnitude(SizeOf<Outer<AppConfiguration, 3>>()); }
 	}
 }
 
-func TestR6gImportedMultiParameterFunctionTemplateInstantiatesWithoutSourceReparse(t *testing.T) {
+func TestImportedMultiParameterFunctionTemplateInstantiatesWithoutSourceReparse(t *testing.T) {
 	producer := `module Standard.Geometry;
 profile Core;
 template <typename T, typename U, usize Tag>

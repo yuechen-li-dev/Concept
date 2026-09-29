@@ -10,7 +10,7 @@ Active compiler:             EVT1 Stage 0 / Go
 Compiler ID:                 concept-evt1-stage0-go
 Retired reference compiler:  PoC3 / Zig
 Current backend:             deterministic MIR and strict C11 C/H
-Current language status:     EVT1 tables and ellipsis repetition
+Backend in progress:         EVT2 target-independent LIR and AMD64 MachineIR
 ```
 
 R0 starts a new canonical compiler line. The Go compiler architecture extracted
@@ -59,20 +59,41 @@ The repository-root `zig build test` command is also retained as a compatibility
 path to the retired suite. New language development does not continue the old
 Phase 22 roadmap inside the Zig compiler.
 
-The top-level `language/`, `tests/`, `examples/phase*`,
-`docs/Concept-PoC3.md`, and `docs/design/` trees remain the legacy
-semantic/reference corpus shared with migration work.
+The PoC3 corpus lives with the compiler that reads it: fixtures in
+`legacy/poc3-zig/language/`, the corpus and test scaffolding in
+`legacy/poc3-zig/tests/`, examples in `legacy/poc3-zig/examples/`, and PoC3
+design documents in `legacy/poc3-zig/docs/`. Their text is unchanged; current
+counterparts are authored separately, per the migration policy.
+
+## Repository layout
+
+```text
+cmd/concept, internal/concept   active Go compiler and its tests
+libraries/                      Standard, DragonGod, and the Golden programs
+language/evt1/                  semantic corpus, one directory per subsystem
+                                (manifest.json records historical milestones)
+examples/tour/                  current-syntax introduction, one subject per file
+examples/evt1/                  Core/Vulkan specimens with checked-in outputs
+tests/                          dogfood, goldens, interop, verify, fixtures
+docs/                           language, library, spec, tooling, design, examples
+docs/history/                   milestone conformance logs and migration records
+legacy/poc3-zig/                retired Zig compiler with its fixtures, corpus,
+                                examples, and design documents
+legacy/dragon-god-poc/          earlier DragonGod proof of concept
+```
+
+New readers should start with `examples/tour/`.
 
 ## EVT1 authority documents
 
 - `docs/spec/CONCEPT_EVT1_LANGUAGE_SPEC.md` defines the formal EVT1 foundation
   and labels canonical, provisional, profile-specific, legacy, and deferred
   areas.
-- `docs/migration/EVT1-RECONCILIATION-MATRIX.md` records every major semantic
+- `docs/history/migration/EVT1-RECONCILIATION-MATRIX.md` records every major semantic
   difference and its R0 disposition.
-- `docs/migration/EVT1-PROVENANCE.md` records exact source commits, extraction
+- `docs/history/migration/EVT1-PROVENANCE.md` records exact source commits, extraction
   paths, compiler identities, and migration doctrine.
-- `docs/migration/POC3-FIXTURE-MIGRATION.md` inventories the 1,296-fixture
+- `docs/history/migration/POC3-FIXTURE-MIGRATION.md` inventories the 1,296-fixture
   primary PoC3 corpus and defines the differential migration strategy.
 - `docs/compiler/EVT1-COMPILER-ARCHITECTURE.md` describes the active Go
   pipeline and the Core/Vulkan boundary.
@@ -81,9 +102,9 @@ semantic/reference corpus shared with migration work.
 
 ## Libraries
 
-The [EVT1 domain goldens](docs/examples/EVT1-GOLDENS.md) exercise embedded,
+The [EVT1 domain goldens](docs/examples/DOMAIN-GOLDENS.md) exercise embedded,
 civilian aerospace, game, HPC, HFT, compiler, native companion, storage, and
-CAD workloads during the R7p semantic burn-in.
+CAD workloads.
 
 - `libraries/Standard` is the production home of reusable Standard modules,
   beginning with `Standard.Memory` and package metadata definitions.
@@ -93,6 +114,3 @@ CAD workloads during the R7p semantic burn-in.
 - `legacy/dragon-god-poc` preserves the earlier proof-of-concept history. EVT1
   language/profile specimens remain conformance evidence, not a competing
   product tree.
-
-The next bounded milestone is R7b. R7a does not add registries, remote fetching,
-lockfiles, scheduler semantics, collectors, or a stable binary ABI.

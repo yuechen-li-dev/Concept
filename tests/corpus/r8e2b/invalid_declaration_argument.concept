@@ -1,4 +1,0 @@
-module R8e2b.InvalidDeclarationArgument;
-profile Core;
-concept DeclarationOnly<declaration D> {}
-void Check() { Assert.Concept<DeclarationOnly>(int, "type is not a declaration"); }

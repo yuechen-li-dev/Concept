@@ -1,4 +1,4 @@
-module R6h.FactStructField;
+module Facts.FactStructField;
 profile Core;
 import Standard.MemoryGeometry;
 struct Holder { MemoryRegion<SystemMemory> region; }

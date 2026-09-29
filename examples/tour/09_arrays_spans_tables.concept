@@ -1,0 +1,49 @@
+// Fixed storage: arrays have a compile-time extent, spans borrow a run of
+// elements without copying, and a table stores columns side by side
+// (structure of arrays). Replaces the PoC3 phase21 array/slice/buffer
+// examples and the phase12 fixed-store notes.
+profile Core;
+
+table<4> Particles
+{
+    float position;
+    float velocity;
+}
+
+float Sum(ReadOnlySpan<float> values)
+{
+    float total = 0.0;
+    for (value in values)
+    {
+        total += value;
+    }
+    return total;
+}
+
+void Scale(Span<float> values, float factor)
+{
+    for (ref float value in values)
+    {
+        value *= factor;
+    }
+}
+
+void Advance(ref Particles particles, float dt)
+{
+    for (i in 0..4)
+    {
+        particles.position[i] += particles.velocity[i] * dt;
+    }
+}
+
+float Main()
+{
+    float[3] samples = [1.0, 2.0, 3.0];
+    Scale(Span(samples), 2.0);
+    ReadOnlySpan<float> all = ReadOnlySpan(samples);
+    float head = Sum(Subspan(all, 0, 2));
+
+    Particles particles = Particles{[0.0 ...], [1.0 ...]};
+    Advance(ref particles, 0.5);
+    return head + Sum(ReadOnlySpan(particles.position));
+}

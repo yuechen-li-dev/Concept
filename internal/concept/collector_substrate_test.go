@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestR7f3AppliedTypeFixedArraySyntaxInStrictC11(t *testing.T) {
+func TestAppliedTypeFixedArraySyntaxInStrictC11(t *testing.T) {
 	source := `profile Core;
 template <typename T> struct Box { T value; };
 template <usize N>
@@ -27,7 +27,7 @@ int Main() { return CountSlots<4>(); }
 	runFoundationNativeHarness(t, outputs, "collector_applied_array_harness.c", "#include \"collector_applied_array.generated.h\"\nint main(void) { return concept_collector_applied_array_main() == 5 ? 0 : 1; }\n")
 }
 
-func TestR7f3IndexedStorageAuthorityMoveRemainsRejected(t *testing.T) {
+func TestIndexedStorageAuthorityMoveRemainsRejected(t *testing.T) {
 	source := `profile Core;
 struct SystemMemory {}
 void Probe()
@@ -45,7 +45,7 @@ void Probe()
 	}
 }
 
-func TestR7nOwnedOptionCannotDiscardStorageAuthority(t *testing.T) {
+func TestOwnedOptionCannotDiscardStorageAuthority(t *testing.T) {
 	source := `profile Core;
 struct SystemMemory {}
 void Probe()

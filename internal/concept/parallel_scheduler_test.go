@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestR7eNativeWorkers(t *testing.T) {
+func TestNativeSchedulerWorkers(t *testing.T) {
 	root := filepath.Join("..", "..", "libraries")
 	output := t.TempDir()
 	if _, err := BuildPackage(root, output, "DragonGod"); err != nil {
@@ -17,7 +17,7 @@ func TestR7eNativeWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := strings.Replace(string(sourceBytes), "module DragonGod.Tests.Parallel;", "module R7e.NativeWorker;", 1)
+	source := strings.Replace(string(sourceBytes), "module DragonGod.Tests.Parallel;", "module Workers.NativeWorker;", 1)
 	roots := []string{filepath.Join(output, "Standard", "modules"), filepath.Join(output, "DragonGod", "modules")}
 	module, err := ParseWithSemanticModuleRoots("R7e/NativeWorker.concept", source, roots)
 	if err != nil {
@@ -40,7 +40,7 @@ typedef concept_parallel_scheduler_parallel_configuration__parallel_machine__4__
 typedef struct { scheduler_t* scheduler; int id; int decisions; } worker_args;
 CPT_THREAD_FN(run_worker, raw) {
   worker_args* args = (worker_args*)raw;
-  args->decisions = concept_r7e__native_worker_run_native_worker(args->scheduler, args->id);
+  args->decisions = concept_workers__native_worker_run_native_worker(args->scheduler, args->id);
   return 0;
 }
 int main(void) {
@@ -48,7 +48,7 @@ int main(void) {
     for (int quantum = 1; quantum <= 4; quantum *= 2) {
     double begin = cpt_seconds_now();
     for (int trial = 0; trial < 20; ++trial) {
-      scheduler_t scheduler = concept_r7e__native_worker_make_native_workload(quantum);
+      scheduler_t scheduler = concept_workers__native_worker_make_native_workload(quantum);
       cpt_thread threads[4];
       worker_args args[4];
       for (int i = 0; i < workers; ++i) {
@@ -64,7 +64,7 @@ int main(void) {
       }
       if (decisions != 4000 / quantum) return 5;
       if (workers > 1 && active_workers < 2) return 6;
-      if (concept_r7e__native_worker_native_final_steps(&scheduler) != 4000) return 4;
+      if (concept_workers__native_worker_native_final_steps(&scheduler) != 4000) return 4;
     }
     double seconds = cpt_seconds_now() - begin;
     printf("workers=%d quantum=%d steps=%d seconds=%.6f throughput=%.0f steps/s\n",
@@ -72,7 +72,7 @@ int main(void) {
     }
   }
   for (int trial = 0; trial < 20; ++trial) {
-    scheduler_t scheduler = concept_r7e__native_worker_make_native_failure_workload();
+    scheduler_t scheduler = concept_workers__native_worker_make_native_failure_workload();
     cpt_thread threads[4];
     worker_args args[4];
     for (int i = 0; i < 4; ++i) {
@@ -80,7 +80,7 @@ int main(void) {
       if (cpt_thread_start(&threads[i], run_worker, &args[i]) != 0) return 7;
     }
     { int join_failed = 0; for (int i = 0; i < 4; ++i) join_failed |= cpt_thread_join(threads[i], 30000); if (join_failed) return 8; }
-    if (concept_r7e__native_worker_native_failure_final_state(&scheduler) != 3000) return 9;
+    if (concept_workers__native_worker_native_failure_final_state(&scheduler) != 3000) return 9;
   }
   return 0;
 }`
@@ -90,14 +90,14 @@ typedef concept_parallel_scheduler_parallel_configuration__shared_agent_machine_
 typedef struct { scheduler_t* scheduler; int id; int decisions; } worker_args;
 CPT_THREAD_FN(run_worker, raw) {
   worker_args* args = (worker_args*)raw;
-  args->decisions = concept_r7e__native_worker_run_shared_agent_worker(args->scheduler, args->id);
+  args->decisions = concept_workers__native_worker_run_shared_agent_worker(args->scheduler, args->id);
   return 0;
 }
 int main(void) {
   for (int workers = 1; workers <= 4; workers *= 2) {
     for (int trial = 0; trial < 20; ++trial) {
-      concept_shared_agent_fixture fixture = concept_r7e__native_worker_make_shared_agent_fixture();
-      scheduler_t scheduler = concept_r7e__native_worker_make_shared_agent_workload(&fixture);
+      concept_shared_agent_fixture fixture = concept_workers__native_worker_make_shared_agent_fixture();
+      scheduler_t scheduler = concept_workers__native_worker_make_shared_agent_workload(&fixture);
       cpt_thread threads[4];
       worker_args args[4];
       for (int i = 0; i < workers; ++i) {
@@ -105,7 +105,7 @@ int main(void) {
         if (cpt_thread_start(&threads[i], run_worker, &args[i]) != 0) return 2;
       }
       { int join_failed = 0; for (int i = 0; i < workers; ++i) join_failed |= cpt_thread_join(threads[i], 30000); if (join_failed) return 3; }
-      if (concept_r7e__native_worker_shared_agent_final_state(&scheduler, &fixture) != 0) return 4;
+      if (concept_workers__native_worker_shared_agent_final_state(&scheduler, &fixture) != 0) return 4;
     }
   }
   return 0;
@@ -116,29 +116,29 @@ typedef concept_parallel_scheduler_parallel_configuration__parallel_machine__4__
 typedef struct { scheduler_t* scheduler; int decisions; } worker_args;
 CPT_THREAD_FN(run_worker, raw) {
   worker_args* args = (worker_args*)raw;
-  args->decisions = concept_r7e__native_worker_run_native_worker(args->scheduler, 1);
+  args->decisions = concept_workers__native_worker_run_native_worker(args->scheduler, 1);
   return 0;
 }
 int main(void) {
   for (int mode = 0; mode < 3; ++mode) {
     for (int trial = 0; trial < 20; ++trial) {
-      scheduler_t scheduler = concept_r7e__native_worker_make_native_wake_workload(mode == 1);
+      scheduler_t scheduler = concept_workers__native_worker_make_native_wake_workload(mode == 1);
       worker_args args = {&scheduler, 0};
       cpt_thread thread;
       if (cpt_thread_start(&thread, run_worker, &args) != 0) return 2;
       int observed = 0;
       for (int spin = 0; spin < 1000000; ++spin) {
-        if (concept_r7e__native_worker_native_wake_entered(&scheduler) == 1) { observed = 1; break; }
+        if (concept_workers__native_worker_native_wake_entered(&scheduler) == 1) { observed = 1; break; }
         cpt_thread_yield();
       }
       if (!observed) return 3;
-      if (mode == 1) concept_r7e__native_worker_native_advance_time(&scheduler);
-      else if (mode == 2) concept_r7e__native_worker_native_notify_event(&scheduler);
-      else concept_r7e__native_worker_native_wake_now(&scheduler);
-      concept_r7e__native_worker_native_wake_proceed(&scheduler);
+      if (mode == 1) concept_workers__native_worker_native_advance_time(&scheduler);
+      else if (mode == 2) concept_workers__native_worker_native_notify_event(&scheduler);
+      else concept_workers__native_worker_native_wake_now(&scheduler);
+      concept_workers__native_worker_native_wake_proceed(&scheduler);
       if (cpt_thread_join(thread, 30000) != 0) return 4;
       if (args.decisions != 2) return 5;
-      if (concept_r7e__native_worker_native_wake_final_state(&scheduler) != 0) return 6;
+      if (concept_workers__native_worker_native_wake_final_state(&scheduler) != 0) return 6;
     }
   }
   return 0;
