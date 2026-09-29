@@ -83,8 +83,31 @@ func TestEVT2x2MachineFrameStepLIR(t *testing.T) {
 			if got := strings.Count(text, "machine_result machine_step_result Yielded"); got != tc.yields {
 				t.Fatalf("yielded paths = %d, want %d", got, tc.yields)
 			}
-			if _, err := LowerLirToAmd64Machine(lir); err == nil || !strings.Contains(err.Error(), "EVT2_MACHINEIR_MACHINE_STEP_DEFERRED") {
-				t.Fatalf("machine escaped EVT2x2 boundary: %v", err)
+			machineIR, err := LowerLirToAmd64Machine(lir)
+			if err != nil || len(machineIR.Functions) != 2 {
+				t.Fatalf("machine MachineIR lowering: %v", err)
+			}
+			if machineIR.Functions[0].Args[0].Register != RCX || machineIR.Functions[1].Args[0].Register != RCX || machineIR.Functions[1].Result != "machine_step_result" {
+				t.Fatal("generated functions lost Win64 frame-pointer and StepResult ABI")
+			}
+			trap := false
+			for _, block := range machineIR.Functions[1].Blocks {
+				if block.Term.Op == "TRAP" {
+					trap = true
+				}
+				for _, in := range block.Instructions {
+					if in.Op == "PUSH_STATE" || in.Op == "POP_STATE" {
+						t.Fatal("machine pseudo-op escaped into AMD64")
+					}
+				}
+			}
+			if !trap {
+				t.Fatal("invalid-state trap lost in MachineIR")
+			}
+			if bridge, err := EncodeMachineBridge(machineIR); err != nil || len(bridge) == 0 {
+				t.Fatalf("machine CMIR bridge: %v", err)
+			} else if decoded, err := DecodeMachineBridge(bridge); err != nil || decoded.String() != machineIR.String() {
+				t.Fatalf("machine CMIR round trip: %v", err)
 			}
 			for i := 0; i < 100; i++ {
 				again, err := GenerateLIR(module)

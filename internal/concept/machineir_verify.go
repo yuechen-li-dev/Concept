@@ -1,6 +1,9 @@
 package concept
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type MachineEffects struct{ ReadsMemory, WritesMemory, SetsFlags, ReadsFlags, Terminates, MayTrap bool }
 
@@ -76,7 +79,8 @@ func VerifyMachineFunction(f MachineFunction) error {
 		if e != nil {
 			return e
 		}
-		if a.Index != i || a.Width != expect.Width || a.Indirect != expect.Indirect || a.OnStack != expect.OnStack || a.Register != expect.Register || a.StackOffset != expect.StackOffset || a.VReg < 0 || a.VReg >= len(f.VRegs) || f.VRegs[a.VReg].Width != a.Width || f.VRegs[a.VReg].Address != a.Indirect {
+		address := a.Indirect || strings.HasPrefix(string(a.Type), "ptr<")
+		if a.Index != i || a.Width != expect.Width || a.Indirect != expect.Indirect || a.OnStack != expect.OnStack || a.Register != expect.Register || a.StackOffset != expect.StackOffset || a.VReg < 0 || a.VReg >= len(f.VRegs) || f.VRegs[a.VReg].Width != a.Width || f.VRegs[a.VReg].Address != address {
 			return fmt.Errorf("MIR_BAD_ABI_ARG %d", i)
 		}
 	}

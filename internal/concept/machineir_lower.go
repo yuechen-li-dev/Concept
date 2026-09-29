@@ -1,6 +1,9 @@
 package concept
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // LowerLirToAmd64Machine selects Win64 AMD64 operations from verified LIR.
 // Extra blocks make every retained failure edge explicit in the machine CFG.
@@ -10,10 +13,7 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	}
 	out := MachineModule{}
 	for _, lf := range lir.Functions {
-		if lf.Machine != nil {
-			return MachineModule{}, fmt.Errorf("EVT2_MACHINEIR_MACHINE_STEP_DEFERRED %s", lf.Name)
-		}
-		b := machineBuilder{lir: lf, values: map[int]MachineOperand{}, types: map[int]LIRType{}, regions: map[int]string{}, flags: map[int]machineCondition{}}
+		b := machineBuilder{lir: lf, values: map[int]MachineOperand{}, types: map[int]LIRType{}, regions: map[int]string{}, frameOffsets: map[int]int{}, flags: map[int]machineCondition{}}
 		b.fn = MachineFunction{Identity: lf.Identity, Name: lf.Name, Target: "amd64-windows", ABI: "win64", Result: lf.Result, Source: lf.Source, Facts: append([]string(nil), lf.Facts...), Decisions: append([]string(nil), lf.Decisions...), Frame: MachineFrame{Alignment: 16}}
 		for _, lb := range lf.Blocks {
 			b.fn.Blocks = append(b.fn.Blocks, MachineBlock{ID: lb.ID, LIRBlock: lb.ID})
@@ -24,6 +24,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 				return MachineModule{}, fmt.Errorf("%s: %w", lf.Name, e)
 			}
 			v := b.vreg(a.Width, a.Indirect)
+			if strings.HasPrefix(string(p.Type), "ptr<") {
+				b.fn.VRegs[v.ID].Address = true
+			}
 			a.VReg = v.ID
 			b.fn.Args = append(b.fn.Args, a)
 			b.values[p.ID] = mv(v.ID, a.Width)
@@ -90,6 +93,26 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 					ctx.Width = w
 					b.emit(current, ctx)
 					b.bind(in.Result, in.Type, ctx.Dst)
+				case "machine_result":
+					tag := map[string]string{"Active": "0", "Yielded": "1", "Completed": "2"}[in.Literal]
+					imm, e := machineImmediate(tag, 4, false)
+					if e != nil {
+						return MachineModule{}, e
+					}
+					v := b.vreg(4, false)
+					ctx.Op, ctx.Dst, ctx.Src, ctx.Width = "MOV", mv(v.ID, 4), []MachineOperand{imm}, 4
+					b.emit(current, ctx)
+					b.bind(in.Result, in.Type, ctx.Dst)
+				case "frame_field_address":
+					base, e := get(0)
+					if e != nil {
+						return MachineModule{}, e
+					}
+					// A frame field is a fixed displacement from the caller's
+					// pointer. Fold it into the consuming memory operand.
+					b.bind(in.Result, in.Type, base)
+					b.frameOffsets[in.Result] = in.FrameOffset
+					b.regions[in.Result] = "machine-frame"
 				case "load_slot":
 					v := b.vreg(w, false)
 					ctx.Op = "LOAD"
@@ -205,7 +228,7 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 					if e != nil {
 						return MachineModule{}, e
 					}
-					mem := MachineOperand{Kind: "mem", Base: addr.ID, BaseSlot: -1, Index: -1, Scale: 1, Width: w, Region: b.regions[in.Args[0]]}
+					mem := MachineOperand{Kind: "mem", Base: addr.ID, BaseSlot: -1, Index: -1, Scale: 1, Disp: b.frameOffsets[in.Args[0]], Width: w, Region: b.regions[in.Args[0]]}
 					if in.Op == "load" {
 						v := b.vreg(w, false)
 						ctx.Op = "LOAD"
@@ -257,6 +280,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 					b.emit(current, MachineInstruction{Op: "MOV", Dst: mp(r, w), Src: []MachineOperand{x}, Width: w, FlagsDef: -1, FlagsUse: -1, LIRBlock: lb.ID, LIRInstruction: -1, Source: lb.Term.Source})
 				}
 				b.fn.Blocks[current].Term = MachineTerminator{Op: "RET", FlagsUse: -1, Source: lb.Term.Source}
+			case "trap":
+				b.emit(current, MachineInstruction{Op: "TRAP", Width: 0, FlagsDef: -1, FlagsUse: -1, LIRBlock: lb.ID, LIRInstruction: -1, Source: lb.Term.Source, Decision: lb.Term.Reason})
+				b.fn.Blocks[current].Term = MachineTerminator{Op: "TRAP", FlagsUse: -1, Source: lb.Term.Source}
 			}
 		}
 		if err := VerifyMachineFunction(b.fn); err != nil {
@@ -279,13 +305,14 @@ type machineCondition struct {
 	cond string
 }
 type machineBuilder struct {
-	lir      LIRFunction
-	fn       MachineFunction
-	values   map[int]MachineOperand
-	types    map[int]LIRType
-	regions  map[int]string
-	flags    map[int]machineCondition
-	nextFlag int
+	lir          LIRFunction
+	fn           MachineFunction
+	values       map[int]MachineOperand
+	types        map[int]LIRType
+	regions      map[int]string
+	frameOffsets map[int]int
+	flags        map[int]machineCondition
+	nextFlag     int
 }
 
 func (b *machineBuilder) vreg(w int, address bool) MachineVReg {
