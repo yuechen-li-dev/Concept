@@ -506,9 +506,11 @@ CPT_THREAD_FN(disjoint_writer, raw) {
 
 CPT_THREAD_FN(reader, raw) {
   shared_args* args = (shared_args*)raw;
-  for (int i = 0; i < 1000000; ++i) {
+  double deadline = cpt_seconds_now() + 10.0;
+  while (cpt_seconds_now() < deadline) {
     int value = concept_sync__shared_state_observe_published(args->fixture);
     if (value >= 0) { args->observed = value; return 0; }
+    cpt_thread_yield();
   }
   args->observed = -2;
   return 0;

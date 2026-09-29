@@ -103,15 +103,62 @@ func narrowNativeDeterminismPath(t *testing.T) {
 }
 
 // nativeHostLinkArgs are the host libraries a linked native harness may need.
-// Generated C can call <math.h> functions (inference lowers softmax to expf),
-// which glibc keeps in libm; MinGW and the MSVC-target clang driver accept -lm
-// as well, matching the existing concept test runner and math_r7x2 harness.
+// Generated C can call <math.h> functions (inference lowers softmax to expf).
+// Unix toolchains use -lm; an MSVC-target clang on Windows interprets -lm as
+// a request for m.lib, which is not supplied by the Windows SDK. Windows C
+// runtime math symbols are resolved by the ordinary host link instead.
 // Threaded harnesses use POSIX threads off Windows.
 func nativeHostLinkArgs() []string {
-	if runtime.GOOS == "windows" {
-		return []string{"-lm"}
+	return nativeHostLinkArgsForOS(runtime.GOOS)
+}
+
+func nativeHostLinkArgsForOS(goos string) []string {
+	if goos == "windows" {
+		return nil
 	}
 	return []string{"-lm", "-pthread"}
+}
+
+func TestNativeHostLinkArgsForOS(t *testing.T) {
+	for _, tc := range []struct {
+		goos string
+		want string
+	}{
+		{"windows", ""},
+		{"linux", "-lm -pthread"},
+		{"darwin", "-lm -pthread"},
+	} {
+		if got := strings.Join(nativeHostLinkArgsForOS(tc.goos), " "); got != tc.want {
+			t.Errorf("%s host link args = %q, want %q", tc.goos, got, tc.want)
+		}
+	}
+}
+
+func TestWindowsNativeMathLinksWithoutMlib(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows C runtime link probe")
+	}
+	dir := t.TempDir()
+	source := filepath.Join(dir, "math.c")
+	const code = "#include <math.h>\nvolatile float x = 1.0f;\nint main(void) { return expf(x) > 2.0f ? 0 : 1; }\n"
+	if err := os.WriteFile(source, []byte(code), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"clang", "gcc"} {
+		compiler, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			executable := filepath.Join(dir, name+"-math.exe")
+			if output, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", source, "-o", executable)...).CombinedOutput(); err != nil {
+				t.Fatalf("link math without m.lib: %v\n%s", err, output)
+			}
+			if output, err := nativeCommand(t, executable).CombinedOutput(); err != nil {
+				t.Fatalf("run math probe: %v\n%s", err, output)
+			}
+		})
+	}
 }
 
 // withHostLinkArgs inserts nativeHostLinkArgs after the inputs of a gcc/clang
