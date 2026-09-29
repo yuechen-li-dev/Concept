@@ -108,7 +108,7 @@ func registerSemanticGobTypes() {
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &ActuationDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
-			&AwaitExpr{}, &InferExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
+			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
 			&FieldExpr{}, &CallExpr{}, &DispatchExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
 			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},

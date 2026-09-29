@@ -1,0 +1,3 @@
+profile Core;
+enum Choice { Left }
+Choice Bad() { return decide { Left when false score 1; }; }

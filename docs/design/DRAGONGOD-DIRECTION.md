@@ -13,7 +13,8 @@ experiments. Its source used obsolete syntax and encoded scheduler-adjacent agen
 policy. It now lives only at `legacy/dragon-god-poc` and no active build reads it.
 
 Implementation B was the EVT1 Concept/Vulkan DragonGod lineage in
-`examples/evt1/evt1_dragongod_m*_language.concept` and matching Vulkan examples.
+`examples/evt1/` (`lifecycle_automata`, `automata_dispatch`, `guarded_transitions`,
+`lifecycle_effects`, and `lifecycle_actuators`, each as `_core` and `_vulkan`).
 It contributed current automata/effect semantics, runtime/platform boundary
 evidence, and strict generated artifacts. Those files remain conformance examples,
 not production authority. Vulkan lifecycle and device policy remain consumers;

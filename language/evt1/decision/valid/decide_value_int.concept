@@ -1,0 +1,26 @@
+profile Core;
+
+enum Choice {
+    First, Second, Third
+}
+
+Choice Choose(int first, int second)
+{
+    return decide
+    {
+        First when first > second score 10;
+        Second score 5;
+        Third score 5;
+    };
+}
+
+int Main()
+{
+    Choice winner = Choose(2, 3);
+    return match (winner)
+    {
+        Choice::First => 1,
+        Choice::Second => 2,
+        Choice::Third => 3,
+    };
+}

@@ -39,6 +39,12 @@ go test ./...
 go vet ./...
 ```
 
+The full Go suite includes the pinned TinyXML2 native companion when its Git
+submodule is present. After a fresh clone or worktree creation, run
+`git submodule update --init -- tests/dogfood/tinyxml2/upstream` before the
+suite to exercise that companion. Tests that require its source report a skip
+when the submodule has not been initialized or Clang C++ is unavailable.
+
 Sources explicitly select `profile Core;` or `profile Vulkan;`. Vulkan domain
 imports, runtime types, effects, and actuators are rejected from the Core
 profile. The Vulkan consumer API lives at

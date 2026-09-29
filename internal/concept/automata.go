@@ -166,7 +166,10 @@ type MIRMachineControl struct {
 }
 
 type MIRState struct {
-	Name                 string                 `json:"name"`
+	Name string `json:"name"`
+	// SemanticBody is the validated source of state control/dataflow for EVT2.
+	// The checked MIR JSON remains a summary, as for MIRFunction.SemanticBody.
+	SemanticBody         *Block                 `json:"-"`
 	Initial              bool                   `json:"initial,omitempty"`
 	Terminal             bool                   `json:"terminal,omitempty"`
 	RuntimeOrdinal       int                    `json:"runtime_ordinal"`
@@ -239,7 +242,9 @@ type MIRAutomataStateEnvironment struct {
 }
 
 type MIRPersistentStorage struct {
-	Identity       string `json:"identity"`
+	Identity string `json:"identity"`
+	// Initializer is retained in memory for native frame construction.
+	Initializer    Expr   `json:"-"`
 	Name           string `json:"name"`
 	Type           Type   `json:"type"`
 	Classification string `json:"classification"`

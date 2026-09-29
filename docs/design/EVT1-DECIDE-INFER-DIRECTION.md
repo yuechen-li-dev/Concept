@@ -33,8 +33,23 @@ first maximum wins. It accepts one exact `int` or `float` score type per block,
 panics on NaN, and panics when there is no enabled candidate. Selection cleans
 transient state, updates the local machine state, and ends the Step.
 
-Plain value-level `decide` is useful future syntax, but would broaden expression
-grammar and is deferred. R5b does not add a generic ordering abstraction.
+R5b did not add a generic ordering abstraction or plain value-level `decide`.
+EVT2d adds a bounded value-level expression with the same guarded hardmax
+policy. A typed enum destination supplies the candidate domain:
+
+```concept
+Choice selected = decide {
+    First when preferred score 10;
+    Second score 5;
+};
+```
+
+Candidates are payload-free variants of that enum, named once each. Guards
+must be `bool`; scores are all the same exact `int` or `float` type. Guards
+and enabled scores run once in source order. The first maximum wins a tie;
+NaN and no enabled candidate panic. The expression returns the selected enum
+value directly. It does not maintain policy state or normalize scores. The
+normal C11 backend lowers the selection with fixed local storage.
 
 ## DragonGod separation
 
