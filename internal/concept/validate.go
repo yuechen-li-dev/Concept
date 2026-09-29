@@ -11,7 +11,6 @@ import (
 type evt1Scope struct {
 	parent            *evt1Scope
 	values            map[string]evt1ValueBinding
-	borrows           []evt1RetainedBorrow
 	depth             int
 	returnType        Type
 	tryHandlers       map[string]Type
@@ -67,8 +66,6 @@ type evt1ValueBinding struct {
 	hasValue         bool
 	value            Value
 	instanceAutomata string
-	batchAutomata    string
-	actuatorName     string
 	provenance       evt1LifetimeProvenance
 	spanFacts        *evt1SpanFacts
 	regionFacts      *evt1SpanFacts
@@ -94,15 +91,6 @@ type evt1AccessPath struct {
 	Root   string
 	Fields []string
 	Span   Span
-}
-
-type evt1RetainedBorrow struct {
-	InstanceName string
-	AutomataName string
-	ContextName  string
-	Path         evt1AccessPath
-	Type         Type
-	Span         Span
 }
 
 type evt1LValue struct {
@@ -138,10 +126,6 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 
 func (s *evt1Scope) declare(name string, binding evt1ValueBinding) {
 	s.values[name] = binding
-}
-
-func (s *evt1Scope) addBorrow(binding evt1RetainedBorrow) {
-	s.borrows = append(s.borrows, binding)
 }
 
 func (s *evt1Scope) lookup(name string) (evt1ValueBinding, bool) {
@@ -480,7 +464,6 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 		binding.objectBorrows = append([]string(nil), binding.objectBorrows...)
 		out.values[name] = binding
 	}
-	out.borrows = append([]evt1RetainedBorrow{}, scope.borrows...)
 	return out
 }
 
@@ -555,24 +538,8 @@ func evt1CheckReadableBinding(name string, binding evt1ValueBinding, span Span) 
 	}
 }
 
-func (s *evt1Scope) activeBorrows() []evt1RetainedBorrow {
-	var out []evt1RetainedBorrow
-	for scope := s; scope != nil; scope = scope.parent {
-		out = append(out, scope.borrows...)
-	}
-	return out
-}
-
 func (b evt1ValueBinding) isInstance() bool {
 	return b.instanceAutomata != ""
-}
-
-func (b evt1ValueBinding) isBatch() bool {
-	return b.batchAutomata != ""
-}
-
-func (b evt1ValueBinding) isActuatorLocal() bool {
-	return b.actuatorName != ""
 }
 
 func validateModule(module Module) error {
@@ -587,9 +554,6 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	}
 	if len(module.Imports) != 0 && !profile.AllowDomainImports {
 		return nil, evt1Diagnostic("CV4401", fmt.Sprintf("profile %s does not admit domain imports", profile.Name), Span{Line: 1, Column: 1})
-	}
-	if len(module.Effects) != 0 && !profile.AllowEffects || len(module.Actuators) != 0 && !profile.AllowActuators {
-		return nil, evt1Diagnostic("CV4402", fmt.Sprintf("effect and actuator declarations are not admitted by profile %s", profile.Name), Span{Line: 1, Column: 1})
 	}
 	env := newSemanticEnv(profile)
 	env.moduleName = module.Name
@@ -667,31 +631,6 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		typeNames[streamDecl.Name] = streamDecl.Span
 		env.streams[streamDecl.Name] = streamDecl
 	}
-	for _, effectDecl := range module.Effects {
-		if effectDecl.Name == "dispatch" || effectDecl.Name == "actuate" || effectDecl.Name == "discard" {
-			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", effectDecl.Name), effectDecl.Span)
-		}
-		if _, exists := env.effects[effectDecl.Name]; exists {
-			return nil, evt1Diagnostic("CV4298", fmt.Sprintf("duplicate effect declaration %s", effectDecl.Name), effectDecl.Span)
-		}
-		if _, exists := env.automata[effectDecl.Name]; exists {
-			return nil, evt1Diagnostic("CV4298", fmt.Sprintf("duplicate declaration %s", effectDecl.Name), effectDecl.Span)
-		}
-		env.effects[effectDecl.Name] = effectDecl
-		env.effectOrder = append(env.effectOrder, effectDecl.Name)
-	}
-	for _, actuatorDecl := range module.Actuators {
-		if profile.compilerOwnedType(actuatorDecl.Name) {
-			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", actuatorDecl.Name), actuatorDecl.Span)
-		}
-		if _, exists := env.actuators[actuatorDecl.Name]; exists {
-			return nil, evt1Diagnostic("CV4313", fmt.Sprintf("duplicate actuator declaration %s", actuatorDecl.Name), actuatorDecl.Span)
-		}
-		if _, exists := typeNames[actuatorDecl.Name]; exists {
-			return nil, evt1Diagnostic("CV4313", fmt.Sprintf("duplicate declaration %s", actuatorDecl.Name), actuatorDecl.Span)
-		}
-		env.actuators[actuatorDecl.Name] = actuatorDecl
-	}
 	for _, automataDecl := range module.Automata {
 		if profile.compilerOwnedType(automataDecl.Name) {
 			return nil, evt1Diagnostic("CV4267", fmt.Sprintf("%s is a compiler-owned runtime type and cannot be redeclared", automataDecl.Name), automataDecl.Span)
@@ -747,9 +686,6 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if templateDecl.Name == "dispatch" || templateDecl.Name == "actuate" || templateDecl.Name == "discard" || evt1IsNumericRoundOperation(templateDecl.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", templateDecl.Name), templateDecl.Span)
 		}
-		if env.effects[templateDecl.Name].Name != "" {
-			return nil, evt1Diagnostic("CV4298", fmt.Sprintf("duplicate declaration %s", templateDecl.Name), templateDecl.Span)
-		}
 		if _, exists := env.templates[templateDecl.Name]; exists {
 			return nil, evt1Diagnostic("CV4168", fmt.Sprintf("duplicate template declaration %s", templateDecl.Name), templateDecl.Span)
 		}
@@ -762,7 +698,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if _, exists := env.comptimeDecls[decl.Name]; exists {
 			return nil, evt1Diagnostic("CV4203", fmt.Sprintf("duplicate comptime declaration %s", decl.Name), decl.Span)
 		}
-		if len(env.functions[decl.Name]) > 0 || env.templates[decl.Name].Name != "" || env.comptimeFunctions[decl.Name].Name != "" || env.automata[decl.Name].Name != "" || env.effects[decl.Name].Name != "" || env.actuators[decl.Name].Name != "" {
+		if len(env.functions[decl.Name]) > 0 || env.templates[decl.Name].Name != "" || env.comptimeFunctions[decl.Name].Name != "" || env.automata[decl.Name].Name != "" {
 			return nil, evt1Diagnostic("CV4203", fmt.Sprintf("comptime declaration %s conflicts with an existing symbol", decl.Name), decl.Span)
 		}
 		env.comptimeDecls[decl.Name] = decl
@@ -771,10 +707,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" || evt1IsNumericRoundOperation(fn.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", fn.Name), fn.Span)
 		}
-		if env.effects[fn.Name].Name != "" {
-			return nil, evt1Diagnostic("CV4298", fmt.Sprintf("duplicate declaration %s", fn.Name), fn.Span)
-		}
-		if env.automata[fn.Name].Name != "" || env.actuators[fn.Name].Name != "" {
+		if env.automata[fn.Name].Name != "" {
 			return nil, evt1Diagnostic("CV4240", fmt.Sprintf("duplicate declaration %s", fn.Name), fn.Span)
 		}
 		for _, existing := range env.functions[fn.Name] {
@@ -851,7 +784,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		if fn.Name == "dispatch" || fn.Name == "actuate" || fn.Name == "discard" || evt1IsNumericRoundOperation(fn.Name) {
 			return nil, evt1Diagnostic("CV4268", fmt.Sprintf("%s is a compiler-owned operation name and cannot be redeclared", fn.Name), fn.Span)
 		}
-		if len(env.functions[fn.Name]) > 0 || env.templates[fn.Name].Name != "" || env.comptimeDecls[fn.Name].Name != "" || env.comptimeFunctions[fn.Name].Name != "" || env.automata[fn.Name].Name != "" || env.effects[fn.Name].Name != "" || env.actuators[fn.Name].Name != "" {
+		if len(env.functions[fn.Name]) > 0 || env.templates[fn.Name].Name != "" || env.comptimeDecls[fn.Name].Name != "" || env.comptimeFunctions[fn.Name].Name != "" || env.automata[fn.Name].Name != "" {
 			return nil, evt1Diagnostic("CV4214", fmt.Sprintf("comptime function %s conflicts with an existing symbol", fn.Name), fn.Span)
 		}
 		env.comptimeFunctions[fn.Name] = fn
@@ -952,26 +885,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			}
 		}
 	}
-	for i, effectDecl := range module.Effects {
-		for j, param := range effectDecl.Params {
-			if err := validateKnownType(env, param.Type, param.Span, "", false); err != nil {
-				return nil, err
-			}
-			resolved, err := evt1ResolveType(env, nil, param.Type.valueType())
-			if err != nil {
-				return nil, err
-			}
-			if err := validateEffectPayloadType(env, resolved, param.Span, effectDecl.Name+"."+param.Name); err != nil {
-				return nil, err
-			}
-			module.Effects[i].Params[j].Type = resolved
-		}
-		env.effects[effectDecl.Name] = module.Effects[i]
-	}
 	if err := evt1ValidateAutomataDecls(env, module); err != nil {
-		return nil, err
-	}
-	if err := evt1ValidateActuatorDecls(env, module); err != nil {
 		return nil, err
 	}
 	for _, conceptDecl := range module.Concepts {
@@ -1734,8 +1648,6 @@ func evt1CollectComptimeCallsFromExpr(expr Expr, env *semanticEnv) []string {
 			out = append(out, evt1CollectComptimeCallsFromExpr(arg, env)...)
 		}
 		return out
-	case *DispatchExpr:
-		return evt1CollectComptimeCallsFromExpr(e.Signal, env)
 	case *TemplateCallExpr:
 		var out []string
 		for _, arg := range e.Args {
@@ -1964,43 +1876,6 @@ func validateTemplateByValueBoundary(env *semanticEnv, t Type, span Span, contex
 		return nil
 	}
 	return validateByValueBoundary(env, t, span, context)
-}
-
-func validateEffectPayloadType(env *semanticEnv, t Type, span Span, label string) error {
-	if t.PointerTo != nil || t.ArrayElem != nil || t.Ownership != "" || t.Const || t.Imported || t.Unsafe || len(t.TypeArgs) > 0 {
-		return evt1Diagnostic("CV4303", fmt.Sprintf("effect payload %s must use a fixed immutable value type, got %s", label, t.String()), span)
-	}
-	switch t.Kind {
-	case TypeBuiltin:
-		switch t.Name {
-		case "int", "bool", "uint64":
-			return nil
-		default:
-			return evt1Diagnostic("CV4303", fmt.Sprintf("effect payload %s must use a fixed immutable value type, got %s", label, t.String()), span)
-		}
-	case TypeEnum:
-		enumDecl := env.enums[t.Name]
-		for _, variant := range enumDecl.Variants {
-			if len(variant.Payload) > 0 {
-				return evt1Diagnostic("CV4303", fmt.Sprintf("effect payload %s enum %s must use only nullary variants", label, t.Name), span)
-			}
-		}
-		return nil
-	case TypeStruct:
-		structDecl := env.structs[t.Name]
-		for _, field := range structDecl.Fields {
-			fieldType, err := evt1ResolveType(env, nil, field.Type.valueType())
-			if err != nil {
-				return err
-			}
-			if err := validateEffectPayloadType(env, fieldType, field.Span, label+"."+field.Name); err != nil {
-				return err
-			}
-		}
-		return nil
-	default:
-		return evt1Diagnostic("CV4303", fmt.Sprintf("effect payload %s must use a fixed immutable value type, got %s", label, t.String()), span)
-	}
 }
 
 func collectEscapedArmBindings(block *Block, env *semanticEnv) {
@@ -2252,37 +2127,6 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if err := validateTransitionInferStmt(env, local, s, templateInfo, inComptimeFn); err != nil {
 				return err
 			}
-		case *EffectsDecl:
-			if inComptimeFn {
-				return evt1Diagnostic("CV4304", fmt.Sprintf("effects batch %s cannot be declared in comptime code", s.Name), s.Span)
-			}
-			info, ok := env.automataInfo[s.AutomataName]
-			if !ok {
-				return evt1Diagnostic("CV4300", fmt.Sprintf("effects declaration requires an automata name, got %s", s.AutomataName), s.Span)
-			}
-			local.declare(s.Name, evt1ValueBinding{
-				mutable:       true,
-				batchAutomata: info.Decl.Name,
-			})
-		case *ActuatorLocalDecl:
-			if inComptimeFn {
-				return evt1Diagnostic("CV4319", fmt.Sprintf("actuator local %s cannot be declared in comptime code", s.Name), s.Span)
-			}
-			info, ok := env.actuatorInfo[s.ActuatorName]
-			if !ok {
-				return evt1Diagnostic("CV4319", fmt.Sprintf("unknown actuator %s", s.ActuatorName), s.Span)
-			}
-			mechanismType, err := validateExpr(env, local, s.Mechanism, templateInfo, false)
-			if err != nil {
-				return err
-			}
-			if err := validateCallArgument(env, local, info.MechanismType, s.Mechanism, mechanismType, templateInfo); err != nil {
-				return err
-			}
-			local.declare(s.Name, evt1ValueBinding{
-				mutable:      false,
-				actuatorName: info.Decl.Name,
-			})
 		case *InstanceDecl:
 			if inComptimeFn {
 				return evt1Diagnostic("CV4271", fmt.Sprintf("instance %s cannot be declared in comptime code", s.Name), s.Span)
@@ -2291,84 +2135,30 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if !ok {
 				return evt1Diagnostic("CV4270", fmt.Sprintf("instance declaration requires an automata name, got %s", s.AutomataName), s.Span)
 			}
-			if info.Decl.SignalType.Name == "" {
-				if len(s.StateArgs) != len(info.Decl.StateFields) {
-					return evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", fmt.Sprintf("instance %s of automata %s requires %d explicit state value(s), got %d", s.Name, s.AutomataName, len(info.Decl.StateFields), len(s.StateArgs)), s.Span)
-				}
-				for i, field := range info.Decl.StateFields {
-					arg := s.StateArgs[i]
-					if field.Type.Kind == TypeDyn {
-						if err := evt1PrepareDynInitializer(env, field.Type, arg, field.Span); err != nil {
-							return err
-						}
-					}
-					argType, err := validateExprAgainstExpected(env, local, arg, field.Type, templateInfo, false)
-					if err != nil {
+			if len(s.StateArgs) != len(info.Decl.StateFields) {
+				return evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", fmt.Sprintf("instance %s of automata %s requires %d explicit state value(s), got %d", s.Name, s.AutomataName, len(info.Decl.StateFields), len(s.StateArgs)), s.Span)
+			}
+			for i, field := range info.Decl.StateFields {
+				arg := s.StateArgs[i]
+				if field.Type.Kind == TypeDyn {
+					if err := evt1PrepareDynInitializer(env, field.Type, arg, field.Span); err != nil {
 						return err
 					}
-					if err := validateCallArgument(env, local, field.Type, arg, argType, templateInfo); err != nil {
-						return err
-					}
-					if field.Type.isOwned() && !evt1CanTransferInitialize(env, field.Type, arg) {
-						return evt1Diagnostic("AUTOMATA_CAPTURE_MOVE_REQUIRED", fmt.Sprintf("owned automata state field %s.%s requires explicit move", s.AutomataName, field.Name), arg.exprSpan())
-					}
 				}
-			} else if info.Decl.Context != nil {
-				if s.Context == nil {
-					return evt1Diagnostic("CV4283", fmt.Sprintf("instance %s of automata %s requires a context argument", s.Name, s.AutomataName), s.Span)
-				}
-				contextType := info.Decl.Context.Type
-				argType, err := validateExpr(env, local, s.Context, templateInfo, false)
+				argType, err := validateExprAgainstExpected(env, local, arg, field.Type, templateInfo, false)
 				if err != nil {
 					return err
 				}
-				paramType := contextType
-				paramType.Ownership = "borrow"
-				paramType.Const = true
-				if err := validateCallArgument(env, local, paramType, s.Context, argType, templateInfo); err != nil {
+				if err := validateCallArgument(env, local, field.Type, arg, argType, templateInfo); err != nil {
 					return err
 				}
-				lvalue, err := validateAssignable(env, local, s.Context, templateInfo)
-				if err != nil {
-					return evt1Diagnostic("CV4285", fmt.Sprintf("context binding for instance %s requires an assignable access path", s.Name), s.Context.exprSpan())
+				if field.Type.isOwned() && !evt1CanTransferInitialize(env, field.Type, arg) {
+					return evt1Diagnostic("AUTOMATA_CAPTURE_MOVE_REQUIRED", fmt.Sprintf("owned automata state field %s.%s requires explicit move", s.AutomataName, field.Name), arg.exprSpan())
 				}
-				local.addBorrow(evt1RetainedBorrow{
-					InstanceName: s.Name,
-					AutomataName: s.AutomataName,
-					ContextName:  info.Decl.Context.Name,
-					Path:         lvalue.path,
-					Type:         contextType,
-					Span:         s.Span,
-				})
-			} else if len(s.StateArgs) != 0 {
-				return evt1Diagnostic("CV4284", fmt.Sprintf("contextless automata %s does not accept a context argument", s.AutomataName), s.StateArgs[0].exprSpan())
 			}
 			local.declare(s.Name, evt1ValueBinding{
 				mutable:          true,
 				instanceAutomata: info.Decl.Name,
-			})
-		case *ActuationDecl:
-			info, ok := env.actuatorInfo[s.ActuatorName]
-			if !ok {
-				return evt1Diagnostic("CV4320", fmt.Sprintf("unknown actuator %s in actuation", s.ActuatorName), s.Span)
-			}
-			batchBinding, ok := local.lookup(s.BatchName)
-			if !ok || !batchBinding.isBatch() {
-				return evt1Diagnostic("CV4321", fmt.Sprintf("actuate requires a local effects batch, but %s is not one", s.BatchName), s.Span)
-			}
-			if batchBinding.batchAutomata != info.Automata.Decl.Name {
-				return evt1Diagnostic("CV4321", fmt.Sprintf("actuate requires a batch for automata %s, but %s belongs to %s", info.Automata.Decl.Name, s.BatchName, batchBinding.batchAutomata), s.Span)
-			}
-			executorBinding, ok := local.lookup(s.ExecutorName)
-			if !ok || !executorBinding.isActuatorLocal() {
-				return evt1Diagnostic("CV4321", fmt.Sprintf("actuate requires a local actuator executor, but %s is not one", s.ExecutorName), s.Span)
-			}
-			if executorBinding.actuatorName != info.Decl.Name {
-				return evt1Diagnostic("CV4321", fmt.Sprintf("actuation %s expects an executor for actuator %s, but %s belongs to %s", s.Name, info.Decl.Name, s.ExecutorName, executorBinding.actuatorName), s.Span)
-			}
-			local.declare(s.Name, evt1ValueBinding{
-				t:       Type{Name: info.ResultTypeName, Kind: TypeStruct, Span: s.Span},
-				mutable: false,
 			})
 		case *AssignStmt:
 			if s.CompoundOp != "" {
@@ -2404,9 +2194,6 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("DYN_READONLY_FIELD_MUTATION", "mutation through readonly dyn field is not allowed", s.Target.exprSpan())
 				}
 				return evt1Diagnostic("CV4128", "mutation through a const access path is not allowed", s.Target.exprSpan())
-			}
-			if borrow, ok := evt1FindOverlappingBorrow(local.activeBorrows(), target.path); ok {
-				return evt1Diagnostic("CV4291", fmt.Sprintf("assignment to %s overlaps retained immutable automata context for instance %s of %s", exprLabel(s.Target), borrow.InstanceName, borrow.AutomataName), s.Target.exprSpan())
 			}
 			valueType, err := validateExprAgainstExpected(env, local, s.Value, target.t, templateInfo, inComptimeFn)
 			if err != nil {
@@ -3837,16 +3624,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, err
 			}
 			if binding.isInstance() {
-				if env.automataInfo[binding.instanceAutomata].Decl.SignalType.Name == "" {
-					return Type{}, evt1Diagnostic("AUTOMATA_CAPTURE_LIFETIME_INVALID", fmt.Sprintf("automata instance %s cannot escape its explicit captured state lifetime", e.Name), e.Span)
-				}
-				return Type{}, evt1Diagnostic("CV4272", fmt.Sprintf("instance %s of automata %s cannot be used as an ordinary value; use dispatch(%s, signal)", e.Name, binding.instanceAutomata, e.Name), e.Span)
-			}
-			if binding.isBatch() {
-				return Type{}, evt1Diagnostic("CV4305", fmt.Sprintf("effects batch %s for automata %s cannot be used as an ordinary value; use dispatch(instance, signal, %s)", e.Name, binding.batchAutomata, e.Name), e.Span)
-			}
-			if binding.isActuatorLocal() {
-				return Type{}, evt1Diagnostic("CV4319", fmt.Sprintf("actuator local %s of actuator %s cannot be used as an ordinary value; use actuation ... = actuate(batch, %s)", e.Name, binding.actuatorName, e.Name), e.Span)
+				return Type{}, evt1Diagnostic("AUTOMATA_CAPTURE_LIFETIME_INVALID", fmt.Sprintf("automata instance %s cannot escape its explicit captured state lifetime", e.Name), e.Span)
 			}
 			if binding.t.isReference() {
 				return evt1CanonicalType(env, binding.t.borrowBase()), nil
@@ -3873,26 +3651,24 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if instance, ok := qualifier.Receiver.(*NameExpr); ok {
 				if binding, found := scope.lookup(instance.Name); found && binding.isInstance() {
 					info := env.automataInfo[binding.instanceAutomata]
-					if info.Decl.SignalType.Name == "" {
-						if qualifier.Field == "state" {
-							for _, field := range info.Decl.StateFields {
+					if qualifier.Field == "state" {
+						for _, field := range info.Decl.StateFields {
+							if field.Name == e.Field {
+								e.AutomataStorage = "state:" + instance.Name
+								return evt1CanonicalType(env, field.Type), nil
+							}
+						}
+						return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown automata state field %s.%s", info.Decl.Name, e.Field), e.Span)
+					}
+					for _, machine := range info.Decl.Machines {
+						if machine.Name == qualifier.Field {
+							for _, field := range machine.Fields {
 								if field.Name == e.Field {
-									e.AutomataStorage = "state:" + instance.Name
+									e.AutomataStorage = "machine:" + instance.Name + ":" + machine.Name
 									return evt1CanonicalType(env, field.Type), nil
 								}
 							}
-							return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown automata state field %s.%s", info.Decl.Name, e.Field), e.Span)
-						}
-						for _, machine := range info.Decl.Machines {
-							if machine.Name == qualifier.Field {
-								for _, field := range machine.Fields {
-									if field.Name == e.Field {
-										e.AutomataStorage = "machine:" + instance.Name + ":" + machine.Name
-										return evt1CanonicalType(env, field.Type), nil
-									}
-								}
-								return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine field %s.%s", machine.Name, e.Field), e.Span)
-							}
+							return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine field %s.%s", machine.Name, e.Field), e.Span)
 						}
 					}
 				}
@@ -4181,9 +3957,6 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s requires a local automata instance", e.Callee), instanceName.Span)
 			}
 			info := env.automataInfo[binding.instanceAutomata]
-			if info.Decl.SignalType.Name != "" {
-				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s is reserved for explicit stateful machines; signal automata use dispatch", e.Callee), e.Span)
-			}
 			if _, ok := info.MachineOrdinal[machineName.Name]; !ok {
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine %s in automata %s", machineName.Name, info.Decl.Name), machineName.Span)
 			}
@@ -4239,20 +4012,6 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
 			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
-		}
-		if e.Callee == "discard" {
-			if len(e.Args) != 1 {
-				return Type{}, evt1Diagnostic("CV4323", fmt.Sprintf("discard requires exactly one batch argument, got %d", len(e.Args)), e.Span)
-			}
-			nameExpr, ok := e.Args[0].(*NameExpr)
-			if !ok {
-				return Type{}, evt1Diagnostic("CV4323", "discard requires a local effects batch name", e.Args[0].exprSpan())
-			}
-			binding, ok := scope.lookup(nameExpr.Name)
-			if !ok || !binding.isBatch() {
-				return Type{}, evt1Diagnostic("CV4323", fmt.Sprintf("discard requires a local effects batch, but %s is not one", nameExpr.Name), e.Args[0].exprSpan())
-			}
-			return Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}, nil
 		}
 		if e.Callee == "Len" {
 			if len(e.Args) != 1 {
@@ -4396,41 +4155,6 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{Name: "Async", Kind: TypeAsync, TypeArgs: []Type{evt1CanonicalType(env, fn.ReturnType)}, AsyncOrigin: fn.Name, Span: e.Span}, nil
 		}
 		return evt1CanonicalType(env, fn.ReturnType), nil
-	case *DispatchExpr:
-		if inComptimeFn {
-			return Type{}, evt1Diagnostic("CV4275", "dispatch is not available during comptime evaluation", e.Span)
-		}
-		binding, ok := scope.lookup(e.InstanceName)
-		if !ok {
-			return Type{}, evt1Diagnostic("CV4273", fmt.Sprintf("dispatch requires a local instance, but %s is unknown", e.InstanceName), e.Span)
-		}
-		if !binding.isInstance() {
-			return Type{}, evt1Diagnostic("CV4273", fmt.Sprintf("dispatch requires a local instance as its first operand, but %s is not an instance", e.InstanceName), e.Span)
-		}
-		info := env.automataInfo[binding.instanceAutomata]
-		expected := evt1CanonicalType(env, info.Decl.SignalType)
-		signalType, err := validateExprAgainstExpected(env, scope, e.Signal, expected, templateInfo, false)
-		if err != nil {
-			return Type{}, err
-		}
-		if !evt1CanonicalType(env, signalType.valueType()).Equal(evt1CanonicalType(env, expected.valueType())) {
-			return Type{}, evt1Diagnostic("CV4274", fmt.Sprintf("dispatch(%s, ...) expects signal type %s but got %s", e.InstanceName, expected.String(), signalType.String()), e.Signal.exprSpan())
-		}
-		if len(info.EffectSet) > 0 {
-			if e.BatchName == "" {
-				return Type{}, evt1Diagnostic("CV4306", fmt.Sprintf("effectful automata %s requires dispatch(%s, signal, batch)", info.Decl.Name, e.InstanceName), e.Span)
-			}
-			batchBinding, ok := scope.lookup(e.BatchName)
-			if !ok || !batchBinding.isBatch() {
-				return Type{}, evt1Diagnostic("CV4307", fmt.Sprintf("dispatch(%s, ...) requires a local effects batch as its third operand, but %s is not one", e.InstanceName, e.BatchName), e.Span)
-			}
-			if batchBinding.batchAutomata != info.Decl.Name {
-				return Type{}, evt1Diagnostic("CV4308", fmt.Sprintf("dispatch(%s, ...) requires an effects batch for automata %s, but %s belongs to %s", e.InstanceName, info.Decl.Name, e.BatchName, batchBinding.batchAutomata), e.Span)
-			}
-		} else if e.BatchName != "" {
-			return Type{}, evt1Diagnostic("CV4309", fmt.Sprintf("effect-free automata %s does not accept a third dispatch operand", info.Decl.Name), e.Span)
-		}
-		return Type{Name: evt1AutomataDispatchOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
 	case *TemplateCallExpr:
 		if evt1IsNumericRoundOperation(e.Callee) {
 			return evt1ValidateNumericRoundCall(env, scope, e, templateInfo, inComptimeFn)
@@ -5152,12 +4876,6 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if binding.isInstance() {
 			return evt1LValue{}, evt1Diagnostic("CV4272", fmt.Sprintf("instance %s of automata %s cannot be assigned or copied as a value", e.Name, binding.instanceAutomata), e.Span)
 		}
-		if binding.isBatch() {
-			return evt1LValue{}, evt1Diagnostic("CV4305", fmt.Sprintf("effects batch %s of automata %s cannot be assigned or copied as a value", e.Name, binding.batchAutomata), e.Span)
-		}
-		if binding.isActuatorLocal() {
-			return evt1LValue{}, evt1Diagnostic("CV4319", fmt.Sprintf("actuator local %s of actuator %s cannot be assigned or copied as a value", e.Name, binding.actuatorName), e.Span)
-		}
 		resolvedType := evt1CanonicalType(env, binding.t)
 		mutable := binding.mutable
 		wholeValue := true
@@ -5322,15 +5040,6 @@ func validateWithExpr(env *semanticEnv, scope *evt1Scope, expr WithExpr, templat
 		}
 	}
 	return baseType, nil
-}
-
-func evt1FindOverlappingBorrow(borrows []evt1RetainedBorrow, path evt1AccessPath) (evt1RetainedBorrow, bool) {
-	for _, borrow := range borrows {
-		if evt1AccessPathsOverlap(borrow.Path, path) {
-			return borrow, true
-		}
-	}
-	return evt1RetainedBorrow{}, false
 }
 
 func evt1AccessPathsOverlap(a, b evt1AccessPath) bool {
@@ -6323,349 +6032,6 @@ func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, retur
 	return nil
 }
 
-const (
-	evt1AutomataMaxGuardExprNodes      = 128
-	evt1AutomataMaxGuardCallDepth      = 8
-	evt1AutomataMaxGuardCallGraphNodes = 16
-	evt1AutomataMaxGuardCallGraphEdges = 32
-)
-
-type evt1GuardCheckState struct {
-	checked  map[string]bool
-	visiting map[string]bool
-	nodes    int
-	edges    int
-}
-
-func evt1ValidateAutomataGuard(env *semanticEnv, info *evt1AutomataInfo, expr Expr) error {
-	scope := evt1ModuleScope(env)
-	if info.Decl.Context != nil {
-		contextType := info.Decl.Context.Type
-		contextType.Ownership = "borrow"
-		contextType.Const = true
-		scope.declare(info.Decl.Context.Name, evt1ValueBinding{
-			t:        contextType,
-			mutable:  false,
-			comptime: false,
-		})
-	}
-	guardType, err := validateExpr(env, scope, expr, nil, false)
-	if err != nil {
-		return err
-	}
-	if guardType.Name != "bool" {
-		return evt1Diagnostic("CV4290", fmt.Sprintf("guard expression must have exact type bool, got %s", guardType.String()), expr.exprSpan())
-	}
-	if nodes := evt1GuardExprNodeCount(expr); nodes > evt1AutomataMaxGuardExprNodes {
-		return evt1Diagnostic("CV4297", fmt.Sprintf("guard expression node count %d exceeds limit %d", nodes, evt1AutomataMaxGuardExprNodes), expr.exprSpan())
-	}
-	state := &evt1GuardCheckState{
-		checked:  map[string]bool{},
-		visiting: map[string]bool{},
-	}
-	return evt1ValidateGuardExpr(env, scope, expr, state, 0)
-}
-
-func evt1ValidateGuardExpr(env *semanticEnv, scope *evt1Scope, expr Expr, state *evt1GuardCheckState, depth int) error {
-	switch e := expr.(type) {
-	case *NameExpr, *IntLiteral, *StringLiteral, *BoolLiteral:
-		return nil
-	case *FieldExpr:
-		return evt1ValidateGuardExpr(env, scope, e.Receiver, state, depth)
-	case *ParenExpr:
-		return evt1ValidateGuardExpr(env, scope, e.Value, state, depth)
-	case *UnaryExpr:
-		return evt1ValidateGuardExpr(env, scope, e.Value, state, depth)
-	case *BinaryExpr:
-		if err := evt1ValidateGuardExpr(env, scope, e.Left, state, depth); err != nil {
-			return err
-		}
-		return evt1ValidateGuardExpr(env, scope, e.Right, state, depth)
-	case *IfExpr:
-		if err := evt1ValidateGuardExpr(env, scope, e.Condition, state, depth); err != nil {
-			return err
-		}
-		if err := evt1ValidateGuardExpr(env, scope, e.Then, state, depth); err != nil {
-			return err
-		}
-		return evt1ValidateGuardExpr(env, scope, e.Else, state, depth)
-	case *MatchExpr:
-		if err := evt1ValidateGuardExpr(env, scope, e.Subject, state, depth); err != nil {
-			return err
-		}
-		for _, arm := range e.Arms {
-			if err := evt1ValidateGuardExpr(env, scope, arm.Value, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *ConstructExpr:
-		for _, arg := range e.Args {
-			if err := evt1ValidateGuardExpr(env, scope, arg, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *StructConstructExpr:
-		for _, arg := range e.Args {
-			if err := evt1ValidateGuardExpr(env, scope, arg, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *WithExpr:
-		if err := evt1ValidateGuardExpr(env, scope, e.Base, state, depth); err != nil {
-			return err
-		}
-		for _, update := range e.Updates {
-			if err := evt1ValidateGuardExpr(env, scope, update.Value, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *ArrayLiteralExpr:
-		for _, element := range e.Elements {
-			if err := evt1ValidateGuardExpr(env, scope, element, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *RepeatInitializer:
-		if err := evt1ValidateGuardExpr(env, scope, e.Value, state, depth); err != nil {
-			return err
-		}
-		if e.Count != nil {
-			return evt1ValidateGuardExpr(env, scope, e.Count, state, depth)
-		}
-		return nil
-	case *IndexExpr:
-		if err := evt1ValidateGuardExpr(env, scope, e.Base, state, depth); err != nil {
-			return err
-		}
-		for _, index := range evt1StorageIndices(e) {
-			if err := evt1ValidateGuardExpr(env, scope, index, state, depth); err != nil {
-				return err
-			}
-		}
-		return nil
-	case *DispatchExpr:
-		return evt1Diagnostic("CV4292", "dispatch is not allowed in automata guards", e.Span)
-	case *TemplateCallExpr:
-		return evt1Diagnostic("CV4293", "template calls are not allowed in automata guards", e.Span)
-	case *CallExpr:
-		if e.Callee == "Len" {
-			for _, arg := range e.Args {
-				if err := evt1ValidateGuardExpr(env, scope, arg, state, depth); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		argTypes := make([]Type, 0, len(e.Args))
-		for _, arg := range e.Args {
-			if err := evt1ValidateGuardExpr(env, scope, arg, state, depth); err != nil {
-				return err
-			}
-			argType, err := validateExpr(env, scope, arg, nil, false)
-			if err != nil {
-				return err
-			}
-			argTypes = append(argTypes, argType)
-		}
-		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, nil, e.Span)
-		if err != nil {
-			return err
-		}
-		return evt1ValidateGuardFunction(env, fn, state, depth+1)
-	default:
-		return evt1Diagnostic("CV4294", "unsupported guard expression form", expr.exprSpan())
-	}
-}
-
-func evt1ValidateGuardFunction(env *semanticEnv, fn FunctionDecl, state *evt1GuardCheckState, depth int) error {
-	if depth > evt1AutomataMaxGuardCallDepth {
-		return evt1Diagnostic("CV4298", fmt.Sprintf("guard call depth %d exceeds limit %d", depth, evt1AutomataMaxGuardCallDepth), fn.Span)
-	}
-	key := fn.Name + "|" + evt1FunctionParamSignature(fn)
-	if state.visiting[key] {
-		return evt1Diagnostic("CV4296", "recursive guard call graph is not allowed: "+key, fn.Span)
-	}
-	if state.checked[key] {
-		return nil
-	}
-	state.nodes++
-	if state.nodes > evt1AutomataMaxGuardCallGraphNodes {
-		return evt1Diagnostic("CV4298", fmt.Sprintf("guard call graph node count %d exceeds limit %d", state.nodes, evt1AutomataMaxGuardCallGraphNodes), fn.Span)
-	}
-	if fn.Body == nil {
-		return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s requires a local function body so purity can be verified", fn.Name), fn.Span)
-	}
-	if fn.ReturnType.Name == "void" {
-		return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s must return a runtime value", fn.Name), fn.Span)
-	}
-	for _, param := range fn.Params {
-		if param.Type.isOwned() {
-			return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot take owned parameter %s", fn.Name, param.Type.String()), param.Span)
-		}
-		if param.Type.isBorrow() && !param.Type.Const {
-			return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot take mutable borrow parameter %s", fn.Name, param.Type.String()), param.Span)
-		}
-		if param.Type.PointerTo != nil {
-			return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot take pointer parameter %s", fn.Name, param.Type.String()), param.Span)
-		}
-		if !param.Type.isBorrowLike() && !evt1TypeCopyable(env, param.Type) {
-			return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot take non-copyable parameter %s", fn.Name, param.Type.String()), param.Span)
-		}
-	}
-	state.visiting[key] = true
-	guardScope := newEVT1Scope(evt1ModuleScope(env))
-	for _, param := range fn.Params {
-		guardScope.declare(param.Name, evt1ValueBinding{
-			t:        evt1CanonicalType(env, param.Type),
-			mutable:  false,
-			comptime: false,
-		})
-	}
-	if err := evt1ValidateGuardFunctionBlock(env, guardScope, *fn.Body, fn, state, depth); err != nil {
-		delete(state.visiting, key)
-		return err
-	}
-	delete(state.visiting, key)
-	state.checked[key] = true
-	return nil
-}
-
-func evt1ValidateGuardFunctionBlock(env *semanticEnv, scope *evt1Scope, block Block, fn FunctionDecl, state *evt1GuardCheckState, depth int) error {
-	for _, stmt := range block.Statements {
-		switch s := stmt.(type) {
-		case *VarDecl:
-			if s.Comptime {
-				return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot use comptime locals", fn.Name), s.Span)
-			}
-			if _, err := validateExpr(env, scope, s.Value, nil, false); err != nil {
-				return err
-			}
-			if err := evt1ValidateGuardExpr(env, scope, s.Value, state, depth); err != nil {
-				return err
-			}
-			resolvedType, err := evt1ResolveType(env, scope, s.Type)
-			if err != nil {
-				return err
-			}
-			scope.declare(s.Name, evt1ValueBinding{t: evt1CanonicalType(env, resolvedType), mutable: false})
-		case *ReturnStmt:
-			if s.Value != nil {
-				if _, err := validateExpr(env, scope, s.Value, nil, false); err != nil {
-					return err
-				}
-				if err := evt1ValidateGuardExpr(env, scope, s.Value, state, depth); err != nil {
-					return err
-				}
-			}
-		case *ExprStmt:
-			if _, err := validateExpr(env, scope, s.Value, nil, false); err != nil {
-				return err
-			}
-			if err := evt1ValidateGuardExpr(env, scope, s.Value, state, depth); err != nil {
-				return err
-			}
-		case *Block:
-			child := newEVT1Scope(scope)
-			if err := evt1ValidateGuardFunctionBlock(env, child, *s, fn, state, depth); err != nil {
-				return err
-			}
-		default:
-			return evt1Diagnostic("CV4295", fmt.Sprintf("guard call target %s cannot use %s", fn.Name, evt1GuardStatementLabel(stmt)), stmt.statementSpan())
-		}
-	}
-	return nil
-}
-
-func evt1GuardStatementLabel(stmt Statement) string {
-	switch stmt.(type) {
-	case *AssignStmt:
-		return "assignment"
-	case *InstanceDecl:
-		return "instance declarations"
-	case *MatchStmt:
-		return "statement-form match"
-	case *WhileStmt:
-		return "while loops"
-	case *ForeachStmt:
-		return "foreach loops"
-	case *YieldStmt:
-		return "yield"
-	case *StaticAssertStmt:
-		return "static_assert"
-	default:
-		return "that statement form"
-	}
-}
-
-func evt1GuardExprNodeCount(expr Expr) int {
-	count := 1
-	switch e := expr.(type) {
-	case *FieldExpr:
-		count += evt1GuardExprNodeCount(e.Receiver)
-	case *CallExpr:
-		for _, arg := range e.Args {
-			count += evt1GuardExprNodeCount(arg)
-		}
-	case *WithExpr:
-		count += evt1GuardExprNodeCount(e.Base)
-		for _, update := range e.Updates {
-			count += evt1GuardExprNodeCount(update.Value)
-		}
-	case *DispatchExpr:
-		count += evt1GuardExprNodeCount(e.Signal)
-	case *TemplateCallExpr:
-		for _, arg := range e.Args {
-			count += evt1GuardExprNodeCount(arg)
-		}
-	case *BinaryExpr:
-		count += evt1GuardExprNodeCount(e.Left)
-		count += evt1GuardExprNodeCount(e.Right)
-	case *UnaryExpr:
-		count += evt1GuardExprNodeCount(e.Value)
-	case *BindExpr:
-		count += evt1GuardExprNodeCount(e.Source)
-	case *ConstructExpr:
-		for _, arg := range e.Args {
-			count += evt1GuardExprNodeCount(arg)
-		}
-	case *StructConstructExpr:
-		for _, arg := range e.Args {
-			count += evt1GuardExprNodeCount(arg)
-		}
-	case *ArrayLiteralExpr:
-		for _, element := range e.Elements {
-			count += evt1GuardExprNodeCount(element)
-		}
-	case *RepeatInitializer:
-		count += evt1GuardExprNodeCount(e.Value)
-		if e.Count != nil {
-			count += evt1GuardExprNodeCount(e.Count)
-		}
-	case *IndexExpr:
-		count += evt1GuardExprNodeCount(e.Base)
-		for _, index := range evt1StorageIndices(e) {
-			count += evt1GuardExprNodeCount(index)
-		}
-	case *MatchExpr:
-		count += evt1GuardExprNodeCount(e.Subject)
-		for _, arm := range e.Arms {
-			count += evt1GuardExprNodeCount(arm.Value)
-		}
-	case *IfExpr:
-		count += evt1GuardExprNodeCount(e.Condition)
-		count += evt1GuardExprNodeCount(e.Then)
-		count += evt1GuardExprNodeCount(e.Else)
-	case *ParenExpr:
-		count += evt1GuardExprNodeCount(e.Value)
-	}
-	return count
-}
-
 func evt1ExprIdentity(expr Expr) string {
 	switch e := expr.(type) {
 	case *InterpretExpr:
@@ -6693,11 +6059,6 @@ func evt1ExprIdentity(expr Expr) string {
 			args = append(args, evt1ExprIdentity(arg))
 		}
 		return e.Callee + "(" + strings.Join(args, ",") + ")"
-	case *DispatchExpr:
-		if e.BatchName != "" {
-			return "dispatch(" + e.InstanceName + "," + evt1ExprIdentity(e.Signal) + "," + e.BatchName + ")"
-		}
-		return "dispatch(" + e.InstanceName + "," + evt1ExprIdentity(e.Signal) + ")"
 	case *TemplateCallExpr:
 		var args []string
 		for _, arg := range e.Args {
@@ -7837,8 +7198,6 @@ func exprLabel(expr Expr) string {
 		return exprLabel(e.Base) + "[index]"
 	case *ArrayLiteralExpr:
 		return "array_literal"
-	case *DispatchExpr:
-		return "dispatch(" + e.InstanceName + ", ...)"
 	default:
 		return "expression"
 	}
@@ -8494,8 +7853,6 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			}
 		}
 		return &VarDecl{Type: evt1SubstituteType(s.Type, typeParam, concreteType), Name: s.Name, Value: value, Span: s.Span}, nil
-	case *EffectsDecl:
-		return &EffectsDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil
 	case *InstanceDecl:
 		return &InstanceDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil
 	case *AssignStmt:
@@ -8712,12 +8069,6 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			out.Args = append(out.Args, sub)
 		}
 		return out, nil
-	case *DispatchExpr:
-		signal, err := evt1SubstituteExpr(e.Signal, typeParam, concreteType)
-		if err != nil {
-			return nil, err
-		}
-		return &DispatchExpr{InstanceName: e.InstanceName, Signal: signal, BatchName: e.BatchName, Span: e.Span}, nil
 	case *TemplateCallExpr:
 		{
 			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteType(e.TypeArg, typeParam, concreteType), Span: e.Span}

@@ -158,6 +158,14 @@ func TestEVT2x2MachineUnsupportedBoundaries(t *testing.T) {
 	if _, err := GenerateLIR(module); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_MACHINE_FIELD_TYPE") {
 		t.Fatalf("unsupported frame field accepted: %v", err)
 	}
+	withInput := `profile Core; enum S { Go, } automata Door with input S { machine Run { state Start { on S::Go => Start; } } }`
+	module, err = Parse("unsupported_machine_input.concept", withInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GenerateLIR(module); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_AUTOMATA_INPUT Door") {
+		t.Fatalf("input reactions were not rejected at the EVT2 boundary: %v", err)
+	}
 }
 
 func TestEVT2x2MachineSemanticArtifactRetainsBodies(t *testing.T) {

@@ -1,5 +1,4 @@
 {
-  "actuators": null,
   "assertions": [
     {
       "concept_name": "VulkanResource",

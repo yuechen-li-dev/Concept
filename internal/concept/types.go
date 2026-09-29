@@ -372,30 +372,6 @@ type Param struct {
 	Span Span   `json:"span"`
 }
 
-type EffectDecl struct {
-	Name   string  `json:"name"`
-	Params []Param `json:"params,omitempty"`
-	Span   Span    `json:"span"`
-}
-
-type ActuatorMapping struct {
-	EffectName         string  `json:"effect_name"`
-	Params             []Param `json:"params,omitempty"`
-	ImplementationName string  `json:"implementation_name"`
-	ImplementationArgs []Expr  `json:"implementation_args,omitempty"`
-	Span               Span    `json:"span"`
-}
-
-type ActuatorDecl struct {
-	Name          string            `json:"name"`
-	AutomataName  string            `json:"automata_name"`
-	MechanismType Type              `json:"mechanism_type"`
-	MechanismName string            `json:"mechanism_name"`
-	ErrorType     Type              `json:"error_type"`
-	Mappings      []ActuatorMapping `json:"mappings,omitempty"`
-	Span          Span              `json:"span"`
-}
-
 type ConceptRequirement interface {
 	evt1ConceptRequirement()
 	requirementSpan() Span
@@ -618,8 +594,6 @@ type Module struct {
 	Layouts          []LayoutDecl          `json:"layouts,omitempty"`
 	Streams          []StreamDecl          `json:"streams,omitempty"`
 	Enums            []EnumDecl            `json:"enums,omitempty"`
-	Effects          []EffectDecl          `json:"effects,omitempty"`
-	Actuators        []ActuatorDecl        `json:"actuators,omitempty"`
 	Automata         []AutomataDecl        `json:"automata,omitempty"`
 	Concepts         []ConceptDecl         `json:"concepts,omitempty"`
 	Assertions       []ConceptAssertion    `json:"assertions,omitempty"`
@@ -707,29 +681,9 @@ type InlineTensorDecl struct {
 func (*VarDecl) evt1Statement()        {}
 func (s *VarDecl) statementSpan() Span { return s.Span }
 
-type EffectsDecl struct {
-	AutomataName string `json:"automata_name"`
-	Name         string `json:"name"`
-	Span         Span   `json:"span"`
-}
-
-func (*EffectsDecl) evt1Statement()        {}
-func (s *EffectsDecl) statementSpan() Span { return s.Span }
-
-type ActuatorLocalDecl struct {
-	ActuatorName string `json:"actuator_name"`
-	Name         string `json:"name"`
-	Mechanism    Expr   `json:"mechanism"`
-	Span         Span   `json:"span"`
-}
-
-func (*ActuatorLocalDecl) evt1Statement()        {}
-func (s *ActuatorLocalDecl) statementSpan() Span { return s.Span }
-
 type InstanceDecl struct {
 	AutomataName string `json:"automata_name"`
 	Name         string `json:"name"`
-	Context      Expr   `json:"context,omitempty"`
 	StateArgs    []Expr `json:"state_args,omitempty"`
 	Span         Span   `json:"span"`
 }
@@ -867,17 +821,6 @@ func (s *TransitionDecideStmt) statementSpan() Span { return s.Span }
 
 func (*InstanceDecl) evt1Statement()        {}
 func (s *InstanceDecl) statementSpan() Span { return s.Span }
-
-type ActuationDecl struct {
-	ActuatorName string `json:"actuator_name"`
-	Name         string `json:"name"`
-	BatchName    string `json:"batch_name"`
-	ExecutorName string `json:"executor_name"`
-	Span         Span   `json:"span"`
-}
-
-func (*ActuationDecl) evt1Statement()        {}
-func (s *ActuationDecl) statementSpan() Span { return s.Span }
 
 type AssignStmt struct {
 	Target     Expr            `json:"target"`
@@ -1145,16 +1088,6 @@ type CallExpr struct {
 func (*CallExpr) evt1Expr()        {}
 func (e *CallExpr) exprSpan() Span { return e.Span }
 
-type DispatchExpr struct {
-	InstanceName string `json:"instance_name"`
-	Signal       Expr   `json:"signal"`
-	BatchName    string `json:"batch_name,omitempty"`
-	Span         Span   `json:"span"`
-}
-
-func (*DispatchExpr) evt1Expr()        {}
-func (e *DispatchExpr) exprSpan() Span { return e.Span }
-
 type TemplateCallExpr struct {
 	Callee        string `json:"callee"`
 	MustUseResult bool   `json:"must_use_result,omitempty"`
@@ -1395,32 +1328,6 @@ func (e *FailureExpr) exprSpan() Span { return e.Span }
 func (*ParenExpr) evt1Expr()        {}
 func (e *ParenExpr) exprSpan() Span { return e.Span }
 
-type MIREffect struct {
-	Name       string    `json:"name"`
-	Params     []MIRName `json:"params,omitempty"`
-	SourceSpan Span      `json:"source_span"`
-}
-
-type MIRActuator struct {
-	Name          string               `json:"name"`
-	AutomataName  string               `json:"automata_name"`
-	MechanismName string               `json:"mechanism_name"`
-	MechanismType Type                 `json:"mechanism_type"`
-	ErrorType     Type                 `json:"error_type"`
-	Identity      string               `json:"identity"`
-	ResultType    string               `json:"result_type"`
-	FailureSlot   string               `json:"failure_slot"`
-	Mappings      []MIRActuatorMapping `json:"mappings,omitempty"`
-	SourceSpan    Span                 `json:"source_span"`
-}
-
-type MIRActuatorMapping struct {
-	EffectName         string   `json:"effect_name"`
-	ImplementationName string   `json:"implementation_name"`
-	ImplementationArgs []string `json:"implementation_args,omitempty"`
-	SourceSpan         Span     `json:"source_span"`
-}
-
 type MIR struct {
 	Schema            string                `json:"schema"`
 	Module            string                `json:"module"`
@@ -1428,8 +1335,6 @@ type MIR struct {
 	TypeAliases       []MIRTypeAlias        `json:"type_aliases,omitempty"`
 	Structs           []MIRStruct           `json:"structs,omitempty"`
 	Enums             []MIREnum             `json:"enums,omitempty"`
-	Effects           []MIREffect           `json:"effects,omitempty"`
-	Actuators         []MIRActuator         `json:"actuators,omitempty"`
 	Automata          []MIRAutomata         `json:"automata,omitempty"`
 	Concepts          []MIRConcept          `json:"concepts,omitempty"`
 	Assertions        []MIRAssertion        `json:"assertions,omitempty"`
@@ -1947,10 +1852,6 @@ type semanticEnv struct {
 	typeAliases             map[string]Type
 	layouts                 map[string]LayoutDecl
 	streams                 map[string]StreamDecl
-	effects                 map[string]EffectDecl
-	effectOrder             []string
-	actuators               map[string]ActuatorDecl
-	actuatorInfo            map[string]*evt1ActuatorInfo
 	automata                map[string]AutomataDecl
 	automataInfo            map[string]*evt1AutomataInfo
 	functions               map[string][]FunctionDecl
@@ -1994,22 +1895,6 @@ type semanticEnv struct {
 	genericInstantiating    map[string]bool
 }
 
-const evt1AutomataDispatchOutcomeTypeName = "AutomataDispatchOutcome"
-
-func evt1BuiltinAutomataDispatchOutcomeEnum() EnumDecl {
-	return EnumDecl{
-		Name: evt1AutomataDispatchOutcomeTypeName,
-		Variants: []VariantDecl{
-			{Name: "Transitioned", Tag: 0},
-			{Name: "Unhandled", Tag: 1},
-			{Name: "Ambiguous", Tag: 2},
-			{Name: "Finished", Tag: 3},
-			{Name: "AlreadyFinished", Tag: 4},
-			{Name: "EffectBatchOccupied", Tag: 5},
-		},
-	}
-}
-
 func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 	enums := map[string]EnumDecl{}
 	fieldSets := map[string]map[string]Type{}
@@ -2028,10 +1913,6 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		typeAliases:             map[string]Type{},
 		layouts:                 map[string]LayoutDecl{},
 		streams:                 map[string]StreamDecl{},
-		effects:                 map[string]EffectDecl{},
-		effectOrder:             nil,
-		actuators:               map[string]ActuatorDecl{},
-		actuatorInfo:            map[string]*evt1ActuatorInfo{},
 		automata:                map[string]AutomataDecl{},
 		automataInfo:            map[string]*evt1AutomataInfo{},
 		functions:               map[string][]FunctionDecl{},

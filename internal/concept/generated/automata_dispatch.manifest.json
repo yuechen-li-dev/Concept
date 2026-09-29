@@ -11,11 +11,11 @@
     },
     {
       "path": "automata_dispatch.mir.json",
-      "sha256": "7f58f35c14f19ba50a40fcacde657428628ae966b1773dfaa53d3c8cde5410e3"
+      "sha256": "a5a548f1f2c523e6a28e98e0ab988c49e32f502f7b3f1eb8c50d171cd998e505"
     },
     {
       "path": "automata_dispatch.map.json",
-      "sha256": "56cedfb95bfb2d7afaab8c3a232b77529ac3935721743f430e9fcfdb0322c0ea"
+      "sha256": "6c0379ac95d80ad49dde73dc60fb9db1944817b8f3e37de3d357632bde63a106"
     }
   ],
   "options": {

@@ -22,8 +22,6 @@ type ProfileDefinition struct {
 	BuiltinEnums       []EnumDecl
 	AdmittedImports    map[string]struct{}
 	AllowDomainImports bool
-	AllowEffects       bool
-	AllowActuators     bool
 }
 
 func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
@@ -52,7 +50,7 @@ func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 var coreProfileDefinition = ProfileDefinition{
 	Name:         "Core",
 	BuiltinTypes: evt1CoreBuiltinDefinitions(),
-	BuiltinEnums: []EnumDecl{evt1BuiltinAutomataDispatchOutcomeEnum(), evt1BuiltinStepOutcomeEnum(), evt1BuiltinNumericCastErrorEnum()},
+	BuiltinEnums: []EnumDecl{evt1BuiltinStepOutcomeEnum(), evt1BuiltinNumericCastErrorEnum()},
 }
 
 var profileDefinitions = map[string]*ProfileDefinition{

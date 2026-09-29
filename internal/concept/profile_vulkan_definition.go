@@ -1,19 +1,5 @@
 package concept
 
-const evt1ActuationOutcomeTypeName = "ActuationOutcome"
-
-func evt1BuiltinActuationOutcomeEnum() EnumDecl {
-	return EnumDecl{
-		Name: evt1ActuationOutcomeTypeName,
-		Variants: []VariantDecl{
-			{Name: "Completed", Tag: 0},
-			{Name: "Failed", Tag: 1},
-			{Name: "NoBatch", Tag: 2},
-			{Name: "AlreadyConsumed", Tag: 3},
-		},
-	}
-}
-
 func evt1NewVulkanProfileDefinition() ProfileDefinition {
 	builtinTypes := evt1CoreBuiltinDefinitions()
 	builtinTypes["PipelineLayout"] = BuiltinTypeDefinition{
@@ -48,16 +34,13 @@ func evt1NewVulkanProfileDefinition() ProfileDefinition {
 		Name:         "Vulkan",
 		BuiltinTypes: builtinTypes,
 		BuiltinEnums: []EnumDecl{
-			evt1BuiltinAutomataDispatchOutcomeEnum(),
-			evt1BuiltinActuationOutcomeEnum(),
+			evt1BuiltinStepOutcomeEnum(),
 			evt1BuiltinNumericCastErrorEnum(),
 		},
 		AdmittedImports: map[string]struct{}{
 			"Prometheus.Vulkan": {},
 		},
 		AllowDomainImports: true,
-		AllowEffects:       true,
-		AllowActuators:     true,
 	}
 }
 

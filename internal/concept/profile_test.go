@@ -25,10 +25,10 @@ func TestProfileDefinitionsOwnBuiltinAdmissions(t *testing.T) {
 	if _, ok := vulkan.AdmittedImports["Prometheus.Vulkan"]; !ok {
 		t.Fatal("Vulkan profile does not own the Prometheus.Vulkan import admission")
 	}
-	if core.AllowEffects || core.AllowActuators || core.AllowDomainImports {
-		t.Fatal("Core profile admits domain semantics")
+	if core.AllowDomainImports {
+		t.Fatal("Core profile admits domain imports")
 	}
-	if !vulkan.AllowEffects || !vulkan.AllowActuators || !vulkan.AllowDomainImports {
+	if !vulkan.AllowDomainImports {
 		t.Fatal("Vulkan profile admissions are incomplete")
 	}
 	for name := range vulkan.BuiltinTypes {

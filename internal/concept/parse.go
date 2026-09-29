@@ -567,17 +567,9 @@ func (p *parser) parseModule() (Module, error) {
 			}
 			module.Enums = append(module.Enums, enumDecl)
 		case "effect":
-			effectDecl, err := p.parseEffectDecl()
-			if err != nil {
-				return module, err
-			}
-			module.Effects = append(module.Effects, effectDecl)
+			return module, evt1RemovedSurface("effect", p.currentSpan())
 		case "actuator":
-			actuatorDecl, err := p.parseActuatorDecl()
-			if err != nil {
-				return module, err
-			}
-			module.Actuators = append(module.Actuators, actuatorDecl)
+			return module, evt1RemovedSurface("actuator", p.currentSpan())
 		case "automata":
 			automataDecl, err := p.parseAutomataDecl()
 			if err != nil {
@@ -1088,46 +1080,12 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 	if err != nil {
 		return AutomataDecl{}, err
 	}
-	canonical := p.peekLexeme() != "("
-	var signalType Type
-	var context *Field
-	if !canonical {
-		p.next()
-		signalType, err = p.parseType("")
-		if err != nil {
-			return AutomataDecl{}, err
-		}
+	if p.peekLexeme() == "(" {
+		return AutomataDecl{}, evt1RemovedSurface("signal automata", p.currentSpan())
 	}
-	if !canonical && p.peekLexeme() == "," {
-		p.next()
-		if p.peekLexeme() != "borrow" {
-			return AutomataDecl{}, evt1Diagnostic("CV4276", "automata context parameter must use `borrow name: Type`", p.currentSpan())
-		}
-		p.next()
-		nameTok, err := p.expectIdentifier("CV4277", "expected automata context binding name")
-		if err != nil {
-			return AutomataDecl{}, err
-		}
-		if _, err := p.expect(":"); err != nil {
-			return AutomataDecl{}, err
-		}
-		contextType, err := p.parseType("")
-		if err != nil {
-			return AutomataDecl{}, err
-		}
-		context = &Field{Name: nameTok.Lexeme, Type: contextType, Span: nameTok.Span}
-		if p.peekLexeme() == "," {
-			return AutomataDecl{}, evt1Diagnostic("CV4278", "automata declarations admit at most one borrowed context parameter", p.currentSpan())
-		}
-	}
-	if !canonical {
-		if _, err := p.expect(")"); err != nil {
-			return AutomataDecl{}, err
-		}
-	}
-	decl := AutomataDecl{Name: nameTok.Lexeme, SignalType: signalType, Context: context, Span: start.Span}
+	decl := AutomataDecl{Name: nameTok.Lexeme, Span: start.Span}
 	seenState := false
-	for canonical && p.peekLexeme() == "with" {
+	for p.peekLexeme() == "with" {
 		p.next()
 		if p.peekLexeme() == "input" {
 			inputTok := p.next()
@@ -1165,7 +1123,7 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 		return AutomataDecl{}, err
 	}
 	for !p.done() && p.peekLexeme() != "}" {
-		machine, err := p.parseMachineDecl(canonical)
+		machine, err := p.parseMachineDecl()
 		if err != nil {
 			return AutomataDecl{}, err
 		}
@@ -1174,7 +1132,7 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 	if _, err := p.expect("}"); err != nil {
 		return AutomataDecl{}, err
 	}
-	if canonical && len(decl.Machines) > 0 {
+	if len(decl.Machines) > 0 {
 		for i := range decl.Machines {
 			decl.Machines[i].Initial = i == 0
 			for stateIndex := range decl.Machines[i].States {
@@ -1211,164 +1169,11 @@ func (p *parser) parseAutomataStorageField(code string, allowInitializer bool) (
 	return Field{Type: t, Name: name.Lexeme, Visibility: "private", Span: name.Span, Initializer: initializer}, nil
 }
 
-func (p *parser) parseEffectDecl() (EffectDecl, error) {
-	start, err := p.expect("effect")
-	if err != nil {
-		return EffectDecl{}, err
-	}
-	nameTok, err := p.expectIdentifier("CV4298", "expected effect name")
-	if err != nil {
-		return EffectDecl{}, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return EffectDecl{}, err
-	}
-	decl := EffectDecl{Name: nameTok.Lexeme, Span: start.Span}
-	if p.peekLexeme() != ")" {
-		for {
-			paramType, err := p.parseType("")
-			if err != nil {
-				return EffectDecl{}, err
-			}
-			paramName, err := p.expectIdentifier("CV4299", "expected effect parameter name")
-			if err != nil {
-				return EffectDecl{}, err
-			}
-			decl.Params = append(decl.Params, Param{Type: paramType, Name: paramName.Lexeme, Span: paramName.Span})
-			if p.peekLexeme() != "," {
-				break
-			}
-			p.next()
-		}
-	}
-	if _, err := p.expect(")"); err != nil {
-		return EffectDecl{}, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return EffectDecl{}, err
-	}
-	return decl, nil
-}
-
-func (p *parser) parseActuatorDecl() (ActuatorDecl, error) {
-	start, err := p.expect("actuator")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	nameTok, err := p.expectIdentifier("CV4313", "expected actuator name")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return ActuatorDecl{}, err
-	}
-	automataTok, err := p.expectIdentifier("CV4314", "expected automata name in actuator declaration")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	if _, err := p.expect(","); err != nil {
-		return ActuatorDecl{}, err
-	}
-	mechanismType, err := p.parseType("")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	mechanismTok, err := p.expectIdentifier("CV4315", "expected actuator mechanism binding name")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	if _, err := p.expect(","); err != nil {
-		return ActuatorDecl{}, err
-	}
-	errorType, err := p.parseType("")
-	if err != nil {
-		return ActuatorDecl{}, err
-	}
-	if _, err := p.expect(")"); err != nil {
-		return ActuatorDecl{}, err
-	}
-	if _, err := p.expect("{"); err != nil {
-		return ActuatorDecl{}, err
-	}
-	decl := ActuatorDecl{
-		Name:          nameTok.Lexeme,
-		AutomataName:  automataTok.Lexeme,
-		MechanismType: mechanismType,
-		MechanismName: mechanismTok.Lexeme,
-		ErrorType:     errorType,
-		Span:          start.Span,
-	}
-	for !p.done() && p.peekLexeme() != "}" {
-		mapping, err := p.parseActuatorMapping()
-		if err != nil {
-			return ActuatorDecl{}, err
-		}
-		decl.Mappings = append(decl.Mappings, mapping)
-	}
-	if _, err := p.expect("}"); err != nil {
-		return ActuatorDecl{}, err
-	}
-	return decl, nil
-}
-
-func (p *parser) parseActuatorMapping() (ActuatorMapping, error) {
-	start, err := p.expect("on")
-	if err != nil {
-		return ActuatorMapping{}, err
-	}
-	effectTok, err := p.expectIdentifier("CV4316", "expected effect name in actuator mapping")
-	if err != nil {
-		return ActuatorMapping{}, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return ActuatorMapping{}, err
-	}
-	mapping := ActuatorMapping{EffectName: effectTok.Lexeme, Span: start.Span}
-	if p.peekLexeme() != ")" {
-		for {
-			paramType, err := p.parseType("")
-			if err != nil {
-				return ActuatorMapping{}, err
-			}
-			paramName, err := p.expectIdentifier("CV4317", "expected actuator mapping parameter name")
-			if err != nil {
-				return ActuatorMapping{}, err
-			}
-			mapping.Params = append(mapping.Params, Param{Type: paramType, Name: paramName.Lexeme, Span: paramName.Span})
-			if p.peekLexeme() != "," {
-				break
-			}
-			p.next()
-		}
-	}
-	if _, err := p.expect(")"); err != nil {
-		return ActuatorMapping{}, err
-	}
-	if _, err := p.expect("=>"); err != nil {
-		return ActuatorMapping{}, err
-	}
-	callExpr, err := p.parseExpr()
-	if err != nil {
-		return ActuatorMapping{}, err
-	}
-	call, ok := callExpr.(*CallExpr)
-	if !ok {
-		return ActuatorMapping{}, evt1Diagnostic("CV4318", "actuator mappings require one direct implementation call", callExpr.exprSpan())
-	}
-	mapping.ImplementationName = call.Callee
-	mapping.ImplementationArgs = call.Args
-	if _, err := p.expect(";"); err != nil {
-		return ActuatorMapping{}, err
-	}
-	return mapping, nil
-}
-
-func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
+func (p *parser) parseMachineDecl() (MachineDecl, error) {
 	start := p.currentSpan()
 	machine := MachineDecl{Span: start}
 	if p.peekLexeme() == "initial" {
-		p.next()
-		machine.Initial = true
+		return MachineDecl{}, evt1RemovedSurface("initial", p.currentSpan())
 	}
 	if _, err := p.expect("machine"); err != nil {
 		return MachineDecl{}, evt1Diagnostic("CV4243", "expected machine declaration", p.currentSpan())
@@ -1380,14 +1185,14 @@ func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 	machine.Name = nameTok.Lexeme
 	machine.ResultType = Type{Name: "void", Kind: TypeBuiltin, Span: nameTok.Span}
 	machine.ErrorType = Type{Name: "void", Kind: TypeBuiltin, Span: nameTok.Span}
-	if canonical && p.peekLexeme() == "returns" {
+	if p.peekLexeme() == "returns" {
 		p.next()
 		machine.ResultType, err = p.parseType("")
 		if err != nil {
 			return MachineDecl{}, err
 		}
 	}
-	if canonical && p.peekLexeme() == "fails" {
+	if p.peekLexeme() == "fails" {
 		p.next()
 		machine.ErrorType, err = p.parseType("")
 		if err != nil {
@@ -1398,7 +1203,7 @@ func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 		return MachineDecl{}, err
 	}
 	for !p.done() && p.peekLexeme() != "}" {
-		if canonical && p.peekLexeme() != "state" && p.peekLexeme() != "initial" && p.peekLexeme() != "terminal" {
+		if p.peekLexeme() != "state" && p.peekLexeme() != "initial" && p.peekLexeme() != "terminal" {
 			field, err := p.parseAutomataStorageField("MACHINE_STATE_ACCESS_INVALID", true)
 			if err != nil {
 				return MachineDecl{}, err
@@ -1406,7 +1211,7 @@ func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 			machine.Fields = append(machine.Fields, field)
 			continue
 		}
-		state, err := p.parseStateDecl(canonical)
+		state, err := p.parseStateDecl()
 		if err != nil {
 			return MachineDecl{}, err
 		}
@@ -1418,22 +1223,15 @@ func (p *parser) parseMachineDecl(canonical bool) (MachineDecl, error) {
 	return machine, nil
 }
 
-func (p *parser) parseStateDecl(canonical bool) (StateDecl, error) {
+func (p *parser) parseStateDecl() (StateDecl, error) {
 	start := p.currentSpan()
 	state := StateDecl{Span: start}
 	if p.peekLexeme() == "initial" {
-		p.next()
-		state.Initial = true
-		if p.peekLexeme() == "terminal" {
-			p.next()
-			state.Terminal = true
-		}
-	} else if p.peekLexeme() == "terminal" {
+		return StateDecl{}, evt1RemovedSurface("initial", p.currentSpan())
+	}
+	if p.peekLexeme() == "terminal" {
 		p.next()
 		state.Terminal = true
-		if p.peekLexeme() == "initial" {
-			return StateDecl{}, evt1Diagnostic("CV4248", "state modifiers must use `initial terminal state`, not `terminal initial state`", p.currentSpan())
-		}
 	}
 	if _, err := p.expect("state"); err != nil {
 		return StateDecl{}, evt1Diagnostic("CV4247", "expected state declaration", p.currentSpan())
@@ -1446,230 +1244,28 @@ func (p *parser) parseStateDecl(canonical bool) (StateDecl, error) {
 	if _, err := p.expect("{"); err != nil {
 		return StateDecl{}, err
 	}
-	if canonical {
-		body := Block{Span: state.Span}
-		for !p.done() && p.peekLexeme() != "}" {
-			var stmt Statement
-			var err error
-			if p.peekLexeme() == "on" || (p.peekLexeme() == "otherwise" && p.peekLexemeN(1) == "=>") {
-				stmt, err = p.parseOnStmt()
-			} else {
-				stmt, err = p.parseStatement()
-			}
-			if err != nil {
-				return StateDecl{}, err
-			}
-			body.Statements = append(body.Statements, stmt)
+	body := Block{Span: state.Span}
+	for !p.done() && p.peekLexeme() != "}" {
+		var stmt Statement
+		var err error
+		switch {
+		case p.peekLexeme() == "on" || (p.peekLexeme() == "otherwise" && p.peekLexemeN(1) == "=>"):
+			stmt, err = p.parseOnStmt()
+		case p.peekLexeme() == "finish" && p.peekLexemeN(1) == ";":
+			err = evt1RemovedSurface("finish", p.currentSpan())
+		default:
+			stmt, err = p.parseStatement()
 		}
-		state.Body = &body
-		if _, err := p.expect("}"); err != nil {
+		if err != nil {
 			return StateDecl{}, err
 		}
-		return state, nil
+		body.Statements = append(body.Statements, stmt)
 	}
-	for !p.done() && p.peekLexeme() != "}" {
-		switch p.peekLexeme() {
-		case "on":
-			handler, err := p.parseAutomataHandler()
-			if err != nil {
-				return StateDecl{}, err
-			}
-			state.Handlers = append(state.Handlers, handler)
-		case "pop", "finish":
-			completion, err := p.parseAutomataCompletion()
-			if err != nil {
-				return StateDecl{}, err
-			}
-			state.Completion = append(state.Completion, completion)
-		default:
-			return StateDecl{}, evt1Diagnostic("CV4264", "state bodies only allow `on`, `pop`, or `finish` clauses", p.currentSpan())
-		}
-	}
+	state.Body = &body
 	if _, err := p.expect("}"); err != nil {
 		return StateDecl{}, err
 	}
 	return state, nil
-}
-
-func (p *parser) parseAutomataHandler() (TransitionDecl, error) {
-	start, err := p.expect("on")
-	if err != nil {
-		return TransitionDecl{}, err
-	}
-	signal, err := p.parseQualifiedEnumMember()
-	if err != nil {
-		return TransitionDecl{}, err
-	}
-	handler := TransitionDecl{Signal: signal, Span: start.Span}
-	switch p.peekLexeme() {
-	case "when":
-		p.next()
-		guard, err := p.parseExpr()
-		if err != nil {
-			return TransitionDecl{}, err
-		}
-		handler.Guard = guard
-		if _, err := p.expect("=>"); err != nil {
-			return TransitionDecl{}, evt1Diagnostic("CV4279", "guarded handlers require `=>` before the control action", p.currentSpan())
-		}
-	case "otherwise":
-		p.next()
-		handler.Otherwise = true
-		if _, err := p.expect("=>"); err != nil {
-			return TransitionDecl{}, evt1Diagnostic("CV4280", "fallback handlers require `=>` before the control action", p.currentSpan())
-		}
-	case "=>":
-		p.next()
-		if err := p.parseAutomataEffectBody(&handler); err != nil {
-			return TransitionDecl{}, err
-		}
-		return handler, nil
-	}
-	if p.peekLexeme() == "{" {
-		if err := p.parseAutomataEffectBody(&handler); err != nil {
-			return TransitionDecl{}, err
-		}
-		return handler, nil
-	}
-	if err := p.parseAutomataControlAction(&handler); err != nil {
-		return TransitionDecl{}, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return TransitionDecl{}, err
-	}
-	return handler, nil
-}
-
-func (p *parser) parseAutomataEffectBody(handler *TransitionDecl) error {
-	if _, err := p.expect("{"); err != nil {
-		return err
-	}
-	for p.peekLexeme() == "emit" {
-		emit, err := p.parseAutomataEmit()
-		if err != nil {
-			return err
-		}
-		handler.Emits = append(handler.Emits, emit)
-	}
-	if err := p.parseAutomataControlAction(handler); err != nil {
-		return err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return err
-	}
-	if _, err := p.expect("}"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *parser) parseAutomataEmit() (EmitStmt, error) {
-	start, err := p.expect("emit")
-	if err != nil {
-		return EmitStmt{}, err
-	}
-	nameTok, err := p.expectIdentifier("CV4301", "expected effect name after emit")
-	if err != nil {
-		return EmitStmt{}, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return EmitStmt{}, err
-	}
-	stmt := EmitStmt{EffectName: nameTok.Lexeme, Span: start.Span}
-	if p.peekLexeme() != ")" {
-		for {
-			arg, err := p.parseExpr()
-			if err != nil {
-				return EmitStmt{}, err
-			}
-			stmt.Args = append(stmt.Args, arg)
-			if p.peekLexeme() != "," {
-				break
-			}
-			p.next()
-		}
-	}
-	if _, err := p.expect(")"); err != nil {
-		return EmitStmt{}, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return EmitStmt{}, err
-	}
-	return stmt, nil
-}
-
-func (p *parser) parseAutomataControlAction(handler *TransitionDecl) error {
-	switch p.peekLexeme() {
-	case "goto":
-		p.next()
-		target, err := p.parseStateRef()
-		if err != nil {
-			return err
-		}
-		handler.Kind = TransitionGoto
-		handler.TargetState = target
-		return nil
-	case "push":
-		p.next()
-		machineTok, err := p.expectIdentifier("CV4255", "expected pushed machine name")
-		if err != nil {
-			return err
-		}
-		if _, err := p.expect("goto"); err != nil {
-			return err
-		}
-		continuation, err := p.parseStateRef()
-		if err != nil {
-			return err
-		}
-		handler.Kind = TransitionPush
-		handler.PushMachine = machineTok.Lexeme
-		handler.Continuation = continuation
-		return nil
-	default:
-		return evt1Diagnostic("CV4264", "state handlers require `goto` or `push ... goto ...`", p.currentSpan())
-	}
-}
-
-func (p *parser) parseAutomataCompletion() (CompletionDecl, error) {
-	tok := p.next()
-	if _, err := p.expect(";"); err != nil {
-		return CompletionDecl{}, err
-	}
-	return CompletionDecl{Kind: tok.Lexeme, Span: tok.Span}, nil
-}
-
-func (p *parser) parseQualifiedEnumMember() (QualifiedEnumMember, error) {
-	enumTok, err := p.expectIdentifier("CV4252", "expected enum name")
-	if err != nil {
-		return QualifiedEnumMember{}, err
-	}
-	if _, err := p.expect("::"); err != nil {
-		return QualifiedEnumMember{}, err
-	}
-	memberTok, err := p.expectIdentifier("CV4252", "expected enum member name")
-	if err != nil {
-		return QualifiedEnumMember{}, err
-	}
-	return QualifiedEnumMember{EnumName: enumTok.Lexeme, MemberName: memberTok.Lexeme, Span: enumTok.Span}, nil
-}
-
-func (p *parser) parseStateRef() (StateRef, error) {
-	first, err := p.expectIdentifier("CV4254", "expected state name")
-	if err != nil {
-		return StateRef{}, err
-	}
-	ref := StateRef{StateName: first.Lexeme, Span: first.Span}
-	if p.peekLexeme() == "::" {
-		p.next()
-		second, err := p.expectIdentifier("CV4254", "expected qualified state name")
-		if err != nil {
-			return StateRef{}, err
-		}
-		ref.MachineName = first.Lexeme
-		ref.StateName = second.Lexeme
-	}
-	return ref, nil
 }
 
 func (p *parser) templateDeclIsRuntimeType() bool {
@@ -3176,16 +2772,6 @@ func (p *parser) parseBlock() (Block, error) {
 func (p *parser) parseStatement() (Statement, error) {
 	switch p.peekLexeme() {
 	case "discard":
-		if p.peekLexemeN(1) == "(" {
-			value, err := p.parseExpr()
-			if err != nil {
-				return nil, err
-			}
-			if _, err := p.expect(";"); err != nil {
-				return nil, err
-			}
-			return &ExprStmt{Value: value, Span: value.exprSpan()}, nil
-		}
 		start := p.next().Span
 		value, err := p.parseExpr()
 		if err != nil {
@@ -3217,11 +2803,13 @@ func (p *parser) parseStatement() (Statement, error) {
 	case "try":
 		return p.parseTryStmt()
 	case "effects":
-		return p.parseEffectsDecl()
+		return nil, evt1RemovedSurface("effects", p.currentSpan())
 	case "actuation":
-		return p.parseActuationDecl()
+		return nil, evt1RemovedSurface("actuator", p.currentSpan())
 	case "actuator":
-		return p.parseActuatorLocalDecl()
+		return nil, evt1RemovedSurface("actuator", p.currentSpan())
+	case "emit":
+		return nil, evt1RemovedSurface("emit", p.currentSpan())
 	case "instance":
 		return p.parseInstanceDecl()
 	case "transition":
@@ -3452,7 +3040,12 @@ func (p *parser) parseOnStmt() (Statement, error) {
 		case "otherwise":
 			p.next()
 			stmt.Otherwise = true
+		case "goto", "push":
+			return nil, evt1RemovedSurface("on goto", p.currentSpan())
 		}
+	}
+	if p.peekLexeme() == "=>" && (p.peekLexemeN(1) == "goto" || p.peekLexemeN(1) == "push") {
+		return nil, evt1RemovedSurface("on goto", p.currentSpan())
 	}
 	if _, err := p.expect("=>"); err != nil {
 		return nil, evt1Diagnostic("ON_SYNTAX_INVALID", "input reactions use `on Pattern [when guard | otherwise] => Target;` or `=> { ... }`", p.currentSpan())
@@ -3674,54 +3267,6 @@ func (p *parser) parseTryStmt() (Statement, error) {
 	return stmt, nil
 }
 
-func (p *parser) parseEffectsDecl() (Statement, error) {
-	start, err := p.expect("effects")
-	if err != nil {
-		return nil, err
-	}
-	automataTok, err := p.expectIdentifier("CV4300", "expected automata name after effects")
-	if err != nil {
-		return nil, err
-	}
-	nameTok, err := p.expectIdentifier("CV4300", "expected local effects name")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return nil, err
-	}
-	return &EffectsDecl{AutomataName: automataTok.Lexeme, Name: nameTok.Lexeme, Span: start.Span}, nil
-}
-
-func (p *parser) parseActuatorLocalDecl() (Statement, error) {
-	start, err := p.expect("actuator")
-	if err != nil {
-		return nil, err
-	}
-	actuatorTok, err := p.expectIdentifier("CV4319", "expected actuator name after actuator")
-	if err != nil {
-		return nil, err
-	}
-	nameTok, err := p.expectIdentifier("CV4319", "expected local actuator name")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return nil, err
-	}
-	mechanism, err := p.parseExpr()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(")"); err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return nil, err
-	}
-	return &ActuatorLocalDecl{ActuatorName: actuatorTok.Lexeme, Name: nameTok.Lexeme, Mechanism: mechanism, Span: start.Span}, nil
-}
-
 func (p *parser) parseInstanceDecl() (Statement, error) {
 	start, err := p.expect("instance")
 	if err != nil {
@@ -3735,7 +3280,6 @@ func (p *parser) parseInstanceDecl() (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	var context Expr
 	var args []Expr
 	if p.peekLexeme() == "(" {
 		p.next()
@@ -3756,61 +3300,10 @@ func (p *parser) parseInstanceDecl() (Statement, error) {
 			return nil, err
 		}
 	}
-	if len(args) == 1 {
-		context = args[0]
-	}
 	if _, err := p.expect(";"); err != nil {
 		return nil, err
 	}
-	return &InstanceDecl{AutomataName: automataTok.Lexeme, Name: nameTok.Lexeme, Context: context, StateArgs: args, Span: start.Span}, nil
-}
-
-func (p *parser) parseActuationDecl() (Statement, error) {
-	start, err := p.expect("actuation")
-	if err != nil {
-		return nil, err
-	}
-	actuatorTok, err := p.expectIdentifier("CV4320", "expected actuator name after actuation")
-	if err != nil {
-		return nil, err
-	}
-	nameTok, err := p.expectIdentifier("CV4320", "expected actuation result name")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect("="); err != nil {
-		return nil, err
-	}
-	if _, err := p.expect("actuate"); err != nil {
-		return nil, evt1Diagnostic("CV4321", "actuation declarations require actuate(batch, executor)", p.currentSpan())
-	}
-	if _, err := p.expect("("); err != nil {
-		return nil, err
-	}
-	batchTok, err := p.expectIdentifier("CV4321", "expected effects batch name in actuate")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(","); err != nil {
-		return nil, err
-	}
-	executorTok, err := p.expectIdentifier("CV4321", "expected actuator local name in actuate")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(")"); err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(";"); err != nil {
-		return nil, err
-	}
-	return &ActuationDecl{
-		ActuatorName: actuatorTok.Lexeme,
-		Name:         nameTok.Lexeme,
-		BatchName:    batchTok.Lexeme,
-		ExecutorName: executorTok.Lexeme,
-		Span:         start.Span,
-	}, nil
+	return &InstanceDecl{AutomataName: automataTok.Lexeme, Name: nameTok.Lexeme, StateArgs: args, Span: start.Span}, nil
 }
 
 func (p *parser) parseLocalComptimeDecl() (Statement, error) {
@@ -4703,8 +4196,8 @@ func (p *parser) parseMatchExpr() (Expr, error) {
 }
 
 func (p *parser) parseNameLikeExpr() (Expr, error) {
-	if p.peekLexeme() == "dispatch" {
-		return p.parseDispatchExpr()
+	if p.peekLexeme() == "dispatch" && p.peekLexemeN(1) == "(" {
+		return nil, evt1RemovedSurface("dispatch", p.currentSpan())
 	}
 	nameTok, err := p.expectIdentifier("CV4015", "expected expression")
 	if err != nil {
@@ -4867,40 +4360,6 @@ func (p *parser) genericConstructionAhead() bool {
 		}
 	}
 	return false
-}
-
-func (p *parser) parseDispatchExpr() (Expr, error) {
-	start, err := p.expect("dispatch")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect("("); err != nil {
-		return nil, err
-	}
-	instanceTok, err := p.expectIdentifier("CV4273", "expected local instance name in dispatch")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(","); err != nil {
-		return nil, err
-	}
-	signal, err := p.parseExpr()
-	if err != nil {
-		return nil, err
-	}
-	batchName := ""
-	if p.peekLexeme() == "," {
-		p.next()
-		batchTok, err := p.expectIdentifier("CV4302", "expected local effects batch name in dispatch")
-		if err != nil {
-			return nil, err
-		}
-		batchName = batchTok.Lexeme
-	}
-	if _, err := p.expect(")"); err != nil {
-		return nil, err
-	}
-	return p.parsePostfixExpr(&DispatchExpr{InstanceName: instanceTok.Lexeme, Signal: signal, BatchName: batchName, Span: start.Span}, start.Span)
 }
 
 func (p *parser) parseArrayLiteralExpr() (Expr, error) {

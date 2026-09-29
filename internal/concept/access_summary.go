@@ -584,10 +584,7 @@ func evt1AccessBlock(env *semanticEnv, state *evt1AccessFunction, block Block) {
 			for _, arm := range s.Arms {
 				evt1AccessBlock(env, state, arm.Block)
 			}
-		case *ActuatorLocalDecl:
-			evt1AccessExpr(env, state, s.Mechanism)
 		case *InstanceDecl:
-			evt1AccessExpr(env, state, s.Context)
 			for _, arg := range s.StateArgs {
 				evt1AccessExpr(env, state, arg)
 			}
@@ -725,8 +722,6 @@ func evt1AccessExpr(env *semanticEnv, state *evt1AccessFunction, expr Expr) {
 		for _, arm := range e.Arms {
 			evt1AccessExpr(env, state, arm.Value)
 		}
-	case *DispatchExpr:
-		evt1AccessExpr(env, state, e.Signal)
 	}
 }
 

@@ -11,11 +11,11 @@
     },
     {
       "path": "lifecycle_automata.mir.json",
-      "sha256": "9ae03cdc20b24fe1b345d33426e99f64f968701d558d4beeaba234cb0d086fee"
+      "sha256": "0fb5c0989c4a797c295918c3197d47e9afd4789532032ba2bd4b66c6ae0201bc"
     },
     {
       "path": "lifecycle_automata.map.json",
-      "sha256": "a4cd9511ed269b9ac530078e500a9d7b92f4fd4e42ceeb5c55d1ca4cf1a0b22a"
+      "sha256": "432d87d6e1c1d9532bd7ab39e8f77ee8fcdbec22b6fcd91c146c0edbd2e59b31"
     }
   ],
   "options": {

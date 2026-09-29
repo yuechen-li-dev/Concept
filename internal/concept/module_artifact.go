@@ -104,12 +104,12 @@ func registerSemanticGobTypes() {
 	semanticGobOnce.Do(func() {
 		values := []any{
 			&OperationRequirement{}, &PrerequisiteRequirement{}, &FieldRequirement{}, &CompilerAnalysisRequirement{},
-			&IfStmt{}, &Block{}, &VarDecl{}, &EffectsDecl{}, &ActuatorLocalDecl{}, &YieldStmt{}, &PushMachineStmt{},
+			&IfStmt{}, &Block{}, &VarDecl{}, &YieldStmt{}, &PushMachineStmt{},
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &OnStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
-			&InstanceDecl{}, &ActuationDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
+			&InstanceDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
 			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
-			&FieldExpr{}, &CallExpr{}, &DispatchExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
+			&FieldExpr{}, &CallExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
 			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},
 		}
@@ -706,8 +706,6 @@ func appendSemanticDeclarations(target *Module, source Module) {
 	target.Layouts = append(target.Layouts, source.Layouts...)
 	target.Streams = append(target.Streams, source.Streams...)
 	target.Enums = append(target.Enums, source.Enums...)
-	target.Effects = append(target.Effects, source.Effects...)
-	target.Actuators = append(target.Actuators, source.Actuators...)
 	target.Automata = append(target.Automata, source.Automata...)
 	target.Concepts = append(target.Concepts, source.Concepts...)
 	target.ComptimeDecls = append(target.ComptimeDecls, source.ComptimeDecls...)

@@ -527,3 +527,14 @@ func validateFailureConstructExpr(env *semanticEnv, scope *evt1Scope, expr *Cons
 	expr.ResolvedType = expected
 	return expected, nil
 }
+func evt1IsResultVoidErrorType(env *semanticEnv, t Type) (Type, bool) {
+	if t.Name != "Result" || len(t.TypeArgs) != 2 {
+		return Type{}, false
+	}
+	okType := evt1CanonicalType(env, t.TypeArgs[0])
+	if okType.Name != "void" || okType.Kind != TypeBuiltin {
+		return Type{}, false
+	}
+	return evt1CanonicalType(env, t.TypeArgs[1]), true
+}
+

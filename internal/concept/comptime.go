@@ -289,8 +289,6 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return evt1EvaluateGlobalComptimeDecl(state, decl)
 		}
 		return Value{}, evt1Diagnostic("CV4200", fmt.Sprintf("name %s is not available in comptime evaluation", e.Name), e.Span)
-	case *DispatchExpr:
-		return Value{}, evt1Diagnostic("CV4275", "dispatch is not available during comptime evaluation", e.Span)
 	case *UnaryExpr:
 		value, err := evt1EvalExpr(state, scope, e.Value)
 		if err != nil {

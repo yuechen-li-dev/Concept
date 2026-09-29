@@ -5,11 +5,11 @@ import (
 	"strconv"
 )
 
-// lowerAutomataToLIR handles the single-frame canonical subset. The current
-// EVT1 pushdown and signal-driven forms retain explicit unsupported boundaries.
+// lowerAutomataToLIR handles the single-frame subset of step machines. The
+// pushdown form and input reactions retain explicit unsupported boundaries.
 func lowerAutomataToLIR(a MIRAutomata, env *semanticEnv) ([]LIRFunction, error) {
-	if a.MachineStack == nil || a.StateEnvironment == nil {
-		return nil, fmt.Errorf("EVT2_UNSUPPORTED_SIGNAL_AUTOMATA %s", a.Name)
+	if a.InputType != "" {
+		return nil, fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_INPUT %s", a.Name)
 	}
 	for _, machine := range a.Machines {
 		for _, state := range machine.States {

@@ -82,7 +82,6 @@
   "automata": [
     {
       "name": "GuardedLifecycle",
-      "signal_enum": "",
       "input_type": "LifecycleSignal",
       "root_machine": "Main",
       "max_active_depth": 1,
