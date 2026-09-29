@@ -140,6 +140,10 @@ itself.
 
 ### VK3: `terminal state` and ambiguity
 
+*(Amended at VK2: the runtime `Ambiguous` outcome and the static overlap checks
+landed with `on` in VK2, since they define its selection rule. VK3 is
+`terminal state`, `Finished`/`AlreadyFinished` coverage, and the parity table.)*
+
 - `terminal state S { }` has no outgoing arms. Entering it makes
   `Complete()` true. A later `Step` returns `AlreadyFinished`, and the step
   that enters it returns `Finished`. This replaces `finish;`.

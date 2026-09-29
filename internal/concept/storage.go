@@ -224,6 +224,8 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 				}
 			case *Block:
 				visitBlock(*s)
+			case *OnStmt:
+				visitBlock(s.Body)
 			case *IfStmt:
 				visitBlock(s.Then)
 				if s.Else != nil {
@@ -338,6 +340,8 @@ func evt1CollectStorageViewTypes(module Module, env *semanticEnv) []Type {
 				add(s.Type)
 			case *Block:
 				visitBlock(*s)
+			case *OnStmt:
+				visitBlock(s.Body)
 			case *IfStmt:
 				visitBlock(s.Then)
 				if s.Else != nil {

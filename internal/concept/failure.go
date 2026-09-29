@@ -325,6 +325,8 @@ func evt1VisitFailureTypesBlock(block Block, add func(Type)) {
 			}
 		case *Block:
 			evt1VisitFailureTypesBlock(*s, add)
+		case *OnStmt:
+			evt1VisitFailureTypesBlock(s.Body, add)
 		}
 	}
 }
@@ -475,6 +477,10 @@ func evt1ModuleUsesTransitionPanic(module Module) bool {
 				}
 			case *Block:
 				if blockUses(*s) {
+					return true
+				}
+			case *OnStmt:
+				if blockUses(s.Body) {
 					return true
 				}
 			}

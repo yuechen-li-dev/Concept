@@ -1,0 +1,79 @@
+profile Core;
+
+// An automata with input may still have states without reactions: they run
+// their body on every Step and report Transitioned. Reaction bodies can use
+// any machine control, including transition match.
+enum Command
+{
+    Set(int value),
+    Reset,
+}
+
+enum Band
+{
+    Low,
+    High,
+}
+
+Band Classify(int value)
+{
+    if (value > 50)
+    {
+        return Band::High;
+    }
+    return Band::Low;
+}
+
+automata Gauge
+with input Command
+with state
+{
+    int value;
+    int settles;
+}
+{
+    machine Run
+    {
+        state Waiting
+        {
+            on Command::Set(value) =>
+            {
+                state.value = value;
+                transition match (Classify(value))
+                {
+                    Band::High => Settling;
+                    Band::Low => Waiting;
+                }
+            }
+            on Command::Reset =>
+            {
+                state.value = 0;
+            }
+        }
+
+        state Settling
+        {
+            settles = settles + 1;
+            transition Waiting;
+        }
+    }
+}
+
+int Main()
+{
+    instance Gauge gauge(0, 0);
+    discard Step(gauge, Run, Command::Set(80));
+    int settled = State(gauge, Run);
+    StepOutcome internal = Step(gauge, Run, Command::Reset);
+    discard Step(gauge, Run, Command::Set(10));
+    int code = 0;
+    match (internal)
+    {
+        StepOutcome::Transitioned => { code = 1; }
+        StepOutcome::Unhandled => { code = 2; }
+        StepOutcome::Ambiguous => { code = 3; }
+        StepOutcome::Finished => { code = 4; }
+        StepOutcome::AlreadyFinished => { code = 5; }
+    }
+    return settled * 1000 + code * 100 + gauge.state.value * 10 + gauge.state.settles;
+}

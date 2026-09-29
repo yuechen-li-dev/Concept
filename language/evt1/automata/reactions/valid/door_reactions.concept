@@ -1,0 +1,68 @@
+profile Core;
+
+enum DoorSignal
+{
+    Push(int force),
+    Lock,
+    Unlock,
+    Kick,
+}
+
+automata Door
+with input DoorSignal
+with state
+{
+    bool locked;
+    int pushes;
+}
+{
+    machine Run
+    {
+        state Closed
+        {
+            on DoorSignal::Push(force) when not locked and force > 2 => Open;
+            on DoorSignal::Push(force) when force > 9 => Broken;
+            on DoorSignal::Push(force) otherwise =>
+            {
+                pushes = pushes + 1;
+            }
+            on DoorSignal::Lock => { locked = true; }
+            on DoorSignal::Unlock => { locked = false; }
+        }
+
+        state Open
+        {
+            on DoorSignal::Push(force) => Closed;
+            otherwise => Open;
+        }
+
+        state Broken
+        {
+        }
+    }
+}
+
+int Code(StepOutcome outcome)
+{
+    return match (outcome)
+    {
+        StepOutcome::Transitioned => 1,
+        StepOutcome::Unhandled => 2,
+        StepOutcome::Ambiguous => 3,
+        StepOutcome::Finished => 4,
+        StepOutcome::AlreadyFinished => 5,
+    };
+}
+
+int Main()
+{
+    instance Door door(false, 0);
+    int trail = Code(Step(door, Run, DoorSignal::Push(1)));
+    trail = trail * 10 + Code(Step(door, Run, DoorSignal::Kick));
+    trail = trail * 10 + Code(Step(door, Run, DoorSignal::Push(5)));
+    trail = trail * 10 + State(door, Run);
+    trail = trail * 10 + Code(Step(door, Run, DoorSignal::Kick));
+    trail = trail * 10 + Code(Step(door, Run, DoorSignal::Push(1)));
+    trail = trail * 10 + Code(Step(door, Run, DoorSignal::Push(20)));
+    return trail * 10 + door.state.pushes;
+}

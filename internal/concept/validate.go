@@ -4168,7 +4168,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if inComptimeFn {
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", e.Callee+" is not available during comptime evaluation", e.Span)
 			}
-			if len(e.Args) != 2 {
+			if len(e.Args) != 2 && !(e.Callee == "Step" && len(e.Args) == 3) {
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("%s requires an automata instance and machine name", e.Callee), e.Span)
 			}
 			instanceName, instanceOK := e.Args[0].(*NameExpr)
@@ -4188,6 +4188,25 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, evt1Diagnostic("MACHINE_STATE_ACCESS_INVALID", fmt.Sprintf("unknown machine %s in automata %s", machineName.Name, info.Decl.Name), machineName.Span)
 			}
 			if e.Callee == "Step" {
+				hasInput := info.Decl.InputType.Name != ""
+				if hasInput && len(e.Args) != 3 {
+					return Type{}, evt1Diagnostic("MACHINE_STEP_REQUIRES_INPUT", fmt.Sprintf("automata %s is declared `with input %s`; step it with Step(%s, %s, input)", info.Decl.Name, info.Decl.InputType.String(), instanceName.Name, machineName.Name), e.Span)
+				}
+				if !hasInput && len(e.Args) == 3 {
+					return Type{}, evt1Diagnostic("MACHINE_STEP_INPUT_UNEXPECTED", fmt.Sprintf("automata %s has no `with input`; step it with Step(%s, %s)", info.Decl.Name, instanceName.Name, machineName.Name), e.Args[2].exprSpan())
+				}
+				if hasInput {
+					inputType, err := validateExprAgainstExpected(env, scope, e.Args[2], info.Decl.InputType, templateInfo, inComptimeFn)
+					if err != nil {
+						return Type{}, err
+					}
+					if !evt1TypesCompatible(env, info.Decl.InputType, inputType, "") {
+						return Type{}, evt1Diagnostic("MACHINE_STEP_INPUT_TYPE", fmt.Sprintf("Step input for %s must be %s, got %s", info.Decl.Name, info.Decl.InputType.String(), inputType.String()), e.Args[2].exprSpan())
+					}
+					e.Intrinsic = "step_machine_input"
+					e.MustUseResult = true
+					return Type{Name: evt1StepOutcomeTypeName, Kind: TypeEnum, Span: e.Span}, nil
+				}
 				e.Intrinsic = "step_machine"
 				return Type{Name: "void", Kind: TypeBuiltin, Span: e.Span}, nil
 			}

@@ -83,6 +83,7 @@ type AutomataDecl struct {
 	Name        string        `json:"name"`
 	Module      string        `json:"-"`
 	SignalType  Type          `json:"signal_type"`
+	InputType   Type          `json:"input_type,omitempty"`
 	Context     *Field        `json:"context,omitempty"`
 	StateFields []Field       `json:"state_fields,omitempty"`
 	Machines    []MachineDecl `json:"machines,omitempty"`
@@ -116,6 +117,7 @@ type evt1AutomataInfo struct {
 type MIRAutomata struct {
 	Name                 string                       `json:"name"`
 	SignalEnum           string                       `json:"signal_enum"`
+	InputType            string                       `json:"input_type,omitempty"`
 	ContextName          string                       `json:"context_name,omitempty"`
 	ContextType          *Type                        `json:"context_type,omitempty"`
 	RootMachine          string                       `json:"root_machine"`
@@ -185,6 +187,20 @@ type MIRState struct {
 	Operations           []MIROperation         `json:"operations,omitempty"`
 	Storage              []MIRPersistentStorage `json:"storage,omitempty"`
 	MachineControl       []MIRMachineControl    `json:"machine_control,omitempty"`
+	Reactions            []MIRReaction          `json:"reactions,omitempty"`
+}
+
+// MIRReaction summarizes one `on` reaction of a state; its body is lowered
+// from the state's SemanticBody.
+type MIRReaction struct {
+	Pattern          string   `json:"pattern,omitempty"`
+	PayloadBindings  []string `json:"payload_bindings,omitempty"`
+	Guard            string   `json:"guard,omitempty"`
+	Otherwise        bool     `json:"otherwise,omitempty"`
+	CatchAll         bool     `json:"catch_all,omitempty"`
+	Target           string   `json:"target,omitempty"`
+	DeclarationOrder int      `json:"declaration_order"`
+	SourceSpan       Span     `json:"source_span"`
 }
 
 type MIRTransitionInfer struct {
@@ -487,6 +503,19 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 		stateTypes[field.Name] = resolved
 	}
 	env.fieldSets[stateEnvName] = stateTypes
+	var inputEnum EnumDecl
+	if decl.InputType.Name != "" {
+		resolved, err := evt1ResolveType(env, nil, decl.InputType)
+		if err != nil {
+			return nil, err
+		}
+		enumDecl, ok := env.enums[resolved.Name]
+		if !ok || resolved.PointerTo != nil || resolved.ArrayElem != nil || len(resolved.TypeArgs) != 0 {
+			return nil, evt1Diagnostic("AUTOMATA_INPUT_INVALID", fmt.Sprintf("automata %s input must be an enum type, got %s", decl.Name, decl.InputType.String()), decl.InputType.Span)
+		}
+		decl.InputType = resolved
+		inputEnum = enumDecl
+	}
 	machineNames := map[string]bool{}
 	allMachineNames := map[string]bool{}
 	for _, declaredMachine := range decl.Machines {
@@ -608,6 +637,15 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 			for _, field := range machine.Fields {
 				machineScope.declare(field.Name, evt1ValueBinding{t: field.Type, mutable: !field.Type.Const, state: evt1StorageInitialized, provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceParameter}})
 			}
+			if evt1StateHasReactions(*state.Body) {
+				if decl.InputType.Name == "" {
+					return nil, evt1Diagnostic("ON_REQUIRES_INPUT", fmt.Sprintf("state %s.%s reacts with `on`, but automata %s does not declare `with input`", machine.Name, state.Name, decl.Name), state.Span)
+				}
+				if err := evt1ValidateStateReactions(env, machineScope, decl.InputType, inputEnum, state); err != nil {
+					return nil, err
+				}
+				continue
+			}
 			if err := validateBlock(env, machineScope, Type{Name: "void", Kind: TypeBuiltin}, *state.Body, nil, false); err != nil {
 				return nil, err
 			}
@@ -625,6 +663,9 @@ func evt1ValidateCanonicalAutomata(env *semanticEnv, decl AutomataDecl) (*evt1Au
 func evt1CanonicalAutomataIdentity(decl AutomataDecl) string {
 	var b strings.Builder
 	b.WriteString(decl.Name + "#state")
+	if decl.InputType.Name != "" {
+		b.WriteString("|input:" + decl.InputType.String())
+	}
 	for _, field := range decl.StateFields {
 		b.WriteString("|" + field.Name + ":" + field.Type.String())
 	}

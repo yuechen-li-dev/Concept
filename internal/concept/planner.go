@@ -701,6 +701,9 @@ func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPol
 	case "step_machine":
 		d.Category, d.Strategy = "AutomataPlan", "ExplicitMachineSwitch"
 		d.Evidence = PlanningEvidence{Claims: []string{"NoScheduler", "OneMachineOnly"}, Detail: "machine identity and current-state storage were fixed before planning"}
+	case "step_machine_input":
+		d.Category, d.Strategy = "AutomataPlan", "InputReactionSwitch"
+		d.Evidence = PlanningEvidence{Claims: []string{"NoScheduler", "OneMachineOnly", "AllGuardsEvaluatedOnce"}, Detail: "the input is copied into the instance, every guard for its variant is evaluated once, and the outcome is returned"}
 	case "state_machine":
 		d.Category, d.Strategy = "AutomataPlan", "ReadCurrentStateTag"
 		d.Evidence = PlanningEvidence{Claims: []string{"StableDeclarationOrder"}}

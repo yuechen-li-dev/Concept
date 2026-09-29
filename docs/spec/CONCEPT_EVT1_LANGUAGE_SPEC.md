@@ -1014,6 +1014,70 @@ transition match (Sample(now))
 }
 ```
 
+**Input reactions.** An automata may declare the input its machines react
+to, and its states may then react with `on`:
+
+```concept
+automata Door
+with input DoorSignal
+with state
+{
+    bool locked;
+}
+{
+    machine Run
+    {
+        state Closed
+        {
+            on DoorSignal::Push(force) when not locked and force > 2 => Open;
+            on DoorSignal::Push(force) otherwise => { /* stay */ }
+            on DoorSignal::Lock => { locked = true; }
+        }
+
+        state Open
+        {
+            on DoorSignal::Push(force) => Closed;
+            otherwise => Open;
+        }
+    }
+}
+
+StepOutcome outcome = Step(door, Run, DoorSignal::Push(5));
+```
+
+`with input T` names an enum. A machine of such an automata is stepped with
+`Step(instance, Machine, input)`, which returns the must-use builtin
+`StepOutcome { Transitioned, Unhandled, Ambiguous, Finished,
+AlreadyFinished }`. `Step` without an input is rejected for it
+(`MACHINE_STEP_REQUIRES_INPUT`), and `Step` with an input is rejected for an
+automata without one.
+
+A reaction is `on Pattern => Target;` or `on Pattern => { ... }`, optionally
+guarded with `when condition`. Payload bindings are in scope in the guard and
+the body. A body that does not transition keeps the current state. The
+reactions of a state are an **unordered set**, unlike the ordered arms of
+`transition match`:
+
+1. For the incoming variant, every guard of its non-fallback reactions is
+   evaluated once (an unguarded reaction counts as true).
+2. Exactly one true: that reaction runs, and the outcome is `Transitioned`.
+3. More than one true: the outcome is `Ambiguous` and the state is unchanged.
+4. None true: `on Pattern otherwise => ...` for that variant runs if present,
+   else the state-level `otherwise => ...`, else the outcome is `Unhandled`
+   and the state is unchanged.
+
+A state that reacts contains only reactions (`ON_MIXED_STATE_BODY`). States
+without reactions run their body on every `Step`, as in automata without
+input. Overlap that is certain is rejected statically (`ON_OVERLAP`): two
+unguarded reactions to one variant, two identical guards, or an unguarded
+reaction next to guarded ones (write the unguarded one as `otherwise`).
+Unreachable fallbacks are rejected (`ON_OTHERWISE_UNREACHABLE`,
+`ON_OTHERWISE_WITHOUT_GUARDS`). A step that completes the root machine
+reports `Finished`; a step on a completed instance reports `AlreadyFinished`.
+
+Style: use `on` for reactions to external input and `transition` for a next
+state the machine computes itself.
+
 **Canonical EVT1 transition semantics transition decide.** The canonical non-redundant candidate
 syntax is:
 

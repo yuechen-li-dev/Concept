@@ -223,6 +223,9 @@ func evt1InferenceCandidateTypes(module Module) map[string]bool {
 				}
 			case *Block:
 				visitBlock(*s)
+			case *OnStmt:
+				visitExpr(s.Guard)
+				visitBlock(s.Body)
 			}
 		}
 	}

@@ -50,6 +50,8 @@ func collectMachineControlMIR(block *Block, machine MachineDecl, out *MIRState) 
 			}
 		case *Block:
 			collectMachineControlMIR(stmt, machine, out)
+		case *OnStmt:
+			collectMachineControlMIR(&stmt.Body, machine, out)
 		}
 	}
 }
@@ -123,6 +125,9 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 	}
 
 	b.WriteString(fmt.Sprintf("typedef struct %s {\n  %s shared;\n  uint8_t depth;\n  uint8_t machine_tags[%d];\n  bool completed;\n", instanceType, stateType, evt1MachineStackCapacity))
+	if info.Decl.InputType.Name != "" {
+		b.WriteString(fmt.Sprintf("  %s input;\n  %s step_outcome;\n", evt1CType(info.Decl.InputType), evt1CType(Type{Name: evt1StepOutcomeTypeName, Kind: TypeEnum})))
+	}
 	for _, machine := range info.Decl.Machines {
 		b.WriteString(fmt.Sprintf("  %s %s[%d];\n", evt1AutomataMachineStorageCName(automata, machine.Name), evt1MachineFramesCName(machine.Name), evt1MachineStackCapacity))
 		b.WriteString(fmt.Sprintf("  %s %s;\n", evt1MachineOutcomeCName(automata, machine.Name), evt1MachineLastOutcomeField(machine.Name)))
@@ -186,7 +191,11 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 			for _, field := range machine.Fields {
 				lower.scope[0][field.Name] = evt1Binding{cName: frameBase + "." + field.Name, t: field.Type}
 			}
-			b.WriteString(lower.lowerBlock(*state.Body, 4))
+			if evt1StateHasReactions(*state.Body) {
+				b.WriteString(lower.lowerStateReactions(*state.Body, info.Decl.InputType, 4))
+			} else {
+				b.WriteString(lower.lowerBlock(*state.Body, 4))
+			}
 			b.WriteString("        break;\n      }\n")
 		}
 		b.WriteString(fmt.Sprintf("    default: concept_abort_invalid_automata_state(\"%s\", %d, instance->%s[frame_index].current_state);\n  }\n}\n\n", automata, info.MachineOrdinal[machine.Name], frames))
@@ -201,6 +210,14 @@ func (l *lowering) canonicalAutomataStackRuntimeSupport(info *evt1AutomataInfo) 
 	b.WriteString(fmt.Sprintf("    default: concept_abort_automata_stack(\"%s\", \"invalid machine state reached\");\n  }\n}\n\n", automata))
 	for _, machine := range info.Decl.Machines {
 		b.WriteString(fmt.Sprintf("static void %s(%s* instance) { if (instance->depth == 1u) instance->machine_tags[0] = %d; %s(instance); }\n", evt1AutomataStepCName(automata, machine.Name), instanceType, info.MachineOrdinal[machine.Name], topStep))
+		if info.Decl.InputType.Name != "" {
+			outcome := evt1CType(Type{Name: evt1StepOutcomeTypeName, Kind: TypeEnum})
+			b.WriteString(fmt.Sprintf("static %s %s(%s* instance, %s input) {\n", outcome, evt1AutomataStepInputCName(automata, machine.Name), instanceType, evt1CType(info.Decl.InputType)))
+			b.WriteString(fmt.Sprintf("  if (instance->completed || instance->depth == 0u) return %s;\n", evt1StepOutcomeValue("AlreadyFinished")))
+			b.WriteString(fmt.Sprintf("  instance->input = input;\n  instance->step_outcome = %s;\n", evt1StepOutcomeValue("Transitioned")))
+			b.WriteString(fmt.Sprintf("  %s(instance);\n", evt1AutomataStepCName(automata, machine.Name)))
+			b.WriteString(fmt.Sprintf("  if (instance->completed) return %s;\n  return instance->step_outcome;\n}\n", evt1StepOutcomeValue("Finished")))
+		}
 	}
 	b.WriteString("\n")
 

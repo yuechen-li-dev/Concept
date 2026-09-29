@@ -500,6 +500,9 @@ func evt1CollectSpanTypes(module Module) []Type {
 				visitExpr(s.Condition)
 			case *Block:
 				visitBlock(*s)
+			case *OnStmt:
+				visitExpr(s.Guard)
+				visitBlock(s.Body)
 			case *IfStmt:
 				visitExpr(s.Condition)
 				visitBlock(s.Then)

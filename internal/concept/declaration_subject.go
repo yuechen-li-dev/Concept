@@ -178,6 +178,8 @@ func collectDeclarationLocals(block Block, owner string, provenance DeclarationP
 			add(LocalDeclaration, s.Name, owner, provenance, s.Span)
 		case *Block:
 			collectDeclarationLocals(*s, owner, provenance, add)
+		case *OnStmt:
+			collectDeclarationLocals(s.Body, owner, provenance, add)
 		case *IfStmt:
 			collectDeclarationLocals(s.Then, owner, provenance, add)
 			if s.Else != nil {

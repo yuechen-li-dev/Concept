@@ -1,0 +1,29 @@
+profile Core;
+
+enum Signal
+{
+    Go(int level),
+    Stop,
+}
+
+automata Bad
+with state
+{
+    bool ready;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            transition Idle;
+        }
+    }
+}
+
+int Main()
+{
+    instance Bad bad(false);
+    discard Step(bad, Run, Signal::Stop);
+    return 0;
+}

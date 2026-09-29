@@ -300,6 +300,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mirAutomata := MIRAutomata{
 			Name:                 automataDecl.Name,
 			SignalEnum:           info.SignalEnum.Name,
+			InputType:            resolvedDecl.InputType.String(),
 			RootMachine:          info.RootMachine,
 			MaxActiveDepth:       info.MaxActiveDepth,
 			ContinuationCapacity: info.ContinuationCapacity,
@@ -359,6 +360,19 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 					collectTransitionMIR(state.Body, &mirState)
 					collectYieldMIR(state.Body, resolvedDecl.Name, machine.Name, state.Name, &mirState)
 					collectMachineControlMIR(state.Body, machine, &mirState)
+					for _, stmt := range state.Body.Statements {
+						if on, ok := stmt.(*OnStmt); ok {
+							reaction := MIRReaction{Otherwise: on.Otherwise, CatchAll: on.CatchAll, Target: on.Target, DeclarationOrder: len(mirState.Reactions), SourceSpan: on.Span}
+							if !on.CatchAll {
+								reaction.Pattern = on.Pattern.EnumName + "::" + on.Pattern.VariantName
+								reaction.PayloadBindings = append([]string{}, on.Pattern.Bindings...)
+							}
+							if on.Guard != nil {
+								reaction.Guard = evt1ExprIdentity(on.Guard)
+							}
+							mirState.Reactions = append(mirState.Reactions, reaction)
+						}
+					}
 					ordinal := 0
 					for _, stmt := range state.Body.Statements {
 						if local, ok := stmt.(*VarDecl); ok {
@@ -1254,6 +1268,12 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 			}
 		case *Block:
 			collectMIROps(env, s, fn, templateInfo)
+		case *OnStmt:
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "input_reaction", Detail: evt1ReactionSummary(s), SourceSpan: s.Span})
+			if s.Guard != nil {
+				collectExprMIROps(env, s.Guard, fn, templateInfo)
+			}
+			collectMIROps(env, &s.Body, fn, templateInfo)
 		case *WhileStmt:
 			kind := "while"
 			if s.Bound != nil {
@@ -1308,6 +1328,8 @@ func collectYieldMIR(block *Block, automata, machine, state string, out *MIRStat
 			collectYieldMIR(&s.Body, automata, machine, state, out)
 		case *Block:
 			collectYieldMIR(s, automata, machine, state, out)
+		case *OnStmt:
+			collectYieldMIR(&s.Body, automata, machine, state, out)
 		}
 	}
 }
@@ -1368,6 +1390,8 @@ func collectTransitionMIR(block *Block, state *MIRState) {
 			collectTransitionMIR(&s.Body, state)
 		case *Block:
 			collectTransitionMIR(s, state)
+		case *OnStmt:
+			collectTransitionMIR(&s.Body, state)
 		}
 	}
 }
@@ -1622,9 +1646,9 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		}
 		kind := "call"
 		detail := e.Callee
-		if e.Intrinsic == "step_machine" || e.Intrinsic == "state_machine" {
+		if e.Intrinsic == "step_machine" || e.Intrinsic == "step_machine_input" || e.Intrinsic == "state_machine" {
 			kind = e.Intrinsic
-			if len(e.Args) == 2 {
+			if len(e.Args) >= 2 {
 				detail = exprLabel(e.Args[0]) + "." + exprLabel(e.Args[1])
 			}
 		} else if e.Callee == "Len" {
@@ -2079,6 +2103,9 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if evt1ModuleUsesAutomataDispatchOutcome(l.module) {
 		body.WriteString(l.enumConstructors(evt1BuiltinAutomataDispatchOutcomeEnum()))
 	}
+	if evt1ModuleUsesStepOutcome(l.module) {
+		body.WriteString(l.enumConstructors(evt1BuiltinStepOutcomeEnum()))
+	}
 	if evt1MIRUsesNumericRound(l.mir) || evt1TypeUsed(l.module, func(t Type) bool { return t.Name == evt1NumericCastErrorName }) {
 		body.WriteString(l.enumConstructors(evt1BuiltinNumericCastErrorEnum()))
 	}
@@ -2388,6 +2415,11 @@ func (l *lowering) runtimeTypeDeclarations() ([]evt1RuntimeTypeDecl, error) {
 	}
 	if evt1ModuleUsesAutomataDispatchOutcome(l.module) {
 		outcome := evt1BuiltinAutomataDispatchOutcomeEnum()
+		index[outcome.Name] = evt1RuntimeTypeDecl{Name: outcome.Name, Enum: &outcome}
+		order = append(order, outcome.Name)
+	}
+	if evt1ModuleUsesStepOutcome(l.module) {
+		outcome := evt1BuiltinStepOutcomeEnum()
 		index[outcome.Name] = evt1RuntimeTypeDecl{Name: outcome.Name, Enum: &outcome}
 		order = append(order, outcome.Name)
 	}
@@ -5296,6 +5328,13 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			b.WriteString(ind(indent) + fmt.Sprintf("%s %s = {0};\n", evt1CType(candidateType), resultTemp))
 			b.WriteString(ind(indent) + fmt.Sprintf("%s.tag = %s.candidate_order[%s];\n", resultTemp, valueTemp, indexTemp))
 			return b.String(), resultTemp, candidateType
+		}
+		if e.Intrinsic == "step_machine_input" {
+			instanceName := e.Args[0].(*NameExpr).Name
+			machineName := e.Args[1].(*NameExpr).Name
+			binding, _ := scopeLookup(instanceName, f.scope)
+			inputPrelude, input, _ := f.lowerExpr(e.Args[2], indent)
+			return inputPrelude, evt1AutomataStepInputCName(binding.instanceAutomata, machineName) + "(&" + binding.cName + ", " + input + ")", Type{Name: evt1StepOutcomeTypeName, Kind: TypeEnum, Span: e.Span}
 		}
 		if e.Intrinsic == "step_machine" || e.Intrinsic == "state_machine" {
 			instanceName := e.Args[0].(*NameExpr).Name

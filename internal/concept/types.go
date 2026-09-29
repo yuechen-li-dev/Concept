@@ -790,6 +790,27 @@ type TransitionMatchArm struct {
 	Span    Span    `json:"span"`
 }
 
+// OnStmt is one input reaction in a state of an automata declared `with
+// input`. The reactions of a state form an unordered set: for the incoming
+// variant every non-fallback guard is evaluated; exactly one true guard is
+// taken, more than one is Ambiguous, and none falls back to the variant's
+// `on P otherwise`, then the state's `otherwise`, then Unhandled.
+type OnStmt struct {
+	Pattern   Pattern `json:"pattern"`
+	Guard     Expr    `json:"guard,omitempty"`
+	Otherwise bool    `json:"otherwise,omitempty"`
+	// CatchAll marks the state-level `otherwise => ...` reaction.
+	CatchAll bool  `json:"catch_all,omitempty"`
+	Body     Block `json:"body"`
+	// Target is set for the `=> State;` short form, whose Body is the
+	// equivalent `transition State;`.
+	Target string `json:"target,omitempty"`
+	Span   Span   `json:"span"`
+}
+
+func (*OnStmt) evt1Statement()        {}
+func (s *OnStmt) statementSpan() Span { return s.Span }
+
 func (*TransitionMatchStmt) evt1Statement()        {}
 func (s *TransitionMatchStmt) statementSpan() Span { return s.Span }
 

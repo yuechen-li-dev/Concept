@@ -105,7 +105,7 @@ func registerSemanticGobTypes() {
 		values := []any{
 			&OperationRequirement{}, &PrerequisiteRequirement{}, &FieldRequirement{}, &CompilerAnalysisRequirement{},
 			&IfStmt{}, &Block{}, &VarDecl{}, &EffectsDecl{}, &ActuatorLocalDecl{}, &YieldStmt{}, &PushMachineStmt{},
-			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
+			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &OnStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &ActuationDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
 			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},

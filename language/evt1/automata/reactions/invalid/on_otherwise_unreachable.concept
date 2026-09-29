@@ -1,0 +1,25 @@
+profile Core;
+
+enum Signal
+{
+    Go(int level),
+    Stop,
+}
+
+automata Bad
+with input Signal
+with state
+{
+    bool ready;
+}
+{
+    machine Run
+    {
+        state Idle
+        {
+            on Signal::Go(level) => Idle;
+            on Signal::Stop => Idle;
+            otherwise => Idle;
+        }
+    }
+}

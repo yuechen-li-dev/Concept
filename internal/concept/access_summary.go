@@ -561,6 +561,9 @@ func evt1AccessBlock(env *semanticEnv, state *evt1AccessFunction, block Block) {
 			}
 		case *Block:
 			evt1AccessBlock(env, state, *s)
+		case *OnStmt:
+			evt1AccessExpr(env, state, s.Guard)
+			evt1AccessBlock(env, state, s.Body)
 		case *WhileStmt:
 			evt1AccessExpr(env, state, s.Condition)
 			evt1AccessExpr(env, state, s.Bound)

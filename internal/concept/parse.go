@@ -1126,11 +1126,27 @@ func (p *parser) parseAutomataDecl() (AutomataDecl, error) {
 		}
 	}
 	decl := AutomataDecl{Name: nameTok.Lexeme, SignalType: signalType, Context: context, Span: start.Span}
-	if canonical && p.peekLexeme() == "with" {
+	seenState := false
+	for canonical && p.peekLexeme() == "with" {
 		p.next()
-		if _, err := p.expect("state"); err != nil {
-			return AutomataDecl{}, evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", "automata `with` must be followed by `state`", p.currentSpan())
+		if p.peekLexeme() == "input" {
+			inputTok := p.next()
+			if decl.InputType.Name != "" {
+				return AutomataDecl{}, evt1Diagnostic("AUTOMATA_INPUT_INVALID", "automata declares `with input` more than once", inputTok.Span)
+			}
+			decl.InputType, err = p.parseType("")
+			if err != nil {
+				return AutomataDecl{}, err
+			}
+			continue
 		}
+		if _, err := p.expect("state"); err != nil {
+			return AutomataDecl{}, evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", "automata `with` must be followed by `input` or `state`", p.currentSpan())
+		}
+		if seenState {
+			return AutomataDecl{}, evt1Diagnostic("AUTOMATA_CAPTURE_INVALID", "automata declares `with state` more than once", p.currentSpan())
+		}
+		seenState = true
 		if _, err := p.expect("{"); err != nil {
 			return AutomataDecl{}, err
 		}
@@ -1433,7 +1449,13 @@ func (p *parser) parseStateDecl(canonical bool) (StateDecl, error) {
 	if canonical {
 		body := Block{Span: state.Span}
 		for !p.done() && p.peekLexeme() != "}" {
-			stmt, err := p.parseStatement()
+			var stmt Statement
+			var err error
+			if p.peekLexeme() == "on" || (p.peekLexeme() == "otherwise" && p.peekLexemeN(1) == "=>") {
+				stmt, err = p.parseOnStmt()
+			} else {
+				stmt, err = p.parseStatement()
+			}
 			if err != nil {
 				return StateDecl{}, err
 			}
@@ -3405,6 +3427,54 @@ func (p *parser) parseForeachStmt() (Statement, error) {
 		return nil, err
 	}
 	return &ForeachStmt{ItemType: itemType, ItemName: item.Lexeme, Source: source, Body: body, Span: start.Span}, nil
+}
+
+// parseOnStmt parses `on Pattern [when guard | otherwise] => Target;`,
+// `on Pattern ... => { ... }`, and the state-level `otherwise => ...`.
+func (p *parser) parseOnStmt() (Statement, error) {
+	start := p.next()
+	stmt := &OnStmt{Span: start.Span}
+	if start.Lexeme == "otherwise" {
+		stmt.CatchAll = true
+	} else {
+		pattern, err := p.parsePattern()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Pattern = pattern
+		switch p.peekLexeme() {
+		case "when":
+			p.next()
+			stmt.Guard, err = p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+		case "otherwise":
+			p.next()
+			stmt.Otherwise = true
+		}
+	}
+	if _, err := p.expect("=>"); err != nil {
+		return nil, evt1Diagnostic("ON_SYNTAX_INVALID", "input reactions use `on Pattern [when guard | otherwise] => Target;` or `=> { ... }`", p.currentSpan())
+	}
+	if p.peekLexeme() == "{" {
+		body, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Body = body
+		return stmt, nil
+	}
+	target, err := p.expectIdentifier("ON_SYNTAX_INVALID", "expected a local state or `{` after `=>`")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(";"); err != nil {
+		return nil, err
+	}
+	stmt.Target = target.Lexeme
+	stmt.Body = Block{Span: target.Span, Statements: []Statement{&TransitionStmt{Target: target.Lexeme, Span: target.Span}}}
+	return stmt, nil
 }
 
 func (p *parser) parseTransitionMatchStmt(start Span) (Statement, error) {
