@@ -2,7 +2,7 @@ module BufferLifetimeTests;
 profile Vulkan;
 import BufferLifetime;
 
-// An observer exported by the GPU-free test device that `concept test` links.
+// A lifetime observer; both the test device and the GPU runtime export it.
 extern "C" int ConceptVkTestLiveBuffers();
 
 [[fact]]

@@ -44,9 +44,9 @@ Log "root=$root"
 Set-Location $root
 Step "toolchain" {
     go version
-    gcc --version | Select-Object -First 1
-    g++ --version | Select-Object -First 1
-    glslc --version | Select-Object -First 1
+    (& gcc --version)[0]
+    (& g++ --version)[0]
+    (& glslc --version)[0]
 }
 Step "vulkaninfo" { vulkaninfo --summary }
 Step "compile double.comp" {

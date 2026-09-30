@@ -89,6 +89,14 @@ void ConceptVkBindStorageBuffer(VkDevice device, VkDescriptorSet set, uint32_t b
 SubmissionRecord ConceptVkSubmitDispatch(VkDevice device, VkQueue queue, VkCommandPool commands, VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, uint32_t groups);
 int32_t ConceptVkWait(VkDevice device, VkCommandPool commands, VkCommandBuffer submitted, VkFence fence);
 
+/* Lifetime observers. Both runtimes export them, so lifetime facts run on the
+   test device and on a real GPU alike. */
+int ConceptVkTestLiveBuffers(void);
+int ConceptVkTestLivePipelines(void);
+int ConceptVkTestLiveContexts(void);
+int ConceptVkTestPendingSubmissions(void);
+int ConceptVkTestDoubleDestroys(void);
+
 #ifdef __cplusplus
 }
 #endif

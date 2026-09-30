@@ -9,7 +9,17 @@
 
 #include "concept_vulkan.h"
 
-ComputeContext ConceptVkCreateComputeContext(void) {
+/* Live-object counts, kept by the exported wrappers at the end of this file.
+   They are the same observers the test device exports, so lifetime facts
+   (Drop destroys exactly once, a dropped Submission is waited) run unchanged
+   on a real GPU. A real device cannot see a double destroy; the validation
+   layers report that instead, so ConceptVkTestDoubleDestroys stays 0. */
+static int live_buffers = 0;
+static int live_pipelines = 0;
+static int live_contexts = 0;
+static int pending_submissions = 0;
+
+static ComputeContext impl_CreateComputeContext(void) {
     ComputeContext out;
     memset(&out, 0, sizeof out);
     VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -74,14 +84,14 @@ ComputeContext ConceptVkCreateComputeContext(void) {
     return out;
 }
 
-void ConceptVkDestroyComputeContext(VkInstance instance, VkDevice device, VkCommandPool commands) {
+static void impl_DestroyComputeContext(VkInstance instance, VkDevice device, VkCommandPool commands) {
     vkDeviceWaitIdle(device);
     vkDestroyCommandPool(device, commands, NULL);
     vkDestroyDevice(device, NULL);
     vkDestroyInstance(instance, NULL);
 }
 
-BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, size_t size, uint32_t usage, uint32_t properties) {
+static BufferCreation impl_CreateBuffer(VkPhysicalDevice physical, VkDevice device, size_t size, uint32_t usage, uint32_t properties) {
     BufferCreation out;
     memset(&out, 0, sizeof out);
     VkBufferCreateInfo bufferInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -122,7 +132,7 @@ BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device,
     return out;
 }
 
-void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory) {
+static void impl_DestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory) {
     vkDestroyBuffer(device, buffer, NULL);
     vkFreeMemory(device, memory, NULL);
 }
@@ -177,7 +187,7 @@ static uint32_t* read_spirv(const char* path, size_t* bytes) {
     return words;
 }
 
-PipelineCreation ConceptVkCreateComputePipeline(VkDevice device, const char* spirvPath, uint32_t storageBuffers) {
+static PipelineCreation impl_CreateComputePipeline(VkDevice device, const char* spirvPath, uint32_t storageBuffers) {
     PipelineCreation out;
     memset(&out, 0, sizeof out);
     out.storageBuffers = storageBuffers;
@@ -243,7 +253,7 @@ PipelineCreation ConceptVkCreateComputePipeline(VkDevice device, const char* spi
     return out;
 }
 
-void ConceptVkDestroyComputePipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline, VkDescriptorPool descriptors) {
+static void impl_DestroyComputePipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline, VkDescriptorPool descriptors) {
     vkDestroyDescriptorPool(device, descriptors, NULL);
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyPipelineLayout(device, layout, NULL);
@@ -262,7 +272,7 @@ void ConceptVkBindStorageBuffer(VkDevice device, VkDescriptorSet set, uint32_t b
     vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
 }
 
-SubmissionRecord ConceptVkSubmitDispatch(VkDevice device, VkQueue queue, VkCommandPool commands, VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, uint32_t groups) {
+static SubmissionRecord impl_SubmitDispatch(VkDevice device, VkQueue queue, VkCommandPool commands, VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, uint32_t groups) {
     SubmissionRecord out;
     memset(&out, 0, sizeof out);
     out.groups = groups;
@@ -297,9 +307,61 @@ SubmissionRecord ConceptVkSubmitDispatch(VkDevice device, VkQueue queue, VkComma
     return out;
 }
 
-int32_t ConceptVkWait(VkDevice device, VkCommandPool commands, VkCommandBuffer submitted, VkFence fence) {
+static int32_t impl_Wait(VkDevice device, VkCommandPool commands, VkCommandBuffer submitted, VkFence fence) {
     VkResult code = vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
     vkDestroyFence(device, fence, NULL);
     vkFreeCommandBuffers(device, commands, 1, &submitted);
     return code;
 }
+
+/* Exported entry points: forward to the implementation and keep the counts. */
+ComputeContext ConceptVkCreateComputeContext(void) {
+    ComputeContext out = impl_CreateComputeContext();
+    if (out.code == VK_SUCCESS) live_contexts++;
+    return out;
+}
+
+void ConceptVkDestroyComputeContext(VkInstance instance, VkDevice device, VkCommandPool commands) {
+    impl_DestroyComputeContext(instance, device, commands);
+    live_contexts--;
+}
+
+BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, size_t size, uint32_t usage, uint32_t properties) {
+    BufferCreation out = impl_CreateBuffer(physical, device, size, usage, properties);
+    if (out.code == VK_SUCCESS) live_buffers++;
+    return out;
+}
+
+void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory) {
+    impl_DestroyBuffer(device, buffer, memory);
+    live_buffers--;
+}
+
+PipelineCreation ConceptVkCreateComputePipeline(VkDevice device, const char* spirvPath, uint32_t storageBuffers) {
+    PipelineCreation out = impl_CreateComputePipeline(device, spirvPath, storageBuffers);
+    if (out.code == VK_SUCCESS) live_pipelines++;
+    return out;
+}
+
+void ConceptVkDestroyComputePipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline, VkDescriptorPool descriptors) {
+    impl_DestroyComputePipeline(device, shader, setLayout, layout, pipeline, descriptors);
+    live_pipelines--;
+}
+
+SubmissionRecord ConceptVkSubmitDispatch(VkDevice device, VkQueue queue, VkCommandPool commands, VkPipeline pipeline, VkPipelineLayout layout, VkDescriptorSet set, uint32_t groups) {
+    SubmissionRecord out = impl_SubmitDispatch(device, queue, commands, pipeline, layout, set, groups);
+    if (out.code == VK_SUCCESS) pending_submissions++;
+    return out;
+}
+
+int32_t ConceptVkWait(VkDevice device, VkCommandPool commands, VkCommandBuffer submitted, VkFence fence) {
+    int32_t code = impl_Wait(device, commands, submitted, fence);
+    if (pending_submissions > 0) pending_submissions--;
+    return code;
+}
+
+int ConceptVkTestLiveBuffers(void) { return live_buffers; }
+int ConceptVkTestLivePipelines(void) { return live_pipelines; }
+int ConceptVkTestLiveContexts(void) { return live_contexts; }
+int ConceptVkTestPendingSubmissions(void) { return pending_submissions; }
+int ConceptVkTestDoubleDestroys(void) { return 0; }
