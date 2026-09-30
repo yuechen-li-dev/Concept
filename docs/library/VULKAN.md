@@ -42,7 +42,10 @@ descriptor pools, no descriptor sets to allocate, and one barrier shape.
 - `Context` (`CreateContext`, `Facts`): instance, a 1.4 device with a compute
   queue, command pool, and pipeline cache. Discrete GPUs rank first;
   `CONCEPT_VULKAN_DEVICE` picks by index or name substring (`AMD`, `3070`).
-  `CONCEPT_VULKAN_VALIDATION=1` loads the Khronos validation layer.
+  `CONCEPT_VULKAN_VALIDATION=1` loads the Khronos validation layer with
+  synchronization validation on; its messages go to stderr and each
+  validation message counts in `ConceptVkTestHazards()`, so the same hazard
+  assertions hold on the test device and on a GPU.
 - `Buffer<T>` (`CreateBuffer<T>(ctx, count, Placement)`): `Device`, `Upload`,
   `Readback`, or `Shared` memory. `Upload`/`Download` take spans and stage
   through a temporary buffer when the memory is not host-visible.
@@ -114,7 +117,9 @@ Two runtimes implement the boundary: `native/test_device.c` (no GPU; it runs
 the host equivalent of the kernels it knows, `double.spv` and `scale.spv`,
 checks synchronization, and gives each command 1000 ns of timestamp) and
 `native/device_runtime.c` (the Vulkan loader). Package tests run in Normal
-and Verify:
+and Verify. The package's own facts always link the test device, since they
+read its synchronization and lifetime observers; GPU coverage comes from the
+examples under `CONCEPT_VULKAN_RUNTIME=device`.
 
 ```text
 go run ./cmd/concept test libraries/Vulkan --verify

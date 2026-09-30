@@ -50,9 +50,10 @@ Step "toolchain" {
 }
 Step "vulkaninfo" { vulkaninfo --summary }
 Step "compile kernels (glslc, dxc)" {
-    glslc --target-env=vulkan1.3 "$k\double.comp" -o "$k\double.spv"
-    if ($LASTEXITCODE -eq 0) { glslc --target-env=vulkan1.3 "$k\scale.comp" -o "$k\scale.spv" }
-    if ($LASTEXITCODE -eq 0) { dxc -spirv -fspv-target-env=vulkan1.3 -T cs_6_0 -E main "$k\scale.hlsl" -Fo "$k\scale_hlsl.spv" }
+    glslc "--target-env=vulkan1.3" "$k\double.comp" -o "$k\double.spv"
+    if ($LASTEXITCODE -eq 0) { glslc "--target-env=vulkan1.3" "$k\scale.comp" -o "$k\scale.spv" }
+    # Quoted: PowerShell splits an unquoted -name=value argument at the dot.
+    if ($LASTEXITCODE -eq 0) { dxc -spirv "-fspv-target-env=vulkan1.3" -T cs_6_0 -E main "$k\scale.hlsl" -Fo "$k\scale_hlsl.spv" }
 }
 Step "build concept" { go build -o $concept .\cmd\concept }
 Step "kernel bindings are current" {
@@ -76,24 +77,28 @@ Step "reference C program" {
 Step "library tests (test device)" { & $concept test libraries\Vulkan --verify }
 Step "examples (test device)" { & $concept test examples\vulkan --verify }
 
+# libraries/Vulkan's own facts link the test device by design (they read its
+# synchronization and lifetime observers); the GPU runs are the examples.
 $env:CONCEPT_VULKAN_RUNTIME = "device"
-Step "library tests (GPU, default device)" { & $concept test libraries\Vulkan --verbose }
 Step "examples (GPU, default device, Normal)" { & $concept test examples\vulkan --verbose }
 Step "examples (GPU, default device, Verify)" { & $concept test examples\vulkan --verify --verbose }
 $env:CONCEPT_VULKAN_DEVICE = "AMD"
 Step "examples (GPU, CONCEPT_VULKAN_DEVICE=AMD)" { & $concept test examples\vulkan --verbose }
 Remove-Item Env:\CONCEPT_VULKAN_DEVICE
-# Khronos validation with synchronization validation: the derived barriers
-# are checked by the real validator. Any VUID or SYNC-HAZARD message fails.
+# Khronos validation with synchronization validation (the runtime turns on
+# validate_sync itself): the derived barriers are checked by the real
+# validator. Validation messages count as hazards, which scale_chain asserts
+# are 0; any message in the output also fails the step.
 $env:CONCEPT_VULKAN_VALIDATION = "1"
-$env:VK_LAYER_ENABLES = "VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT"
-Step "examples + library under validation and sync validation" {
-    $text = (& $concept test examples\vulkan --verbose 2>&1 | Out-String) + (& $concept test libraries\Vulkan --verbose 2>&1 | Out-String)
+Step "examples under validation and sync validation" {
+    $text = (& $concept test examples\vulkan --verbose 2>&1 | Out-String)
+    $code = $LASTEXITCODE
     $text
-    if ($text -match "VUID-|SYNC-HAZARD|Validation Error") { "validation reported problems"; $global:LASTEXITCODE = 1 }
+    if ($text -notmatch "validation enabled") { "the validation layer did not load"; $code = 1 }
+    if ($text -match "vulkan (error|warning):|VUID-|SYNC-HAZARD") { "validation reported problems"; $code = 1 }
+    $global:LASTEXITCODE = $code
 }
 Remove-Item Env:\CONCEPT_VULKAN_VALIDATION
-Remove-Item Env:\VK_LAYER_ENABLES
 Remove-Item Env:\CONCEPT_VULKAN_RUNTIME
 
 Log ""

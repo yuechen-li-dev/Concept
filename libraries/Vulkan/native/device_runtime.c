@@ -8,7 +8,10 @@
  *
  * Environment:
  *   CONCEPT_VULKAN_DEVICE      device index, or a substring of its name
- *   CONCEPT_VULKAN_VALIDATION  1 enables VK_LAYER_KHRONOS_validation
+ *   CONCEPT_VULKAN_VALIDATION  1 enables VK_LAYER_KHRONOS_validation with
+ *                              synchronization validation; its warnings and
+ *                              errors go to stderr, and validation findings
+ *                              are what ConceptVkTestHazards counts
  *   CONCEPT_VULKAN_KERNELS     directory relative kernel paths resolve in
  *
  * One context per process: the loaded device entry points are global. */
@@ -34,6 +37,34 @@ static int barriers = 0;
 static PFN_vkCmdPipelineBarrier2 cmdPipelineBarrier2 = NULL;
 static PFN_vkCmdPushDescriptorSet cmdPushDescriptorSet = NULL;
 static PFN_vkCmdWriteTimestamp2 cmdWriteTimestamp2 = NULL;
+
+static VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+static int validation_findings = 0;
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL on_validation_message(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types,
+    const VkDebugUtilsMessengerCallbackDataEXT* data, void* user) {
+    (void)user;
+    /* Loader chatter (layer naming, API versions of unrelated layers) is
+     * GENERAL; only validation messages are findings. */
+    const char* message = data && data->pMessage ? data->pMessage : "";
+    if (!(types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)) {
+        fprintf(stderr, "vulkan loader: %s\n", message);
+        return VK_FALSE;
+    }
+    validation_findings++;
+    fprintf(stderr, "vulkan %s: %s\n",
+            (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ? "error" : "warning", message);
+    return VK_FALSE;
+}
+
+static void destroy_messenger(VkInstance instance) {
+    if (messenger == VK_NULL_HANDLE) return;
+    PFN_vkDestroyDebugUtilsMessengerEXT destroy =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (destroy) destroy(instance, messenger, NULL);
+    messenger = VK_NULL_HANDLE;
+}
 
 /* ---- Context ---------------------------------------------------------- */
 
@@ -109,7 +140,10 @@ static VkPhysicalDevice choose_device(VkInstance instance, uint32_t* family) {
 static void destroy_partial(ContextCreation* out) {
     if (out->commands) vkDestroyCommandPool(out->device, out->commands, NULL);
     if (out->device) vkDestroyDevice(out->device, NULL);
-    if (out->instance) vkDestroyInstance(out->instance, NULL);
+    if (out->instance) {
+        destroy_messenger(out->instance);
+        vkDestroyInstance(out->instance, NULL);
+    }
     VkResult code = (VkResult)out->code;
     memset(out, 0, sizeof *out);
     out->code = code;
@@ -125,15 +159,41 @@ static ContextCreation impl_CreateContext(void) {
     VkInstanceCreateInfo instanceInfo = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instanceInfo.pApplicationInfo = &app;
     const char* validation = "VK_LAYER_KHRONOS_validation";
+    const char* extensions[] = {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_LAYER_SETTINGS_EXTENSION_NAME};
+    const VkBool32 on = VK_TRUE;
+    VkLayerSettingEXT syncValidation = {validation, "validate_sync", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &on};
+    VkLayerSettingsCreateInfoEXT validationSettings = {.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT};
+    validationSettings.settingCount = 1;
+    validationSettings.pSettings = &syncValidation;
+    VkDebugUtilsMessengerCreateInfoEXT messengerInfo = {.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+    messengerInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    messengerInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    messengerInfo.pfnUserCallback = on_validation_message;
     const char* wantValidation = getenv("CONCEPT_VULKAN_VALIDATION");
-    if (wantValidation && strcmp(wantValidation, "1") == 0) {
+    int validate = wantValidation && strcmp(wantValidation, "1") == 0;
+    if (validate) {
         instanceInfo.enabledLayerCount = 1;
         instanceInfo.ppEnabledLayerNames = &validation;
+        instanceInfo.enabledExtensionCount = 2;
+        instanceInfo.ppEnabledExtensionNames = extensions;
+        validationSettings.pNext = &messengerInfo; /* covers instance creation and destruction */
+        instanceInfo.pNext = &validationSettings;
     }
     out.code = vkCreateInstance(&instanceInfo, NULL, &out.instance);
     if (out.code != VK_SUCCESS) {
         out.instance = VK_NULL_HANDLE;
         return out;
+    }
+    if (validate) {
+        PFN_vkCreateDebugUtilsMessengerEXT create =
+            (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(out.instance, "vkCreateDebugUtilsMessengerEXT");
+        out.code = create ? create(out.instance, &messengerInfo, NULL, &messenger) : VK_ERROR_EXTENSION_NOT_PRESENT;
+        if (out.code != VK_SUCCESS) {
+            messenger = VK_NULL_HANDLE;
+            destroy_partial(&out);
+            return out;
+        }
+        fprintf(stderr, "vulkan: VK_LAYER_KHRONOS_validation enabled with synchronization validation\n");
     }
 
     out.physical = choose_device(out.instance, &out.queueFamily);
@@ -205,6 +265,7 @@ static void impl_DestroyContext(VkInstance instance, VkDevice device, VkCommandP
     vkDestroyPipelineCache(device, cache, NULL);
     vkDestroyCommandPool(device, commands, NULL);
     vkDestroyDevice(device, NULL);
+    destroy_messenger(instance);
     vkDestroyInstance(instance, NULL);
 }
 
@@ -656,5 +717,6 @@ int ConceptVkTestLiveContexts(void) { return live_contexts; }
 int ConceptVkTestPendingSubmissions(void) { return pending_submissions; }
 int ConceptVkTestDoubleDestroys(void) { return 0; }
 int ConceptVkTestBarriers(void) { return barriers; }
-/* A real device cannot see hazards; run with CONCEPT_VULKAN_VALIDATION=1. */
-int ConceptVkTestHazards(void) { return 0; }
+/* A real device sees hazards only through the validation layer
+ * (CONCEPT_VULKAN_VALIDATION=1); without it this stays 0. */
+int ConceptVkTestHazards(void) { return validation_findings; }

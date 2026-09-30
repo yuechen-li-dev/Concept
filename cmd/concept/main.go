@@ -80,8 +80,8 @@ func main() {
 		return
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "test" {
-		if (len(os.Args) == 3 || len(os.Args) == 4 && os.Args[3] == "--verify") && nativeProjectDir(os.Args[2]) {
-			runNativeCommand("test", os.Args[2], len(os.Args) == 4)
+		if root, verify, verbose, ok := nativeTestArgs(os.Args[2:]); ok {
+			runNativeTestCommand(root, verify, verbose)
 			return
 		}
 		runTestCommand(os.Args[2:])
@@ -273,7 +273,33 @@ func nativeProjectDir(path string) bool {
 	return err == nil && strings.Contains(string(body), "NativeProjectManifest Native")
 }
 
+// nativeTestArgs recognizes `concept test <native project> [--verify] [--verbose]`.
+func nativeTestArgs(args []string) (root string, verify, verbose, ok bool) {
+	for _, arg := range args {
+		switch arg {
+		case "--verify":
+			verify = true
+		case "--verbose":
+			verbose = true
+		default:
+			if root != "" {
+				return "", false, false, false
+			}
+			root = arg
+		}
+	}
+	return root, verify, verbose, root != "" && nativeProjectDir(root)
+}
+
+func runNativeTestCommand(root string, verify, verbose bool) {
+	runNativeCommandWith("test", root, verify, verbose)
+}
+
 func runNativeCommand(action, root string, verify bool) {
+	runNativeCommandWith(action, root, verify, false)
+}
+
+func runNativeCommandWith(action, root string, verify, verbose bool) {
 	project, err := concept.LoadNativeProject(root)
 	if err != nil {
 		fail(err)
@@ -370,6 +396,9 @@ func runNativeCommand(action, root string, verify bool) {
 		fmt.Printf("%-20s %s\n", item.Status, item.TestID)
 		if item.Failure != nil {
 			fmt.Printf("  %s: %s\n", item.Failure.Kind, item.Failure.Message)
+		}
+		if verbose && item.Stderr != "" {
+			fmt.Print("  stderr: ", strings.ReplaceAll(strings.TrimSpace(item.Stderr), "\n", "\n          "), "\n")
 		}
 	}
 	fmt.Printf("\n%d passed, %d failed\n", run.Passed, run.Failed)
