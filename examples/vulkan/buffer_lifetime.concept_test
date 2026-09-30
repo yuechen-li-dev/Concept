@@ -8,7 +8,8 @@ extern "C" int ConceptVkTestLiveBuffers();
 [[fact]]
 void TheStagingBufferIsReleasedWhenTheFunctionReturns()
 {
-    owned Context context = CreateComputeContext()!;
-    Assert.Equal(StagingBytes(ref const context)!, 4096, "the size crosses back");
-    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "and the buffer is gone");
+    owned Context context = CreateContext()!;
+    int before = ConceptVkTestLiveBuffers();
+    Assert.Equal(StagingBytes(ref const context)!, 4096, "1024 floats are 4096 bytes");
+    Assert.Equal(ConceptVkTestLiveBuffers(), before, "and the buffer is gone");
 }

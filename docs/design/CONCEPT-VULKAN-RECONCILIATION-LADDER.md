@@ -19,7 +19,7 @@ vertical passed on a real GPU in Normal and Verify modes.
 | VK9b | `b54deb7` | `profile Vulkan` kept as setup automation only (implied import, runtime linking) |
 | VK8 | `d8b0b71`, `3ad5760` | Compute dispatch on the test device and a real GPU; lifetime observers on both runtimes |
 
-Device run (Windows, Vulkan SDK 1.4.350, MinGW gcc 15.2, `tools/vk8/run_vk8.ps1`):
+Device run (Windows, Vulkan SDK 1.4.350, MinGW gcc 15.2, `tools/vk8/run_vk8.ps1` (now `tools/vulkan/run_gpu.ps1`)):
 all nine steps pass. The C reference and `compute_dispatch` both return 4032;
 `buffer_lifetime` sees zero live buffers after scope exit on the GPU runtime.
 

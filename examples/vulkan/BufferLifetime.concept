@@ -6,8 +6,6 @@ profile Vulkan;
 // a manifest, or a link setting.
 Result<int, VulkanError> StagingBytes(ref const Context context)
 {
-    BufferUsage usage = BufferUsage{0} with { transferSource = true; };
-    MemoryProperty memory = MemoryProperty{0} with { hostVisible = true; hostCoherent = true; };
-    owned Buffer staging = CreateBuffer(ref const context, 4096, usage, memory)?;
-    return Result::Ok(Magnitude(staging.size) as int);
+    owned Buffer<float> staging = CreateBuffer<float>(ref const context, 1024, Placement::Upload)?;
+    return Result::Ok(Magnitude(ByteSize(ref const staging)) as int);
 }

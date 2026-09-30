@@ -1,0 +1,17 @@
+module ScaleChainTests;
+profile Vulkan;
+import ScaleChain;
+
+extern "C" int ConceptVkTestHazards();
+
+[[fact]]
+void TwoScalesComposeWithOneDerivedBarrier()
+{
+    int hazards = ConceptVkTestHazards();
+    Scaled scaled = ScaleTwice(256, 2.0, 3.0)!;
+    Assert.Equal(scaled.first, 6.0, "1 * 2 * 3");
+    Assert.Equal(scaled.last, 1536.0, "256 * 2 * 3");
+    Assert.Equal(scaled.barriers, 1, "only the read-after-write between the dispatches");
+    Assert.True(scaled.nanoseconds > 0.0, "the timestamps measured the work");
+    Assert.Equal(ConceptVkTestHazards(), hazards, "no unsynchronized access");
+}

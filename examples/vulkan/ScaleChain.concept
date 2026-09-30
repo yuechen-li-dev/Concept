@@ -1,0 +1,45 @@
+module ScaleChain;
+profile Vulkan;
+import ScaleKernel;
+
+// Two dependent dispatches with push constants, timed on the device.
+// The second dispatch reads what the first wrote; the Recording sees that
+// from the generated wrapper's access declarations and inserts the one
+// barrier it needs. Nothing here names a stage, an access mask, a
+// descriptor set, or a push-constant offset.
+
+record struct Scaled
+{
+    float first;
+    float last;
+    double nanoseconds;
+    int barriers;
+};
+
+Result<Scaled, VulkanError> ScaleTwice(uint32 count, float a, float b)
+{
+    owned Context context = CreateContext()?;
+    owned Scale kernel = LoadScale(ref const context)?;
+    owned Buffer<float> source = CreateBuffer<float>(ref const context, 256, Placement::Device)?;
+    owned Buffer<float> middle = CreateBuffer<float>(ref const context, 256, Placement::Device)?;
+    owned Buffer<float> result = CreateBuffer<float>(ref const context, 256, Placement::Device)?;
+    float<array>[256] values = [0.0...];
+    for (i in 0..256)
+    {
+        values[i] = (i + 1) as float;
+    }
+    Upload(ref const context, ref const source, ReadOnlySpan(values))?;
+
+    owned Recording recording = BeginRecording(ref const context, 2)?;
+    uint32 start = Timestamp(ref recording);
+    RecordScale(ref recording, ref const kernel, ref const source, ref middle, ScalePush{count, a}, ScaleGroupsFor(count), 1, 1);
+    RecordScale(ref recording, ref const kernel, ref const middle, ref result, ScalePush{count, b}, ScaleGroupsFor(count), 1, 1);
+    uint32 end = Timestamp(ref recording);
+    int barriers = recording.barriers;
+    owned Submission work = Submit(move recording)?;
+    Wait(ref work)?;
+    double nanoseconds = ElapsedNanoseconds(ref const work, start, end)?;
+
+    Download(ref const context, ref const result, Span(values))?;
+    return Result::Ok(Scaled{values[0], values[(count - 1) as int], nanoseconds, barriers});
+}

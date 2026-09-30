@@ -7,5 +7,5 @@ import ComputeDispatch;
 [[fact]]
 void DoublingSixtyFourIntsOnTheDevice()
 {
-    Assert.Equal(DoubleAndSum("kernels/double.spv")!, 4032, "sum of 2*i for i in 0..63");
+    Assert.Equal(DoubleAndSum()!, 4032, "sum of 2*i for i in 0..63");
 }

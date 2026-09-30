@@ -1,33 +1,38 @@
 module ComputeDispatch;
 profile Vulkan;
+import DoubleKernel;
 
-// The compute-dispatch vertical: create buffers, a pipeline, record and
-// submit a dispatch, wait, and read back. Every Vulkan object is owned and
-// released in reverse order; every failure is a VulkanError.
-// reference/compute_dispatch.c is the same program in plain C.
+// The compute-dispatch vertical: upload, dispatch, read back. Every Vulkan
+// object is owned and released in reverse order; every failure is a
+// VulkanError. DoubleKernel.concept is generated from the shader by
+// `concept vulkan-bind kernels/double.spv -o DoubleKernel.concept`, so the
+// binding numbers, the workgroup size, and which buffer is written come from
+// the SPIR-V, and the barriers come from that. reference/compute_dispatch.c
+// is the same program in plain C.
 
-Result<int, VulkanError> DoubleAndSum(string kernel)
+Result<int, VulkanError> DoubleAndSum()
 {
-    owned Context context = CreateComputeContext()?;
-    BufferUsage storage = BufferUsage{0} with { storage = true; };
-    MemoryProperty shared = MemoryProperty{0} with { hostVisible = true; hostCoherent = true; };
-    owned Buffer input = CreateBuffer(ref const context, 256, storage, shared)?;
-    owned Buffer output = CreateBuffer(ref const context, 256, storage, shared)?;
+    owned Context context = CreateContext()?;
+    owned Double kernel = LoadDouble(ref const context)?;
+    owned Buffer<int> input = CreateBuffer<int>(ref const context, 64, Placement::Device)?;
+    owned Buffer<int> output = CreateBuffer<int>(ref const context, 64, Placement::Device)?;
+    int<array>[64] values = [0...];
     for (i in 0..64)
     {
-        WriteInt(ref const input, i as usize, i)?;
+        values[i] = i;
     }
+    Upload(ref const context, ref const input, ReadOnlySpan(values))?;
 
-    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, kernel, 2)?;
-    BindStorage(ref const pipeline, 0, ref const input);
-    BindStorage(ref const pipeline, 1, ref const output);
-    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)?;
-    Wait(move work)?;
+    owned Recording recording = BeginRecording(ref const context, 0)?;
+    RecordDouble(ref recording, ref const kernel, ref const input, ref output, DoubleGroupsFor(64), 1, 1);
+    owned Submission work = Submit(move recording)?;
+    Wait(ref work)?;
 
+    Download(ref const context, ref const output, Span(values))?;
     int sum = 0;
     for (i in 0..64)
     {
-        sum = sum + ReadInt(ref const output, i as usize)?;
+        sum = sum + values[i];
     }
     return Result::Ok(sum);
 }
