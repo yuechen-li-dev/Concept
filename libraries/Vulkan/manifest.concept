@@ -20,7 +20,7 @@ record struct PackageManifest
 comptime PackageManifest Manifest = PackageManifest{
     "Vulkan",
     "Concept",
-    Version{0, 1, 0},
+    Version{0, 2, 0},
     PackageKind::Library,
     [Dependency{""}],
     0
@@ -66,14 +66,14 @@ record struct NativeProjectManifest
     NativeTarget<array>[1] targets;
     string<array>[1] companions;
     string<array>[1] tests;
-    NativeAbiClaim<array>[5] abi;
+    NativeAbiClaim<array>[9] abi;
 };
 
 // Package tests link the GPU-free test device. A real loader-backed
 // implementation of native/concept_vulkan.h replaces it on a machine with a
 // Vulkan SDK.
 comptime NativeProjectManifest Native = NativeProjectManifest{
-    "Vulkan", "Concept", NativeVersion{0, 1, 0}, NativeToolchain::GCC,
+    "Vulkan", "Concept", NativeVersion{0, 2, 0}, NativeToolchain::GCC,
     ["native", "concept"],
     [NativeTarget{
         "vulkan_test_device", NativeLanguage::C, NativeStandard::C11,
@@ -84,19 +84,31 @@ comptime NativeProjectManifest Native = NativeProjectManifest{
     ["concept/Vulkan.concept"], ["tests/vulkan.concept_test"],
     // Claims share one array width; unused trailing slots are "".
     [NativeAbiClaim{
-        "native/concept_vulkan.h", "ComputeContext", "concept/Vulkan.concept",
-        48, 8, ["code", "queueFamily", "instance", "physical", "device", "queue", "commands", ""], [0, 4, 8, 16, 24, 32, 40, 0]
+        "native/concept_vulkan.h", "ContextCreation", "concept/Vulkan.concept",
+        56, 8, ["code", "queueFamily", "instance", "physical", "device", "queue", "commands", "cache"], [0, 4, 8, 16, 24, 32, 40, 48]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "DeviceFacts", "concept/Vulkan.concept",
+        288, 8, ["apiVersion", "deviceType", "subgroupSize", "maxWorkgroupInvocations", "timestampValidBits", "timestampPeriod", "maxStorageBufferRange", "name"], [0, 4, 8, 12, 16, 20, 24, 32]
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "BufferCreation", "concept/Vulkan.concept",
-        24, 8, ["code", "buffer", "memory", "", "", "", "", ""], [0, 8, 16, 0, 0, 0, 0, 0]
+        24, 8, ["code", "hostVisible", "buffer", "memory", "", "", "", ""], [0, 4, 8, 16, 0, 0, 0, 0]
     }, NativeAbiClaim{
-        "native/concept_vulkan.h", "IntRead", "concept/Vulkan.concept",
-        8, 4, ["code", "value", "", "", "", "", "", ""], [0, 4, 0, 0, 0, 0, 0, 0]
+        "native/concept_vulkan.h", "BindingSlot", "concept/Vulkan.concept",
+        8, 4, ["binding", "kind", "", "", "", "", "", ""], [0, 4, 0, 0, 0, 0, 0, 0]
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "PipelineCreation", "concept/Vulkan.concept",
-        56, 8, ["code", "storageBuffers", "shader", "setLayout", "layout", "pipeline", "descriptors", "set"], [0, 4, 8, 16, 24, 32, 40, 48]
+        40, 8, ["code", "pushBytes", "shader", "setLayout", "layout", "pipeline", "", ""], [0, 4, 8, 16, 24, 32, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "RecordingBegin", "concept/Vulkan.concept",
+        24, 8, ["code", "timestamps", "commands", "queries", "", "", "", ""], [0, 4, 8, 16, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "DescriptorWrite", "concept/Vulkan.concept",
+        32, 8, ["buffer", "offset", "range", "binding", "kind", "", "", ""], [0, 8, 16, 24, 28, 0, 0, 0]
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "SubmissionRecord", "concept/Vulkan.concept",
-        24, 8, ["code", "groups", "commands", "fence", "", "", "", ""], [0, 4, 8, 16, 0, 0, 0, 0]
+        16, 8, ["code", "reserved", "fence", "", "", "", "", ""], [0, 4, 8, 0, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "Elapsed", "concept/Vulkan.concept",
+        16, 8, ["code", "reserved", "nanoseconds", "", "", "", "", ""], [0, 4, 8, 0, 0, 0, 0, 0]
     }]
 };

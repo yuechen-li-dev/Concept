@@ -2,22 +2,14 @@ module Vulkan.Tests;
 profile Core;
 import Vulkan;
 
-// Observers exported by native/test_device.c.
+// Observers exported by the runtimes (native/concept_vulkan.h).
 extern "C" int ConceptVkTestLiveBuffers();
 extern "C" int ConceptVkTestLivePipelines();
 extern "C" int ConceptVkTestLiveContexts();
 extern "C" int ConceptVkTestPendingSubmissions();
 extern "C" int ConceptVkTestDoubleDestroys();
-
-// Keeps only the status of a creation, dropping a created buffer.
-Result<void, VulkanError> Discarded(Result<Buffer, VulkanError> created)
-{
-    return match (move created)
-    {
-        Result::Ok(buffer) => Result::Ok(),
-        Result::Error(error) => Result::Error(error),
-    };
-}
+extern "C" int ConceptVkTestBarriers();
+extern "C" int ConceptVkTestHazards();
 
 int ErrorCode(VulkanError error)
 {
@@ -39,18 +31,6 @@ int ErrorCode(VulkanError error)
     };
 }
 
-BufferUsage StorageTransfer()
-{
-    BufferUsage none = BufferUsage{0};
-    return none with { storage = true; transferDestination = true; };
-}
-
-MemoryProperty HostVisible()
-{
-    MemoryProperty none = MemoryProperty{0};
-    return none with { hostVisible = true; hostCoherent = true; };
-}
-
 int FailureCode(Result<void, VulkanError> result)
 {
     return match (result)
@@ -60,92 +40,209 @@ int FailureCode(Result<void, VulkanError> result)
     };
 }
 
+// Keeps only the status of a creation, dropping a created buffer.
+Result<void, VulkanError> Discarded(Result<Buffer<int>, VulkanError> created)
+{
+    return match (move created)
+    {
+        Result::Ok(buffer) => Result::Ok(),
+        Result::Error(error) => Result::Error(error),
+    };
+}
+
+Result<Pipeline, VulkanError> DoublePipeline(ref const Context context)
+{
+    BindingSlot<array>[2] slots = [BindingSlot{0, 0}, BindingSlot{1, 0}];
+    return CreatePipeline(ref const context, "double.spv", "main", ReadOnlySpan(slots), 0);
+}
+
+// Records double.spv: output[i] = 2 * input[i].
+void RecordDouble(ref Recording recording, ref const Pipeline pipeline, ref const Buffer<int> input, ref const Buffer<int> output)
+{
+    Binding<array>[2] bindings = [Bind(0, ref const input, Access::Read), Bind(1, ref const output, Access::Write)];
+    Dispatch(ref recording, ref const pipeline, ReadOnlySpan(bindings), 1, 1, 1);
+}
+
 [[fact]]
 void EveryFailingCodeRoundTrips()
 {
-    for (code in 1..14)
+    for (code in -12..0)
     {
-        Assert.Equal(FailureCode(Check(0 - code)), 0 - code, "a negative code is an error that keeps its value");
+        Assert.Equal(ErrorCode(ErrorFromCode(code)), code, "each VkResult failure maps to one VulkanError");
     }
-    Assert.Equal(FailureCode(Check(-1000)), -1000, "an unlisted code is Unknown(code)");
-    Assert.LGTM(Check(0), "VK_SUCCESS");
-    Assert.LGTM(Check(2), "VK_TIMEOUT is a status, not a failure");
+    Assert.Equal(ErrorCode(ErrorFromCode(-1000)), -1000, "unknown codes are kept");
+    Assert.Equal(FailureCode(Check(0)), 0, "success is Ok");
+    Assert.Equal(FailureCode(Check(5)), 0, "status codes are Ok");
 }
 
 [[fact]]
-void FlagWordsMatchTheVulkanBits()
+void TheContextReportsItsDevice()
 {
-    Assert.True(StorageTransfer().raw == 34, "STORAGE (0x20) | TRANSFER_DST (0x2)");
-    Assert.True(HostVisible().raw == 6, "HOST_VISIBLE (0x2) | HOST_COHERENT (0x4)");
-}
-
-int LiveWhileHeld(ref const Context context)
-{
-    owned Buffer buffer = CreateBuffer(ref const context, 256, StorageTransfer(), HostVisible())!;
-    return ConceptVkTestLiveBuffers();
-}
-
-void Consume(owned Buffer buffer)
-{
+    owned Context context = CreateContext()!;
+    DeviceFacts facts = Facts(ref const context);
+    Assert.True(facts.apiVersion >= 4210688, "a Vulkan 1.4 device");
+    Assert.True(facts.subgroupSize > 0, "subgroup size is known");
+    Assert.True(facts.name[0] != 0, "the device has a name");
 }
 
 [[fact]]
 void DroppingABufferDestroysItOnce()
 {
-    owned Context context = CreateComputeContext()!;
-    Assert.Equal(LiveWhileHeld(ref const context), 1, "the buffer is live while owned");
-    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "leaving scope destroyed it");
-    owned Buffer moved = CreateBuffer(ref const context, 64, StorageTransfer(), HostVisible())!;
-    Consume(move moved);
-    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "moving hands destruction to the new owner");
+    int before = ConceptVkTestLiveBuffers();
+    owned Context context = CreateContext()!;
+    {
+        owned Buffer<int> buffer = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+        Assert.Equal(ConceptVkTestLiveBuffers(), before + 1, "one live buffer");
+        Assert.Equal(Magnitude(ByteSize(ref const buffer)) as int, 64, "16 ints are 64 bytes");
+    }
+    Assert.Equal(ConceptVkTestLiveBuffers(), before, "leaving scope destroyed it");
     Assert.Equal(ConceptVkTestDoubleDestroys(), 0, "nothing was destroyed twice");
 }
 
 [[fact]]
 void FailedCreationOwnsNothing()
 {
-    owned Context context = CreateComputeContext()!;
-    BufferUsage none = BufferUsage{0};
-    Assert.Equal(FailureCode(Discarded(CreateBuffer(ref const context, 64, none, HostVisible()))), -3, "no usage is VK_ERROR_INITIALIZATION_FAILED");
-    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "a failed creation leaves nothing live");
-}
-
-int RunAndCount(ref const Context context)
-{
-    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, "kernels/double.spv", 2)!;
-    owned Buffer input = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
-    owned Buffer output = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
-    WriteInt(ref const input, 2, 21)!;
-    BindStorage(ref const pipeline, 0, ref const input);
-    BindStorage(ref const pipeline, 1, ref const output);
-    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)!;
-    Wait(move work)!;
-    return ReadInt(ref const output, 2)! * 10 + ConceptVkTestPendingSubmissions();
+    int before = ConceptVkTestLiveBuffers();
+    owned Context context = CreateContext()!;
+    Assert.Equal(FailureCode(Discarded(CreateBuffer<int>(ref const context, 0, Placement::Device))), -3, "an empty buffer is invalid");
+    Assert.Equal(FailureCode(Discarded(CreateBuffer<int>(ref const context, 1073741824, Placement::Device))), -2, "4 GiB exceeds device memory");
+    Assert.Equal(ConceptVkTestLiveBuffers(), before, "a failed creation leaves nothing live");
 }
 
 [[fact]]
-void ADispatchIsWaitedAndEverythingIsReleased()
+void UploadAndDownloadStageDeviceLocalBuffers()
 {
-    owned Context context = CreateComputeContext()!;
-    Assert.Equal(RunAndCount(ref const context), 420, "the test device ran double.spv; nothing is pending");
-    Assert.Equal(ConceptVkTestLivePipelines() + ConceptVkTestLiveBuffers(), 0, "pipeline and buffers were released");
-}
-
-int DropWithoutWaiting(ref const Context context)
-{
-    owned ComputePipeline pipeline = CreateComputePipeline(ref const context, "kernels/double.spv", 2)!;
-    owned Buffer input = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
-    owned Buffer output = CreateBuffer(ref const context, 16, StorageTransfer(), HostVisible())!;
-    BindStorage(ref const pipeline, 0, ref const input);
-    BindStorage(ref const pipeline, 1, ref const output);
-    owned Submission work = Dispatch(ref const context, ref const pipeline, 1)!;
-    return ConceptVkTestPendingSubmissions();
+    int buffersBefore = ConceptVkTestLiveBuffers();
+    int hazardsBefore = ConceptVkTestHazards();
+    owned Context context = CreateContext()!;
+    owned Buffer<int> buffer = CreateBuffer<int>(ref const context, 8, Placement::Device)!;
+    int<array>[8] values = [1, 2, 3, 4, 5, 6, 7, 8];
+    int<array>[8] back = [0...];
+    Upload(ref const context, ref const buffer, ReadOnlySpan(values))!;
+    Download(ref const context, ref const buffer, Span(back))!;
+    Assert.Equal(back[0], 1, "first element round-trips");
+    Assert.Equal(back[7], 8, "last element round-trips");
+    Assert.Equal(ConceptVkTestLiveBuffers(), buffersBefore + 1, "the staging buffers are gone");
+    Assert.Equal(ConceptVkTestHazards(), hazardsBefore, "staging copies are synchronized");
 }
 
 [[fact]]
-void AnUnwaitedSubmissionIsWaitedWhenDropped()
+void HostVisibleBuffersAreWrittenDirectly()
 {
-    owned Context context = CreateComputeContext()!;
-    Assert.Equal(DropWithoutWaiting(ref const context), 1, "in flight inside the function");
-    Assert.Equal(ConceptVkTestPendingSubmissions(), 0, "Drop waited for it");
+    owned Context context = CreateContext()!;
+    owned Buffer<float> buffer = CreateBuffer<float>(ref const context, 4, Placement::Shared)!;
+    int barriersBefore = ConceptVkTestBarriers();
+    float<array>[4] values = [0.5, 1.5, 2.5, 3.5];
+    float<array>[4] back = [0.0...];
+    Upload(ref const context, ref const buffer, ReadOnlySpan(values))!;
+    Download(ref const context, ref const buffer, Span(back))!;
+    Assert.Equal(back[3], 3.5, "a shared buffer maps directly");
+    Assert.Equal(ConceptVkTestBarriers(), barriersBefore, "no command buffer was needed");
+}
+
+[[fact]]
+void BarriersAreDerivedFromDeclaredAccess()
+{
+    int hazardsBefore = ConceptVkTestHazards();
+    owned Context context = CreateContext()!;
+    owned Pipeline pipeline = DoublePipeline(ref const context)!;
+    owned Buffer<int> first = CreateBuffer<int>(ref const context, 64, Placement::Device)!;
+    owned Buffer<int> second = CreateBuffer<int>(ref const context, 64, Placement::Device)!;
+    owned Buffer<int> third = CreateBuffer<int>(ref const context, 64, Placement::Device)!;
+    owned Buffer<int> result = CreateBuffer<int>(ref const context, 64, Placement::Readback)!;
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    Fill(ref recording, ref const first, 3);                                         // transfer write
+    RecordDouble(ref recording, ref const pipeline, ref const first, ref const second); // transfer -> compute
+    RecordDouble(ref recording, ref const pipeline, ref const second, ref const third); // compute -> compute
+    Copy(ref recording, ref const third, ref const result);                        // compute -> transfer
+    Assert.Equal(recording.barriers, 3, "one barrier per dependent step");
+    owned Submission work = Submit(move recording)!;                              // transfer -> host
+    Wait(ref work)!;
+    int<array>[64] values = [0...];
+    Download(ref const context, ref const result, Span(values))!;
+    Assert.Equal(values[0], 12, "3, doubled twice");
+    Assert.Equal(values[63], 12, "every element");
+    Assert.Equal(ConceptVkTestHazards(), hazardsBefore, "the derived barriers cover every hazard");
+}
+
+[[fact]]
+void WriteAfterReadIsOrdered()
+{
+    int hazardsBefore = ConceptVkTestHazards();
+    owned Context context = CreateContext()!;
+    owned Pipeline pipeline = DoublePipeline(ref const context)!;
+    owned Buffer<int> input = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Buffer<int> output = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    RecordDouble(ref recording, ref const pipeline, ref const input, ref const output); // reads input
+    Fill(ref recording, ref const input, 7);                                          // then overwrites it
+    Assert.Equal(recording.barriers, 1, "write-after-read needs an execution barrier");
+    owned Submission work = Submit(move recording)!;
+    Wait(ref work)!;
+    Assert.Equal(ConceptVkTestHazards(), hazardsBefore, "no hazard");
+}
+
+[[fact]]
+void IndependentWorkNeedsNoBarrier()
+{
+    owned Context context = CreateContext()!;
+    owned Pipeline pipeline = DoublePipeline(ref const context)!;
+    owned Buffer<int> a = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Buffer<int> b = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Buffer<int> c = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Buffer<int> d = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    RecordDouble(ref recording, ref const pipeline, ref const a, ref const b);
+    RecordDouble(ref recording, ref const pipeline, ref const c, ref const d);
+    Assert.Equal(recording.barriers, 0, "disjoint dispatches can overlap");
+    owned Submission work = Submit(move recording)!;
+    Wait(ref work)!;
+}
+
+[[fact]]
+void TheValidatorSeesAMissingBarrier()
+{
+    int hazardsBefore = ConceptVkTestHazards();
+    owned Context context = CreateContext()!;
+    owned Buffer<int> buffer = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Buffer<int> other = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    // Bypass Touch: write, then copy out, with no barrier in between.
+    ConceptVkCmdFill(recording.commands, buffer.buffer, 64, 1);
+    ConceptVkCmdCopy(recording.commands, buffer.buffer, other.buffer, 64);
+    owned Submission work = Submit(move recording)!;
+    Wait(ref work)!;
+    Assert.True(ConceptVkTestHazards() > hazardsBefore, "an unsynchronized read-after-write is reported");
+}
+
+[[fact]]
+void TimestampsMeasureARecording()
+{
+    owned Context context = CreateContext()!;
+    owned Pipeline pipeline = DoublePipeline(ref const context)!;
+    owned Buffer<int> input = CreateBuffer<int>(ref const context, 16, Placement::Upload)!;
+    owned Buffer<int> output = CreateBuffer<int>(ref const context, 16, Placement::Device)!;
+    owned Recording recording = BeginRecording(ref const context, 2)!;
+    uint32 start = Timestamp(ref recording);
+    RecordDouble(ref recording, ref const pipeline, ref const input, ref const output);
+    uint32 end = Timestamp(ref recording);
+    owned Submission work = Submit(move recording)!;
+    Wait(ref work)!;
+    Assert.True(ElapsedNanoseconds(ref const work, start, end)! > 0.0, "time passed between the timestamps");
+}
+
+[[fact]]
+void AbandonedAndUnwaitedWorkIsReleased()
+{
+    int pendingBefore = ConceptVkTestPendingSubmissions();
+    owned Context context = CreateContext()!;
+    {
+        owned Recording never = BeginRecording(ref const context, 0)!;
+    }
+    {
+        owned Recording recording = BeginRecording(ref const context, 0)!;
+        owned Submission work = Submit(move recording)!;
+        Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore + 1, "submitted");
+    }
+    Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore, "Drop waited for it");
 }
