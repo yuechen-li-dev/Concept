@@ -2,6 +2,7 @@ package concept
 
 import (
 	"strconv"
+	"strings"
 )
 
 // evt1InferClosedTemplateArguments closes a template from its parameter types.
@@ -17,6 +18,12 @@ func evt1InferClosedTemplateArguments(env *semanticEnv, decl TemplateDecl, actua
 	}
 	bindings := make(map[string]Type, len(parameters))
 	for i, parameter := range decl.Params {
+		// A parameter that mentions no template parameter contributes nothing
+		// to inference; ordinary argument checking (which types integer
+		// literals contextually) decides whether the argument fits it.
+		if !evt1TypeDependsOnAnyParameter(parameter.Type, parameters) {
+			continue
+		}
 		if !evt1InferTemplatePattern(env, parameter.Type, actual[i], parameters, bindings) {
 			return nil, false
 		}
@@ -34,6 +41,9 @@ func evt1InferClosedTemplateArguments(env *semanticEnv, decl TemplateDecl, actua
 		return nil, false
 	}
 	for i, parameter := range instance.Params {
+		if !evt1TypeDependsOnAnyParameter(decl.Params[i].Type, parameters) {
+			continue
+		}
 		closed, err := evt1ResolveType(env, nil, parameter.Type)
 		if err != nil || !evt1RequiredOperationTypeEqual(env, closed, actual[i]) {
 			return nil, false
@@ -46,7 +56,7 @@ func evt1InferTemplatePattern(env *semanticEnv, pattern, actual Type, parameters
 	// Closed generic structs are represented by their nominal instance name
 	// during ordinary expression checking. Reopen the recorded application for
 	// inference, while retaining the same concrete type for final checking.
-	if application, ok := env.genericTypeApplications[actual.valueType().Name]; ok {
+	if application, ok := evt1GenericApplicationOf(env, actual.valueType().Name); ok {
 		application.Ownership, application.Const = actual.Ownership, actual.Const
 		actual = application
 	}
@@ -129,4 +139,33 @@ func evt1InferTemplateExtent(pattern, actual Type, parameters []GenericParameter
 		return false
 	}
 	return true
+}
+
+// evt1GenericApplicationOf returns the application behind a closed generic
+// instance name such as Buffer<int>. Instances built in this environment are
+// recorded when instantiated; an instance that arrived already closed (from a
+// semantic artifact or a generated harness module) is recovered by parsing
+// its canonical name, and the result is cached.
+func evt1GenericApplicationOf(env *semanticEnv, name string) (Type, bool) {
+	if application, ok := env.genericTypeApplications[name]; ok {
+		return application, true
+	}
+	open := strings.IndexByte(name, '<')
+	if open <= 0 || !strings.HasSuffix(name, ">") {
+		return Type{}, false
+	}
+	if _, ok := env.genericTypes[name[:open]]; !ok {
+		return Type{}, false
+	}
+	tokens, err := lexEVT1(name)
+	if err != nil {
+		return Type{}, false
+	}
+	p := &parser{path: "<generic-instance>", tokens: tokens}
+	application, err := p.parseType("")
+	if err != nil || application.Name != name[:open] || len(application.TypeArgs) == 0 {
+		return Type{}, false
+	}
+	env.genericTypeApplications[name] = application
+	return application, true
 }

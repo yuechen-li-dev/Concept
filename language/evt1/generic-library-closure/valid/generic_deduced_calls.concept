@@ -1,0 +1,47 @@
+profile Core;
+
+// A template may call another template with deduced arguments, including
+// through a generic class, inside a record construction, next to an
+// assert, and with an integer literal for a parameter that mentions no
+// template parameter. Each concrete instantiation of the caller closes the
+// callee.
+
+template <typename T>
+class Cell
+{
+public:
+    usize count;
+};
+
+record struct Tag { uint32 slot; usize bytes; };
+
+template <typename T>
+usize<byte> Bytes(ref const Cell<T> cell)
+{
+    return cell.count * SizeOf<T>();
+}
+
+template <typename T>
+Tag Describe(uint32 slot, ref const Cell<T> cell)
+{
+    assert(cell.count > 0, "an empty cell has no description");
+    return Tag{slot, Magnitude(Bytes(ref const cell))};
+}
+
+template <typename T>
+usize Total(ref const Cell<T> first, ref const Cell<T> second)
+{
+    Tag a = Describe(0, ref const first);
+    Tag b = Describe(1, ref const second);
+    return a.bytes + b.bytes + (b.slot as usize);
+}
+
+int Main()
+{
+    Cell<double> wide = Cell<double>{2};
+    Cell<double> more = Cell<double>{3};
+    Cell<uint16> narrow = Cell<uint16>{4};
+    usize doubles = Total(ref const wide, ref const more);
+    usize shorts = Total(ref const narrow, ref const narrow);
+    return (doubles + shorts) as int;
+}

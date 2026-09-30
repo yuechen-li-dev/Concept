@@ -4123,6 +4123,14 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, templateInfo, e.Span)
 		if err != nil {
 			if decl, exists := env.templates[e.Callee]; exists {
+				if templateInfo != nil && evt1AnyTypeDependsOnParameters(argTypes, templateInfo.Decl.Parameters) {
+					// Inside a template body with dependent arguments: type the
+					// call symbolically; the caller's instantiations close it.
+					if result, ok := evt1DependentTemplateCallResult(env, decl, argTypes); ok {
+						return evt1CanonicalType(env, result), nil
+					}
+					return Type{}, evt1Diagnostic("CV4173", fmt.Sprintf("template call %s cannot infer its arguments from the dependent call", e.Callee), e.Span)
+				}
 				if inferred, ok := evt1InferClosedTemplateArguments(env, decl, argTypes); ok {
 					instance, instanceErr := instantiateTemplateArgs(env, e.Callee, inferred, e.Span)
 					if instanceErr != nil {
@@ -4793,7 +4801,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, evt1FailureSuccessType(operand)), nil
 	case *StructConstructExpr:
-		return validateStructConstructExpr(env, scope, *e)
+		return validateStructConstructExpr(env, scope, *e, templateInfo, inComptimeFn)
 	case *WithExpr:
 		return validateWithExpr(env, scope, *e, templateInfo, inComptimeFn)
 	case *IfExpr:
@@ -5163,7 +5171,7 @@ func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExp
 	return Type{Name: enumDecl.Name, Kind: TypeEnum, Span: expr.Span}, nil
 }
 
-func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr StructConstructExpr) (Type, error) {
+func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr StructConstructExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	resolvedType := Type{Name: expr.StructName, Kind: TypeStruct, Span: expr.Span}
 	if expr.StructType.Name != "" {
 		resolved, err := evt1ResolveType(env, scope, expr.StructType)
@@ -5213,12 +5221,12 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		} else {
 			field = structDecl.Fields[i]
 		}
-		argType, err := validateExprAgainstExpected(env, scope, arg, field.Type, nil, false)
+		argType, err := validateExprAgainstExpected(env, scope, arg, field.Type, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
 		}
 		if field.Type.isReference() {
-			if err := validateCallArgument(env, scope, field.Type, arg, argType, nil); err != nil {
+			if err := validateCallArgument(env, scope, field.Type, arg, argType, templateInfo); err != nil {
 				return Type{}, err
 			}
 		} else if !evt1CanInitializeStoredType(env, field.Type, argType) {
@@ -6321,7 +6329,7 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 			return fn
 		}
 	}
-	if application, ok := env.genericTypeApplications[t.valueType().Name]; ok {
+	if application, ok := evt1GenericApplicationOf(env, t.valueType().Name); ok {
 		if decl, found := env.templates["Drop"]; found && len(decl.Params) == 1 && decl.Params[0].Type.isOwned() {
 			parameterType := decl.Params[0].Type.valueType()
 			if parameterType.Name == application.Name && len(application.TypeArgs) == len(decl.Parameters) {
@@ -7545,8 +7553,16 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 	if !dependent || templateInfo.Decl.Constraint.ConceptName == "" {
 		fn, err := evt1ResolveOrdinaryCall(env, scope, call.Callee, call.Args, argTypes, templateInfo, call.Span)
 		if err != nil {
-			if _, exists := env.templates[call.Callee]; exists {
-				return Type{}, evt1Diagnostic("CV4174", "templates cannot invoke templates in EVT1 M1B-B", call.Span)
+			if calleeDecl, exists := env.templates[call.Callee]; exists {
+				// A template may call another template. The call is typed here
+				// by inferring the callee's parameters from the (possibly
+				// dependent) argument types; each concrete instantiation of
+				// the caller re-validates the body and instantiates the callee
+				// with closed types.
+				if result, ok := evt1DependentTemplateCallResult(env, calleeDecl, argTypes); ok {
+					return result, nil
+				}
+				return Type{}, evt1Diagnostic("CV4174", fmt.Sprintf("cannot infer the template arguments of %s from this call", call.Callee), call.Span)
 			}
 			return Type{}, err
 		}
@@ -7813,7 +7829,16 @@ func evt1TypeIdentity(t Type) string {
 		}
 		return evt1CName(t.Name)[len("concept_"):] + "_" + strings.Join(parts, "_")
 	}
-	return evt1CName(t.Name)[len("concept_"):]
+	identity := evt1CName(t.Name)[len("concept_"):]
+	// A declared type such as Double must not share its identity with the
+	// builtin double: identities name composite C types (Result<Double, E>
+	// versus Result<double, E>).
+	if identity != t.Name {
+		if _, builtin := evt1BuiltinDefinition(identity); builtin {
+			return "type_" + identity
+		}
+	}
+	return identity
 }
 
 func evt1TemplateInstanceSymbol(templateName string, concreteType Type) string {
@@ -7919,6 +7944,30 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			return nil, err
 		}
 		return &ExprStmt{Value: value, Discard: s.Discard, Span: s.Span}, nil
+	case *AssertStmt:
+		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		var reason Expr
+		if s.Reason != nil {
+			if reason, err = evt1SubstituteExpr(s.Reason, typeParam, concreteType); err != nil {
+				return nil, err
+			}
+		}
+		return &AssertStmt{Condition: condition, Reason: reason, Span: s.Span}, nil
+	case *StaticAssertStmt:
+		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		if err != nil {
+			return nil, err
+		}
+		var message Expr
+		if s.Message != nil {
+			if message, err = evt1SubstituteExpr(s.Message, typeParam, concreteType); err != nil {
+				return nil, err
+			}
+		}
+		return &StaticAssertStmt{Condition: condition, Message: message, Span: s.Span}, nil
 	case *TryStmt:
 		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
 		if err != nil {
@@ -8300,4 +8349,41 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	default:
 		return nil, evt1Diagnostic("CV4181", "unsupported template expression during instantiation", expr.exprSpan())
 	}
+}
+
+// evt1DependentTemplateCallResult types a call to template decl from inside
+// another template's body. Argument types may mention the caller's template
+// parameters; the callee's parameters are inferred from them structurally.
+func evt1DependentTemplateCallResult(env *semanticEnv, decl TemplateDecl, argTypes []Type) (Type, bool) {
+	parameters := decl.Parameters
+	if len(parameters) == 0 {
+		parameters = []GenericParameter{{Name: decl.TypeParam, Kind: "type"}}
+	}
+	if len(decl.Params) != len(argTypes) {
+		return Type{}, false
+	}
+	bindings := make(map[string]Type, len(parameters))
+	for i, parameter := range decl.Params {
+		if !evt1TypeDependsOnAnyParameter(parameter.Type, parameters) {
+			continue
+		}
+		if !evt1InferTemplatePattern(env, parameter.Type, argTypes[i], parameters, bindings) {
+			return Type{}, false
+		}
+	}
+	for _, parameter := range parameters {
+		if _, ok := bindings[parameter.Name]; !ok {
+			return Type{}, false
+		}
+	}
+	return evt1SubstituteBindings(decl.ReturnType, bindings), true
+}
+
+func evt1AnyTypeDependsOnParameters(types []Type, parameters []GenericParameter) bool {
+	for _, t := range types {
+		if evt1TypeDependsOnAnyParameter(t, parameters) {
+			return true
+		}
+	}
+	return false
 }

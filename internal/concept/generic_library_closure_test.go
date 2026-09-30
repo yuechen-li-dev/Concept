@@ -2,6 +2,7 @@ package concept
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -318,5 +319,42 @@ func TestBorrowSourcesSurviveAssignmentAndJoin(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "STORAGE_MOVE_WITH_LIVE_REFERENCE") {
 			t.Fatalf("case %d diagnostic = %v", i, err)
 		}
+	}
+}
+
+// Deduced template-to-template calls: through a generic class, inside a
+// record construction, beside an assert, and with an integer literal for a
+// parameter that mentions no template parameter. Each instantiation of the
+// caller closes its callees.
+func TestGenericDeducedCallsInStrictC11(t *testing.T) {
+	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "valid", "generic_deduced_calls.concept")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(filepath.ToSlash(path), string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs, err := Generate(module, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runFoundationNativeHarness(t, outputs, "generic_deduced_calls_harness.c", "#include \"generic_deduced_calls.generated.h\"\nint main(void) { return concept_generic_deduced_calls_main() == 58 ? 0 : 1; }\n")
+}
+
+func TestGenericDeducedCallMustInfer(t *testing.T) {
+	path := filepath.Join("..", "..", "language", "evt1", "generic-library-closure", "invalid", "generic_deduced_call_uninferable.concept")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(filepath.ToSlash(path), string(source))
+	if err == nil {
+		_, err = Generate(module, source)
+	}
+	var diagnostic Diagnostic
+	if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4174" {
+		t.Fatalf("diagnostic = %v, want CV4174", err)
 	}
 }

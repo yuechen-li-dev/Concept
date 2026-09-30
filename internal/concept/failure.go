@@ -72,7 +72,15 @@ func evt1TypeCIdentity(t Type) string {
 			b.WriteByte('_')
 		}
 	}
-	return strings.Trim(b.String(), "_")
+	identity := strings.Trim(b.String(), "_")
+	// Distinguish a declared type spelled like a builtin (Double vs double);
+	// both would otherwise snake-case to the same composite C name.
+	if lower := strings.ToLower(identity); lower != identity {
+		if _, builtin := evt1BuiltinDefinition(lower); builtin {
+			return "Type_" + identity
+		}
+	}
+	return identity
 }
 
 func evt1FailureConstructorName(t Type, variant string) string {
@@ -537,4 +545,3 @@ func evt1IsResultVoidErrorType(env *semanticEnv, t Type) (Type, bool) {
 	}
 	return evt1CanonicalType(env, t.TypeArgs[1]), true
 }
-

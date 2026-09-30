@@ -1616,6 +1616,12 @@ variadic/template-metaprogramming sublanguage.
 existing fixed-layout geometry authority. They accept a generic parameter
 inside a function-template definition and fold after concrete substitution.
 
+A function-template body may call another function template with deduced
+arguments. The call is typed dependently and resolved after substitution.
+Deduction uses only the parameters whose types mention a template parameter;
+the other arguments convert to their declared types as in any call. A call
+whose template arguments cannot be deduced is CV4174.
+
 `extern "C"` declares a bodyless external operation. Its source name is its C
 symbol. The admitted ABI domain is Core scalars, enums, and single pointers to
 builtin storage; other types are rejected until an explicit ABI law exists.
