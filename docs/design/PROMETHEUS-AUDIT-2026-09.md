@@ -293,14 +293,23 @@ In parallel: Dominatus → DragonGod, adding a typed blackboard, filters,
 predictor/reservations and selection as step machines on top of the existing
 actuation and replay vocabulary.
 
-## Decisions for the owner
+## Owner decisions (2026-09-30)
 
-1. **Milestone executors (A1):** delete outright with reports kept, or archive
-   on a tag first?
-2. **Batch (A3):** selector-governed or explicitly baseline-only?
-3. **Port scope:** are ray query and FFT in the Concept port, or frozen in C?
-4. **Kernel build home (K5):** `oct make` target, since SDSL-V stays in Oct, or
-   a Concept native-project kernel target consuming `oct sdslv`?
+Governing rule: 5S. Sort and remove what is not needed first, then set in
+order, then port. Nothing is kept "just in case".
+
+1. **A1: delete and extract.** Unreachable milestone executors are deleted,
+   not archived on a tag. Their DevelopmentReport entries stay as history.
+   Anything worth keeping is extracted into a named, reachable form first.
+2. **A3: batch is planned through the selector.** Per-entry decisions reach
+   the batch plan. **A4 is widened:** the shadow HFSM machinery gets
+   production callers (lifecycle advanced in production), not test-only
+   drivers. Authority still passes through the canary gate.
+3. **Port scope:** ray query and FFT are in scope but deferred. They stay in C
+   until the SGEMM, reduction and model-block ports land.
+4. **K5: the kernel build is an `oct make` target.** SDSL-V stays in Oct;
+   Concept consumes the package. A Concept-native `profile spirv` is far
+   future.
 
 ## Method and caveats
 
