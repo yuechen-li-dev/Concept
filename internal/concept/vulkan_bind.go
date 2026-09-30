@@ -426,7 +426,7 @@ func GenerateVulkanBinding(i SPIRVInterface, options VulkanBindOptions) (string,
 		}
 		b.WriteString("};\n\n")
 	}
-	fmt.Fprintf(&b, "// The %s pipeline. Dropping it releases the pipeline.\nclass %s\n{\npublic:\n    Pipeline pipeline;\n};\n\n", name, name)
+	fmt.Fprintf(&b, "// The %s pipeline. Dropping it releases the pipeline.\nclass %s\n{\npublic:\n    owned Pipeline pipeline;\n};\n\n", name, name)
 	fmt.Fprintf(&b, "Result<%s, VulkanError> Load%s(ref const Context context)\n{\n", name, name)
 	fmt.Fprintf(&b, "    BindingSlot<array>[%d] slots = [", len(i.Bindings))
 	for index, binding := range i.Bindings {

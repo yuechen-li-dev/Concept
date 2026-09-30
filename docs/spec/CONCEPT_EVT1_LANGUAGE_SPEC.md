@@ -1612,6 +1612,10 @@ rules. Infinite recursive instantiation is a diagnostic. There is no SFINAE,
 runtime generic dictionary, reflection registry, partial specialization, or
 variadic/template-metaprogramming sublanguage.
 
+Structural Drop releases `owned` fields in reverse declaration order. A field
+whose type has a Drop must be declared `owned`; otherwise the aggregate would
+hold destruction authority it never exercises, and the declaration is CV4653.
+
 `SizeOf<T>()` and `AlignOf<T>()` are compile-time-only `usize` queries over the
 existing fixed-layout geometry authority. They accept a generic parameter
 inside a function-template definition and fold after concrete substitution.

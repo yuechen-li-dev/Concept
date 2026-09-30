@@ -138,7 +138,11 @@ void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool
     (void)instance;
     (void)commands;
     (void)cache;
-    if (device == (VkDevice)token(514)) live_contexts--;
+    if (device != (VkDevice)token(514)) return;
+    /* Destroying the device with live children is what the validation layer
+     * reports as VUID-vkDestroyDevice-device-05137; count it the same way. */
+    hazards += live_buffers + live_pipelines;
+    live_contexts--;
 }
 
 DeviceFacts ConceptVkDeviceFacts(VkPhysicalDevice physical) {

@@ -16,7 +16,7 @@ comptime uint32 DoubleWorkgroupZ = 1;
 class Double
 {
 public:
-    Pipeline pipeline;
+    owned Pipeline pipeline;
 };
 
 Result<Double, VulkanError> LoadDouble(ref const Context context)

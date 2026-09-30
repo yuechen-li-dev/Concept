@@ -33,7 +33,7 @@ record struct ScalePush
 class Scale
 {
 public:
-    Pipeline pipeline;
+    owned Pipeline pipeline;
 };
 
 Result<Scale, VulkanError> LoadScale(ref const Context context)

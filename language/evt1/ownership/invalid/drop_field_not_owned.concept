@@ -1,0 +1,19 @@
+profile Core;
+
+// A field whose type has a Drop must be declared `owned`: structural Drop
+// releases only owned fields, so this Holder would never release its
+// Resource (CV4653).
+struct Resource
+{
+    int handle;
+}
+
+void Drop(owned Resource resource)
+{
+}
+
+class Holder
+{
+public:
+    Resource resource;
+};

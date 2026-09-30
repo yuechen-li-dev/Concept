@@ -2,10 +2,18 @@ module ComputeDispatchTests;
 profile Vulkan;
 import ComputeDispatch;
 
+extern "C" int ConceptVkTestHazards();
+extern "C" int ConceptVkTestLivePipelines();
+extern "C" int ConceptVkTestLiveBuffers();
+
 // Runs on the GPU with CONCEPT_VULKAN_RUNTIME=device, and on the GPU-free test
 // device (which knows double.spv) otherwise.
 [[fact]]
 void DoublingSixtyFourIntsOnTheDevice()
 {
+    int hazards = ConceptVkTestHazards();
     Assert.Equal(DoubleAndSum()!, 4032, "sum of 2*i for i in 0..63");
+    Assert.Equal(ConceptVkTestLivePipelines(), 0, "the kernel's pipeline is released");
+    Assert.Equal(ConceptVkTestLiveBuffers(), 0, "every buffer is released");
+    Assert.Equal(ConceptVkTestHazards(), hazards, "no hazards or leaks");
 }

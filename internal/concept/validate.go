@@ -1297,7 +1297,28 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := evt1InstantiateGenericDrops(env); err != nil {
 		return nil, err
 	}
+	if err := evt1ValidateDropFieldsAreOwned(env, module); err != nil {
+		return nil, err
+	}
 	return env, nil
+}
+
+// evt1ValidateDropFieldsAreOwned rejects a field whose type has a Drop but
+// which is not declared `owned`. Structural Drop runs only for owned fields,
+// so such a field would copy destruction authority in and never release it.
+func evt1ValidateDropFieldsAreOwned(env *semanticEnv, module Module) error {
+	for _, structDecl := range module.Structs {
+		for _, field := range structDecl.Fields {
+			if field.Type.isOwned() || field.Type.isBorrowLike() {
+				continue
+			}
+			if evt1DropFunction(env, field.Type) == nil {
+				continue
+			}
+			return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;`", structDecl.Name, field.Name, field.Type.Name, field.Type.Name, field.Name), field.Span)
+		}
+	}
+	return nil
 }
 
 func evt1OperationEffectKey(operation string, signature string) string {
