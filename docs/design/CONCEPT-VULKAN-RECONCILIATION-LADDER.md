@@ -1,6 +1,34 @@
 # Concept Vulkan reconciliation: mini-milestone ladder
 
-Status: **proposal, awaiting approval**. Nothing has been implemented.
+Status: **complete** (2026-09-29). VK0–VK9 landed; the compute-dispatch
+vertical passed on a real GPU in Normal and Verify modes.
+
+## Completion report
+
+| Rung | Commit | Outcome |
+| --- | --- | --- |
+| VK0 | `d831ef2` | Specimens renamed to Core; originals frozen in `legacy/evt1-specimens/` |
+| VK1 | `feceb3d` | Guarded `transition match` arms (ordered, final unguarded arm required) |
+| VK2 | `5e0f553` | `with input T` and `on Pattern [when g] => S;` with must-use `StepOutcome` |
+| VK3 | `779a80e` | `terminal state`; ambiguous reactions reported as `Ambiguous` |
+| VK4 | `c7c6bf6` | `Standard.Collection.Outbox<T,N>` and step-machine ports |
+| VK5 | `646b008` | M-era automata, `dispatch`, effects and actuators removed, each with a `REMOVED_*` diagnostic |
+| VK6 | `e6e0935` | `extern "C" handle Name;` opaque foreign handles in Core |
+| VK7 | `8f74a88` | `libraries/Vulkan` in ordinary Concept: owned Context, Buffer, ComputePipeline, Submission |
+| VK9a | `4a458ed` | Profile semantics removed; constitution and isolation audit moved to `docs/history/vulkan/` |
+| VK9b | `b54deb7` | `profile Vulkan` kept as setup automation only (implied import, runtime linking) |
+| VK8 | `d8b0b71`, `3ad5760` | Compute dispatch on the test device and a real GPU; lifetime observers on both runtimes |
+
+Device run (Windows, Vulkan SDK 1.4.350, MinGW gcc 15.2, `tools/vk8/run_vk8.ps1`):
+all nine steps pass. The C reference and `compute_dispatch` both return 4032;
+`buffer_lifetime` sees zero live buffers after scope exit on the GPU runtime.
+
+Left open:
+
+- The stale `concept-vulkan.exe`/`.obj` in the Oct repository root (VK9) is
+  in a different repository and is left for the owner.
+- The follow-up rung for access and barrier derivation, informed by the VK8
+  friction note below.
 
 ## Goal
 
@@ -244,6 +272,33 @@ wait → read back.
 
 *Exit:* standing gates. The Golden compiles as strict C11 with gcc and
 clang. A device run is attempted where hardware exists.
+
+*(Amended at VK8: the vertical shipped as one `Vulkan` module rather than
+`Vulkan.Commands`/`Vulkan.Descriptors`. Recording is internal to `Dispatch`,
+and bindings are explicit `BindStorage` calls; `[[binding]]` derivation moved
+to the follow-up rung. The Golden pair is `examples/vulkan/ComputeDispatch.concept`
+(33 lines) and `examples/vulkan/reference/compute_dispatch.c` (209 lines); the
+mechanics the C spells out live once in `libraries/Vulkan/native/device_runtime.c`.)*
+
+**VK8 friction note.** What still feels worse than C, or no better:
+
+- Bindings are positional. The storage-buffer count passed to
+  `CreateComputePipeline` and the `BindStorage` indices must agree with the
+  shader's layout by hand; nothing checks them against `double.comp`.
+- Buffers are untyped bytes with int accessors. The size (256 bytes) and the
+  element count (64) are stated separately, and each `WriteInt`/`ReadInt` is
+  a runtime call rather than a mapped, typed view.
+- Synchronization is invisible and fixed. The runtime records one
+  shader-write → host-read barrier; Concept cannot express or check any
+  other. This is the core of the access-and-barrier derivation rung.
+- The kernel is a path string resolved at run time via
+  `CONCEPT_VULKAN_KERNELS`, not a compile-time dependency.
+- The device runtime supports one context per process.
+
+What is clearly better: every object is owned and destroyed once in reverse
+order without any cleanup code; every failure is a `VulkanError` through `?`;
+a `Submission` that is dropped without `Wait` is waited by `Drop`; and the same
+lifetime facts run unchanged on the test device and a GPU.
 
 ### VK9: shrink the profile and write the docs
 

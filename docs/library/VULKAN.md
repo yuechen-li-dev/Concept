@@ -70,6 +70,10 @@ owned and every failure a `VulkanError`. `reference/compute_dispatch.c` is
 the same program against Vulkan directly (about 200 lines); the mechanics it
 spells out live once in `device_runtime.c`. `tools/vk8/run_vk8.ps1` runs
 both on a machine with a GPU and the Vulkan SDK.
+Both runtimes export the same lifetime observers (`ConceptVkTestLiveBuffers`
+and friends, declared in `concept_vulkan.h`), so lifetime facts run unchanged
+on the test device and a GPU. The first device run (2026-09-29) passed in
+Normal and Verify modes.
 
 ## Not yet
 
