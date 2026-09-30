@@ -1,0 +1,7 @@
+profile Core;
+extern "C" usize CountBytes(ReadOnlySpan<byte> bytes);
+usize Main()
+{
+    float<array>[2] values = [1.0, 2.0];
+    return CountBytes(AsBytes(values));
+}

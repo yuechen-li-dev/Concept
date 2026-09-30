@@ -901,7 +901,7 @@ func evt1ValidateMIR(mir MIR) error {
 				}
 				continue
 			}
-			if operation.Kind == "span_from_region" || operation.Kind == "span_to_readonly" || operation.Kind == "span_subregion" || operation.Kind == "span_index" {
+			if operation.Kind == "span_from_region" || operation.Kind == "span_to_readonly" || operation.Kind == "span_subregion" || operation.Kind == "span_as_bytes" || operation.Kind == "span_index" {
 				if operation.ElementType == nil || operation.RegionID == "" || operation.Length == "" || operation.Provenance == "" || operation.Mutability == "" || operation.Alignment < 1 || operation.BoundsCheck == "" || !operation.Contiguous || !operation.NoCopy || !operation.NoAllocation || !operation.NoOwnershipTransfer || !operation.SameBackingRegion {
 					return evt1Diagnostic("CV4608", fmt.Sprintf("MIR %s operation %s omits bounded borrowed-region facts", operation.Kind, operation.ID), operation.SourceSpan)
 				}
@@ -1540,7 +1540,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			}
 			return
 		}
-		if e.Intrinsic == "span_from_region" || e.Intrinsic == "span_to_readonly" || e.Intrinsic == "span_subregion" {
+		if e.Intrinsic == "span_from_region" || e.Intrinsic == "span_to_readonly" || e.Intrinsic == "span_subregion" || e.Intrinsic == "span_as_bytes" {
 			bounds := "source_extent"
 			if e.Intrinsic == "span_subregion" {
 				bounds = "half_open_overflow_safe"
@@ -4342,6 +4342,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		if e.Intrinsic == "span_from_region" || e.Intrinsic == "span_to_readonly" || e.Intrinsic == "span_subregion" {
 			return f.lowerSpanCall(e, indent)
+		}
+		if e.Intrinsic == "span_as_bytes" {
+			return f.lowerSpanAsBytes(e, indent)
 		}
 		if e.Callee == "Len" || e.Callee == "Rank" || e.Callee == "Shape" {
 			if e.Callee == "Len" && len(e.Args) == 1 {

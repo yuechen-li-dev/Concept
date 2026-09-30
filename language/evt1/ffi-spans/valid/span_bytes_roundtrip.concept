@@ -1,0 +1,30 @@
+module SpanBytesRoundtrip;
+profile Core;
+
+// Spans cross extern "C" by value as { data, length }, borrowed for the
+// duration of the call. AsBytes views C ABI values as their backing bytes.
+
+[[repr(C)]]
+record struct Sample { uint32 id; float value; };
+
+extern "C" usize CountBytes(ReadOnlySpan<byte> bytes);
+extern "C" void Scale(Span<float> values, float factor);
+
+template <typename T>
+usize ByteCount(ReadOnlySpan<T> data)
+{
+    return CountBytes(AsBytes(data));
+}
+
+float Main()
+{
+    float<array>[4] values = [1.0, 2.0, 3.0, 4.0];
+    Sample<array>[2] samples = [Sample{1, 0.5}, Sample{2, 1.5}];
+    Scale(Span(values), 2.0);
+    usize bytes = ByteCount(ReadOnlySpan(values)) + ByteCount(ReadOnlySpan(samples));
+    if (bytes != 32)
+    {
+        return 0.0;
+    }
+    return values[3];
+}

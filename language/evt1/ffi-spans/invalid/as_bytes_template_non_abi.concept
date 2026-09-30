@@ -1,0 +1,13 @@
+profile Core;
+record struct Loose { int a; float b; };
+extern "C" usize CountBytes(ReadOnlySpan<byte> bytes);
+template <typename T>
+usize ByteCount(ReadOnlySpan<T> data)
+{
+    return CountBytes(AsBytes(data));
+}
+usize Main()
+{
+    Loose<array>[1] values = [Loose{1, 2.0}];
+    return ByteCount(ReadOnlySpan(values));
+}

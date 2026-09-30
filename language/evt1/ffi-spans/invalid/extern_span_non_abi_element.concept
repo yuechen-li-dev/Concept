@@ -1,0 +1,3 @@
+profile Core;
+record struct Loose { int a; float b; };
+extern "C" void Take(ReadOnlySpan<Loose> values);

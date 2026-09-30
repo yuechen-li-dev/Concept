@@ -727,7 +727,7 @@ func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPol
 	case "stream_bind":
 		d.Category, d.Strategy = "StreamPlan", "ErasedAliasLayoutDescriptor"
 		d.Evidence = PlanningEvidence{Claims: []string{"NoAllocation", "NoCopy", "NoOwnershipTransfer"}, Detail: "stream is zero-storage MIR"}
-	case "span_from_region", "span_to_readonly":
+	case "span_from_region", "span_to_readonly", "span_as_bytes":
 		d.Category, d.Strategy = "SpanPlan", "PointerLengthDescriptor"
 		d.Evidence = evidenceForSubject(facts, op.RegionID, FactContiguous, FactBounded)
 	case "tensor_inline_storage":

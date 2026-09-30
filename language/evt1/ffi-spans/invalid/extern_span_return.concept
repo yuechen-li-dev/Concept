@@ -1,0 +1,2 @@
+profile Core;
+extern "C" ReadOnlySpan<float> Borrowed();

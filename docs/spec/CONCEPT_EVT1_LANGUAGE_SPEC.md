@@ -682,6 +682,15 @@ Span may convert to ReadOnlySpan.
 ReadOnlySpan may not convert to Span.
 ```
 
+**Byte views.** `AsBytes(span)` views a `Span<T>` or `ReadOnlySpan<T>` as the
+`Span<byte>`/`ReadOnlySpan<byte>` that backs it: same backing region, lifetime,
+and mutability, `Len` multiplied by `SizeOf<T>()`, no copy. `T` must have a C
+ABI value representation. A mutable byte view of an element that contains a
+foreign handle is rejected, because writing bytes could forge a handle.
+Violations report `SPAN_AS_BYTES_INVALID`, including when a template is
+instantiated with an ineligible `T`. Byte views are how typed data crosses a
+byte-oriented boundary such as a GPU upload or a push-constant block.
+
 ### 16.4 Tensor mathematics and Einstein indexing
 
 **Canonical EVT1 tensor semantics.** `tensor<T, Rank>` is a mathematical rank-`Rank` view
@@ -919,6 +928,17 @@ Absence is `Option<Name>`, never a null sentinel. The generated C is
 `typedef struct Name_T* <c-name>;`, the same underlying type as the usual C
 header convention, so a foreign header's typedef and the generated one can be
 in scope together.
+
+**Spans at the boundary.** An `extern "C"` parameter may be `Span<T>` or
+`ReadOnlySpan<T>` when `T` has a C ABI value representation (a scalar, a
+handle, or a `[[repr(C)]]` record). It crosses by value as
+`struct { T* data; size_t length; }` (`const T*` for `ReadOnlySpan`), with
+`length` counted in elements. The foreign side borrows the view for the
+duration of the call and must not retain it. A span is never an extern
+return type (`EXTERN_C_ABI_TYPE_INVALID`): a foreign function cannot hand back
+a borrowed view. The generated header names the struct
+`concept_span_<T>`/`concept_readonly_span_<T>`; a companion C file declares a
+layout-identical struct of its own.
 
 ## 22. Automata, machines, states, and persistent capture
 

@@ -1729,6 +1729,13 @@ func evt1ValidateExternCSignature(env *semanticEnv, fn FunctionDecl) error {
 		return nil
 	}
 	compatible := func(t Type) (bool, string) {
+		if evt1IsSpanType(t) {
+			element := evt1CanonicalType(env, evt1SpanElement(t).valueType())
+			if ok, reason := evt1CABIValue(env, element, map[string]bool{}); !ok {
+				return false, "span element " + element.String() + ": " + reason
+			}
+			return true, ""
+		}
 		if t.PointerTo != nil {
 			base := *t.PointerTo
 			if base.PointerTo == nil && base.ArrayElem == nil && (base.Kind == TypeBuiltin || base.Name == "void") {
@@ -1746,6 +1753,9 @@ func evt1ValidateExternCSignature(env *semanticEnv, fn FunctionDecl) error {
 			return false, "enum lacks an explicit fixed underlying C representation"
 		}
 		return evt1CABIValue(env, t, map[string]bool{})
+	}
+	if evt1IsSpanType(fn.ReturnType) {
+		return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("cannot return %s across extern C: a foreign function cannot hand back a borrowed view", fn.ReturnType.String()), fn.ReturnType.Span)
 	}
 	if ok, reason := compatible(fn.ReturnType); !ok {
 		return evt1Diagnostic("EXTERN_C_ABI_TYPE_INVALID", fmt.Sprintf("cannot return %s by value across extern C: %s", fn.ReturnType.String(), reason), fn.ReturnType.Span)
@@ -2524,7 +2534,7 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 	if call, ok := expr.(*CallExpr); ok && call.Callee == "Tensor" {
 		return validateTensorConstruction(env, scope, call, expected, templateInfo, inComptimeFn)
 	}
-	if call, ok := expr.(*CallExpr); ok && (call.Callee == evt1SpanMutableName || call.Callee == evt1SpanReadonlyName || call.Callee == "Subspan") {
+	if call, ok := expr.(*CallExpr); ok && (call.Callee == evt1SpanMutableName || call.Callee == evt1SpanReadonlyName || call.Callee == "Subspan" || call.Callee == "AsBytes") {
 		return validateSpanCall(env, scope, call, &expected, templateInfo, inComptimeFn)
 	}
 	if call, ok := expr.(*CallExpr); ok && call.Callee == "Uninitialized" && (expected.StorageKind == StorageRaw || expected.StorageKind == StorageSparse) {
@@ -4022,7 +4032,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return evt1CanonicalType(env, evt1InferenceCandidateType(argType)), nil
 		}
-		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" {
+		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "AsBytes" {
 			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
 		}
 		if e.Callee == "Len" {

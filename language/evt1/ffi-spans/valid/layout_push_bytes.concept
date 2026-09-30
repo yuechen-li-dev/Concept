@@ -1,0 +1,25 @@
+module LayoutPushBytes;
+profile Core;
+
+// A layout pins the byte geometry of a push-constant block; the compiler
+// checks it and AsBytes hands the bound bytes across the C boundary.
+
+layout ScaleConstants
+{
+    at(0) uint count;
+    at(4) float scale;
+}
+
+static_assert(LayoutSize<ScaleConstants>() == 8);
+static_assert(LayoutOffset<ScaleConstants>("scale") == 4);
+
+extern "C" uint ReadCount(ReadOnlySpan<byte> bytes);
+
+uint Main()
+{
+    byte<array>[8] raw = [0...];
+    ref ScaleConstants constants = bind raw;
+    constants.count = 64;
+    constants.scale = 2.0;
+    return ReadCount(ReadOnlySpan(raw));
+}

@@ -1,0 +1,11 @@
+profile Core;
+extern "C" handle Device;
+[[repr(C)]]
+record struct Slot { Device device; uint32 index; };
+extern "C" void Scramble(Span<byte> bytes);
+extern "C" Device OpenDevice();
+void Main()
+{
+    Slot<array>[1] slots = [Slot{OpenDevice(), 0}];
+    Scramble(AsBytes(Span(slots)));
+}

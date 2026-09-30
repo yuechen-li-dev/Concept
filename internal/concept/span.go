@@ -283,6 +283,9 @@ func validateSpanCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, expect
 		return parentType, nil
 	}
 
+	if call.Callee == "AsBytes" {
+		return validateAsBytesCall(env, scope, call, templateInfo, inComptimeFn)
+	}
 	if call.Callee != evt1SpanMutableName && call.Callee != evt1SpanReadonlyName {
 		return Type{}, evt1Diagnostic("CV4600", "unknown Span intrinsic "+call.Callee, call.Span)
 	}
@@ -691,4 +694,93 @@ func (f *evt1FunctionLowerer) lowerSpanIndex(index *IndexExpr, indent int) (stri
 		}
 	}
 	return out.String(), fmt.Sprintf("%s.data[(size_t)%s]", baseName, indexName), evt1SpanElement(baseType)
+}
+
+// AsBytes(span) views a span of C ABI values as the bytes that back it, with
+// the same mutability, backing region, and lifetime. It is how typed data
+// crosses a byte-oriented foreign boundary (a GPU upload, a file write)
+// without a copy or a raw pointer. A mutable byte view is rejected when the
+// element contains a foreign handle, because writing bytes could forge one.
+func validateAsBytesCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if len(call.Args) != 1 {
+		return Type{}, evt1Diagnostic("SPAN_AS_BYTES_INVALID", fmt.Sprintf("AsBytes expects exactly one Span or ReadOnlySpan; got %d argument(s)", len(call.Args)), call.Span)
+	}
+	sourceType, err := validateExpr(env, scope, call.Args[0], templateInfo, inComptimeFn)
+	if err != nil {
+		return Type{}, err
+	}
+	if !evt1IsSpanType(sourceType) {
+		return Type{}, evt1Diagnostic("SPAN_AS_BYTES_INVALID", "AsBytes requires a Span or ReadOnlySpan, got "+sourceType.String(), call.Args[0].exprSpan())
+	}
+	element := evt1CanonicalType(env, evt1SpanElement(sourceType).valueType())
+	typeParam := ""
+	if templateInfo != nil {
+		typeParam = evt1TemplateParameterSet(templateInfo.Decl.Parameters)
+	}
+	if !evt1TypeDependsOnParam(element, typeParam) {
+		if ok, reason := evt1CABIValue(env, element, map[string]bool{}); !ok {
+			return Type{}, evt1Diagnostic("SPAN_AS_BYTES_INVALID", fmt.Sprintf("AsBytes requires elements with a C ABI value representation; %s: %s", element.String(), reason), call.Args[0].exprSpan())
+		}
+		if evt1SpanMutable(sourceType) && evt1TypeContainsHandle(env, element, map[string]bool{}) {
+			return Type{}, evt1Diagnostic("SPAN_AS_BYTES_INVALID", fmt.Sprintf("a mutable byte view of %s could forge a foreign handle; use ReadOnlySpan", element.String()), call.Args[0].exprSpan())
+		}
+	}
+	byteType, _ := evt1BuiltinType("byte", call.Span)
+	facts, known := evt1KnownSpanFacts(scope, call.Args[0])
+	if !known {
+		if derived := evt1SpanFactsForValue(env, scope, call.Args[0], sourceType); derived != nil {
+			facts = *derived
+		} else {
+			facts = evt1SpanFacts{RegionID: "as-bytes-region", BaseOffsetExpression: "runtime", LengthExpression: "runtime", ByteExtentExpression: "runtime", Alignment: 1}
+		}
+	}
+	facts.ElementType = byteType
+	facts.Mutable = evt1SpanMutable(sourceType)
+	facts.Provenance = evt1ExprProvenance(env, scope, call.Args[0])
+	if facts.LengthExpression != "runtime" && facts.LengthExpression != "" {
+		facts.LengthExpression = "(" + facts.LengthExpression + ") * sizeof(" + element.String() + ")"
+	}
+	facts.LengthStatic = false
+	mutability := "readonly"
+	if facts.Mutable {
+		mutability = "mutable"
+	}
+	evt1ApplySpanFacts(call, facts, "span_as_bytes", mutability)
+	return evt1SpanType(sourceType.Name, byteType, call.Span), nil
+}
+
+func evt1TypeContainsHandle(env *semanticEnv, t Type, visiting map[string]bool) bool {
+	if evt1IsHandle(env, t) {
+		return true
+	}
+	if t.ArrayElem != nil {
+		return evt1TypeContainsHandle(env, *t.ArrayElem, visiting)
+	}
+	decl, ok := env.structs[t.Name]
+	if !ok || visiting[t.Name] {
+		return false
+	}
+	visiting[t.Name] = true
+	defer delete(visiting, t.Name)
+	for _, field := range decl.Fields {
+		if evt1TypeContainsHandle(env, field.Type, visiting) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *evt1FunctionLowerer) lowerSpanAsBytes(call *CallExpr, indent int) (string, string, Type) {
+	sourcePrelude, sourceValue, sourceType := f.lowerExpr(call.Args[0], indent)
+	resultType := evt1SpanType(call.MutabilityToTypeName(), *call.SpanElementType, call.Span)
+	element := evt1CType(evt1SpanElement(sourceType).valueType())
+	name := f.nextTemp("span_bytes_source")
+	var out strings.Builder
+	out.WriteString(sourcePrelude)
+	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(sourceType), name, sourceValue))
+	pointer := "uint8_t*"
+	if resultType.Name == evt1SpanReadonlyName {
+		pointer = "const uint8_t*"
+	}
+	return out.String(), fmt.Sprintf("(%s){ .data = (%s)(%s.data), .length = %s.length * sizeof(%s) }", evt1CType(resultType), pointer, name, name, element), resultType
 }

@@ -1,0 +1,8 @@
+profile Core;
+record struct Loose { int a; float b; };
+extern "C" usize CountBytes(ReadOnlySpan<byte> bytes);
+usize Main()
+{
+    Loose<array>[1] values = [Loose{1, 2.0}];
+    return CountBytes(AsBytes(ReadOnlySpan(values)));
+}

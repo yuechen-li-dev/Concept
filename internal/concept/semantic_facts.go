@@ -619,7 +619,7 @@ func evt1FactOriginForOperation(operation MIROperation) SemanticFactOrigin {
 	switch operation.Kind {
 	case "layout_bind", "stream_bind", "bind_storage":
 		return FactOriginBind
-	case "span_from_region", "span_to_readonly", "span_subregion", "span_index":
+	case "span_from_region", "span_to_readonly", "span_subregion", "span_as_bytes", "span_index":
 		return FactOriginSpan
 	case "tensor_inline_storage", "tensor_view":
 		return FactOriginTensorBacking
