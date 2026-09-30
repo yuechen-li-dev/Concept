@@ -553,6 +553,9 @@ func runOneTest(test TestDeclaration, values []any, caseIndex int, options TestR
 			if vulkanErr != nil {
 				return failedTestResult(result, start, "vulkan-runtime", vulkanErr.Error(), test)
 			}
+			if staleErr := evt1CheckVulkanKernelBindings(filepath.Dir(test.sourcePath)); staleErr != nil {
+				return failedTestResult(result, start, "vulkan-kernel-binding", staleErr.Error(), test)
+			}
 			// The runtime sources join the compile; its libraries follow it.
 			head := append([]string{}, vulkan.CFlags...)
 			head = append(head, vulkan.Sources...)

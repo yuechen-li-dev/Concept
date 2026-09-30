@@ -44,6 +44,7 @@ Usage:
   concept test <native-project-dir>
   concept test <native-project-dir> --verify
   concept plan <native-project-dir>
+  concept vulkan-bind <kernel.spv> [-o <Module.concept>] [--check] [--describe]
 
 Commands:
   check   parse and semantically validate a Concept source file
@@ -144,6 +145,10 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "package" {
 		runPackageCommand(os.Args[2:])
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "vulkan-bind" {
+		runVulkanBindCommand(os.Args[2:])
 		return
 	}
 	verify := len(os.Args) == 4 && os.Args[3] == "--verify"

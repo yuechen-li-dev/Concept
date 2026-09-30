@@ -5,5 +5,6 @@ zig-out/
 .octmake/
 artifacts/
 .native-build/
-tools/vk8/out/
+tools/vulkan/out/
 *.spv
+!internal/concept/testdata/vulkan-bind/*.spv
