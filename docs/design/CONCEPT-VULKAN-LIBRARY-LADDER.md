@@ -12,7 +12,20 @@ and the Prometheus audit (`PROMETHEUS-AUDIT-2026-09.md`).
 | VL3 | Vulkan 1.4 floor: push descriptors, synchronization2, pipeline cache, device choice, validation switch | done |
 | VL4 | `Recording`: per-buffer access history, derived barriers, host barrier at submit, timestamps; test device checks synchronization | done |
 | VL5 | `concept vulkan-bind`: SPIR-V reflection to a generated module; fingerprint; stale-binding check in `concept test` | done |
-| VL6 | Examples (`ScaleChain`, generated `DoubleKernel`/`ScaleKernel`), HLSL twin, `tools/vulkan/run_gpu.ps1`, docs | done; GPU run pending |
+| VL6 | Examples (`ScaleChain`, generated `DoubleKernel`/`ScaleKernel`), HLSL twin, `tools/vulkan/run_gpu.ps1`, docs | done |
+
+## Device run (2026-09-30)
+
+`tools/vulkan/run_gpu.ps1`, Windows, SDK 1.4.350: all 13 steps pass. Examples
+pass on the RTX 3070 (Normal and Verify) and the Radeon 780M, and under
+Khronos validation with synchronization validation. GLSL and DXC builds of
+the scale kernel reflect the same fingerprint.
+
+The first validated run found one defect, not a barrier: generated kernel
+classes held `Pipeline pipeline;` without `owned`, so structural Drop never
+released it (VUID-vkDestroyDevice-device-05137). Fixed by CV4653 and the
+generator (`17d8f56`). Synchronization validation raised no hazards against
+the derived barriers.
 
 ## Compiler work the library needed
 
@@ -26,6 +39,8 @@ and the Prometheus audit (`PROMETHEUS-AUDIT-2026-09.md`).
 - Record construction inside templates sees the template's parameters.
 - Declared types whose names match a builtin case-insensitively (`Double`)
   no longer collide with it in C.
+- A field whose type has a Drop must be declared `owned` (CV4653).
+- `concept test <native project>` accepts `--verify`/`--verbose` in any order.
 
 ## `stream` and `layout`
 
