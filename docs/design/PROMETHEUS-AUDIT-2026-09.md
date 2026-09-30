@@ -311,6 +311,77 @@ order, then port. Nothing is kept "just in case".
    Concept consumes the package. A Concept-native `profile spirv` is far
    future.
 
+## Phase 0 status (first pass, 2026-09-30)
+
+Branch `claude/prometheus-phase0` in the Oct repository, four commits on top
+of `a8bbdd60`:
+
+| Commit | Change |
+| --- | --- |
+| `ab0c9816` | A1: delete code unreachable from the reactor ABI |
+| `4c7b9794` | A2 + A4: shadow controller on by default; test seed leaves the public header |
+| `1ce34dc2` | Rename `reactor_vulkan_transformer.c` → `reactor_vulkan_gemma4e2b.c` (it now holds only the Gemma M1 path) |
+| `e9ed0411` | `tools/prometheus_phase0/run_phase0.ps1`: baseline-vs-branch GPU comparison |
+
+| Measure | Before | After |
+| --- | ---: | ---: |
+| Hand-written native C/C++/H | 54,661 | 38,325 |
+| Mechanism `.c` | 34,008 | 21,232 |
+| Function lines unreachable from the ABI | 15,346 | 1,405 (all retained instruments) |
+| Marionette lines | 33,603 | 26,152 |
+| Internal types removed | | 102 |
+
+What was done:
+
+- **A1.** The M42–M49b transformer executors, the M49b numerical shadow
+  (`reactor_numerical_research.*`, `reactor_vulkan_transformer_control.*`),
+  the M40b experiment, and the orphaned Concept/Vulkan kernel54 set were
+  deleted, together with 58 tests that only exercised them. The M49b shadow
+  could only run inside the deleted M48 stack, so it could not be switched
+  on; it is deleted rather than kept off.
+- **Kept as instruments:** SGEMM placement benchmark, audit harness,
+  model-block fault injection, blackboard/HFSM observers, the M46 RMSNorm CPU
+  oracle, and the Gemma M46 hardware proof. Test-only compositions moved to
+  `Marionette/reactor_test_compositions.h` and `reactor_test_numerics.h`.
+- **A4.** The P15 shadow controller (canary, authority gate, agree-and-confirm
+  feedforward) runs by default; `PrometheusReactorConfig.p15_shadow_disabled`
+  opts out. It cannot override the judgment-selected variant.
+- **A2.** `prometheus_reactor_runtime_p15_test_seed_matured_reservation` is no
+  longer exported.
+- **5S outside git:** 75 ignored `.obj`/probe files were removed from the Oct
+  root, along with the untracked `internal/conceptvulkan/generated` leftover.
+
+Verification: a Linux build against a stub Vulkan loader (every entry point
+fails cleanly), with a per-test comparison to the pre-change baseline. There
+were 0 regressions; the runtime-level P15 tests need a device.
+**GPU verification is pending:** run `tools\prometheus_phase0\run_phase0.ps1`
+on Windows.
+
+Deferred (listed, not started):
+
+1. **A1b: reclaim resources of deleted executors.** Reduction slots still
+   allocate descriptor sets for the M48 stack (4 layers × M43–M47 sets) and
+   keep `m48_layer`/`m48_descriptors` fields that only cleanup touches. This
+   changes descriptor-pool arithmetic, so it needs GPU validation.
+2. **A3: batch planned through the selector.** Per-entry variants need
+   per-slot pipeline binding and mixed variants within one submit.
+3. **A5: milestone identifiers** at surviving boundaries (the public header
+   still carries hundreds; `m46`/`m48` names now sit inside the live Gemma
+   path).
+4. **Prestage scaffold (P15 M6):** evaluate-only, with no action path. Either
+   build the pre-transfer action or delete it; it cannot simply be turned on.
+5. **Feedforward authority:** the shadow controller now runs, but only in
+   agree-and-confirm mode. Letting it steer (override) is the real authority
+   transfer and should be its own milestone.
+6. **Two cancel paths:** `prom_dominatus_reservation_cancel` (tested
+   primitive) and the correction path cancel differently. Unify them in the
+   DragonGod port.
+7. **Registry drift (pre-existing):** shader-registry metadata tests fail
+   without a device, e.g. `PrometheusShaderRegistryIdsAreUnique` expects 40
+   package-only assets and finds 44. This is evidence for K3/K4 (one kernel
+   authority).
+8. Phase 1–4 (K1–K5, P1–P3, L1–L6, the port) as above.
+
 ## Method and caveats
 
 - Reachability: brace-matched function extraction over production `.c`/`.cpp`
