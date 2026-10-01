@@ -53,7 +53,7 @@ func innateAgreementCorpus(t *testing.T) []innateAgreementCase {
 
 func assertInnateAgreement(t *testing.T, code string, cases []innateAgreementCase) {
 	t.Helper()
-	goOnly := evt1AnalysisOptions{innateOff: map[string]bool{code: true}}
+	goOnly := evt1AnalysisOptions{goRulesOn: map[string]bool{code: true}, innateOff: map[string]bool{code: true}}
 	innateOnly := evt1AnalysisOptions{goRulesOff: map[string]bool{code: true}}
 	fired := 0
 	for _, tc := range cases {

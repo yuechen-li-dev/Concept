@@ -548,12 +548,28 @@ func validateModule(module Module) error {
 }
 
 // evt1AnalysisOptions selects which implementation of a rule runs while it
-// moves from Go into an innate concept: goRulesOff retires Go rules by
-// diagnostic code, innateOff skips innate concepts by diagnostic code. The
-// zero value is the compiler's normal configuration.
+// moves from Go into an innate concept. goRulesOff turns a Go rule off and
+// goRulesOn turns a retired one back on, by diagnostic code; innateOff skips
+// innate concepts by diagnostic code. The zero value is the compiler's normal
+// configuration.
 type evt1AnalysisOptions struct {
 	goRulesOff map[string]bool
+	goRulesOn  map[string]bool
 	innateOff  map[string]bool
+}
+
+// evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
+// retired rule runs only when an agreement test asks for it, and is deleted
+// once the switch has held.
+var evt1RetiredGoRules = map[string]bool{
+	"CV4653": true,
+}
+
+func (e *semanticEnv) goRule(code string) bool {
+	if e.options.goRulesOn[code] {
+		return true
+	}
+	return !evt1RetiredGoRules[code] && !e.options.goRulesOff[code]
 }
 
 func analyzeModule(module Module) (*semanticEnv, error) {
@@ -1307,7 +1323,7 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
-		if env.options.goRulesOff["CV4653"] {
+		if !env.goRule("CV4653") {
 			break
 		}
 		if err := evt1ValidateDropFieldsAreOwned(env, structDecl, nil); err != nil {
@@ -1361,7 +1377,7 @@ func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
 				template = &generic.Struct
 			}
 		}
-		if env.options.goRulesOff["CV4653"] {
+		if !env.goRule("CV4653") {
 			continue
 		}
 		if err := evt1ValidateDropFieldsAreOwned(env, instance, template); err != nil {
