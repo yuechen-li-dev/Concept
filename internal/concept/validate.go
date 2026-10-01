@@ -561,9 +561,7 @@ type evt1AnalysisOptions struct {
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
 // retired rule runs only when an agreement test asks for it, and is deleted
 // once the switch has held.
-var evt1RetiredGoRules = map[string]bool{
-	"C_ABI_REPR_INVALID": true,
-}
+var evt1RetiredGoRules = map[string]bool{}
 
 func (e *semanticEnv) goRule(code string) bool {
 	if e.options.goRulesOn[code] {
@@ -827,11 +825,6 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
-		if env.goRule("C_ABI_REPR_INVALID") {
-			if err := evt1ValidateCRepr(env, structDecl); err != nil {
-				return nil, err
-			}
-		}
 		fields := map[string]Type{}
 		for _, field := range structDecl.Fields {
 			if _, exists := fields[field.Name]; exists {
@@ -1359,24 +1352,9 @@ func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
 		if declared[instance.Name] {
 			continue
 		}
-		if env.goRule("C_ABI_REPR_INVALID") {
-			if err := evt1ValidateCRepr(env, instance); err != nil {
-				return err
-			}
-		}
 		if err := evt1ValidateStructFieldEmbedding(env, instance); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func evt1ValidateCRepr(env *semanticEnv, structDecl StructDecl) error {
-	if !evt1HasCRepr(structDecl.Attributes) {
-		return nil
-	}
-	if ok, reason := evt1CABIValue(env, Type{Name: structDecl.Name, Kind: TypeStruct}, map[string]bool{}); !ok {
-		return evt1Diagnostic("C_ABI_REPR_INVALID", structDecl.Name+": "+reason, structDecl.Span)
 	}
 	return nil
 }

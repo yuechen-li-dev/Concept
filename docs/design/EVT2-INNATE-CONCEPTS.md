@@ -1,6 +1,6 @@
 # EVT2 innate concepts (MVP design)
 
-Status: proposed.
+Status: MVP complete (IC0–IC6). Two Go rules now live in Concept.
 
 > A concept is something that must be true and can be validated. Innate
 > concepts are the ones the compiler holds before it reads any program: no
@@ -278,6 +278,47 @@ on the field shows it.
 If both pilots read better in Concept than in Go, and the agreement test is
 clean, the mechanism is ready for the rest of the declarative layer.
 
+### As built in IC6
+
+`CReprIsPlainData` replaces the Go repr(C) declaration check. Its
+`CValueProblem` walks a type exactly as `evt1CABIValue` does, recursively
+through fixed arrays and nested repr(C) records, and reports the path to the
+first offending field (`Outer: field middle: field leaves: aggregate lacks
+[[repr(C)]]`). The protocol ran in three commits, with the agreement test over
+the corpus and 16 targeted cases.
+
+Writing it in Concept surfaced three things, each fixed in its own commit
+before the shadow step:
+
+- **Comptime recursion was forbidden.** It is now admitted with an explicit
+  bound, `comptime string F(typename t) bounded(N)`, the way `while` is
+  admitted with `bounded(limit)`; every function on a cycle states its bound.
+- **The Go rule's destruction check was dead.** `evt1CABIValue` asked
+  `evt1TypeHasDrop` of a non-owned type, which never sees the type's own
+  Drop, so a repr(C) record with a Drop passed. Fixed for repr(C) and
+  `extern "C"` values alike, with a corpus case.
+- **Observations needed for parity:** `NominalName` (a type's name without
+  arguments or units), plus exact single-argument matching for
+  `HasAttributeArgument`.
+
+`evt1CABIValue` itself stays in Go for the rules that still use it: extern
+"C" signatures, spans across the boundary, and `AsBytes`. The `[[repr(...)]]`
+attribute's own syntax checks (reflection.go) also stay: they check the
+attribute, not the aggregate.
+
+### Verdict on the pilots
+
+Both rules read at least as well in Concept as in Go: the per-field rule is a
+dozen lines, and the structural walk is the same length as its Go original,
+with every judgment visible in one place and its wording next to its
+condition. The cost is the observation vocabulary (three additions across the
+two pilots) and two language gaps closed along the way (comptime control flow
+and bounded recursion). The benefit beyond parity is the bug the rewrite
+found. The mechanism is ready for the rest of the declarative layer: struct
+field embedding (CV4525, CV4138, CALLABLE_FIELD_REF_ESCAPE), enum payload
+rules, and the extern "C" signature domain once function declarations are
+subjects.
+
 ## Ladder
 
 | Step | Content |
@@ -288,7 +329,7 @@ clean, the mechanism is ready for the rest of the declarative layer.
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash; done |
 | IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED`; done |
 | IC5 | CV4653: shadow, switch, delete; done (`4d3b92a`, `c7ebe48`, and the deletion) |
-| IC6 | C_ABI_REPR_INVALID: shadow, switch, delete; spec section |
+| IC6 | C_ABI_REPR_INVALID: shadow, switch, delete; spec section; done |
 
 ## Not in the MVP
 

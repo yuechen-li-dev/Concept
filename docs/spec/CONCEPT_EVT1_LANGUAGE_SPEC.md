@@ -457,7 +457,8 @@ compiler analyses, or other concepts. The compiler applies each innate concept
 to every declaration of its kind; no program can omit, weaken, or redefine
 them. `innate` is rejected outside the compiler's module. Semantic module
 artifacts record the innate identity they were checked under. See
-`docs/design/EVT2-INNATE-CONCEPTS.md`.
+`docs/design/EVT2-INNATE-CONCEPTS.md`. The innate concepts today are
+`DroppableFieldIsOwned` (CV4653) and `CReprIsPlainData` (C_ABI_REPR_INVALID).
 
 **Deferred reconciliation.** Multiple parameters, specialization, negative
 concepts, orphan/coherence breadth, and the full PoC3 marker-concept system are
@@ -507,7 +508,8 @@ names are `OBSERVATION_UNKNOWN`. A type that is or contains a subject is
 compile-time only: runtime signatures and locals reject it
 (`COMPTIME_ONLY_TYPE`), and such aggregates are erased before lowering. The
 compiler supplies subject values to compile-time predicates; see
-`docs/design/EVT2-INNATE-CONCEPTS.md`.
+`docs/design/EVT2-INNATE-CONCEPTS.md`. The innate concepts today are
+`DroppableFieldIsOwned` (CV4653) and `CReprIsPlainData` (C_ABI_REPR_INVALID).
 
 **Deferred reconciliation.** PoC3 capability-based compile-time permissions,
 compiler-owned temporary allocation, reflection breadth, and any I/O are not
