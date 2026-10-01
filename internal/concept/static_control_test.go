@@ -45,6 +45,7 @@ int main(void) { return concept_closure__static_use_use(3) == 58 ? 0 : 1; }`)
 func TestR9aRuntimeStaticControlDiagnostics(t *testing.T) {
 	cases := []struct{ name, source, code string }{
 		{"runtime condition", `int Bad(int value) { comptime if (value > 0) { return 1; } return 0; }`, "CV4200"},
+		{"runtime inferred initializer", `int Bad(int value) { comptime auto constant = value; return constant; }`, "CV4200"},
 		{"runtime loop", `int Bad(int value) { comptime for (i in 0..value) { value += i; } return value; }`, "CV4200"},
 		{"mixed open condition", `template <typename T> int Bad(int value) { comptime if (SizeOf<T>() == 4 and value > 0) { return 1; } return 0; }`, "CV4200"},
 		{"selected invalid", `int Bad() { comptime if (false) { return 1; } else { return Missing(); } }`, "CV"},
@@ -60,6 +61,24 @@ func TestR9aRuntimeStaticControlDiagnostics(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.code) {
 				t.Fatalf("expected %s, got %v", tc.code, err)
 			}
+		})
+	}
+}
+
+func TestR9aComptimeAutoAndVarCompatibility(t *testing.T) {
+	for _, spelling := range []string{"auto", "var", "var int<array>[3]"} {
+		t.Run(spelling, func(t *testing.T) {
+			source := "profile Core; int Main() { comptime " + spelling + " steps = [1, 2, 3]; int total = 0; comptime for (i in steps) { total += i; } return total; }"
+			module, err := Parse("auto_alias.concept", source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			outputs, err := Generate(module, []byte(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertR8cStrictC11(t, outputs, "auto_alias.generated.c")
+			runFoundationNativeHarness(t, outputs, "auto_alias_harness.c", "#include \"auto_alias.generated.h\"\nint main(void) { return concept_auto_alias_main() == 6 ? 0 : 1; }\n")
 		})
 	}
 }

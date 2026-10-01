@@ -1760,3 +1760,9 @@ freshness, disjointness, or hidden allocation.
 
 Full C++ ABI, header parsing, generated or verified contracts, callbacks,
 shared foreign ownership, MMIO/volatile, and allocator policy remain deferred.
+
+R9a runtime static controls use `comptime if` and `comptime for` with compile-time
+operands and ordinary runtime bodies. Closed controls select/expand before runtime
+validation. Local inferred constants use `comptime auto name = initializer;`;
+`var` remains a compatibility spelling. Fixed arrays infer their element type and
+extent. Open generic values are resolved when the function is instantiated.

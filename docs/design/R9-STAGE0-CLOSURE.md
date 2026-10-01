@@ -122,3 +122,10 @@ execute Normal/Verify strict C11, preserve authoritative NoAllocation analysis a
 compare artifacts/C/MIR over exactly 100 runs. The generic variable clone now
 retains comptime/const and existing declaration metadata. One older class-method
 symbol test was updated to structural C identity and given a native return probe.
+
+`comptime auto name = initializer;` is the primary local inference spelling,
+aligned with the C/C++ surface. It admits the existing comptime value types,
+including fixed arrays; `comptime var name = initializer;` and the existing typed
+`var` alias are accepted. Inferred bindings dependent on open generic parameters
+retain their initializer until closure. Runtime-dependent initializers still
+reject CV4200. Ordinary runtime auto admission remains separately bounded.

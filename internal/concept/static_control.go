@@ -155,6 +155,7 @@ func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1Te
 		}
 	}
 	dependent := false
+	visited := map[string]bool{}
 	var walk func(reflect.Value) error
 	walk = func(v reflect.Value) error {
 		if !v.IsValid() {
@@ -167,8 +168,14 @@ func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1Te
 					dependent = true
 					return nil
 				}
-				if binding, ok := scope.lookup(e.Name); ok && !binding.comptime {
-					return evt1Diagnostic("CV4200", fmt.Sprintf("runtime name %s is unavailable in static control", e.Name), e.Span)
+				if binding, ok := scope.lookup(e.Name); ok {
+					if !binding.comptime {
+						return evt1Diagnostic("CV4200", fmt.Sprintf("runtime name %s is unavailable in comptime evaluation", e.Name), e.Span)
+					}
+					if !binding.hasValue && binding.source != nil && !visited[e.Name] {
+						visited[e.Name] = true
+						return walk(reflect.ValueOf(binding.source))
+					}
 				}
 				return nil
 			case Type:

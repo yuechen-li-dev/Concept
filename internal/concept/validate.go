@@ -2082,6 +2082,24 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				})
 				continue
 			}
+			if s.Type.Kind == TypeInferred && s.Comptime {
+				valueType, err := validateExpr(env, local, s.Value, templateInfo, true)
+				if err != nil {
+					return err
+				}
+				if !evt1IsComptimeType(env, valueType) {
+					return evt1Diagnostic("CV4216", fmt.Sprintf("comptime auto initializer type %s is not supported", valueType.String()), s.Span)
+				}
+				dependent, err := evt1StaticControlDependencies(local, s.Value, templateInfo)
+				if err != nil {
+					return err
+				}
+				if dependent {
+					local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: false, comptime: true, source: s.Value, state: evt1StorageInitialized})
+					continue
+				}
+				s.Type = valueType
+			}
 			if s.Type.Kind == TypeInferred {
 				valueType, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn)
 				if err != nil {

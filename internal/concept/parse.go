@@ -3430,11 +3430,17 @@ func (p *parser) parseInstanceDecl() (Statement, error) {
 }
 
 func (p *parser) parseLocalComptimeDecl() (Statement, error) {
-	decl, err := p.parseComptimeDecl()
+	start, err := p.expect("comptime")
 	if err != nil {
 		return nil, err
 	}
-	return &VarDecl{Comptime: true, Type: decl.Type, Name: decl.Name, Value: decl.Value, Span: decl.Span}, nil
+	stmt, err := p.parseVarDecl()
+	if err != nil {
+		return nil, err
+	}
+	decl := stmt.(*VarDecl)
+	decl.Comptime, decl.Span = true, start.Span
+	return decl, nil
 }
 
 func (p *parser) looksLikeVarDecl() bool {

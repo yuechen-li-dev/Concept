@@ -3,7 +3,8 @@ profile Core;
 
 template <typename T>
 int Select(int value) {
-    comptime if (SizeOf<T>() == 4) { return value + 1; }
+    comptime auto width = SizeOf<T>();
+    comptime if (width == 4) { return value + 1; }
     else { return value + 2; }
 }
 
@@ -29,7 +30,7 @@ int Repeat(int value) {
 }
 
 int Fixed(int value) {
-    comptime int<array>[3] steps =[1, 2, 3];
+    comptime auto steps =[1, 2, 3];
     int total = 0;
     comptime for (i in steps) {
         total += value * i;
