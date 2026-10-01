@@ -563,7 +563,7 @@ type evt1AnalysisOptions struct {
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
 // retired rule runs only when an agreement test asks for it, and is deleted
 // once the switch has held.
-var evt1RetiredGoRules = map[string]bool{}
+var evt1RetiredGoRules = map[string]bool{"CV4138": true}
 
 func (e *semanticEnv) goRule(code string) bool {
 	if e.options.goRulesOn[code] {
