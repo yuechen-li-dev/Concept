@@ -46,3 +46,87 @@ comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
     }
     return Verdict::Refuted(field, problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`");
 }
+
+// ---- C ABI -----------------------------------------------------------------
+
+// A [[repr(C)]] struct is a C value: a nonempty record whose fields are C
+// scalars, handles, fixed arrays of C values, or other repr(C) records, with
+// no destruction authority. The message names the path to the first field
+// that is not.
+[[diagnostic("C_ABI_REPR_INVALID")]]
+innate concept CReprIsPlainData<TypeDeclaration T>
+{
+    requires CReprIsPlainDataHolds(T);
+}
+
+comptime Verdict CReprIsPlainDataHolds(declaration aggregate)
+{
+    if (not compiler.HasAttributeArgument(aggregate, "repr", "C") or not compiler.IsStruct(compiler.TypeOf(aggregate)))
+    {
+        return Verdict::Holds;
+    }
+    string problem = CValueProblem(compiler.TypeOf(aggregate));
+    if (problem == "")
+    {
+        return Verdict::Holds;
+    }
+    return Verdict::Refuted(aggregate, compiler.Name(aggregate) + ": " + problem);
+}
+
+// Why value is not a C value, or "" when it is.
+comptime string CValueProblem(typename value) bounded(32)
+{
+    if (compiler.IsBorrowLike(value) or compiler.IsOwnedType(value))
+    {
+        return "borrowed, owned, or pointer fields need a separate explicit foreign contract";
+    }
+    if (compiler.IsArray(value))
+    {
+        if (compiler.RuntimeShape(value))
+        {
+            return "array extent is not fixed";
+        }
+        return CValueProblem(compiler.Element(value));
+    }
+    if (compiler.HasTypeArguments(value) or compiler.IsCallable(value) or compiler.IsAsync(value))
+    {
+        return "field has no fixed C value representation";
+    }
+    if (IsCScalar(compiler.NominalName(value)) or compiler.IsHandle(value))
+    {
+        return "";
+    }
+    if (not compiler.IsStruct(value))
+    {
+        return "type is not a supported C scalar or aggregate";
+    }
+    declaration record = compiler.Declaration(value);
+    if (not compiler.HasAttributeArgument(record, "repr", "C"))
+    {
+        return "aggregate lacks [[repr(C)]]";
+    }
+    if (not compiler.IsRecord(record) or compiler.IsRefStruct(record) or compiler.IsImmovable(record) or compiler.IsClass(record) or compiler.IsTable(record) or compiler.FieldCount(record) == 0)
+    {
+        return "repr(C) requires a nonempty record struct";
+    }
+    for (i in 0..compiler.FieldCount(record))
+    {
+        declaration field = compiler.Field(record, i);
+        string problem = CValueProblem(compiler.TypeOf(field));
+        if (problem != "")
+        {
+            return "field " + compiler.Name(field) + ": " + problem;
+        }
+    }
+    if (compiler.NeedsDrop(value))
+    {
+        return "aggregate carries destruction authority";
+    }
+    return "";
+}
+
+// The scalars with a fixed C representation. bool, half, and string are not.
+comptime bool IsCScalar(string name)
+{
+    return name == "int" or name == "uint" or name == "uint8" or name == "uint16" or name == "uint32" or name == "byte" or name == "uint64" or name == "usize" or name == "isize" or name == "float" or name == "double";
+}

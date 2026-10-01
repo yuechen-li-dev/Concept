@@ -66,6 +66,7 @@ func assertInnateAgreement(t *testing.T, code string, cases []innateAgreementCas
 		innateIs := errors.As(innateErr, &innateDiagnostic) && innateDiagnostic.Code == code
 		if goIs || innateIs {
 			fired++
+			t.Logf("%s: %v", tc.path, innateErr)
 			if !goIs || !innateIs || goDiagnostic.Span != innateDiagnostic.Span || goDiagnostic.Message != innateDiagnostic.Message {
 				t.Errorf("%s disagrees on %s:\n  go:     %v\n  innate: %v", code, tc.path, goErr, innateErr)
 			}
@@ -121,4 +122,30 @@ func TestCV4653IsTheInnateConcept(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCReprGoAndInnateAgree(t *testing.T) {
+	t.Parallel()
+	cases := innateAgreementCorpus(t)
+	header := "module CRepr;\nprofile Core;\n\nextern \"C\" handle Device;\n\n"
+	for name, body := range map[string]string{
+		"scalars":        "[[repr(C)]]\nrecord struct Plain\n{\n    int a;\n    uint64 b;\n    double c;\n    byte d;\n};\n",
+		"handle":         "[[repr(C)]]\nrecord struct Holder\n{\n    Device device;\n    uint32 index;\n};\n",
+		"nested":         "[[repr(C)]]\nrecord struct Inner\n{\n    int a;\n};\n\n[[repr(C)]]\nrecord struct Outer\n{\n    Inner inner;\n    Inner<array>[4] many;\n};\n",
+		"nested no repr": "record struct Inner\n{\n    int a;\n};\n\n[[repr(C)]]\nrecord struct Outer\n{\n    int b;\n    Inner inner;\n};\n",
+		"deep path":      "record struct Leaf\n{\n    int a;\n};\n\n[[repr(C)]]\nrecord struct Middle\n{\n    Leaf<array>[2] leaves;\n};\n\n[[repr(C)]]\nrecord struct Outer\n{\n    Middle middle;\n};\n",
+		"bool":           "[[repr(C)]]\nrecord struct Flags\n{\n    bool on;\n};\n",
+		"string":         "[[repr(C)]]\nrecord struct Named\n{\n    string name;\n};\n",
+		"enum field":     "enum Mode { A, B, }\n\n[[repr(C)]]\nrecord struct Tagged\n{\n    Mode mode;\n};\n",
+		"class":          "[[repr(C)]]\nclass Thing\n{\npublic:\n    int a;\n};\n",
+		"plain struct":   "[[repr(C)]]\nstruct Thing\n{\n    int a;\n}\n",
+		"drop":           "[[repr(C)]]\nrecord struct Owner\n{\n    int id;\n};\n\nvoid Drop(owned Owner owner)\n{\n}\n",
+		"nested drop":    "[[repr(C)]]\nrecord struct Owner\n{\n    int id;\n};\n\nvoid Drop(owned Owner owner)\n{\n}\n\n[[repr(C)]]\nrecord struct Outer\n{\n    int a;\n};\n",
+		"no repr":        "record struct Free\n{\n    bool on;\n    string name;\n};\n",
+		"deep path late": "[[repr(C)]]\nrecord struct Outer\n{\n    Middle middle;\n};\n\n[[repr(C)]]\nrecord struct Middle\n{\n    int count;\n    Leaf<array>[2] leaves;\n};\n\nrecord struct Leaf\n{\n    int a;\n};\n",
+		"deep valid":     "[[repr(C)]]\nrecord struct Outer\n{\n    Middle middle;\n};\n\n[[repr(C)]]\nrecord struct Middle\n{\n    Leaf<array>[2] leaves;\n};\n\n[[repr(C)]]\nrecord struct Leaf\n{\n    Device device;\n};\n",
+	} {
+		cases = append(cases, innateAgreementCase{"crepr/" + name + ".concept", header + body})
+	}
+	assertInnateAgreement(t, "C_ABI_REPR_INVALID", cases)
 }

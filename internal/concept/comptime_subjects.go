@@ -234,6 +234,7 @@ var evt1Observations = map[string]evt1Observation{
 	"DeclaredTypeName":     {[]string{"declaration"}, "string"},
 	// types
 	"TypeName":         {[]string{"typename"}, "string"},
+	"NominalName":      {[]string{"typename"}, "string"},
 	"IsScalar":         {[]string{"typename"}, "bool"},
 	"IsHandle":         {[]string{"typename"}, "bool"},
 	"IsStruct":         {[]string{"typename"}, "bool"},
@@ -399,6 +400,8 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 			}
 			return evt1DeclarationValue(fieldRef), nil
 		case "HasAttribute", "HasAttributeArgument":
+			// HasAttributeArgument asks for exactly one argument with that
+			// spelling, as [[repr(C)]] has.
 			var attributes []Attribute
 			if isStruct {
 				attributes = structDecl.Attributes
@@ -414,10 +417,8 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 				if e.Callee == "HasAttribute" {
 					return boolean(true)
 				}
-				for _, argument := range attribute.Args {
-					if evt1AttributeArgumentSpelling(argument) == args[2].StringValue {
-						return boolean(true)
-					}
+				if len(attribute.Args) == 1 && evt1AttributeArgumentSpelling(attribute.Args[0]) == args[2].StringValue {
+					return boolean(true)
 				}
 			}
 			return boolean(false)
@@ -460,6 +461,8 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 	switch e.Callee {
 	case "TypeName":
 		return text(value.String())
+	case "NominalName":
+		return text(value.Name)
 	case "IsScalar":
 		_, builtin := evt1BuiltinType(value.Name, e.Span)
 		return boolean(builtin && value.Kind == TypeBuiltin && value.ArrayElem == nil && value.PointerTo == nil && value.Name != "void" && !evt1IsSubjectTypeName(value.Name))

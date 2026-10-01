@@ -825,8 +825,10 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
-		if err := evt1ValidateCRepr(env, structDecl); err != nil {
-			return nil, err
+		if env.goRule("C_ABI_REPR_INVALID") {
+			if err := evt1ValidateCRepr(env, structDecl); err != nil {
+				return nil, err
+			}
 		}
 		fields := map[string]Type{}
 		for _, field := range structDecl.Fields {
@@ -1355,8 +1357,10 @@ func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
 		if declared[instance.Name] {
 			continue
 		}
-		if err := evt1ValidateCRepr(env, instance); err != nil {
-			return err
+		if env.goRule("C_ABI_REPR_INVALID") {
+			if err := evt1ValidateCRepr(env, instance); err != nil {
+				return err
+			}
 		}
 		if err := evt1ValidateStructFieldEmbedding(env, instance); err != nil {
 			return err
