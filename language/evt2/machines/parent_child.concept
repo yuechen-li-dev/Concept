@@ -1,0 +1,22 @@
+profile Core;
+
+automata Pair with state { int value; }
+{
+    machine Parent
+    {
+        int preserved = 7;
+        state Start { push Child goto Done; }
+        state Done { state.value = state.value + machine.preserved; complete; }
+    }
+    machine Child
+    {
+        int count = 4;
+        state Start
+        {
+            machine.count = machine.count + 1;
+            state.value = state.value + machine.count;
+            if (machine.count < 6) { yield; }
+            pop;
+        }
+    }
+}

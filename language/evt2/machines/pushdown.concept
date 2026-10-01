@@ -1,0 +1,30 @@
+profile Core;
+
+automata Worker with state { int value; }
+{
+    machine Parent
+    {
+        int preserved = 7;
+        state Start { push Child goto Again; }
+        state Again { push Child goto Done; }
+        state Done { state.value = state.value + machine.preserved; complete; }
+    }
+    machine Child
+    {
+        int count = 4;
+        state Start
+        {
+            machine.count = machine.count + 1;
+            if (machine.count < 6) { yield; }
+            transition Nested;
+        }
+        state Nested { push GrandChild goto Done; }
+        state Done { state.value = state.value + machine.count; pop; }
+    }
+    machine GrandChild
+    {
+        bool touched = false;
+        int amount = 10;
+        state Start { machine.touched = true; state.value = state.value + machine.amount; complete; }
+    }
+}

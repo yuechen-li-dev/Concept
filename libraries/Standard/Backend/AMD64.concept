@@ -201,7 +201,7 @@ struct BackendFunction
     bool hasCalls;
     MachineArg[8] args;
     int argCount;
-    MachineVReg[128] virtualRegs;
+    MachineVReg[512] virtualRegs;
     int virtualRegCount;
     MachineSlot[64] slots;
     int slotCount;
@@ -411,7 +411,7 @@ Result<void, BackendError> ReadFunction(ref BridgeReader reader, ref BackendFunc
         };
     }
     function.virtualRegCount = ReadCount(ref reader) ?;
-    if (function.virtualRegCount > 128) {
+    if (function.virtualRegCount > 512) {
         return Result::Error(BackendError::CapacityExceeded);
     }
     for (i in 0 .. function.virtualRegCount)
@@ -523,10 +523,76 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function)
 
 struct Allocation
 {
-    int[128] start;
-    int[128] end;
-    Register[128] physical;
-    bool[128] assigned;
+    int[512] start;
+    int[512] end;
+    Register[512] physical;
+    bool[512] assigned;
+}
+
+// A bounds/overflow check splits one LIR block into several MachineIR blocks.
+// Keep those continuations adjacent before computing linear intervals. Appended
+// checks otherwise create artificial overlapping intervals across unrelated
+// source blocks. This is general layout, independent of automata or frame tags.
+Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
+{
+    MachineBlock[128] originalBlocks = function.blocks;
+    MachineInstruction[512] originalInstructions = function.instructions;
+    bool[128] seen = [false ...];
+    int[128] remap = [0 ...];
+    int nextBlock = 0;
+    int nextInstruction = 0;
+    for (first in 0 .. function.blockCount)
+    {
+        if (not seen[first])
+        {
+            for (old in first .. function.blockCount)
+            {
+                if (originalBlocks[old].lirBlock == originalBlocks[first].lirBlock)
+                {
+                    seen[old] = true;
+                    MachineBlock block = originalBlocks[old];
+                    remap[old] = nextBlock;
+                    function.blocks[nextBlock] = MachineBlock {
+                        nextBlock, block.lirBlock, nextInstruction, block.instructionCount,
+                        block.terminator, block.trueBlock, block.falseBlock, block.condition,
+                        block.flagsUse, block.sourceLine, block.sourceColumn
+                    };
+                    for (ii in 0 .. block.instructionCount)
+                    {
+                        function.instructions[nextInstruction] = originalInstructions[block.firstInstruction + ii];
+                        nextInstruction = nextInstruction + 1;
+                    }
+                    nextBlock = nextBlock + 1;
+                }
+            }
+        }
+    }
+    if (nextInstruction != function.instructionCount)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        int yes = block.trueBlock;
+        int no = block.falseBlock;
+        if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+        {
+            if (yes < 0 or yes >= function.blockCount)
+            { return Result::Error(BackendError::BridgeInvalid); }
+            yes = remap[yes];
+        }
+        if (block.terminator == Opcode::Jcc)
+        {
+            if (no < 0 or no >= function.blockCount)
+            { return Result::Error(BackendError::BridgeInvalid); }
+            no = remap[no];
+        }
+        function.blocks[bi] = MachineBlock {
+            bi, block.lirBlock, block.firstInstruction, block.instructionCount,
+            block.terminator, yes, no, block.condition,
+            block.flagsUse, block.sourceLine, block.sourceColumn
+        };
+    }
+    return Result::Ok();
 }
 
 Allocation EmptyAllocation()
@@ -561,24 +627,30 @@ void TouchOperand(ref Allocation allocation, MachineOperand operand, int positio
     }
 }
 
+struct LivenessBits { int[17] words; }
+
 struct Liveness
 {
-    bool[512] use;
-    bool[512] def;
-    bool[512] liveIn;
-    bool[512] liveOut;
+    // 128 blocks * 17 words of 31 bits: 512 virtual registers per block. The same
+    // fixed-capacity representation serves ordinary and generated functions.
+    LivenessBits[128] use;
+    LivenessBits[128] def;
+    LivenessBits[128] liveIn;
+    LivenessBits[128] liveOut;
 }
 
 Liveness EmptyLiveness()
 {
-    return Liveness{[false ...],[false ...],[false ...],[false ...]};
+    return Liveness{[LivenessBits{[0 ...]} ...],[LivenessBits{[0 ...]} ...],
+    [LivenessBits{[0 ...]} ...],[LivenessBits{[0 ...]} ...]};
 }
 
 void MarkUse(ref Liveness liveness, int block, int id)
 {
-    int index = block * 32 + id;
-    if (not liveness.def[index]) {
-        liveness.use[index] = true;
+    int index = id / 31;
+    int bit = 1 << (id % 31);
+    if ((liveness.def[block].words[index] & bit) == 0) {
+        liveness.use[block].words[index] = liveness.use[block].words[index] | bit;
     }
 }
 
@@ -602,7 +674,7 @@ void MarkOperandUse(ref Liveness liveness, int block, MachineOperand operand)
 Result<void, BackendError> ComputeLiveness(
 ref const BackendFunction function, ref Liveness liveness)
 {
-    if (function.blockCount > 16 or function.virtualRegCount > 32)
+    if (function.blockCount > 128 or function.virtualRegCount > 512)
     { return Result::Error(BackendError::CapacityExceeded); }
     for (bi in 0 .. function.blockCount)
     {
@@ -627,7 +699,10 @@ ref const BackendFunction function, ref Liveness liveness)
             }
             if (instruction.destination.kind == OperandKind::Virtual)
             {
-                liveness.def[bi * 32 + instruction.destination.id] = true;
+                int id = instruction.destination.id;
+                int index = id / 31;
+                int bit = 1 << (id % 31);
+                liveness.def[bi].words[index] = liveness.def[bi].words[index] | bit;
             }
         }
     }
@@ -646,27 +721,27 @@ ref const BackendFunction function, ref Liveness liveness)
             if (block.terminator == Opcode::Jcc and
             (block.falseBlock < 0 or block.falseBlock >= function.blockCount))
             { return Result::Error(BackendError::BridgeInvalid); }
-            for (id in 0 .. function.virtualRegCount)
+            for (word in 0 .. (function.virtualRegCount + 30) / 31)
             {
-                int index = bi * 32 + id;
-                bool outgoing = false;
+                int outgoing = 0;
                 if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
                 {
-                    outgoing = liveness.liveIn[block.trueBlock * 32 + id];
+                    outgoing = liveness.liveIn[block.trueBlock].words[word];
                 }
                 if (block.terminator == Opcode::Jcc)
                 {
-                    outgoing = outgoing or liveness.liveIn[block.falseBlock * 32 + id];
+                    outgoing = outgoing | liveness.liveIn[block.falseBlock].words[word];
                 }
-                bool incoming = liveness.use[index] or
-                (outgoing and not liveness.def[index]);
-                if (outgoing != liveness.liveOut[index] or
-                incoming != liveness.liveIn[index])
+                int allBits = 2147483647;
+                int incoming = liveness.use[bi].words[word] |
+                (outgoing & (liveness.def[bi].words[word] ^ allBits));
+                if (outgoing != liveness.liveOut[bi].words[word] or
+                incoming != liveness.liveIn[bi].words[word])
                 {
                     changed = true;
                 }
-                liveness.liveOut[index] = outgoing;
-                liveness.liveIn[index] = incoming;
+                liveness.liveOut[bi].words[word] = outgoing;
+                liveness.liveIn[bi].words[word] = incoming;
             }
         }
         if (not changed) { return Result::Ok(); }
@@ -686,12 +761,13 @@ ref const BackendFunction function, ref Allocation allocation)
         MachineBlock block = function.blocks[bi];
         for (id in 0 .. function.virtualRegCount)
         {
-            int index = bi * 32 + id;
-            if (liveness.liveIn[index])
+            int index = id / 31;
+            int bit = 1 << (id % 31);
+            if ((liveness.liveIn[bi].words[index] & bit) != 0)
             {
                 TouchInterval(ref allocation, id, block.firstInstruction);
             }
-            if (liveness.liveOut[index])
+            if ((liveness.liveOut[bi].words[index] & bit) != 0)
             {
                 TouchInterval(ref allocation, id,
                 block.firstInstruction + block.instructionCount);
@@ -916,7 +992,7 @@ ref const Allocation allocation, MachineOperand operand)
 {
     if (operand.kind == OperandKind::Virtual)
     {
-        if (operand.id < 0 or operand.id >= 128 or not allocation.assigned[operand.id])
+        if (operand.id < 0 or operand.id >= 512 or not allocation.assigned[operand.id])
         { return Result::Error(BackendError::BridgeInvalid); }
         return Result::Ok(allocation.physical[operand.id]);
     }
@@ -973,13 +1049,13 @@ int opcode, Register reg, MachineOperand memory, int width)
     if (memory.kind != OperandKind::Memory or memory.base < 0 or
     memory.baseSlot >= 0 or(width != 1 and width != 4 and width != 8))
     { return Result::Error(BackendError::UnsupportedInstruction); }
-    if (memory.base >= 128 or not allocation.assigned[memory.base])
+    if (memory.base >= 512 or not allocation.assigned[memory.base])
     { return Result::Error(BackendError::BridgeInvalid); }
     int base = RegisterEncoding(allocation.physical[memory.base]);
     int index = - 1;
     if (memory.index >= 0)
     {
-        if (memory.index >= 128 or not allocation.assigned[memory.index])
+        if (memory.index >= 512 or not allocation.assigned[memory.index])
         { return Result::Error(BackendError::BridgeInvalid); }
         index = RegisterEncoding(allocation.physical[memory.index]);
         if (index == 4) { return Result::Error(BackendError::InvalidEncoding); }
@@ -1395,6 +1471,7 @@ ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
 {
     BackendFunction function = EmptyFunction();
     DecodeFunction(artifact, ordinal, ref function) ?;
+    LayoutLoweredBlocks(ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
@@ -1405,6 +1482,7 @@ ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
 
 void BackendFacts()
 {
+	Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
     Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
     Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");

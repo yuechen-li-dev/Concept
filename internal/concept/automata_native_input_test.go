@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -65,7 +64,7 @@ func TestEVT2xMachineSemanticInputSurvivesMIR(t *testing.T) {
 	// verified module despite the executable automata declaration.
 	automataOnly := module
 	automataOnly.Functions = nil
-	if _, err := GenerateLIR(automataOnly); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP Worker.Parent.Start") {
-		t.Fatalf("native LIR silently omitted automata: %v", err)
+	if lir, err := GenerateLIR(automataOnly); err != nil || len(lir.Functions) != 2 || lir.Functions[1].Activation == nil || lir.Functions[1].Activation.Role != "step" {
+		t.Fatalf("native LIR omitted activation Init/Step: %v", err)
 	}
 }

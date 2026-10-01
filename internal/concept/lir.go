@@ -76,6 +76,20 @@ type LIRActivationFunction struct {
 	Role       string
 	Layout     ActivationStackLayout
 	InitFields []LIRMachineField
+	Transfers  []LIRActivationTransfer
+}
+
+// Source provenance and typed lifetime CFG boundaries, checked against the
+// ordinary instructions. The backend never executes or interprets this record.
+type LIRActivationTransfer struct {
+	Kind          string
+	Block         int
+	ParentTag     uint32
+	ChildTag      uint32
+	ResumeState   int
+	DestroyBlocks []int
+	PublishBlocks []int
+	SourceBlocks  []int
 }
 
 // LIRMachineFunction describes a closed caller-owned frame shared by its
@@ -313,7 +327,7 @@ func VerifyLIR(m LIRModule) error {
 						return fmt.Errorf("LIR_BAD_CONST b%d", b.ID)
 					}
 				case "machine_result":
-					if f.Machine == nil || f.Machine.Role != "step" || in.Result < 0 || in.Type != "machine_step_result" || len(in.Args) != 0 || (in.Literal != "Active" && in.Literal != "Yielded" && in.Literal != "Completed") {
+					if (f.Machine == nil || f.Machine.Role != "step") && (f.Activation == nil || f.Activation.Role != "step") || in.Result < 0 || in.Type != "machine_step_result" || len(in.Args) != 0 || (in.Literal != "Active" && in.Literal != "Yielded" && in.Literal != "Completed") {
 						return fmt.Errorf("LIR_BAD_MACHINE_RESULT b%d", b.ID)
 					}
 				case "frame_field_address":
@@ -395,7 +409,7 @@ func VerifyLIR(m LIRModule) error {
 					return fmt.Errorf("LIR_BAD_BRANCH b%d", b.ID)
 				}
 			case "trap":
-				if f.Machine == nil || b.Term.Reason != "invalid_machine_state" {
+				if (f.Machine == nil || b.Term.Reason != "invalid_machine_state") && (f.Activation == nil || f.Activation.Role != "step" || (b.Term.Reason != "invalid_machine_state" && b.Term.Reason != "invalid_machine_tag" && b.Term.Reason != "invalid_machine_depth")) {
 					return fmt.Errorf("LIR_BAD_TRAP b%d", b.ID)
 				}
 			default:

@@ -147,8 +147,9 @@ func TestEVT2x2MachineUnsupportedBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := GenerateLIR(module); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP Worker.Parent.Start") {
-		t.Fatalf("push was not rejected at its state: %v", err)
+	module.Functions = nil // source Step is qualified; host instance wrappers need EVT2e calls.
+	if lir, err := GenerateLIR(module); err != nil || len(lir.Functions) != 2 || lir.Functions[1].Activation == nil {
+		t.Fatalf("push source lowering failed: %v", err)
 	}
 	unsupported := `profile Core; automata Counter with state { float value; } { machine Run { state Start { yield; } } }`
 	module, err = Parse("unsupported_machine_field.concept", unsupported)

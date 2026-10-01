@@ -5,17 +5,20 @@ import (
 	"strconv"
 )
 
-// lowerAutomataToLIR handles the single-frame subset of step machines. The
-// pushdown form and input reactions retain explicit unsupported boundaries.
+// Finite machines retain their established ABI. Source push/pop selects the
+// bounded activation ABI; external input reactions retain a named boundary.
 func lowerAutomataToLIR(a MIRAutomata, env *semanticEnv) ([]LIRFunction, error) {
 	if a.InputType != "" {
 		return nil, fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_INPUT %s", a.Name)
 	}
 	for _, machine := range a.Machines {
 		for _, state := range machine.States {
+			if activationPushdownBody(state.SemanticBody) {
+				return lowerActivationAutomata(a, env)
+			}
 			for _, control := range state.MachineControl {
 				if control.Kind == "push_machine" {
-					return nil, fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP %s.%s.%s", a.Name, machine.Name, state.Name)
+					return lowerActivationAutomata(a, env)
 				}
 			}
 		}
@@ -38,6 +41,47 @@ func lowerAutomataToLIR(a MIRAutomata, env *semanticEnv) ([]LIRFunction, error) 
 		return nil, err
 	}
 	return []LIRFunction{init, step}, nil
+}
+
+func lowerActivationAutomata(a MIRAutomata, env *semanticEnv) ([]LIRFunction, error) {
+	layout, err := planActivationStack(a, env)
+	if err != nil {
+		return nil, err
+	}
+	init, err := lowerActivationRootInit(a, layout)
+	if err != nil {
+		return nil, err
+	}
+	step, err := lowerActivationStep(a, layout)
+	if err != nil {
+		return nil, err
+	}
+	return []LIRFunction{init, step}, nil
+}
+
+func activationPushdownBody(block *Block) bool {
+	if block == nil {
+		return false
+	}
+	for _, statement := range block.Statements {
+		switch s := statement.(type) {
+		case *PushMachineStmt:
+			return true
+		case *MachineCompleteStmt:
+			if s.Operation == "pop" {
+				return true
+			}
+		case *IfStmt:
+			if activationPushdownBody(&s.Then) || activationPushdownBody(s.Else) {
+				return true
+			}
+		case *Block:
+			if activationPushdownBody(s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func machineFrameLayout(a MIRAutomata, machine MIRMachine, identity string, env *semanticEnv) (*LIRMachineFunction, error) {
@@ -214,6 +258,9 @@ func lowerMachineStep(a MIRAutomata, machine MIRMachine, frame *LIRMachineFuncti
 }
 
 func (b *lirBuilder) frameFieldAddress(id int, span Span) int {
+	if b.activation != nil {
+		return b.activationFieldAddress(id, span)
+	}
 	field := b.machine.Fields[id]
 	return b.emit(LIRInstruction{Op: "frame_field_address", Result: 0, Type: LIRType("ptr<" + string(field.Type) + ">"), Args: []int{b.frameParam}, Slot: -1, FrameField: id, FrameOffset: field.Offset, Source: span})
 }
@@ -248,6 +295,10 @@ func (b *lirBuilder) storeMachineState(id int, span Span) {
 	b.emit(LIRInstruction{Op: "store", Result: -1, Type: "u32", Args: []int{addr, value}, Slot: -1, Source: span})
 }
 func (b *lirBuilder) storeMachineCompleted(value bool, span Span) {
+	if b.activation != nil {
+		b.storeActivationHeader(1, b.constant("bool", strconv.FormatBool(value), span), span)
+		return
+	}
 	literal := "false"
 	if value {
 		literal = "true"

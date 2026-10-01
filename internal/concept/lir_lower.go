@@ -170,6 +170,7 @@ type lirBuilder struct {
 	// terminalStates marks states whose entry completes the machine.
 	terminalStates map[string]bool
 	activeState    int
+	activation     *activationStepContext
 }
 
 func (b *lirBuilder) value() int { n := b.nextValue; b.nextValue++; return n }
@@ -380,6 +381,9 @@ func (b *lirBuilder) statement(stmt Statement) error {
 		if b.machine == nil {
 			return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T", stmt)
 		}
+		if b.activation != nil {
+			return b.lowerActivationCompletion(s)
+		}
 		if s.Operation == "pop" {
 			return fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP")
 		}
@@ -389,6 +393,9 @@ func (b *lirBuilder) statement(stmt Statement) error {
 		b.storeMachineCompleted(true, s.Span)
 		b.returnMachineResult("Completed", s.Span)
 	case *PushMachineStmt:
+		if b.activation != nil {
+			return b.lowerActivationPush(s)
+		}
 		return fmt.Errorf("EVT2_UNSUPPORTED_AUTOMATA_PUSH_POP")
 	default:
 		return fmt.Errorf("EVT2_UNSUPPORTED_STATEMENT %T at %d:%d", stmt, stmt.statementSpan().Line, stmt.statementSpan().Column)
