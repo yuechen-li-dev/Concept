@@ -23,8 +23,8 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | C6 | Intentionally deferred | Verdict<H,R> requires generic comptime support |
 | C7 | Retained | Shape and boolean observations; no speculative redesign |
 | C8 | Measured; synchronization and limits retained | 76 library modules, equal 304-validation workloads, four workers; see R9A-INNATE-SCALE |
-| D1 | Pending | CMIRAMD1 manual producer/consumer; current differential/round-trip tests retained |
-| D2 | Handoff capacity mismatch already fixed in EVT2x baseline | Liveness has 128 blocks; caller-supplied arena path missing |
+| D1 | Concrete bounded path documented; single-source implementation remains | R9A-BRIDGE-CONVERGENCE selects Concept reflection and family-by-family shadow/switch/delete. Current wire round-trip/native evidence retained; no derived-codec differential claim |
+| D2 | Encoding workspace MVP implemented | Caller Span offsets/fixups/output, exact-demand preflight, Result exhaustion and NoAllocation; 100 native byte comparisons. Liveness already 128 blocks; other phases remain bounded |
 | D3 | Existing differential tests retained | EVT2d backend/bridge and EVT2x native/C oracle |
 | D4 | Intentionally deferred | Imported bytes reflection requires dependency identity work |
 | D5 | Not frozen | Freeze-readiness report names remaining work |

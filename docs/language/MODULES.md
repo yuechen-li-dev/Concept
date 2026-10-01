@@ -3,7 +3,8 @@
 R9a advances the envelope to `concept-module.v2` for structured generic identity,
 declared predicate requirements and retained static-control ASTs. It requires
 `generic_application_schema: "concept-generic-application.v1"`. Rebuild older
-artifacts: the loader reports `MODULE_GENERIC_SCHEMA_STALE`; it never reparses
+artifacts: v1 envelopes reject `MODULE_SCHEMA_UNSUPPORTED`, while v2 envelopes
+missing structural metadata reject `MODULE_GENERIC_SCHEMA_STALE`. It never reparses
 nominal names for compatibility. The inspectable `generic_applications` list
 matches the payload's closed declarations. Each application stores its defining
 module and declaration name plus ordered, tagged type or typed integer arguments.

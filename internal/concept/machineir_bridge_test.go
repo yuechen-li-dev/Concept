@@ -209,7 +209,34 @@ int main(int argc, char** argv) {
   concept_result_finalized_frame_backend_error frame = concept_standard__backend__amd64_finalize_frame(&function);
   if (frame.tag != 0) return 107;
   if ((ordinal == 0 || ordinal == 1) && frame.payload.ok.value.byteCount != 0) return 108;
+  int32_t blockScratch[256] = {0};
+  concept_branch_fixup fixupScratch[512] = {0};
+  int fixupDemand = 0;
+  for (int bi = 0; bi < function.blockCount; ++bi) {
+    if (function.blocks.data[bi].terminator.tag == 13) ++fixupDemand;
+    if (function.blocks.data[bi].terminator.tag == 14) fixupDemand += 2;
+  }
+  concept_span_int offsets = {blockScratch, (size_t)function.blockCount};
+  concept_span_branch_fixup fixups = {fixupScratch, (size_t)fixupDemand};
+  unsigned char workspaceCode[1024];
+  memset(workspaceCode, 0xaa, sizeof workspaceCode);
+  concept_span_byte workspaceOutput = {workspaceCode, sizeof workspaceCode};
+  concept_span_int noOffsets = {blockScratch, 0};
+  concept_result_int_backend_error noOffsetResult = concept_standard__backend__amd64_emit_function_with_workspace(input, ordinal, workspaceOutput, noOffsets, fixups);
+  if (noOffsetResult.tag == 0 || noOffsetResult.payload.error.error.tag != 2 || workspaceCode[0] != 0xaa) return 114;
+  if (fixupDemand > 0) {
+    concept_span_branch_fixup shortFixups = {fixupScratch, (size_t)fixupDemand - 1u};
+    concept_result_int_backend_error noFixupResult = concept_standard__backend__amd64_emit_function_with_workspace(input, ordinal, workspaceOutput, offsets, shortFixups);
+    if (noFixupResult.tag == 0 || noFixupResult.payload.error.error.tag != 2 || workspaceCode[0] != 0xaa) return 115;
+  }
   for (int repeat = 0; repeat < 100; ++repeat) {
+    concept_result_int_backend_error workspaceResult = concept_standard__backend__amd64_emit_function_with_workspace(input, ordinal, workspaceOutput, offsets, fixups);
+    if (workspaceResult.tag != 0 || workspaceResult.payload.ok.value != length || memcmp(code, workspaceCode, (size_t)length) != 0) return 116;
+    // A larger caller budget has the same bytes as the exact-demand budget.
+    concept_span_int largeOffsets = {blockScratch, 256};
+    concept_span_branch_fixup largeFixups = {fixupScratch, 512};
+    workspaceResult = concept_standard__backend__amd64_emit_function_with_workspace(input, ordinal, workspaceOutput, largeOffsets, largeFixups);
+    if (workspaceResult.tag != 0 || workspaceResult.payload.ok.value != length || memcmp(code, workspaceCode, (size_t)length) != 0) return 117;
     unsigned char next[1024] = {0};
     concept_span_byte nextOutput = {next, sizeof next};
     concept_result_int_backend_error again = concept_standard__backend__amd64_emit_function(input, ordinal, nextOutput);

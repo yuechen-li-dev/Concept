@@ -129,3 +129,30 @@ including fixed arrays; `comptime var name = initializer;` and the existing type
 `var` alias are accepted. Inferred bindings dependent on open generic parameters
 retain their initializer until closure. Runtime-dependent initializers still
 reject CV4200. Ordinary runtime auto admission remains separately bounded.
+
+## Caller-supplied encoding workspace
+
+`EncodeFunctionWithWorkspace` takes an `EncodingWorkspace` containing mutable
+`Span<int>` block offsets and `Span<BranchFixup>` fixups. `EmitFunctionWithWorkspace`
+exposes the same budgets alongside the caller's existing byte-output Span. The
+caller can back these views with inline Storage or its existing Standard.Memory
+allocation; the backend neither allocates nor owns that storage. Encoding counts
+the actual Jmp/Jcc fixups and checks both scratch extents before writing output.
+Exhaustion returns CapacityExceeded; malformed targets remain InvalidEncoding;
+byte output exhaustion remains BufferFull. Scratch is reusable, and successful
+Result publishes the byte count. Callers discard output on any later encoding error.
+
+The compatibility entry points allocate the original 128/256 inline scratch and
+call the same encoding implementation. Native tests compare exact-demand and
+larger 256/512 caller budgets against the compatibility bytes 100 times per
+fixture. Zero offset and insufficient fixup budgets fail before touching output.
+Compiler-owned NoAllocation proofs cover both new entry points. Decoder/model,
+liveness and register allocation keep their existing bounded capacities; the
+EVT2x baseline already has 128-block liveness arrays. This is the requested real
+phase-local arena path, not a claim of an unbounded backend.
+
+Future liveness storage should receive separate Span<LivenessBits> use/def/in/out
+views, each checked against the validated function's block count. Allocation should
+receive interval and assignment views checked against its virtual-register count.
+Those phase APIs must keep explicit Result exhaustion and the same caller ownership
+contract; they are not implemented or required for this encoding MVP.

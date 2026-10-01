@@ -858,6 +858,14 @@ struct EncodingPlan
     int fixupCount;
 }
 
+// Scratch storage belongs to the caller; no phase allocates a hidden heap.
+struct EncodingWorkspace
+{
+    Span<int> blockOffsets;
+    Span<BranchFixup> fixups;
+    int fixupCount;
+}
+
 struct FinalizedFrame
 {
     int byteCount;
@@ -1289,6 +1297,19 @@ ref ByteWriter writer, ref EncodingPlan plan, int target)
     return Result::Ok();
 }
 
+Result<void, BackendError> AddWorkspaceFixup(
+ref ByteWriter writer, ref EncodingWorkspace workspace, int target)
+{
+    if (target < 0 or target >= Len(workspace.blockOffsets))
+    { return Result::Error(BackendError::InvalidEncoding); }
+    if (workspace.fixupCount >= Len(workspace.fixups))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    workspace.fixups[workspace.fixupCount] = BranchFixup{writer.offset, target};
+    workspace.fixupCount += 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
+
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -1405,12 +1426,22 @@ MachineInstruction instruction)
 }
 
 // Callers must discard output on Error; the published count is transactional.
-Result<int, BackendError> EncodeFunction(
+Result<int, BackendError> EncodeFunctionWithWorkspace(
 ref const BridgeReader reader, ref const BackendFunction function,
-ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan)
 {
     ByteWriter writer = ByteWriter{output, 0};
-    EncodingPlan plan = EmptyEncodingPlan();
+    if (function.blockCount < 0 or function.blockCount > Len(plan.blockOffsets))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    int requiredFixups = 0;
+    for (bi in 0 .. function.blockCount)
+    {
+        if (function.blocks[bi].terminator == Opcode::Jmp) { requiredFixups += 1; }
+        if (function.blocks[bi].terminator == Opcode::Jcc) { requiredFixups += 2; }
+    }
+    if (requiredFixups > Len(plan.fixups))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    plan.fixupCount = 0;
     WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
     for (bi in 0 .. function.blockCount)
     {
@@ -1425,16 +1456,16 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
         {
             Opcode::Jmp => {
                 WriteByte(ref writer, 233) ?;
-                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.trueBlock) ?;
             }
             Opcode::Jcc => {
                 int condition = ConditionEncoding(block.condition);
                 if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
                 WriteByte(ref writer, 15) ?;
                 WriteByte(ref writer, 128 + condition) ?;
-                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.trueBlock) ?;
                 WriteByte(ref writer, 233) ?;
-                AddFixup(ref writer, ref plan, block.falseBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.falseBlock) ?;
             }
             Opcode::Ret => {
                 WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
@@ -1466,6 +1497,33 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
     return Result::Ok(writer.offset);
 }
 
+// Compatibility entry point retains the original bounded inline scratch budget.
+Result<int, BackendError> EncodeFunction(
+ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
+{
+    EncodingPlan storage = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace{Span(storage.blockOffsets), Span(storage.fixups), 0};
+    return EncodeFunctionWithWorkspace(ref const reader, ref const function,
+    ref const allocation, ref const frame, output, ref workspace);
+}
+
+Result<int, BackendError> EmitFunctionWithWorkspace(
+ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output,
+Span<int> blockOffsets, Span<BranchFixup> fixups)
+{
+    BackendFunction function = EmptyFunction();
+    DecodeFunction(artifact, ordinal, ref function) ?;
+    LayoutLoweredBlocks(ref function) ?;
+    Allocation allocation = EmptyAllocation();
+    AllocateRegisters(ref const function, ref allocation) ?;
+    FinalizedFrame frame = FinalizeFrame(ref const function) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    EncodingWorkspace workspace = EncodingWorkspace{blockOffsets, fixups, 0};
+    return EncodeFunctionWithWorkspace(ref const reader, ref const function,
+    ref const allocation, ref const frame, output, ref workspace);
+}
+
 Result<int, BackendError> EmitFunction(
 ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
 {
@@ -1485,6 +1543,8 @@ void BackendFacts()
 	Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
     Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
     Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
+    Assert.Concept<NoAllocation>(EncodeFunctionWithWorkspace, "caller-supplied encoding scratch");
+    Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
     Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
 }

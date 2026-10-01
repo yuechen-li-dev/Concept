@@ -10,6 +10,10 @@ Ordinary predicate requirements
 now narrow concept satisfaction using declared proof provenance, including project
 policy and artifact-only Assert.Concept. CV4138 has completed innate migration;
 large-library measurements support keeping the current limits and mutex.
-The bridge needs one schema source or a qualified bounded derivation path. Backend
-storage needs a real caller-supplied arena path; the liveness capacity mismatch is already
-absent at EVT2x6. Neither frontend self-hosting nor R9b is begun.
+The bridge now has a concrete bounded derivation path and current round-trip/native
+qualification, but its Go producer/Concept consumer still duplicate field order.
+The isolated next closure item is a build-time Go codec emitter from checked Concept
+reflection, followed by old-versus-derived wire comparison and schema-hash identity.
+Backend encoding has a real caller-supplied scratch path with explicit exhaustion;
+the liveness capacity mismatch is already absent at EVT2x6. Other backend phases
+remain bounded. Neither frontend self-hosting nor R9b is begun.
