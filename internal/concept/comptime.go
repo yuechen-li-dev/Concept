@@ -67,6 +67,7 @@ type evt1ComptimeState struct {
 	stack          []string
 	globalState    map[string]string
 	staticMessages map[*StaticAssert]string
+	usage          *evt1ComptimeUsage
 }
 
 func newEVT1ComptimeState(env *semanticEnv) *evt1ComptimeState {
@@ -81,8 +82,11 @@ func newEVT1ComptimeState(env *semanticEnv) *evt1ComptimeState {
 
 func (s *evt1ComptimeState) push(frame string) error {
 	s.stack = append(s.stack, frame)
+	if s.usage != nil {
+		s.usage.Depth = max(s.usage.Depth, len(s.stack))
+	}
 	if len(s.stack) > evt1ComptimeMaxCallDepth {
-		return evt1Diagnostic("CV4211", "comptime call depth exceeded at "+strings.Join(s.stack, " -> "), Span{})
+		return evt1Diagnostic("CV4211", fmt.Sprintf("comptime call depth %d exceeds limit %d at %s", len(s.stack), evt1ComptimeMaxCallDepth, strings.Join(s.stack, " -> ")), Span{})
 	}
 	return nil
 }
@@ -95,12 +99,15 @@ func (s *evt1ComptimeState) pop() {
 
 func (s *evt1ComptimeState) spend(span Span, cost int) error {
 	s.fuel -= cost
+	if s.usage != nil {
+		s.usage.Fuel = evt1ComptimeMaxFuel - s.fuel
+	}
 	if s.fuel < 0 {
 		path := strings.Join(s.stack, " -> ")
 		if path == "" {
 			path = "<root>"
 		}
-		return evt1Diagnostic("CV4204", "comptime fuel exhausted along "+path, span)
+		return evt1Diagnostic("CV4204", fmt.Sprintf("comptime fuel exhausted: used %d, limit %d along %s", evt1ComptimeMaxFuel-s.fuel, evt1ComptimeMaxFuel, path), span)
 	}
 	return nil
 }
@@ -980,6 +987,9 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 			if bound.IntValue > evt1ComptimeMaxLoopBound {
 				return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", bound.IntValue, evt1ComptimeMaxLoopBound), s.Bound.exprSpan())
 			}
+			if state.usage != nil {
+				state.usage.Loop = max(state.usage.Loop, int(bound.IntValue))
+			}
 			if err := state.push(fmt.Sprintf("while[%d]", bound.IntValue)); err != nil {
 				return nil, err
 			}
@@ -1121,6 +1131,9 @@ func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *F
 	if len(items) > evt1ComptimeMaxLoopBound {
 		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), stmt.Span)
 	}
+	if state.usage != nil {
+		state.usage.Loop = max(state.usage.Loop, len(items))
+	}
 	if err := state.push(fmt.Sprintf("for[%d]", len(items))); err != nil {
 		return nil, err
 	}
@@ -1207,6 +1220,9 @@ func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr A
 	}
 	if expandedCount > evt1ComptimeMaxLiteralElements {
 		return Value{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds compile-time evaluation limit %d", expandedCount, evt1ComptimeMaxLiteralElements), expr.Span)
+	}
+	if state.usage != nil {
+		state.usage.Array = max(state.usage.Array, expandedCount)
 	}
 	literalElements := expr.Elements
 	if arrayType.StorageKind == StorageNDArray {

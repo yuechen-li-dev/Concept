@@ -22,7 +22,7 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | C5 | Intentionally deferred | Pattern guard binding/fallthrough unnecessary here |
 | C6 | Intentionally deferred | Verdict<H,R> requires generic comptime support |
 | C7 | Retained | Shape and boolean observations; no speculative redesign |
-| C8 | Measurement pending | Large-library fuel/depth/mutex study follows |
+| C8 | Measured; synchronization and limits retained | 76 library modules, equal 304-validation workloads, four workers; see R9A-INNATE-SCALE |
 | D1 | Pending | CMIRAMD1 manual producer/consumer; current differential/round-trip tests retained |
 | D2 | Handoff capacity mismatch already fixed in EVT2x baseline | Liveness has 128 blocks; caller-supplied arena path missing |
 | D3 | Existing differential tests retained | EVT2d backend/bridge and EVT2x native/C oracle |

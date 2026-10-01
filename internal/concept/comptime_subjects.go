@@ -168,6 +168,10 @@ func evt1InvokeComptimeFunction(env *semanticEnv, name string, args []Value, spa
 // evt1InvokeComptimeFunctionOn runs a comptime function from env whose
 // observations look at subjects.
 func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args []Value, span Span) (Value, error) {
+	return evt1InvokeComptimeFunctionOnMeasured(env, subjects, name, args, span, nil)
+}
+
+func evt1InvokeComptimeFunctionOnMeasured(env, subjects *semanticEnv, name string, args []Value, span Span, usage *evt1ComptimeUsage) (Value, error) {
 	fn, ok := env.comptimeFunctions[name]
 	if !ok {
 		return Value{}, evt1Diagnostic("CV4210", fmt.Sprintf("%s is not a comptime function", name), span)
@@ -177,6 +181,7 @@ func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args 
 	}
 	state := newEVT1ComptimeState(env)
 	state.subjects = subjects
+	state.usage = usage
 	if err := state.push("comptime fn " + name); err != nil {
 		return Value{}, err
 	}

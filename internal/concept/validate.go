@@ -555,9 +555,10 @@ func validateModule(module Module) error {
 // innate concepts by diagnostic code. The zero value is the compiler's normal
 // configuration.
 type evt1AnalysisOptions struct {
-	goRulesOff map[string]bool
-	goRulesOn  map[string]bool
-	innateOff  map[string]bool
+	goRulesOff    map[string]bool
+	goRulesOn     map[string]bool
+	innateOff     map[string]bool
+	innateMetrics *evt1InnateMetrics
 }
 
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
