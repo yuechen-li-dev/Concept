@@ -99,6 +99,9 @@ func verifyLIRActivationFunction(f LIRFunction) error {
 		return nil
 	}
 	l := m.Layout
+	if m.Role == "step" {
+		return verifyLIRActivationStep(f)
+	}
 	if f.Machine != nil || m.Role != "init" || f.Result != "void" || len(f.Params) == 0 || f.Params[0].Type != LIRType("ptr<activation:"+l.Identity+">") || len(f.Blocks) != 1 || f.Blocks[0].Term.Op != "return" || l.Capacity != evt1MachineStackCapacity || l.MaxFrameSize <= 0 || l.MaxFrameAlign <= 0 || l.SlotDataOffset%l.MaxFrameAlign != 0 || l.SlotSize < l.SlotDataOffset+l.MaxFrameSize || l.Size < l.SlotsOffset+l.Capacity*l.SlotSize {
 		return fmt.Errorf("LIR_BAD_ACTIVATION_FRAME %s", f.Name)
 	}
