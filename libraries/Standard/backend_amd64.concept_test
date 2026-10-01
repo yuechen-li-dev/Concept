@@ -1,0 +1,77 @@
+profile Core;
+import Standard.Backend.AMD64;
+
+MachineOperand Virtual32(int id)
+{
+    return MachineOperand{OperandKind::Virtual, id, 4, -1, -1, -1, 1, 0,
+        BridgeText{0,0}, BridgeText{0,0}, false};
+}
+
+[[fact]]
+void LivenessPropagatesTheHighestRegisterAcrossAllBlocks()
+{
+    BackendFunction function = EmptyFunction();
+    function.virtualRegCount = 512;
+    function.blockCount = 128;
+    function.instructionCount = 2;
+    function.instructions[0] = MachineInstruction{Opcode::Mov, Virtual32(511),
+        EmptyOperand(), EmptyOperand(), 0, 4, -1, -1, Condition::None, 0, 0, 0, 0};
+    function.instructions[1] = MachineInstruction{Opcode::Mov, EmptyOperand(),
+        Virtual32(511), EmptyOperand(), 1, 4, -1, -1, Condition::None, 127, 0, 0, 0};
+    for (i in 0 .. 128)
+    {
+        function.blocks[i] = MachineBlock{i, i, 1, 0, Opcode::Jmp, i+1, 0,
+            Condition::None, -1, 0, 0};
+    }
+    function.blocks[0] = MachineBlock{0, 0, 0, 1, Opcode::Jmp, 1, 0, Condition::None, -1, 0, 0};
+    function.blocks[127] = MachineBlock{127, 127, 1, 1, Opcode::Ret, 0, 0, Condition::None, -1, 0, 0};
+    Liveness liveness = EmptyLiveness();
+    Assert.LGTM(ComputeLiveness(ref const function, ref liveness), "bounded fixed point");
+    Assert.Equal(liveness.liveIn[0].words[16], 0, "definition kills root live-in");
+    Assert.Equal(liveness.liveOut[0].words[16], 32768, "high bit survives first edge");
+    Assert.Equal(liveness.liveIn[64].words[16], 32768, "propagates through middle");
+    Assert.Equal(liveness.use[127].words[16], 32768, "register 511");
+    Assert.Equal(liveness.use[127].words[0], 0, "no word aliasing");
+    Allocation allocation = EmptyAllocation();
+    Assert.LGTM(ComputeIntervals(ref const function, ref allocation), "intervals");
+    Assert.Equal(allocation.start[511], 0, "definition start");
+    Assert.Equal(allocation.end[511], 1, "last use");
+}
+
+[[fact]]
+void LoweredBlockLayoutRemapsEdgesAndInstructionRanges()
+{
+    BackendFunction function = EmptyFunction();
+    function.blockCount = 4;
+    function.instructionCount = 4;
+    for (i in 0 .. 4)
+    {
+        function.instructions[i] = MachineInstruction{Opcode::Trap, EmptyOperand(),
+            EmptyOperand(), EmptyOperand(), 0, 0, -1, -1, Condition::None, i%2, 0, i, 0};
+        function.blocks[i] = MachineBlock{i, i%2, i, 1, Opcode::Ret, 0, 0, Condition::None, -1, 0, 0};
+    }
+    function.blocks[0] = MachineBlock{0, 0, 0, 1, Opcode::Jcc, 2, 1, Condition::Equal, 0, 0, 0};
+    function.blocks[2] = MachineBlock{2, 0, 2, 1, Opcode::Jmp, 3, 0, Condition::None, -1, 0, 0};
+    Assert.LGTM(LayoutLoweredBlocks(ref function), "group continuations");
+    Assert.Equal(function.blocks[0].trueBlock, 1, "old block 2");
+    Assert.Equal(function.blocks[0].falseBlock, 2, "old block 1");
+    Assert.Equal(function.blocks[1].trueBlock, 3, "old block 3");
+    Assert.Equal(function.instructions[1].sourceLine, 2, "old block 2 instructions");
+    Assert.Equal(function.instructions[2].sourceLine, 1, "old block 1 instructions");
+    Assert.LGTM(LayoutLoweredBlocks(ref function), "idempotent");
+    Assert.Equal(function.blocks[0].trueBlock, 1, "stable edge");
+    Assert.Equal(function.instructions[1].sourceLine, 2, "stable instruction order");
+    Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed arrays, no heap");
+}
+
+[[fact]]
+void LivenessCapacityFailuresRemainExplicit()
+{
+    BackendFunction function = EmptyFunction();
+    Liveness liveness = EmptyLiveness();
+    function.virtualRegCount = 513;
+    Assert.FailsWith(ComputeLiveness(ref const function, ref liveness), BackendError::CapacityExceeded, "virtual register bound");
+    function.virtualRegCount = 0;
+    function.blockCount = 129;
+    Assert.FailsWith(ComputeLiveness(ref const function, ref liveness), BackendError::CapacityExceeded, "block bound");
+}
