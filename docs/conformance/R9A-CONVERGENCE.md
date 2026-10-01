@@ -14,7 +14,7 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | B2 | Numeric friction closed; named initializers retained | Integer indices use width-safe guards; u literals; requirable width-preserving ~; artifact generic rounding. Field defaults remain unadmitted |
 | B3 | Touched diagnostics name fixes | Qualifiers, scoped, attributes, stale artifacts, repr |
 | B4 | Generic repr(C) records admitted after closure | Artifact/native Pair<int>; resource pair rejects |
-| B5 | Pending | Parser lacks runtime comptime if/for; deferred open AST and closed expansion needed |
+| B5 | Runtime static control implemented | Closed selection/expansion before runtime validation; open AST retained in v2 artifacts; range/fixed-array iterator and aggregate fuel limits; Normal/Verify strict C11/native and 100-artifact tests |
 | C1 | CV4138 field family migrated | Corpus shadow agreement, authoritative switch, Go deletion; array/generic/artifact tests |
 | C2 | Type/struct-field subjects; bounded function observations | Parameter count/type, result type, C linkage; enum-payload migration deferred |
 | C3 | Declared predicate requirements implemented | Verdict/bool, typename/declaration binding, ordinary proof graph, artifact/native and policy lexical-environment tests |
@@ -52,6 +52,6 @@ selector metadata is deliberately observable; compiler attributes have strict po
 | verify_foreign | Contract verification test metadata | Runner declaration/Verify instrumentation | Retain; test kind and args checked |
 | execution_context/semantic_access/synchronization | Access/proof derivation | Summaries/planner evidence | Retain admitted function positions |
 | diagnostic | Innate diagnostic identity | Innate metadata | Retain innate only; ordinary concept rejects |
-| generic requires | Required-operation/constraint closure | Structural concepts/witness metadata | Retain; unsupported predicates explicitly reject |
+| generic requires | Required-operation/constraint closure | Structural concepts/witness metadata | Retain; declared predicates are evaluated with ordinary provenance |
 
 Audit scope is the current Stage-0 surfaces above, not future features or retired Zig.

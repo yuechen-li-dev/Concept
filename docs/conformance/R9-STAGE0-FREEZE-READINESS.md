@@ -5,7 +5,8 @@ identity survives artifacts structurally without nominal-name reparsing. Explici
 ownership remains. Modifier/attribute and context holes are repaired; generic repr(C)
 records are checked after closure.
 
-R9a still needs runtime-function static expansion. Ordinary predicate requirements
+Runtime-function static selection and bounded expansion now work in the C11 path.
+Ordinary predicate requirements
 now narrow concept satisfaction using declared proof provenance, including project
 policy and artifact-only Assert.Concept. CV4138 has completed innate migration;
 large-library measurements support keeping the current limits and mutex.

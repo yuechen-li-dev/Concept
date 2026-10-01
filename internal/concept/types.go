@@ -672,6 +672,7 @@ type Block struct {
 }
 
 type IfStmt struct {
+	Comptime  bool   `json:"comptime,omitempty"`
 	Condition Expr   `json:"condition"`
 	Then      Block  `json:"then"`
 	Else      *Block `json:"else,omitempty"`
@@ -971,6 +972,7 @@ func (s *WhileStmt) statementSpan() Span { return s.Span }
 // ForeachStmt retains the explicit iterator contract selected by validation.
 // IteratorType is empty only before semantic analysis.
 type ForeachStmt struct {
+	Comptime     bool   `json:"comptime,omitempty"`
 	ItemType     Type   `json:"item_type"`
 	ItemName     string `json:"item_name"`
 	Source       Expr   `json:"source"`
@@ -1031,6 +1033,16 @@ type NameExpr struct {
 
 func (*NameExpr) evt1Expr()        {}
 func (e *NameExpr) exprSpan() Span { return e.Span }
+
+// ComptimeValueExpr is an evaluator-produced binding initializer. It has no
+// source syntax and preserves opaque reflected subjects without reparsing text.
+type ComptimeValueExpr struct {
+	Value Value `json:"value"`
+	Span  Span  `json:"span"`
+}
+
+func (*ComptimeValueExpr) evt1Expr()        {}
+func (e *ComptimeValueExpr) exprSpan() Span { return e.Span }
 
 type IntLiteral struct {
 	// Magnitude is the exact non-negative source magnitude. Negative is kept

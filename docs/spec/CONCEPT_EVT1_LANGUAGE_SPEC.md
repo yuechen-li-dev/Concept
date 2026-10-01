@@ -75,7 +75,7 @@ profile Vulkan;
 **Approved R6e extension.** A reusable unit declares `module Dotted.Name;`
 and consumers write `import Dotted.Name;`. The declaration may precede or
 follow `profile`; imports follow them. Core resolves exact local/configured-root
-`concept-module.v1` artifacts. Imports are semantic and never textual.
+`concept-module.v2` artifacts. Imports are semantic and never textual.
 
 ## 4. Naming and formatting
 
@@ -1720,7 +1720,7 @@ summary to Unknown.
 
 ## 32. Approved R6e semantic module substrate
 
-`concept-module.v1` is a deterministic, compiler-versioned, integrity-checked
+`concept-module.v2` is a deterministic, compiler-versioned, integrity-checked
 semantic artifact. It preserves declarations, generic bodies and constraints,
 source spans, structural ownership/provenance inputs, and bounded operation
 summaries without containing backend code. A consumer loads the artifact and

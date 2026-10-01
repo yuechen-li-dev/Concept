@@ -59,7 +59,7 @@ and ordered tagged type/typed integer arguments. Nested applications stay struct
 aliases use normal canonical resolution. Cache keys exclude locations, import markers,
 and nested display names. Generic C symbols carry a structural digest, preventing
 Buffer<double>/Buffer<Double> collisions. Bare symbols acquire metadata from their
-declarations, never by parsing display spelling. The concept-module.v1 envelope now
+declarations, never by parsing display spelling. The concept-module.v2 envelope
 requires concept-generic-application.v1; old artifacts must be rebuilt. Inspectable
 application summaries must match the typed payload. No legacy parser fallback exists.
 Self-hosted frontend stages consume structured generic application identity; they do
@@ -95,3 +95,30 @@ the ordinary innate C value rule; open declarations claim no concrete ABI layout
 Foreign boundaries retain existing native-probe requirements. Named initializers already
 evaluate in source expression order and reject duplicate, unknown, and missing fields.
 Field defaults remain unsupported.
+
+## Runtime static control
+
+`comptime if` evaluates the condition through the ordinary bounded evaluator. In a
+closed runtime function it replaces the control with the selected block before
+runtime body validation, ownership joins and MIR. Discarded branches must parse;
+they need not typecheck as runtime statements. Open generic conditions retain the
+static flag and both parsed branches in the v2 semantic artifact, with deferred
+MIR metadata; each closed instantiation rechecks selection. A structural dependency
+walk rejects runtime values even when an open type layout query appears first.
+
+`comptime for` shares the existing evaluator iterator for half-open ranges,
+`step`/`descend` and fixed rank-1 arrays. Each iteration clones the ordinary body
+and adds an evaluator-produced, immutable comptime binding, including opaque values
+without source reparsing. Bodies may use surrounding runtime values. Item typing
+and value-only iteration remain explicit. Existing loop bound 256 and fuel 4096
+apply; validation charges expanded statements against shared function expansion
+fuel, so nested loops cannot create an unbounded runtime AST. A static loop does
+not become a runtime iterator. General custom iterator/reflection traversal is
+not added; existing generator reflection remains its own supported path.
+
+Artifact-only tests select int/double layouts, ignore an invalid discarded branch,
+reject the same branch when selected, expand value-parameter and fixed-array loops,
+execute Normal/Verify strict C11, preserve authoritative NoAllocation analysis and
+compare artifacts/C/MIR over exactly 100 runs. The generic variable clone now
+retains comptime/const and existing declaration metadata. One older class-method
+symbol test was updated to structural C identity and given a native return probe.

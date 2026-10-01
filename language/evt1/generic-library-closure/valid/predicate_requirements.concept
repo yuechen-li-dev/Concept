@@ -1,25 +1,45 @@
 module Closure.Predicates;
 profile Core;
 
-enum Verdict { Holds, Refuted(declaration at, string message), }
+enum Verdict {
+    Holds, Refuted(declaration at, string message),
+}
 
-comptime bool IsInt(typename type) { return compiler.TypeName(type) == "int"; }
-concept IntegerOnly<T> { requires IsInt(T); }
+comptime bool IsInt(typename type) {
+    return compiler.TypeName(type) == "int";
+}
+concept IntegerOnly<T> {
+    requires IsInt(T);
+}
 template <typename T> requires IntegerOnly<T>
-T Identity(T value) { return value; }
+T Identity(T value) {
+    return value;
+}
 
 comptime Verdict IsSmall(declaration function) {
     if (compiler.ParameterCount(function) <= 1) { return Verdict::Holds; }
     return Verdict::Refuted(function, "operation takes too many parameters; split the operation");
 }
-concept Small<declaration F> { requires IsSmall(F); }
-comptime bool FieldIsInt(declaration field) { return compiler.TypeName(compiler.TypeOf(field)) == "int"; }
-concept IntegerField<declaration F> { requires FieldIsInt(F); }
+concept Small<declaration F> {
+    requires IsSmall(F);
+}
+comptime bool FieldIsInt(declaration field) {
+    return compiler.TypeName(compiler.TypeOf(field)) == "int";
+}
+concept IntegerField<declaration F> {
+    requires FieldIsInt(F);
+}
 
-int Good(int value) { return value; }
-int Many(int first, int second) { return first + second; }
+int Good(int value) {
+    return value;
+}
+int Many(int first, int second) {
+    return first + second;
+}
 void Proof() {
     Assert.Concept<IntegerOnly>(int, "type predicate");
     Assert.Concept<Small>(Good, "declaration predicate");
 }
-int Run() { return Identity<int>(3); }
+int Run() {
+    return Identity<int>(3);
+}

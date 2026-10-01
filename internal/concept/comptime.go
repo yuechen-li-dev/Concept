@@ -305,6 +305,8 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return evt1EvaluateGlobalComptimeDecl(state, decl)
 		}
 		return Value{}, evt1Diagnostic("CV4200", fmt.Sprintf("name %s is not available in comptime evaluation", e.Name), e.Span)
+	case *ComptimeValueExpr:
+		return e.Value, nil
 	case *UnaryExpr:
 		value, err := evt1EvalExpr(state, scope, e.Value)
 		if err != nil {
@@ -1137,25 +1139,9 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 // descending by `descend`, with the same direction rule. Each iteration costs
 // fuel and the iteration count is bounded like `while ... bounded`.
 func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *ForeachStmt, returnType Type) (*Value, error) {
-	var items []Value
-	if rangeExpr, ok := stmt.Source.(*BinaryExpr); ok && (rangeExpr.Op == ".." || rangeExpr.Op == "step" || rangeExpr.Op == "descend") {
-		values, err := evt1ComptimeRangeValues(state, scope, rangeExpr, stmt.ItemType)
-		if err != nil {
-			return nil, err
-		}
-		items = values
-	} else {
-		source, err := evt1EvalExpr(state, scope, stmt.Source)
-		if err != nil {
-			return nil, err
-		}
-		if source.Kind != ValueArray {
-			return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array", stmt.Source.exprSpan())
-		}
-		items = source.Elements
-	}
-	if len(items) > evt1ComptimeMaxLoopBound {
-		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), stmt.Span)
+	items, err := evt1ComptimeIteratorValues(state, scope, stmt.Source, stmt.ItemType, stmt.Span)
+	if err != nil {
+		return nil, err
 	}
 	if state.usage != nil {
 		state.usage.Loop = max(state.usage.Loop, len(items))
@@ -1179,6 +1165,31 @@ func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *F
 		}
 	}
 	return nil, nil
+}
+
+// Both evaluated loops and runtime static expansion share iterator semantics.
+func evt1ComptimeIteratorValues(state *evt1ComptimeState, scope *evt1EvalScope, sourceExpr Expr, itemType Type, span Span) ([]Value, error) {
+	var items []Value
+	if rangeExpr, ok := sourceExpr.(*BinaryExpr); ok && (rangeExpr.Op == ".." || rangeExpr.Op == "step" || rangeExpr.Op == "descend") {
+		values, err := evt1ComptimeRangeValues(state, scope, rangeExpr, itemType)
+		if err != nil {
+			return nil, err
+		}
+		items = values
+	} else {
+		source, err := evt1EvalExpr(state, scope, sourceExpr)
+		if err != nil {
+			return nil, err
+		}
+		if source.Kind != ValueArray {
+			return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array", sourceExpr.exprSpan())
+		}
+		items = source.Elements
+	}
+	if len(items) > evt1ComptimeMaxLoopBound {
+		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), span)
+	}
+	return items, nil
 }
 
 func evt1ComptimeRangeValues(state *evt1ComptimeState, scope *evt1EvalScope, expr *BinaryExpr, itemType Type) ([]Value, error) {

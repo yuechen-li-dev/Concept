@@ -9,6 +9,7 @@ import (
 )
 
 type evt1Scope struct {
+	staticExpansion   *evt1ComptimeState
 	context           evt1ValidationContext
 	parent            *evt1Scope
 	values            map[string]evt1ValueBinding
@@ -110,6 +111,7 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 	s := &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
 	if parent != nil {
 		s.returnType = parent.returnType
+		s.staticExpansion = parent.staticExpansion
 		s.context = parent.context
 		s.tryHandlers = parent.tryHandlers
 		s.transitionTargets = parent.transitionTargets
@@ -443,6 +445,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	}
 	out := newEVT1Scope(evt1CloneScope(scope.parent))
 	out.returnType = scope.returnType
+	out.staticExpansion = scope.staticExpansion
 	out.tryHandlers = scope.tryHandlers
 	out.transitionTargets = scope.transitionTargets
 	out.inAutomataState = scope.inAutomataState
@@ -2032,7 +2035,30 @@ func collectEscapedArmBindings(block *Block, env *semanticEnv) {
 func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Block, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
 	local := newEVT1Scope(scope)
 	local.context = evt1ExpressionContext(templateInfo, inComptimeFn)
-	for _, stmt := range block.Statements {
+	if !inComptimeFn && local.staticExpansion == nil && evt1BlockHasStaticControl(block) {
+		local.staticExpansion = newEVT1ComptimeState(env)
+		if err := local.staticExpansion.push("static expansion " + local.functionName); err != nil {
+			return err
+		}
+	}
+	for statementIndex, stmt := range block.Statements {
+		if !inComptimeFn {
+			if expanded, handled, err := evt1ExpandStaticControl(env, local, stmt, templateInfo); handled {
+				if err != nil {
+					return err
+				}
+				if expanded == nil { // An open generic retains the parsed control.
+					continue
+				}
+				block.Statements[statementIndex] = expanded
+				stmt = expanded
+			}
+		}
+		if local.staticExpansion != nil {
+			if err := local.staticExpansion.spend(stmt.statementSpan(), 1); err != nil {
+				return err
+			}
+		}
 		switch s := stmt.(type) {
 		case *AsmStmt:
 			if err := evt1ValidateAsmStmt(env, local, s, inComptimeFn); err != nil {
@@ -3631,6 +3657,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 	restore := evt1EnterValidationContext(scope, templateInfo, inComptimeFn)
 	defer restore()
 	switch e := expr.(type) {
+	case *ComptimeValueExpr:
+		if !inComptimeFn {
+			return Type{}, evt1Diagnostic("CV4200", "an evaluator value is only valid in a comptime binding", e.Span)
+		}
+		return e.Value.Type, nil
 	case *InterpretExpr:
 		if err := validateKnownType(env, e.Target, e.Span, "", false); err != nil {
 			return Type{}, err
@@ -8099,7 +8130,9 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 				return nil, err
 			}
 		}
-		return &VarDecl{Type: evt1SubstituteType(s.Type, typeParam, concreteType), Name: s.Name, Value: value, Span: s.Span}, nil
+		out := *s
+		out.Type, out.Value = evt1SubstituteType(s.Type, typeParam, concreteType), value
+		return &out, nil
 	case *InstanceDecl:
 		return &InstanceDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil
 	case *AssignStmt:
@@ -8194,7 +8227,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		if err != nil {
 			return nil, err
 		}
-		out := &IfStmt{Condition: condition, Then: thenBlock, Span: s.Span}
+		out := &IfStmt{Comptime: s.Comptime, Condition: condition, Then: thenBlock, Span: s.Span}
 		if s.Else != nil {
 			elseBlock, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
 			if err != nil {
@@ -8238,6 +8271,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			return nil, err
 		}
 		return &ForeachStmt{
+			Comptime:     s.Comptime,
 			ItemType:     evt1SubstituteType(s.ItemType, typeParam, concreteType),
 			ItemName:     s.ItemName,
 			Source:       source,
@@ -8255,6 +8289,9 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
 	switch e := expr.(type) {
+	case *ComptimeValueExpr:
+		out := *e
+		return &out, nil
 	case *InterpretExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {

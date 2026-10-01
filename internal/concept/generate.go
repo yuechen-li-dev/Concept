@@ -1108,6 +1108,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectExprMIROps(env, s.Value, fn, templateInfo)
 			}
 		case *ForeachStmt:
+			if s.Comptime && templateInfo != nil {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "comptime_for_deferred", Detail: s.ItemName, SourceSpan: s.Span})
+				continue
+			}
 			mode := "Value"
 			if s.ItemType.Ownership == "ref" {
 				mode = "Ref"
@@ -1214,6 +1218,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectMIROps(env, s.Else, fn, templateInfo)
 			}
 		case *IfStmt:
+			if s.Comptime && templateInfo != nil {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "comptime_if_deferred", SourceSpan: s.Span})
+				continue
+			}
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "if_stmt", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Condition, fn, templateInfo)
 			collectMIROps(env, &s.Then, fn, templateInfo)

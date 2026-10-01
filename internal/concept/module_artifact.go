@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-const SemanticModuleSchema = "concept-module.v1"
+const SemanticModuleSchema = "concept-module.v2"
 const GenericApplicationSchema = "concept-generic-application.v1"
 
 type SemanticModuleDependency struct {
@@ -112,7 +112,7 @@ func registerSemanticGobTypes() {
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &OnStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
-			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
+			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &ComptimeValueExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
 			&FieldExpr{}, &CallExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
 			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},

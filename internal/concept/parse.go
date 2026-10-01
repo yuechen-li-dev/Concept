@@ -2900,6 +2900,20 @@ func (p *parser) parseStatement() (Statement, error) {
 	case "for":
 		return p.parseForeachStmt()
 	case "comptime":
+		if p.pos+1 < len(p.tokens) && (p.tokens[p.pos+1].Lexeme == "if" || p.tokens[p.pos+1].Lexeme == "for") {
+			start := p.next().Span
+			stmt, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			switch s := stmt.(type) {
+			case *IfStmt:
+				s.Comptime, s.Span = true, start
+			case *ForeachStmt:
+				s.Comptime, s.Span = true, start
+			}
+			return stmt, nil
+		}
 		return p.parseLocalComptimeDecl()
 	case "static_assert":
 		assertion, err := p.parseStaticAssert()

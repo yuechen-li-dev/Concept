@@ -50,7 +50,7 @@ Commands:
   check   parse and semantically validate a Concept source file
   lint    evaluate manifest.concept policies over bound declarations
   format  apply presentation-only canonical whitespace and comment-preserving layout
-  build-module  write a deterministic concept-module.v1 artifact to stdout
+  build-module  write a deterministic concept-module.v2 artifact to stdout
   emit-c  write generated strict-C11 implementation to stdout
   mir     write deterministic MIR JSON to stdout
   lir     verify and write target-independent EVT2 LIR to stdout
