@@ -4814,6 +4814,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return leftType, nil
 		}
+		if e.Op == "+" && leftType.valueType().Name == "string" && rightType.valueType().Name == "string" && leftType.ArrayElem == nil && rightType.ArrayElem == nil {
+			// Concatenation builds a new compile-time string. Runtime strings
+			// are borrowed C literals with no allocation authority to build one.
+			if !inComptimeFn {
+				return Type{}, evt1Diagnostic("STRING_CONCAT_RUNTIME", "string + string is compile-time only; runtime strings are borrowed literals", e.Span)
+			}
+			out, _ := evt1BuiltinType("string", e.Span)
+			return out, nil
+		}
 		if evt1IsHandle(env, leftType) || evt1IsHandle(env, rightType) {
 			if leftType.Name != rightType.Name || !evt1IsHandle(env, leftType) || !evt1IsHandle(env, rightType) {
 				return Type{}, evt1Diagnostic("HANDLE_OPERATION_INVALID", fmt.Sprintf("handles compare only with the same handle type, got %s and %s", leftType.String(), rightType.String()), e.Span)

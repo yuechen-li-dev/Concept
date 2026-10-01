@@ -3,10 +3,7 @@ package concept
 import "fmt"
 
 func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, returnType Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
-	if inComptimeFn {
-		return evt1Diagnostic("FOREACH_ITERATOR_INVALID", "foreach is a runtime iterator operation", stmt.Span)
-	}
-	sourceType, err := validateExpr(env, scope, stmt.Source, templateInfo, false)
+	sourceType, err := validateExpr(env, scope, stmt.Source, templateInfo, inComptimeFn)
 	if err != nil {
 		return err
 	}
@@ -39,6 +36,14 @@ func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, 
 		stmt.SourceKind, stmt.IteratorType, element = "custom", iterator, customElement
 	}
 	stmt.ElementType = element
+	// Compile-time iteration walks a range or a fixed rank-1 array by value;
+	// spans and iterator protocols are runtime operations.
+	if inComptimeFn && stmt.SourceKind != "range" && stmt.SourceKind != "array" {
+		return evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array; "+stmt.SourceKind+" iteration is a runtime operation", stmt.Span)
+	}
+	if inComptimeFn && stmt.ItemType.Ownership == "ref" {
+		return evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for produces values, not references", stmt.Span)
+	}
 	if stmt.ItemType.Name == "" {
 		stmt.ItemType = element
 	} else {
@@ -70,7 +75,7 @@ func validateForeachStmt(env *semanticEnv, scope *evt1Scope, stmt *ForeachStmt, 
 	}
 	child := evt1CloneScope(scope)
 	child.declare(stmt.ItemName, evt1ValueBinding{t: stmt.ItemType, mutable: !stmt.ItemType.Const, state: evt1StorageInitialized, provenance: evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: child.depth, Scoped: stmt.ItemType.Scoped}})
-	return validateBlock(env, child, returnType, stmt.Body, templateInfo, false)
+	return validateBlock(env, child, returnType, stmt.Body, templateInfo, inComptimeFn)
 }
 
 func evt1ResolveForeachProtocol(env *semanticEnv, source Type, span Span) (Type, Type, error) {

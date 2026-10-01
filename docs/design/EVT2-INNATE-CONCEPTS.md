@@ -212,7 +212,7 @@ clean, the mechanism is ready for the rest of the declarative layer.
 | Step | Content |
 | --- | --- |
 | IC0 | Make `concept check` agree with `emit-c` on generic instances (see Findings): done |
-| IC1 | `comptime` `if`, `for`, string `+`; tests |
+| IC1 | `comptime` `if`, `for`, string `+` (`match` already evaluated; now tested); done |
 | IC2 | `declaration` / `typename` subject values; observation list; `Verdict` |
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash |
 | IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED` |

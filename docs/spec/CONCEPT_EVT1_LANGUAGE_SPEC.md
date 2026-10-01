@@ -471,6 +471,15 @@ booleans, strings in the compile-time domain, enums, structs, and fixed arrays
 composed from supported values. Compile-time `while` requires a static
 `bounded(limit)` clause.
 
+Compile-time functions use ordinary control flow: `if`/`else`, `match`
+statements and expressions over enum values (with payload bindings), and
+`for (item in source)` where the source is a range (`a..b`, `step n`,
+`descend n`, with the runtime direction rule) or a fixed rank-1 array, by
+value. Each iteration costs fuel and the iteration count obeys the loop bound.
+Spans and iterator protocols are runtime iteration. `string + string`
+concatenates compile-time strings, bounded in length; at runtime strings are
+borrowed literals and concatenation is `STRING_CONCAT_RUNTIME`.
+
 **Deferred reconciliation.** PoC3 capability-based compile-time permissions,
 compiler-owned temporary allocation, reflection breadth, and any I/O are not
 part of the current canonical subset.

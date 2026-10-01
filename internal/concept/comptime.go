@@ -14,6 +14,7 @@ const (
 	evt1ComptimeMaxArrayNesting    = 8
 	evt1ComptimeMaxArrayCells      = 512
 	evt1ComptimeMaxLiteralElements = 512
+	evt1ComptimeMaxStringBytes     = 4096
 )
 
 type evt1EvalBinding struct {
@@ -535,6 +536,14 @@ func evt1EvalBinaryExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Bin
 	if (left.Kind == ValueArray || right.Kind == ValueArray) && (expr.Op == "<" || expr.Op == ">" || expr.Op == "<=" || expr.Op == ">=") {
 		return Value{}, evt1Diagnostic("CV4236", "array ordering comparisons are not supported", expr.Span)
 	}
+	if expr.Op == "+" && left.Kind == ValueString && right.Kind == ValueString {
+		joined := left.StringValue + right.StringValue
+		if len(joined) > evt1ComptimeMaxStringBytes {
+			return Value{}, evt1Diagnostic("COMPTIME_STRING_LIMIT", fmt.Sprintf("comptime string exceeds %d bytes", evt1ComptimeMaxStringBytes), expr.Span)
+		}
+		t, _ := evt1BuiltinType("string", expr.Span)
+		return Value{Kind: ValueString, Type: t, StringValue: joined}, nil
+	}
 	if left.Type.Quantity != nil || right.Type.Quantity != nil {
 		result, handled, err := evt1ValidateNumericBinary(left.Type, right.Type, expr.Op, expr.Span)
 		if err != nil {
@@ -1027,11 +1036,132 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 			if result != nil {
 				return result, nil
 			}
+		case *IfStmt:
+			condition, err := evt1EvalExpr(state, local, s.Condition)
+			if err != nil {
+				return nil, err
+			}
+			if condition.Kind != ValueBool {
+				return nil, evt1Diagnostic("CV4201", "comptime if condition must evaluate to bool", s.Condition.exprSpan())
+			}
+			branch := &s.Then
+			if !condition.BoolValue {
+				branch = s.Else
+			}
+			if branch == nil {
+				continue
+			}
+			result, err := evt1ExecComptimeBlock(state, local, *branch, returnType)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
+				return result, nil
+			}
+		case *ForeachStmt:
+			result, err := evt1ExecComptimeFor(state, local, s, returnType)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
+				return result, nil
+			}
 		default:
 			return nil, evt1Diagnostic("CV4201", "unsupported comptime statement", stmt.statementSpan())
 		}
 	}
 	return nil, nil
+}
+
+// evt1ExecComptimeFor runs `for (item in source)` over a range or a fixed
+// array. Ranges follow the runtime iterator: half-open, ascending by `step` or
+// descending by `descend`, with the same direction rule. Each iteration costs
+// fuel and the iteration count is bounded like `while ... bounded`.
+func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *ForeachStmt, returnType Type) (*Value, error) {
+	var items []Value
+	if rangeExpr, ok := stmt.Source.(*BinaryExpr); ok && (rangeExpr.Op == ".." || rangeExpr.Op == "step" || rangeExpr.Op == "descend") {
+		values, err := evt1ComptimeRangeValues(state, scope, rangeExpr, stmt.ItemType)
+		if err != nil {
+			return nil, err
+		}
+		items = values
+	} else {
+		source, err := evt1EvalExpr(state, scope, stmt.Source)
+		if err != nil {
+			return nil, err
+		}
+		if source.Kind != ValueArray {
+			return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array", stmt.Source.exprSpan())
+		}
+		items = source.Elements
+	}
+	if len(items) > evt1ComptimeMaxLoopBound {
+		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), stmt.Span)
+	}
+	if err := state.push(fmt.Sprintf("for[%d]", len(items))); err != nil {
+		return nil, err
+	}
+	defer state.pop()
+	for _, item := range items {
+		if err := state.spend(stmt.Span, 1); err != nil {
+			return nil, err
+		}
+		iteration := newEVT1EvalScope(scope)
+		iteration.declare(stmt.ItemName, evt1EvalBinding{value: item, mutable: true, comptime: true})
+		result, err := evt1ExecComptimeBlock(state, iteration, stmt.Body, returnType)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			return result, nil
+		}
+	}
+	return nil, nil
+}
+
+func evt1ComptimeRangeValues(state *evt1ComptimeState, scope *evt1EvalScope, expr *BinaryExpr, itemType Type) ([]Value, error) {
+	bounds, step, descending := expr, 1, false
+	if expr.Op != ".." {
+		bounds, _ = expr.Left.(*BinaryExpr)
+		magnitude, err := evt1EvalExprTyped(state, scope, expr.Right, &itemType)
+		if err != nil {
+			return nil, err
+		}
+		if magnitude.Kind != ValueInt {
+			return nil, evt1Diagnostic("RANGE_STEP_INVALID", "range step or descend magnitude must be a compile-time integer", expr.Right.exprSpan())
+		}
+		step, descending = magnitude.IntValue, expr.Op == "descend"
+	}
+	start, err := evt1EvalExprTyped(state, scope, bounds.Left, &itemType)
+	if err != nil {
+		return nil, err
+	}
+	end, err := evt1EvalExprTyped(state, scope, bounds.Right, &itemType)
+	if err != nil {
+		return nil, err
+	}
+	if start.Kind != ValueInt || end.Kind != ValueInt {
+		return nil, evt1Diagnostic("RANGE_ENDPOINT_TYPE_MISMATCH", "comptime range endpoints must be compile-time integers", bounds.Span)
+	}
+	if step <= 0 || (!descending && start.IntValue > end.IntValue) || (descending && start.IntValue < end.IntValue) {
+		return nil, evt1Diagnostic("RANGE_STEP_INVALID", "invalid range step or direction", expr.Span)
+	}
+	var values []Value
+	for cursor := start.IntValue; (descending && cursor > end.IntValue) || (!descending && cursor < end.IntValue); {
+		if len(values) > evt1ComptimeMaxLoopBound {
+			break
+		}
+		item := start
+		item.IntValue = cursor
+		item.Type = itemType
+		values = append(values, item)
+		if descending {
+			cursor -= step
+		} else {
+			cursor += step
+		}
+	}
+	return values, nil
 }
 
 func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr ArrayLiteralExpr, expected *Type) (Value, error) {
