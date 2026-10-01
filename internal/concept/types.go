@@ -2024,6 +2024,10 @@ type Value struct {
 	Variant     string
 	Payload     []Value
 	Elements    []Value
+	// Declaration and Typename are compile-time subjects (ValueDeclaration,
+	// ValueTypename); see comptime_subjects.go.
+	Declaration *evt1DeclarationRef
+	Typename    *Type
 }
 
 func (v Value) Render() string {
@@ -2067,6 +2071,16 @@ func (v Value) Render() string {
 			parts = append(parts, entry.Render())
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
+	case ValueDeclaration:
+		if v.Declaration != nil {
+			return "declaration " + v.Declaration.qualifiedName()
+		}
+		return "declaration <invalid>"
+	case ValueTypename:
+		if v.Typename != nil {
+			return "typename " + v.Typename.String()
+		}
+		return "typename <invalid>"
 	default:
 		return "<invalid>"
 	}

@@ -123,23 +123,31 @@ opaque value types. They can be passed, stored in locals, and compared with
 `==`, and they are only inspected through observations. They cannot reach
 runtime code, MIR, or C.
 
-MVP observation list (closed, versioned with the innate module):
+MVP observation list (closed, versioned with the innate module; implemented
+in `comptime_subjects.go`). Kinds are boolean observations rather than enums, so
+a misspelled kind is an unknown observation (a compile error), not a silent
+`false`:
 
 | Observation | Result |
 | --- | --- |
-| `compiler.Kind(declaration)` | `DeclarationKind` enum |
-| `compiler.Name(declaration)`, `compiler.QualifiedName(declaration)` | `string` |
-| `compiler.Provenance(declaration)` | `Authored`, `Generated`, `Foreign` |
-| `compiler.TypeOf(declaration)` | field, parameter, or local type |
-| `compiler.Owned(declaration)` | `bool`: the declaration carries `owned` |
-| `compiler.FieldCount(declaration)`, `compiler.Field(declaration, int)` | a type declaration's fields, in order |
-| `compiler.HasAttribute(declaration, string name, string argument)` | `bool` |
-| `compiler.IsRecord`, `IsClass`, `IsRefStruct` (`declaration`) | `bool` |
-| `compiler.TypeName(typename)` | canonical source spelling |
-| `compiler.TypeKind(typename)` | `Scalar`, `Handle`, `Struct`, `Enum`, `Array`, `Pointer`, `Borrow`, `Callable`, `Dyn`, `Async`, `Parameter` |
-| `compiler.BorrowLike(typename)`, `HasDrop(typename)`, `HasTypeArguments(typename)` | `bool` |
-| `compiler.Element(typename)`, `RuntimeShape(typename)` | array element; runtime extent |
-| `compiler.Declaration(typename)` | the struct or enum declaration of a nominal type |
+| `Name`, `QualifiedName` (`declaration`) | `string`; a field's qualified name is `Type.field` |
+| `IsType`, `IsField` (`declaration`) | `bool` |
+| `IsAuthored`, `IsGenerated`, `IsForeign` (`declaration`) | `bool`; closed generic instances are Generated |
+| `Parent(declaration)` | a field's enclosing type |
+| `TypeOf(declaration)` | a field's declared type, or the type a type declaration declares |
+| `Owned(declaration)` | `bool`: the field is declared `owned` |
+| `FieldCount(declaration)`, `Field(declaration, int)` | a struct, class, or record's fields, in order |
+| `HasAttribute(declaration, string)`, `HasAttributeArgument(declaration, string, string)` | `bool` |
+| `IsRecord`, `IsClass`, `IsRefStruct`, `IsImmovable`, `IsTable` (`declaration`) | `bool` |
+| `TypeName(typename)` | canonical spelling without ownership |
+| `IsScalar`, `IsHandle`, `IsStruct`, `IsEnum`, `IsArray`, `IsPointer`, `IsBorrowLike`, `IsOwnedType`, `IsCallable`, `IsDyn`, `IsAsync`, `HasTypeArguments`, `RuntimeShape` (`typename`) | `bool` |
+| `Element(typename)` | array element type |
+| `Declaration(typename)` | the struct or enum declaration of a nominal type |
+| `HasDrop(typename)`, `NeedsDrop(typename)` | the type has its own Drop; the type needs dropping (own or structural) |
+
+An observation applied to the wrong kind of subject (`Field` past the end,
+`TypeOf` on a declaration without a type) is `OBSERVATION_INVALID` during
+evaluation, which an innate concept reports as Unknown.
 
 `HasDrop` is the one observation that consults a witness. It reports whether a
 `Drop` operation exists, which the compiler already resolves. It does not
@@ -213,13 +221,17 @@ clean, the mechanism is ready for the rest of the declarative layer.
 | --- | --- |
 | IC0 | Make `concept check` agree with `emit-c` on generic instances (see Findings): done |
 | IC1 | `comptime` `if`, `for`, string `+` (`match` already evaluated; now tested); done |
-| IC2 | `declaration` / `typename` subject values; observation list; `Verdict` |
+| IC2 | `declaration` / `typename` subject values; observation list; `Verdict` shape tested (the enum itself ships in the innate module, IC3); done |
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash |
 | IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED` |
 | IC5 | CV4653: shadow, switch, delete |
 | IC6 | C_ABI_REPR_INVALID: shadow, switch, delete; spec section |
 
 ## Not in the MVP
+
+- `comptime if` / `comptime for` as static branching and unrolling inside
+  runtime functions (C++ `if constexpr`); wanted, tracked as follow-up work
+  after the MVP;
 
 - fact-granting innate concepts (`NoAllocation`, `Outlives`);
 - body-level analyses (types, moves, borrows, lifetimes), which move as

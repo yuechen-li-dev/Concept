@@ -1791,6 +1791,16 @@ func validateFunctionSignature(env *semanticEnv, fn FunctionDecl) error {
 	if _, _, err := evt1MachineIntrinsic(fn); err != nil {
 		return err
 	}
+	if !fn.Comptime {
+		if err := evt1RejectComptimeOnlyType(env, fn.ReturnType, fn.Span, "runtime return type"); err != nil {
+			return err
+		}
+		for _, param := range fn.Params {
+			if err := evt1RejectComptimeOnlyType(env, param.Type, param.Span, "runtime parameter "+param.Name+" of type"); err != nil {
+				return err
+			}
+		}
+	}
 	if err := validateKnownType(env, fn.ReturnType, fn.Span, "", false); err != nil {
 		return err
 	}
@@ -2048,6 +2058,11 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			resolvedType, err := evt1ResolveType(env, local, s.Type)
 			if err != nil {
 				return err
+			}
+			if !inComptimeFn && !s.Comptime {
+				if err := evt1RejectComptimeOnlyType(env, resolvedType, s.Span, "runtime local "+s.Name+" of type"); err != nil {
+					return err
+				}
 			}
 			s.Type = resolvedType
 			if resolvedType.Kind == TypeDyn {
@@ -3821,6 +3836,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, fieldType), nil
 	case *CallExpr:
+		if evt1IsObservationCall(e) {
+			if _, shadowed := scope.lookup("compiler"); !shadowed {
+				return validateObservationCall(env, scope, e, templateInfo, inComptimeFn)
+			}
+		}
 		if e.Callee == "Magnitude" {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("QUANTITY_MAGNITUDE_INVALID", "Magnitude expects one unit-bearing numeric value", e.Span)
@@ -4814,6 +4834,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return leftType, nil
 		}
+		if evt1IsSubjectTypeName(leftType.valueType().Name) || evt1IsSubjectTypeName(rightType.valueType().Name) {
+			if leftType.valueType().Name != rightType.valueType().Name || (e.Op != "==" && e.Op != "!=") {
+				return Type{}, evt1Diagnostic("SUBJECT_OPERATION_INVALID", fmt.Sprintf("%s values support only == and != with the same kind, got %s %s %s", leftType.valueType().Name, leftType.String(), e.Op, rightType.String()), e.Span)
+			}
+			out, _ := evt1BuiltinType("bool", e.Span)
+			return out, nil
+		}
 		if e.Op == "+" && leftType.valueType().Name == "string" && rightType.valueType().Name == "string" && leftType.ArrayElem == nil && rightType.ArrayElem == nil {
 			// Concatenation builds a new compile-time string. Runtime strings
 			// are borrowed C literals with no allocation authority to build one.
@@ -4841,7 +4868,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return Type{}, evt1Diagnostic("CV4540", fmt.Sprintf("%s constructor requires an Option/Result expected type", e.EnumName), e.Span)
 		}
-		return validateConstructExpr(env, scope, *e)
+		return validateConstructExpr(env, scope, *e, inComptimeFn)
 	case *FailureExpr:
 		operand, err := validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
 		if err != nil {
@@ -5231,7 +5258,7 @@ func evt1OpenGenericFieldSetAvailable(env *semanticEnv, t Type) bool {
 	return ok && len(base.TypeArgs) > 0
 }
 
-func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExpr) (Type, error) {
+func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExpr, inComptimeFn bool) (Type, error) {
 	enumDecl, ok := env.enums[expr.EnumName]
 	if !ok {
 		return Type{}, evt1Diagnostic("CV4102", fmt.Sprintf("unknown enum type %s in qualified construction", expr.EnumName), expr.Span)
@@ -5250,7 +5277,7 @@ func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExp
 		return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong constructor payload count for %s::%s: expected %d but got %d", expr.EnumName, expr.VariantName, len(variant.Payload), len(expr.Args)), expr.Span)
 	}
 	for i, arg := range expr.Args {
-		argType, err := validateExprAgainstExpected(env, scope, arg, variant.Payload[i].Type, nil, false)
+		argType, err := validateExprAgainstExpected(env, scope, arg, variant.Payload[i].Type, nil, inComptimeFn)
 		if err != nil {
 			return Type{}, err
 		}

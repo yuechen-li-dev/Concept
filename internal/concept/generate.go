@@ -44,6 +44,7 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 	}
 	evt1MaterializeGenericInstances(&module, env)
 	evt1MaterializeGenericProofSummaries(&module, env)
+	module = evt1EraseComptimeOnlyTypes(env, module)
 	if err := evt1NormalizeModuleStorageTypes(&module, env); err != nil {
 		return nil, err
 	}

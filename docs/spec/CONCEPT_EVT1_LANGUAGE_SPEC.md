@@ -480,6 +480,18 @@ Spans and iterator protocols are runtime iteration. `string + string`
 concatenates compile-time strings, bounded in length; at runtime strings are
 borrowed literals and concatenation is `STRING_CONCAT_RUNTIME`.
 
+`declaration` and `typename` are compile-time subject types: opaque values for
+a checked declaration and a checked type, compared only with `==`/`!=`. A
+compile-time function inspects them through the closed `compiler.*`
+observation set (for example `compiler.TypeOf(field)`,
+`compiler.HasDrop(type)`), which projects checked semantic state and never
+judges it. Observations are compile-time only (`OBSERVATION_RUNTIME`); unknown
+names are `OBSERVATION_UNKNOWN`. A type that is or contains a subject is
+compile-time only: runtime signatures and locals reject it
+(`COMPTIME_ONLY_TYPE`), and such aggregates are erased before lowering. The
+compiler supplies subject values to compile-time predicates; see
+`docs/design/EVT2-INNATE-CONCEPTS.md`.
+
 **Deferred reconciliation.** PoC3 capability-based compile-time permissions,
 compiler-owned temporary allocation, reflection breadth, and any I/O are not
 part of the current canonical subset.

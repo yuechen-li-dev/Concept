@@ -108,7 +108,7 @@ func evt1IsComptimeType(env *semanticEnv, t Type) bool {
 		return evt1IsComptimeType(env, *t.ArrayElem)
 	}
 	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
-		return evt1IntegralRepresentation(t) || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double"
+		return evt1IntegralRepresentation(t) || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double" || evt1IsSubjectTypeName(t.Name)
 	}
 	if structDecl, ok := env.structs[t.Name]; ok {
 		for _, field := range structDecl.Fields {
@@ -422,6 +422,9 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 	case *MatchExpr:
 		return evt1EvalMatchExpr(state, scope, *e)
 	case *CallExpr:
+		if evt1IsObservationCall(e) {
+			return evt1EvalObservation(state, scope, e)
+		}
 		if e.Callee == "Magnitude" && len(e.Args) == 1 {
 			value, err := evt1EvalExpr(state, scope, e.Args[0])
 			if err != nil {
@@ -796,6 +799,10 @@ func evt1ValueEqual(left, right Value) bool {
 		return right.Kind == ValueBool && left.BoolValue == right.BoolValue
 	case ValueString:
 		return right.Kind == ValueString && left.StringValue == right.StringValue
+	case ValueDeclaration:
+		return right.Kind == ValueDeclaration && left.Declaration != nil && right.Declaration != nil && left.Declaration.equal(*right.Declaration)
+	case ValueTypename:
+		return right.Kind == ValueTypename && left.Typename != nil && right.Typename != nil && evt1CanonicalType(nil, *left.Typename).Equal(evt1CanonicalType(nil, *right.Typename))
 	case ValueStruct:
 		if right.Kind != ValueStruct || left.StructName != right.StructName || len(left.Fields) != len(right.Fields) {
 			return false

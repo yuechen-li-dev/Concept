@@ -44,6 +44,9 @@ func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 		"uint64":  {Name: "uint64", CType: "uint64_t"},
 		"usize":   {Name: "usize", CType: "size_t"},
 		"isize":   {Name: "isize", CType: "ptrdiff_t"},
+		// Compile-time subjects; they have no runtime representation.
+		"declaration": {Name: "declaration"},
+		"typename":    {Name: "typename"},
 	}
 }
 
