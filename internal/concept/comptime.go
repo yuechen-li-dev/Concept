@@ -264,6 +264,9 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		return evt1EvalExprTyped(state, scope, e.Value, expected)
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
+		if e.Unsigned {
+			t, _ = evt1BuiltinType("uint", e.Span)
+		}
 		if expected != nil && evt1IntegralRepresentation(*expected) {
 			t = expected.valueType()
 		}
@@ -318,6 +321,29 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 				return Value{}, evt1Diagnostic("CV4201", "not requires bool", e.Span)
 			}
 			return Value{Kind: ValueBool, Type: value.Type, BoolValue: !value.BoolValue}, nil
+		case "~":
+			negativeAllowed, _, _, width, ok := evt1IntegerTypeRange(value.Type)
+			if !ok || value.Kind != ValueInt || value.Type.Quantity != nil {
+				return Value{}, evt1Diagnostic("CV4201", "bitwise ~ requires an integer scalar representation", e.Span)
+			}
+			if negativeAllowed {
+				return Value{Kind: ValueInt, Type: value.Type, IntValue: ^value.IntValue}, nil
+			}
+			bits := uint64(value.IntValue)
+			if value.WideUint {
+				bits = value.UintValue
+			}
+			bits = ^bits
+			if width < 64 {
+				bits &= (uint64(1) << width) - 1
+			}
+			result := Value{Kind: ValueInt, Type: value.Type}
+			if bits > uint64(^uint(0)>>1) {
+				result.UintValue, result.WideUint = bits, true
+			} else {
+				result.IntValue = int(bits)
+			}
+			return result, nil
 		default:
 			return Value{}, evt1Diagnostic("CV4201", "unsupported comptime unary operator "+e.Op, e.Span)
 		}
@@ -354,8 +380,8 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 				return Value{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
 			}
 			extent := base.Type.Shape[i].Extent
-			if index.IntValue < 0 || index.IntValue >= extent {
-				return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("storage index %d is out of range for extent %d", index.IntValue, extent), indexExpr.exprSpan())
+			if evt1IndexOutOfBounds(index, extent) {
+				return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("storage index %s is out of range for extent %d", index.Render(), extent), indexExpr.exprSpan())
 			}
 			offset = offset*extent + index.IntValue
 		}

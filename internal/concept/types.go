@@ -1038,6 +1038,7 @@ type IntLiteral struct {
 	// a signed parser representation.
 	Magnitude    uint64 `json:"magnitude"`
 	Negative     bool   `json:"negative,omitempty"`
+	Unsigned     bool   `json:"unsigned,omitempty"`
 	Lexeme       string `json:"lexeme,omitempty"`
 	ResolvedType Type   `json:"resolved_type,omitempty"`
 	Span         Span   `json:"span"`

@@ -13,11 +13,15 @@ const (
 )
 
 func evt1ParseIntegerLiteral(lexeme string, negative bool, span Span) (*IntLiteral, error) {
-	magnitude, err := strconv.ParseUint(lexeme, 0, 64)
+	unsigned := strings.HasSuffix(lexeme, "u")
+	magnitude, err := strconv.ParseUint(strings.TrimSuffix(lexeme, "u"), 0, 64)
 	if err != nil {
 		return nil, evt1Diagnostic("CV4644", fmt.Sprintf("integer literal %s is outside the supported uint64 magnitude range", lexeme), span)
 	}
-	return &IntLiteral{Magnitude: magnitude, Negative: negative, Lexeme: lexeme, Span: span}, nil
+	if unsigned && negative {
+		return nil, evt1Diagnostic("CV4644", "an unsigned literal cannot be negative; remove u for a signed value", span)
+	}
+	return &IntLiteral{Magnitude: magnitude, Negative: negative, Unsigned: unsigned, Lexeme: lexeme, Span: span}, nil
 }
 
 func evt1IntegerTypeRange(t Type) (negativeAllowed bool, maxMagnitude uint64, minMagnitude uint64, width int, ok bool) {
@@ -49,6 +53,9 @@ func evt1ResolveIntegerLiteral(literal *IntLiteral, target Type) error {
 	negativeAllowed, maxMagnitude, minMagnitude, width, ok := evt1IntegerTypeRange(target)
 	if !ok {
 		return evt1Diagnostic("CV4644", fmt.Sprintf("integer literal %s cannot target non-integral type %s", literal.Source(), target.String()), literal.Span)
+	}
+	if literal.Unsigned && negativeAllowed {
+		return evt1Diagnostic("CV4644", fmt.Sprintf("unsigned literal %s cannot implicitly target %s; use an explicit checked conversion", literal.Source(), target.String()), literal.Span)
 	}
 	limit := maxMagnitude
 	if literal.Negative {

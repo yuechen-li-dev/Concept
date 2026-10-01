@@ -1,0 +1,9 @@
+module Closure.BadRound;
+profile Core;
+template <typename T>
+Result<int, NumericCastError> Truncate(T value) {
+    return TruncTo<int>(value);
+}
+Result<int, NumericCastError> Bad(bool value) {
+    return Truncate<bool>(value);
+}

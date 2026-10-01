@@ -1,0 +1,5 @@
+module Closure.BadBits;
+profile Core;
+bool Bad(bool value) {
+    return ~ value;
+}

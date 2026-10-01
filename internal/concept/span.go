@@ -95,7 +95,7 @@ func evt1SpanElementGeometry(env *semanticEnv, element Type) (int, int, error) {
 
 func evt1StaticInt(env *semanticEnv, scope *evt1Scope, expr Expr) (int, bool) {
 	value, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), expr)
-	return value.IntValue, err == nil && value.Kind == ValueInt
+	return value.IntValue, err == nil && value.Kind == ValueInt && !value.WideUint
 }
 
 func evt1SpanSourceFacts(env *semanticEnv, scope *evt1Scope, expr Expr, sourceType Type, place evt1LValue) (evt1SpanFacts, error) {
@@ -678,19 +678,20 @@ func (call *CallExpr) MutabilityToTypeName() string {
 
 func (f *evt1FunctionLowerer) lowerSpanIndex(index *IndexExpr, indent int) (string, string, Type) {
 	basePrelude, baseValue, baseType := f.lowerExpr(index.Base, indent)
-	indexPrelude, indexValue, _ := f.lowerExpr(evt1StorageIndices(index)[0], indent)
+	indexPrelude, indexValue, indexType := f.lowerExpr(evt1StorageIndices(index)[0], indent)
 	baseName := f.nextTemp("span")
 	indexName := f.nextTemp("span_index")
 	var out strings.Builder
 	out.WriteString(basePrelude)
 	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), baseName, baseValue))
 	out.WriteString(indexPrelude)
-	out.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", indexName, indexValue))
+	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1IndexCType(indexType), indexName, indexValue))
 	if f.plannedStrategy("span_index", "PerAccessRuntime") == "PerAccessRuntime" {
 		if f.l.verify {
-			out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_verify_bounds(%q, %q, %d, %d, (int64_t)%s, %s.length); }\n", indexName, indexName, baseName, "Concept span index out of bounds", f.l.module.Path, index.Span.Line, index.Span.Column, indexName, baseName))
+			helper, cast := evt1IndexVerifyCall(indexType)
+			out.WriteString(ind(indent) + fmt.Sprintf("if (%s) { %s(%q, %q, %d, %d, (%s)%s, %s.length); }\n", evt1IndexGuard(indexName, baseName+".length", indexType), helper, "Concept span index out of bounds", f.l.module.Path, index.Span.Line, index.Span.Column, cast, indexName, baseName))
 		} else {
-			out.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.length) { concept_panic(%q, %d, %d); }\n", indexName, indexName, baseName, "Concept span index out of bounds", index.Span.Line, index.Span.Column))
+			out.WriteString(ind(indent) + fmt.Sprintf("if (%s) { concept_panic(%q, %d, %d); }\n", evt1IndexGuard(indexName, baseName+".length", indexType), "Concept span index out of bounds", index.Span.Line, index.Span.Column))
 		}
 	}
 	return out.String(), fmt.Sprintf("%s.data[(size_t)%s]", baseName, indexName), evt1SpanElement(baseType)

@@ -1,5 +1,27 @@
 # R9a Stage-0 closure
 
+Ordinary integral scalar representations may index storage, spans, strings and
+tensors. Signed indices check negativity; all compare against extent at uint64
+width before pointer-offset use, without narrowing to int or size_t first. Unknown
+bounds retain the existing Planner guard. Fixed known bounds reject wide unsigned
+out-of-range values rather than reading their unused signed evaluator field.
+Verify reports unsigned indices at full width. Subspan's offset/length API and
+raw-storage initialization operations keep their own existing contracts.
+
+The literal suffix `u` defaults to canonical `uint` (32 bits) and contextually
+types into unsigned representations when representable. Negative unsigned
+literals and implicit signed targets reject; explicit checked casts remain.
+`~` complements the operand representation width, returns that same scalar type,
+and rejects bool/floating/quantity operands. `operator~` uses ordinary required
+operation witnesses, including artifact-only generic instances.
+
+Named rounding intrinsics accept dependent source/target types in open templates
+and check their representations when each instance closes. They preserve the
+explicit rounding choice and Result error model; this grants no optimizer facts.
+Floating-to-integer `as` remains rejected. Record field defaults are not admitted
+by this change; named initialization retains the established source expression
+order and missing-field diagnostic.
+
 CV4138 now belongs to the innate field concept
 `MovableFieldDoesNotEmbedImmovable`. Its predicate projects immovability and
 raw/sparse storage from existing semantic observations, preserves the former

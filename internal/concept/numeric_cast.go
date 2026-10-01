@@ -32,18 +32,27 @@ func evt1ValidateNumericRoundCall(env *semanticEnv, scope *evt1Scope, call *Temp
 	if len(call.TypeArgs) != 1 || len(call.Args) != 1 {
 		return Type{}, evt1Diagnostic("NUMERIC_ROUND_ARITY", call.Callee+" requires one integer target and one floating argument", call.Span)
 	}
-	if err := validateKnownType(env, call.TypeArg, call.Span, "", false); err != nil {
+	typeParams := ""
+	if templateInfo != nil {
+		typeParams = evt1TemplateParameterSet(templateInfo.Decl.Parameters)
+	}
+	if err := validateKnownType(env, call.TypeArg, call.Span, typeParams, false); err != nil {
 		return Type{}, err
 	}
 	call.TypeArg = evt1CanonicalType(env, call.TypeArg)
-	if !evt1IntegralRepresentation(call.TypeArg) || call.TypeArg.Quantity != nil {
+	targetOpen := templateInfo != nil && evt1TypeDependsOnAnyParameter(call.TypeArg, templateInfo.Decl.Parameters)
+	if !targetOpen && (!evt1IntegralRepresentation(call.TypeArg) || call.TypeArg.Quantity != nil) {
 		return Type{}, evt1Diagnostic("NUMERIC_ROUND_TARGET", call.Callee+" target must be an unqualified integer representation", call.Span)
 	}
 	source, err := validateExpr(env, scope, call.Args[0], templateInfo, inComptimeFn)
 	if err != nil {
 		return Type{}, err
 	}
-	if !evt1IsFloating(source) || source.Quantity != nil {
+	sourceOpen := templateInfo != nil && evt1TypeDependsOnAnyParameter(source, templateInfo.Decl.Parameters)
+	// The intrinsic fixes its rounding and Result shape in an open body. Every
+	// closed instance revalidates representation legality after substitution,
+	// just as an explicit numeric cast does; no numeric fact is granted here.
+	if !sourceOpen && (!evt1IsFloating(source) || source.Quantity != nil) {
 		return Type{}, evt1Diagnostic("NUMERIC_ROUND_SOURCE", call.Callee+" requires an unqualified floating source", call.Span)
 	}
 	call.ResolvedType = evt1NumericRoundResultType(call.TypeArg, call.Span)

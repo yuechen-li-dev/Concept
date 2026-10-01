@@ -1,0 +1,64 @@
+module Closure.Unsigned;
+profile Core;
+
+concept Complementable<T> {
+    requires T operator ~(T value);
+}
+template <typename T> requires Complementable<T>
+T Complement(T value) {
+    return ~ value;
+}
+
+comptime uint8 Small = 0xffu;
+static_assert(~ Small == 0u, "complement uses the operand width");
+comptime uint64 Wide = 18446744073709551615u;
+static_assert(~ Wide == 0u, "wide complement is exact");
+
+uint Explicit() {
+    return 1u;
+}
+uint8 Narrow() {
+    return 0xffu;
+}
+uint64 Maximum() {
+    return 18446744073709551615u;
+}
+uint8 Bits(uint8 value) {
+    return Complement<uint8>(value);
+}
+uint64 WideBits(uint64 value) {
+    return Complement<uint64>(value);
+}
+int SignedBits(int value) {
+    return ~ value;
+}
+
+int Read(uint64 index) {
+    int<array>[3] values =[4, 5, 6];
+    return values[index];
+}
+int Write(uint32 index) {
+    int<array>[3] values =[4, 5, 6];
+    values[index] = 9;
+    return values[index];
+}
+int ReadSpan(uint64 index) {
+    int<array>[3] values =[4, 5, 6];
+    Span<int> span = Span(values);
+    return span[index];
+}
+byte ReadString(uint64 index) {
+    return "abc"[index];
+}
+int ReadTensor(uint64 index) {
+    const tensor<int> values[2, 2] =[[1, 2],[3, 4]];
+    return values[index, 1u];
+}
+int ReadND(uint64 index) {
+    int<ndarray>[2, 2] values =[[1, 2],[3, 4]];
+    return values[index, 1u];
+}
+int Known() {
+    int<array>[3] values =[4, 5, 6];
+    return values[1u];
+}

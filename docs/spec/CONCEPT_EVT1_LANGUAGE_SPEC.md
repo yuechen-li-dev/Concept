@@ -1,5 +1,13 @@
 # Concept EVT1 language specification
 
+R9a scalar closure: suffix `u` selects canonical `uint` by default and unsigned
+contextual targets when representable. `~` returns the integer operand's type
+and complements exactly its representation width; it is requirable as unary
+`operator~`. Ordinary integer scalar indices check bounds at full width before
+pointer access. Signed indices additionally check negativity. Named rounding
+operations can defer dependent representation checks to closed instantiations;
+float-to-int `as` still requires an explicit rounding operation.
+
 R9a closure: generic ownership remains explicitly authored (`owned T value`), even
 for trivial instantiations. Generic `[[repr(C)]] record struct` declarations are admitted;
 each closed plain-data instance establishes C value/layout legality. Generic identity

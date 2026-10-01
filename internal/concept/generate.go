@@ -2049,6 +2049,9 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	rawBody := body.String()
 	integerSupport := evt1DefinedIntegerArithmeticHelpers(l.symbolBase, rawBody)
 	var support strings.Builder
+	if strings.Contains(rawBody, "strlen(") && !strings.Contains(rawBody, "#include <string.h>") {
+		support.WriteString("#include <string.h>\n")
+	}
 	if strings.Contains(rawBody, "concept_abort_invalid_tag(") {
 		support.WriteString("_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {\n")
 		support.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
@@ -2062,6 +2065,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if strings.Contains(rawBody, "concept_verify_bounds(") {
 		support.WriteString("static void concept_verify_bounds(const char* reason, const char* source, int line, int column, int64_t index, size_t extent) {\n")
 		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%lld extent=%zu\\n\", reason, source, line, column, (long long)index, extent);\n")
+		support.WriteString("  abort();\n}\n\n")
+	}
+	if strings.Contains(rawBody, "concept_verify_unsigned_bounds(") {
+		support.WriteString("static void concept_verify_unsigned_bounds(const char* reason, const char* source, int line, int column, uint64_t index, size_t extent) {\n")
+		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%llu extent=%zu\\n\", reason, source, line, column, (unsigned long long)index, extent);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
 	if strings.Contains(rawBody, "concept_verify_foreign_nonnull(") {
@@ -3929,7 +3937,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(basePrelude + indexPrelude)
 			prelude.WriteString(ind(indent) + fmt.Sprintf("const char *%s = %s;\n", baseTemp, base))
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(indexType), indexTemp, index))
-			prelude.WriteString(ind(indent) + fmt.Sprintf("if ((int64_t)%s < 0 || (uint64_t)%s >= strlen(%s)) { concept_panic(\"string index out of bounds\", %d, %d); }\n", indexTemp, indexTemp, baseTemp, e.Span.Line, e.Span.Column))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s) { concept_panic(\"string index out of bounds\", %d, %d); }\n", evt1IndexGuard(indexTemp, "strlen("+baseTemp+")", indexType), e.Span.Line, e.Span.Column))
 			return prelude.String(), fmt.Sprintf("((uint8_t)%s[%s])", baseTemp, indexTemp), Type{Name: "byte", Kind: TypeBuiltin, Span: e.Span}
 		}
 		return f.lowerStorageIndex(e, indent, false)
@@ -4021,6 +4029,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		prelude, value, valueType := f.lowerExpr(e.Value, indent)
 		if e.Op == "not" {
 			return prelude, "(!" + value + ")", Type{Name: "bool", Kind: TypeBuiltin}
+		}
+		if e.Op == "~" {
+			return prelude, "((" + evt1CType(valueType) + ")(~(" + value + ")))", valueType
 		}
 		return prelude, "(" + e.Op + value + ")", valueType
 	case *MoveExpr:

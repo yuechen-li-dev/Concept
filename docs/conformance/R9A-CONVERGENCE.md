@@ -11,7 +11,7 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | A4 | Validator revalidation modes repaired | Context fixtures; explicit runtime push/comptime bounds retained |
 | A5 | Existing diagnostic order retained | No promise migrated rules fire first |
 | B1 | Explicit ownership retained | Generic Drop/CV4653 qualification |
-| B2 | Named initializers already work; other friction pending | Unsigned indices/literals, complement, generic rounding, defaults need closure |
+| B2 | Numeric friction closed; named initializers retained | Integer indices use width-safe guards; u literals; requirable width-preserving ~; artifact generic rounding. Field defaults remain unadmitted |
 | B3 | Touched diagnostics name fixes | Qualifiers, scoped, attributes, stale artifacts, repr |
 | B4 | Generic repr(C) records admitted after closure | Artifact/native Pair<int>; resource pair rejects |
 | B5 | Pending | Parser lacks runtime comptime if/for; deferred open AST and closed expansion needed |

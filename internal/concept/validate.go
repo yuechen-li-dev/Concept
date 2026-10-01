@@ -3739,6 +3739,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return e.ResultType, nil
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
+		if e.Unsigned {
+			t, _ = evt1BuiltinType("uint", e.Span)
+		}
 		if err := evt1ResolveIntegerLiteral(e, t); err != nil {
 			return Type{}, err
 		}
@@ -4402,12 +4405,12 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4604", "Span index must be int", indices[0].exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("CV4604", "Span index must be an integer scalar; use an explicit rounding operation for floating values", indices[0].exprSpan())
 			}
 			facts, known := evt1KnownSpanFacts(scope, e.Base)
-			if index, static := evt1StaticInt(env, scope, indices[0]); static && known && facts.LengthStatic && (index < 0 || index >= facts.StaticLength) {
-				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index %d is out of bounds for length %d", index, facts.StaticLength), indices[0].exprSpan())
+			if index, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indices[0]); err == nil && known && facts.LengthStatic && evt1IndexOutOfBounds(index, facts.StaticLength) {
+				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index %s is out of bounds for length %d", index.Render(), facts.StaticLength), indices[0].exprSpan())
 			}
 			element := evt1SpanElement(baseType)
 			e.SpanIndex, e.SpanElementType = true, &element
@@ -4433,8 +4436,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" && indexType.Name != "usize" {
-				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte index must be int or usize", indices[0].exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte index must be an integer scalar", indices[0].exprSpan())
 			}
 			out, _ := evt1BuiltinType("byte", e.Span)
 			return out, nil
@@ -4459,20 +4462,20 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4232", "storage index must be int", indexExpr.exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("CV4232", "storage index must be an integer scalar; use an explicit rounding operation for floating values", indexExpr.exprSpan())
 			}
 			indexValue, evalErr := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indexExpr)
 			if evalErr == nil && !baseType.Shape[i].Runtime {
 				if indexValue.Kind != ValueInt {
 					return Type{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
 				}
-				if indexValue.IntValue < 0 || indexValue.IntValue >= baseType.Shape[i].Extent {
+				if evt1IndexOutOfBounds(indexValue, baseType.Shape[i].Extent) {
 					code := "CV4233"
 					if baseType.StorageKind == StorageNDArray {
 						code = "CV4561"
 					}
-					return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index %d is out of bounds for dimension %d extent %d", baseType.StorageKind, indexValue.IntValue, i, baseType.Shape[i].Extent), indexExpr.exprSpan())
+					return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index %s is out of bounds for dimension %d extent %d", baseType.StorageKind, indexValue.Render(), i, baseType.Shape[i].Extent), indexExpr.exprSpan())
 				}
 			}
 		}
@@ -4497,6 +4500,14 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			out, _ := evt1BuiltinType("bool", e.Span)
 			return out, nil
+		case "~":
+			if templateInfo != nil && evt1TypeDependsOnAnyParameter(valueType, templateInfo.Decl.Parameters) {
+				return evt1ValidateOpenRequiredOperator(env, templateInfo, "operator~", []Type{valueType}, e.Span)
+			}
+			if !evt1IntegralRepresentation(valueType) || valueType.Quantity != nil {
+				return Type{}, evt1Diagnostic("CV4028", "bitwise ~ requires an integer scalar representation", e.Span)
+			}
+			return valueType.valueType(), nil
 		default:
 			return Type{}, evt1Diagnostic("CV4028", "unsupported unary operator "+e.Op, e.Span)
 		}

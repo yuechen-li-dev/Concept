@@ -5,7 +5,7 @@ identity survives artifacts structurally without nominal-name reparsing. Explici
 ownership remains. Modifier/attribute and context holes are repaired; generic repr(C)
 records are checked after closure.
 
-R9a remains incomplete until numeric friction, runtime-function static expansion,
+R9a remains incomplete until runtime-function static expansion,
 ordinary predicate requirements close. CV4138 has completed innate migration;
 large-library measurements support keeping the current limits and mutex.
 The bridge needs one schema source or a qualified bounded derivation path. Backend

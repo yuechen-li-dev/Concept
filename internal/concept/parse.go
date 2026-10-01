@@ -185,6 +185,9 @@ func lexEVT1(text string) ([]Token, error) {
 					}
 				}
 			}
+			if j < len(text) && text[j] == 'u' && isNumber(text[i:j]) {
+				j++
+			}
 			tokens = append(tokens, Token{Lexeme: text[i:j], Span: start})
 			column += j - i
 			i = j
@@ -247,7 +250,7 @@ func lexEVT1(text string) ([]Token, error) {
 			return nil, evt1Diagnostic("CV4648", "use 'and' instead of '&&'", start)
 		case i+1 < len(text) && text[i:i+2] == "||":
 			return nil, evt1Diagnostic("CV4648", "use 'or' instead of '||'", start)
-		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|", rune(c)):
+		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|~", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
 			column++
@@ -2302,7 +2305,7 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	}
 	if nameTok.Lexeme == "operator" {
 		switch p.peekLexeme() {
-		case "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=":
+		case "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", "~":
 			nameTok.Lexeme += p.next().Lexeme
 		default:
 			return nil, evt1Diagnostic("CV4143", "expected supported required operator", p.currentSpan())
@@ -3967,7 +3970,7 @@ func (p *parser) parseUnary() (Expr, error) {
 		}
 		return p.parsePostfixExpr(literal, op.Span)
 	}
-	if p.peekLexeme() == "-" || p.peekLexeme() == "not" {
+	if p.peekLexeme() == "-" || p.peekLexeme() == "not" || p.peekLexeme() == "~" {
 		op := p.next()
 		value, err := p.parseUnary()
 		if err != nil {
@@ -4826,6 +4829,7 @@ func isIdentifier(s string) bool {
 }
 
 func isNumber(s string) bool {
+	s = strings.TrimSuffix(s, "u")
 	if s == "" {
 		return false
 	}

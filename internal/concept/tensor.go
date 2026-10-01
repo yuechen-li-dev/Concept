@@ -295,11 +295,11 @@ func validateOrdinaryTensorIndex(env *semanticEnv, scope *evt1Scope, index *Inde
 		if err != nil {
 			return Type{}, err
 		}
-		if t.Name != "int" {
-			return Type{}, evt1Diagnostic("CV4618", "ordinary tensor indices must be int", expr.exprSpan())
+		if !evt1IndexInteger(t) {
+			return Type{}, evt1Diagnostic("CV4618", "ordinary tensor indices must be integer scalars", expr.exprSpan())
 		}
-		if v, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), expr); err == nil && axis < len(facts.Shape) && !facts.Shape[axis].Runtime && (v.IntValue < 0 || v.IntValue >= facts.Shape[axis].Extent) {
-			return Type{}, evt1Diagnostic("CV4618", fmt.Sprintf("tensor index %d is out of bounds for axis %d extent %d", v.IntValue, axis, facts.Shape[axis].Extent), expr.exprSpan())
+		if v, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), expr); err == nil && axis < len(facts.Shape) && !facts.Shape[axis].Runtime && evt1IndexOutOfBounds(v, facts.Shape[axis].Extent) {
+			return Type{}, evt1Diagnostic("CV4618", fmt.Sprintf("tensor index %s is out of bounds for axis %d extent %d", v.Render(), axis, facts.Shape[axis].Extent), expr.exprSpan())
 		}
 	}
 	index.TensorIndex = true
@@ -887,12 +887,12 @@ func (f *evt1FunctionLowerer) lowerTensorIndex(index *IndexExpr, indent int) (st
 	boundsStrategy := f.plannedStrategyAt("tensor_index", index.Span, "PerAccessRuntime")
 	indexNames := make([]string, len(indices))
 	for axis, expr := range indices {
-		pre, value, _ := f.lowerExpr(expr, indent)
+		pre, value, indexType := f.lowerExpr(expr, indent)
 		name := f.nextTemp("tensor_index")
 		b.WriteString(pre)
-		b.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, value))
+		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1IndexCType(indexType), name, value))
 		if boundsStrategy == "PerAccessRuntime" {
-			b.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s.shape[%d]) { concept_panic(%q, %d, %d); }\n", name, name, baseName, axis, "Concept tensor index out of bounds", index.Span.Line, index.Span.Column))
+			b.WriteString(ind(indent) + fmt.Sprintf("if (%s) { concept_panic(%q, %d, %d); }\n", evt1IndexGuard(name, fmt.Sprintf("%s.shape[%d]", baseName, axis), indexType), "Concept tensor index out of bounds", index.Span.Line, index.Span.Column))
 		}
 		indexNames[axis] = name
 	}

@@ -1,0 +1,5 @@
+module Closure.BadUnsigned;
+profile Core;
+int Bad() {
+    return 1u;
+}
