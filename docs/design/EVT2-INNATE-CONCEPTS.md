@@ -208,6 +208,29 @@ into Concept, are later work under the same trust rules.
 predicate, verdict, message, site. `concept explain file:line` on a field shows
 the innate concepts that applied to it.
 
+### As built in IC4
+
+- `analyzeModule` applies the innate set after the Go validator accepts the
+  module (`innate_apply.go`), so `check`, code generation, and `explain` all
+  see the same judgment. The innate module itself is not judged by itself.
+- Subjects: each struct and enum the module declares, each closed generic
+  instance the compilation materialized, and each struct's fields after their
+  type, in source order. Enum payload fields are not subjects yet. Innate
+  concepts apply to `TypeDeclaration` and `FieldDeclaration`; other kinds are
+  `INNATE_CONCEPT_SHAPE` until they have observations.
+- Predicates run in the innate module's environment while their
+  observations look at the program being compiled (`subjects` on the
+  comptime state). Evaluations through the shared innate environment are
+  serialized.
+- Requirements: predicates, declaration analyses (`compiler.Authored(T)`),
+  and prerequisite innate concepts (nested at most 8 deep).
+- The first refutation is the diagnostic: the concept's code, the Verdict
+  message, the `at` declaration's site, and a `concept-proof.v1` graph on the
+  diagnostic. An evaluation error, a non-Verdict result, or a refutation
+  without a message is `INNATE_UNDECIDED`, worded as a compiler defect.
+- `concept explain file:line` on a declaration shows every innate concept
+  that judged it.
+
 ## Strangler protocol
 
 Each Go rule moves in three commits:
@@ -242,7 +265,7 @@ clean, the mechanism is ready for the rest of the declarative layer.
 | IC1 | `comptime` `if`, `for`, string `+` (`match` already evaluated; now tested); done |
 | IC2 | `declaration` / `typename` subject values; observation list; `Verdict` shape tested (the enum itself ships in the innate module, IC3); done |
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash; done |
-| IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED` |
+| IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED`; done |
 | IC5 | CV4653: shadow, switch, delete |
 | IC6 | C_ABI_REPR_INVALID: shadow, switch, delete; spec section |
 

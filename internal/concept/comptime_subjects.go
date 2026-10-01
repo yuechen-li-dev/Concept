@@ -162,6 +162,12 @@ func evt1FieldDeclarationRef(env *semanticEnv, structName string, index int) (ev
 // compiler supplies, such as declaration subjects. It is the entry point for
 // compile-time predicates.
 func evt1InvokeComptimeFunction(env *semanticEnv, name string, args []Value, span Span) (Value, error) {
+	return evt1InvokeComptimeFunctionOn(env, env, name, args, span)
+}
+
+// evt1InvokeComptimeFunctionOn runs a comptime function from env whose
+// observations look at subjects.
+func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args []Value, span Span) (Value, error) {
 	fn, ok := env.comptimeFunctions[name]
 	if !ok {
 		return Value{}, evt1Diagnostic("CV4210", fmt.Sprintf("%s is not a comptime function", name), span)
@@ -170,6 +176,7 @@ func evt1InvokeComptimeFunction(env *semanticEnv, name string, args []Value, spa
 		return Value{}, evt1Diagnostic("CV4106", fmt.Sprintf("%s expects %d argument(s), got %d", name, len(fn.Params), len(args)), span)
 	}
 	state := newEVT1ComptimeState(env)
+	state.subjects = subjects
 	if err := state.push("comptime fn " + name); err != nil {
 		return Value{}, err
 	}
@@ -295,7 +302,7 @@ func evt1ObservationError(name, message string, span Span) error {
 }
 
 func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *CallExpr) (Value, error) {
-	env := state.env
+	env := state.subjects
 	args := make([]Value, len(e.Args))
 	for i, arg := range e.Args {
 		value, err := evt1EvalExpr(state, scope, arg)

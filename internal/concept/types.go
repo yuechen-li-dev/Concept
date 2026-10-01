@@ -1894,6 +1894,7 @@ type semanticEnv struct {
 	templateDepth           int
 	semanticProofs          []MIRSemanticProof
 	proofGraphs             []ProofGraph
+	innateEvaluations       []evt1InnateEvaluation
 	resultProvenance        map[string]evt1ResultProvenanceSummary
 	resultFactSummaries     map[string]SemanticValueFactSummary
 	templateFactSummaries   map[string]SemanticValueFactSummary

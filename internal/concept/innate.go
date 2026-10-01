@@ -161,6 +161,9 @@ func evt1ValidateInnateConceptDecl(env *semanticEnv, decl ConceptDecl) error {
 	if len(parameters) != 1 || parameters[0].Kind != "declaration" || parameters[0].DeclarationKind == "" {
 		return evt1Diagnostic("INNATE_CONCEPT_SHAPE", fmt.Sprintf("innate concept %s takes exactly one declaration-kind parameter, such as <FieldDeclaration F>", decl.Name), decl.Span)
 	}
+	if kind := DeclarationKind(parameters[0].DeclarationKind); kind != TypeDeclaration && kind != FieldDeclaration {
+		return evt1Diagnostic("INNATE_CONCEPT_SHAPE", fmt.Sprintf("innate concepts apply to TypeDeclaration or FieldDeclaration in this compiler, not %s", kind), parameters[0].Span)
+	}
 	if _, ok := evt1InnateDiagnosticCode(decl); !ok {
 		return evt1Diagnostic("INNATE_CONCEPT_SHAPE", fmt.Sprintf(`innate concept %s needs [[diagnostic("CODE")]]: the code is its stable identity in diagnostics and the corpus`, decl.Name), decl.Span)
 	}

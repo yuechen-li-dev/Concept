@@ -1300,6 +1300,15 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := evt1ValidateGenericInstanceStructs(env, module); err != nil {
 		return nil, err
 	}
+	if !env.innateAuthority {
+		innate, err := evt1LoadInnate()
+		if err != nil {
+			return nil, err
+		}
+		if err := evt1ApplyInnateConcepts(env, module, innate); err != nil {
+			return nil, err
+		}
+	}
 	return env, nil
 }
 

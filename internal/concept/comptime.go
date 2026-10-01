@@ -57,7 +57,11 @@ func (s *evt1EvalScope) assign(name string, value Value) bool {
 }
 
 type evt1ComptimeState struct {
-	env            *semanticEnv
+	env *semanticEnv
+	// subjects is the program that compiler.* observations look at. It is
+	// env except when innate predicates, compiled in the innate module, judge
+	// another module's declarations.
+	subjects       *semanticEnv
 	fuel           int
 	callDepth      int
 	stack          []string
@@ -68,6 +72,7 @@ type evt1ComptimeState struct {
 func newEVT1ComptimeState(env *semanticEnv) *evt1ComptimeState {
 	return &evt1ComptimeState{
 		env:            env,
+		subjects:       env,
 		fuel:           evt1ComptimeMaxFuel,
 		globalState:    map[string]string{},
 		staticMessages: map[*StaticAssert]string{},

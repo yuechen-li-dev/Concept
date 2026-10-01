@@ -274,6 +274,11 @@ func explainModule(module Module, line int) (ProofGraph, error) {
 			return graph, nil
 		}
 	}
+	if line > 0 {
+		if graph, ok := evt1ExplainInnate(env, module.Path, line); ok {
+			return graph, nil
+		}
+	}
 	// An interpretation is a declared semantic boundary, not a proposition
 	// proven from execution. Expose the checked MIR site through the existing
 	// explanation schema so callers can audit its source, type, and unit scale.
