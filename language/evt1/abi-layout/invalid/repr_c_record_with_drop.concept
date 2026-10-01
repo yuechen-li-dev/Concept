@@ -1,0 +1,13 @@
+profile Core;
+
+// A [[repr(C)]] record crosses the C boundary by value. C copies it and never
+// runs its Drop, so a record with destruction authority is not a C value.
+[[repr(C)]]
+record struct Owner
+{
+    int id;
+};
+
+void Drop(owned Owner owner)
+{
+}

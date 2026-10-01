@@ -3,7 +3,7 @@
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
     "valid": 419,
-    "static_invalid": 318,
+    "static_invalid": 319,
     "runtime_negative": 14,
     "compatibility": 5,
     "expected_divergence": 4
@@ -44,7 +44,7 @@
     { "subsystem": "Tables and initializer repetition", "path": "tables-initializers", "valid": 4, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["EVT1 tables and ellipsis"] },
     { "subsystem": "Generic library closure", "path": "generic-library-closure", "valid": 6, "static_invalid": 2, "runtime_negative": [], "historical_milestones": ["R7f1"] },
     { "subsystem": "Destructive resource", "path": "destructive-resource", "valid": 2, "static_invalid": 4, "runtime_negative": [], "historical_milestones": ["R7f2", "R7fR"] },
-    { "subsystem": "C ABI layout", "path": "abi-layout", "valid": 2, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7j"] },
+    { "subsystem": "C ABI layout", "path": "abi-layout", "valid": 2, "static_invalid": 7, "runtime_negative": [], "historical_milestones": ["R7j"] },
     { "subsystem": "Substitution failure", "path": "tooling/substitution-failure", "valid": 0, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R7p"] },
     { "subsystem": "Quantity boundary", "path": "tooling/quantity-boundary", "valid": 2, "static_invalid": 1, "runtime_negative": [], "historical_milestones": ["R7p"] },
     { "subsystem": "Multiplicative unit algebra", "path": "units/r8c", "valid": 4, "static_invalid": 6, "runtime_negative": [], "historical_milestones": ["R8c"] },

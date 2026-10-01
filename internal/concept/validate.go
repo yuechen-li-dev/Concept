@@ -1929,7 +1929,9 @@ func evt1CABIValue(env *semanticEnv, t Type, visiting map[string]bool) (bool, st
 			return false, "field " + field.Name + ": " + reason
 		}
 	}
-	if evt1TypeHasDrop(env, t) {
+	// A Drop of its own or of any field: C would copy the value and never
+	// run the release.
+	if evt1StorageElementHasDrop(env, t.valueType()) {
 		return false, "aggregate carries destruction authority"
 	}
 	return true, ""
