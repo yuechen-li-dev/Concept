@@ -1,7 +1,10 @@
 # R9a convergence and issue ledger
 
-This is a progressing closure record, not a freeze declaration. Final commits and
-qualification are appended after closeout. R9b and frontend self-hosting are not begun.
+Result: MEANINGFUL PROGRESSION. Stage-0 is not frozen. Structured identity,
+context/admission fixes, numeric closure, runtime static expansion, declared
+predicates, one completed innate migration and an encoding workspace MVP work in
+their real paths. The remaining D1 implementation is isolated below. R9b and
+frontend self-hosting are not begun.
 
 | Item | Status / semantics | Evidence or remaining work |
 | --- | --- | --- |
@@ -55,3 +58,52 @@ selector metadata is deliberately observable; compiler attributes have strict po
 | generic requires | Required-operation/constraint closure | Structural concepts/witness metadata | Retain; declared predicates are evaluated with ordinary provenance |
 
 Audit scope is the current Stage-0 surfaces above, not future features or retired Zig.
+
+## Baseline, result and commits
+
+Baseline: 9004990cd2019dcef6aa1fe91c7ee07ecc0e75a7, clean merged main.
+Qualified code head: 59465422023918b76d13f83d482f2d5c4ab95936.
+Branch: codex/r9a-stage0-closure. Compiler: concept-evt1-stage0-go.
+Artifact envelope: concept-module.v2; structural application schema v1.
+Innate: innate-b8fa1458c50f6499. Full hashes and actual gate results are in
+R9A-CONFORMANCE; evaluator observations are in R9A-INNATE-SCALE.
+
+| Commit | Change |
+| --- | --- |
+| 77ac414 | Retain structural generic identity and close Stage-0 admission contexts |
+| ced4572 | Shadow immovable-field legality with an innate predicate |
+| 5939ef3 | Make innate CV4138 authoritative after corpus agreement |
+| 6278f55 | Remove Go immovable-field rule and retain innate closure qualification |
+| 7337368 | Measure innate library scale and clarify evaluator limit diagnostics |
+| 4013a27 | Close unsigned scalar, width-safe index, and generic rounding paths |
+| b75d832 | Evaluate declared predicates through concept proofs and root policy contexts |
+| 33b9441 | Expand runtime static control through the bounded evaluator and version semantic artifacts |
+| 3dc89d8 | Prefer comptime auto inference while retaining var compatibility |
+| 066ad37 | Normalize table-column generic arguments and repair structural-symbol regression probes |
+| 2814761 | Add caller-supplied encoding scratch and record the bounded bridge convergence path |
+| 5946542 | Apply canonical formatting to the static-control and encoding workspace sources |
+
+The final closeout documentation commit follows the qualified code head. No PR was
+published, no other repository was changed, and no background service was added.
+Qualification logs and the one-off runtime specimen harness remain ignored under
+artifacts/r9a. Source, tests, corpus and documentation changes are committed.
+
+## Isolated next closure item
+
+D1 still duplicates operand/record/sequence order in machineir_bridge.go and
+AMD64.concept. Existing GeneratorDecl can produce checked Concept FunctionDecls;
+it has no build-time Go codec output target. Implement the bounded emitter from
+checked Concept reflection, beginning with the operand record, and compare whole
+artifacts against the manual Go oracle before switching/removing each family.
+Generated schema hash/version identity and old-versus-derived differential tests
+are required. R9A-BRIDGE-CONVERGENCE records the exact order and acceptance gates.
+Current Go round-trip and native/C differential evidence passed; it does not stand
+in for the unimplemented derived-codec comparison.
+
+D2's requested MVP has a real caller-supplied encoding workspace. The decoder,
+liveness and allocator remain bounded; a complete growable backend is not claimed.
+Enum payload migration, generic Verdict, imported-byte reflection, fact-granting
+innate trust, broader Vulkan qualification and R9b research remain explicitly
+outside this closure. Field defaults remain unadmitted; named initializers already
+work. The next self-hosted stage must consume structural identity and the new
+artifact envelope rather than porting the retired name-reparse helper.

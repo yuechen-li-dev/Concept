@@ -6,8 +6,7 @@ ownership remains. Modifier/attribute and context holes are repaired; generic re
 records are checked after closure.
 
 Runtime-function static selection and bounded expansion now work in the C11 path.
-Ordinary predicate requirements
-now narrow concept satisfaction using declared proof provenance, including project
+Ordinary predicate requirements now narrow concept satisfaction using declared proof provenance, including project
 policy and artifact-only Assert.Concept. CV4138 has completed innate migration;
 large-library measurements support keeping the current limits and mutex.
 The bridge now has a concrete bounded derivation path and current round-trip/native
@@ -17,3 +16,9 @@ reflection, followed by old-versus-derived wire comparison and schema-hash ident
 Backend encoding has a real caller-supplied scratch path with explicit exhaustion;
 the liveness capacity mismatch is already absent at EVT2x6. Other backend phases
 remain bounded. Neither frontend self-hosting nor R9b is begun.
+
+The final qualification gates pass, including Standard/DragonGod/Golden/Vulkan in
+Normal and Verify, full Go, vet, both Zig suites, native paths and the race lane.
+This remains MEANINGFUL PROGRESSION until the D1 derived codec and its hash/version
+and shadow differential gates replace the manual bridge order. See R9A-CONVERGENCE
+for exact commits and R9A-CONFORMANCE for evidence and intentionally deferred scope.

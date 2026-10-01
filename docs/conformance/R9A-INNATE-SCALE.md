@@ -43,3 +43,15 @@ ownership, attributes, dependency identities and source sites. No cache is added
 Fuel and depth diagnostics now state current/configured values and the evaluation
 stack; loop and array diagnostics already state both values and carry source sites.
 Innate failures additionally identify the concept, predicate and judged declaration.
+
+## Final-source race qualification
+
+The earlier table is the non-race measurement captured before the workspace MVP.
+On the final source, the same scale/limit tests also passed under `go test -race`:
+76 modules; Standard has 387 predicate evaluations (seven additional declarations)
+and the other library counts remain 237/593/194. Equal repeated workloads contain
+304 validations and 5644 evaluations. With race instrumentation, serial wall was
+8.929s and four-worker wall 2.685s, with summed lock wait 6.123ms in the parallel
+run. Largest backend source is now 53,437 bytes. Peaks remain fuel 430, depth 8,
+loop 8 and array 0. Instrumented timings are a separate workload and must not be
+compared directly with the original non-race table. No race was reported.
