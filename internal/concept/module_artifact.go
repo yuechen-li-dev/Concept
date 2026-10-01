@@ -81,6 +81,7 @@ type SemanticModuleExports struct {
 type SemanticModuleArtifact struct {
 	SchemaVersion      string                                `json:"schema_version"`
 	CompilerIdentity   string                                `json:"compiler_identity"`
+	InnateIdentity     string                                `json:"innate_identity"`
 	ModuleIdentity     string                                `json:"module_identity"`
 	SourceIdentity     string                                `json:"source_identity"`
 	SourceSHA256       string                                `json:"source_sha256"`
@@ -103,7 +104,7 @@ var semanticGobOnce sync.Once
 func registerSemanticGobTypes() {
 	semanticGobOnce.Do(func() {
 		values := []any{
-			&OperationRequirement{}, &PrerequisiteRequirement{}, &FieldRequirement{}, &CompilerAnalysisRequirement{},
+			&OperationRequirement{}, &PrerequisiteRequirement{}, &FieldRequirement{}, &CompilerAnalysisRequirement{}, &PredicateRequirement{},
 			&IfStmt{}, &Block{}, &VarDecl{}, &YieldStmt{}, &PushMachineStmt{},
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &OnStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
@@ -157,6 +158,9 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	}
 	if artifact.CompilerIdentity != CompilerID {
 		return artifact, Module{}, fmt.Errorf("MODULE_COMPILER_INCOMPATIBLE: expected %s, got %s", CompilerID, artifact.CompilerIdentity)
+	}
+	if artifact.InnateIdentity != InnateIdentity() {
+		return artifact, Module{}, fmt.Errorf("MODULE_INNATE_STALE: %s was checked under innate concepts %q; this compiler carries %s; rebuild it", artifact.ModuleIdentity, artifact.InnateIdentity, InnateIdentity())
 	}
 	if err := validateSemanticFunctionFactSummaries(artifact.ValueFactSummaries); err != nil {
 		return artifact, Module{}, err
@@ -247,6 +251,7 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 	artifact := SemanticModuleArtifact{
 		SchemaVersion:      SemanticModuleSchema,
 		CompilerIdentity:   CompilerID,
+		InnateIdentity:     InnateIdentity(),
 		ModuleIdentity:     local.Name,
 		SourceIdentity:     local.Name,
 		SourceSHA256:       digest([]byte(source)),

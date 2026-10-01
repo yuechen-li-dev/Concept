@@ -1,0 +1,19 @@
+module Innate;
+profile Core;
+
+// The compiler's innate concepts: rules every Concept program satisfies,
+// written in Concept and applied by the compiler to every declaration of
+// their kind. No program can omit, weaken, or redefine them.
+//
+// This module ships inside the compiler. Its source hash is the innate
+// identity recorded in every semantic module artifact.
+// See docs/design/EVT2-INNATE-CONCEPTS.md.
+
+// The result of an innate predicate. Refuted names the declaration the
+// diagnostic points at, and a message that says what is wrong and how to fix
+// it. The compiler relies on this exact shape.
+enum Verdict
+{
+    Holds,
+    Refuted(declaration at, string message),
+}

@@ -423,11 +423,24 @@ type SemanticSubjectRef struct {
 	Span Span   `json:"span"`
 }
 
+// PredicateRequirement is `requires Predicate(D);`: a comptime function from
+// declaration subjects to Verdict decides the requirement.
+type PredicateRequirement struct {
+	Predicate string               `json:"predicate"`
+	Subjects  []SemanticSubjectRef `json:"subjects"`
+	Span      Span                 `json:"span"`
+}
+
+func (*PredicateRequirement) evt1ConceptRequirement() {}
+func (r *PredicateRequirement) requirementSpan() Span { return r.Span }
+
 func (*CompilerAnalysisRequirement) evt1ConceptRequirement() {}
 func (r *CompilerAnalysisRequirement) requirementSpan() Span { return r.Span }
 
 type ConceptDecl struct {
 	Name         string               `json:"name"`
+	Innate       bool                 `json:"innate,omitempty"`
+	Attributes   []Attribute          `json:"attributes,omitempty"`
 	Module       string               `json:"-"`
 	TypeParam    string               `json:"type_param"`
 	Parameters   []GenericParameter   `json:"parameters,omitempty"`
@@ -475,10 +488,13 @@ type TemplateDecl struct {
 }
 
 type GenericParameter struct {
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	ValueType Type   `json:"value_type,omitempty"`
-	Span      Span   `json:"span"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	// DeclarationKind narrows a declaration parameter to one kind, such as
+	// FieldDeclaration; innate concepts apply to every declaration of it.
+	DeclarationKind string `json:"declaration_kind,omitempty"`
+	ValueType       Type   `json:"value_type,omitempty"`
+	Span            Span   `json:"span"`
 }
 
 type GenericTypeDecl struct {
@@ -578,6 +594,10 @@ type TypeAliasDecl struct {
 }
 
 type Module struct {
+	// innateAuthority admits `innate concept`; only the compiler's embedded
+	// innate module is compiled with it.
+	innateAuthority bool
+
 	Path               string              `json:"path"`
 	Name               string              `json:"name,omitempty"`
 	Profile            string              `json:"profile"`
@@ -1846,6 +1866,7 @@ type MIRAsmOperand struct {
 }
 
 type semanticEnv struct {
+	innateAuthority         bool
 	handles                 map[string]HandleDecl
 	sourcePath              string
 	moduleName              string

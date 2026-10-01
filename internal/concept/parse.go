@@ -368,6 +368,19 @@ func (p *parser) parseModule() (Module, error) {
 				module.Enums = append(module.Enums, decl)
 				continue
 			}
+			if p.peekLexeme() == "concept" || p.peekLexeme() == "innate" && p.peekLexemeN(1) == "concept" {
+				innate := p.peekLexeme() == "innate"
+				if innate {
+					p.next()
+				}
+				decl, err := p.parseConceptDecl()
+				if err != nil {
+					return module, err
+				}
+				decl.Innate, decl.Attributes = innate, attributes
+				module.Concepts = append(module.Concepts, decl)
+				continue
+			}
 			if p.peekLexeme() == "template" && p.templateDeclIsRuntimeType() {
 				decl, err := p.parseGenericTypeDecl()
 				if err != nil {
@@ -592,6 +605,17 @@ func (p *parser) parseModule() (Module, error) {
 			if err != nil {
 				return module, err
 			}
+			module.Concepts = append(module.Concepts, conceptDecl)
+		case "innate":
+			p.next()
+			if p.peekLexeme() != "concept" {
+				return module, evt1Diagnostic("INNATE_CONCEPT_SHAPE", "innate applies to a concept declaration: innate concept Name<FieldDeclaration F> { ... }", p.currentSpan())
+			}
+			conceptDecl, err := p.parseConceptDecl()
+			if err != nil {
+				return module, err
+			}
+			conceptDecl.Innate = true
 			module.Concepts = append(module.Concepts, conceptDecl)
 		case "interface":
 			interfaceDecl, err := p.parseInterfaceDecl()
@@ -2019,16 +2043,19 @@ func (p *parser) parseConceptDecl() (ConceptDecl, error) {
 	var params []GenericParameter
 	conceptParams := map[string]bool{}
 	for {
-		kind := "type"
+		kind, declarationKind := "type", ""
 		if p.peekLexeme() == "declaration" {
 			p.next()
+			kind = "declaration"
+		} else if _, narrowed := evt1InnateDeclarationKinds[p.peekLexeme()]; narrowed && p.peekLexemeN(1) != "," && p.peekLexemeN(1) != ">" {
+			declarationKind = p.next().Lexeme
 			kind = "declaration"
 		}
 		paramTok, parseErr := p.expectIdentifier("CV4141", "expected concept parameter")
 		if parseErr != nil {
 			return ConceptDecl{}, parseErr
 		}
-		params = append(params, GenericParameter{Name: paramTok.Lexeme, Kind: kind, Span: paramTok.Span})
+		params = append(params, GenericParameter{Name: paramTok.Lexeme, Kind: kind, DeclarationKind: declarationKind, Span: paramTok.Span})
 		if kind == "type" {
 			conceptParams[paramTok.Lexeme] = true
 		}
@@ -2236,6 +2263,32 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 			requirement.TypeArg = types[0]
 		}
 		return requirement, nil
+	}
+	// `requires Predicate(D, ...);`: an operation requirement always spells
+	// its result type first, so a name directly followed by `(` is a
+	// predicate over declaration subjects.
+	if p.peekLexemeN(1) == "(" && !async && len(operationParams) == 0 && isIdentifier(p.peekLexeme()) {
+		name := p.next()
+		p.next()
+		req := &PredicateRequirement{Predicate: name.Lexeme, Span: name.Span}
+		for p.peekLexeme() != ")" {
+			subject, err := p.expectIdentifier("CV4527", "expected a declaration parameter")
+			if err != nil {
+				return nil, err
+			}
+			req.Subjects = append(req.Subjects, SemanticSubjectRef{Name: subject.Lexeme, Span: subject.Span})
+			if p.peekLexeme() != "," {
+				break
+			}
+			p.next()
+		}
+		if _, err := p.expect(")"); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(";"); err != nil {
+			return nil, err
+		}
+		return req, nil
 	}
 	retType, err := p.parseType(typeParam)
 	if err != nil {

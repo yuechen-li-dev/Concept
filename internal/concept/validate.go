@@ -558,6 +558,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	env := newSemanticEnv(profile)
 	env.moduleName = module.Name
 	env.sourcePath = module.Path
+	env.innateAuthority = module.innateAuthority
 	env.declarationSubjects = DeclarationSubjects(module)
 	for _, summary := range module.ImportedHardwareEffects {
 		env.importedHardwareEffects[evt1OperationEffectKey(summary.Operation, summary.Signature)] = summary
@@ -893,6 +894,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 			conceptParameterNames = append(conceptParameterNames, parameter.Name)
 		}
 		conceptParameterSet := strings.Join(conceptParameterNames, "|")
+		if err := evt1ValidateInnateConceptDecl(env, conceptDecl); err != nil {
+			return nil, err
+		}
 		seenMembers := map[string]bool{}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
@@ -1032,6 +1036,10 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 						}
 						return nil, err
 					}
+				}
+			case *PredicateRequirement:
+				if err := evt1ValidatePredicateRequirement(env, conceptDecl, r); err != nil {
+					return nil, err
 				}
 			default:
 				return nil, evt1Diagnostic("CV4147", "unsupported concept requirement", req.requirementSpan())

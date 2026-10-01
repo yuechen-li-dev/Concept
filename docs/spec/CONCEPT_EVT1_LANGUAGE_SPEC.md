@@ -448,6 +448,17 @@ semantic requirements. A template constraint consumes the resulting
 compile-time witness; lifetime analysis is not silently run across unrelated
 code.
 
+**Innate concepts (EVT2).** The compiler carries an embedded innate module.
+Its `innate concept` declarations take one declaration-kind parameter
+(`<FieldDeclaration F>`, `<TypeDeclaration T>`, ...), carry a
+`[[diagnostic("CODE")]]`, and require compile-time predicates
+(`requires Predicate(F);`, a comptime function from `declaration` to `Verdict`),
+compiler analyses, or other concepts. The compiler applies each innate concept
+to every declaration of its kind; no program can omit, weaken, or redefine
+them. `innate` is rejected outside the compiler's module. Semantic module
+artifacts record the innate identity they were checked under. See
+`docs/design/EVT2-INNATE-CONCEPTS.md`.
+
 **Deferred reconciliation.** Multiple parameters, specialization, negative
 concepts, orphan/coherence breadth, and the full PoC3 marker-concept system are
 not admitted by foundation.
