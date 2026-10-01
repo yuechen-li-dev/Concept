@@ -4,10 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// The strangler protocol for a rule moving from Go into an innate concept:
+// The strangler protocol for a rule moving from Go into an innate concept
+// (EVT2-INNATE-CONCEPTS.md): shadow, switch, delete. During shadow and switch,
 // the Go rule and the innate concept run separately over the whole corpus
 // and the rule's own cases, and must agree on every file: the same
 // diagnostic code, site, and message, or both silent.
@@ -80,19 +82,43 @@ func assertInnateAgreement(t *testing.T, code string, cases []innateAgreementCas
 
 const cv4653Header = "module Ownership;\nprofile Core;\n\nclass Resource\n{\npublic:\n    int id;\n};\n\nvoid Drop(owned Resource resource)\n{\n}\n\n"
 
-func TestCV4653GoAndInnateAgree(t *testing.T) {
+// CV4653 completed the protocol (shadow, switch, delete); its Go rule is
+// gone and DroppableFieldIsOwned in the innate module is the only
+// implementation. These are the rule's cases, now checked directly.
+func TestCV4653IsTheInnateConcept(t *testing.T) {
 	t.Parallel()
-	cases := innateAgreementCorpus(t)
-	for name, body := range map[string]string{
-		"plain":            "class Holder\n{\npublic:\n    Resource resource;\n};\n",
-		"owned":            "class Holder\n{\npublic:\n    owned Resource resource;\n};\n",
-		"record":           "record struct Holder\n{\n    int count;\n    Resource resource;\n};\n",
-		"borrowed":         "ref struct Holder\n{\n    ref const Resource resource;\n}\n",
-		"generic instance": "template <typename T>\nstruct Box\n{\n    T value;\n}\n\nint Use()\n{\n    owned Resource resource = Resource{7};\n    owned Box<Resource> box = Box<Resource>{move resource};\n    return box.value.id;\n}\n",
-		"owned generic":    "template <typename T>\nstruct Box\n{\n    owned T value;\n}\n\nint Use()\n{\n    owned Box<Resource> box = Box<Resource>{Resource{1}};\n    owned Box<int> count = Box<int>{2};\n    return box.value.id + count.value;\n}\n",
-		"plain generic":    "template <typename T>\nstruct Box\n{\n    T value;\n}\n\nint Use()\n{\n    Box<int> count = Box<int>{2};\n    return count.value;\n}\n",
+	for name, tc := range map[string]struct {
+		body, message string
+		line          int
+	}{
+		"plain":            {"class Holder\n{\npublic:\n    Resource resource;\n};\n", "field Holder.resource holds Resource, which has a Drop; declare it `owned Resource resource;`", 17},
+		"record":           {"record struct Holder\n{\n    int count;\n    Resource resource;\n};\n", "field Holder.resource holds Resource, which has a Drop; declare it `owned Resource resource;`", 17},
+		"generic instance": {"template <typename T>\nstruct Box\n{\n    T value;\n}\n\nint Use()\n{\n    owned Resource resource = Resource{7};\n    owned Box<Resource> box = Box<Resource>{move resource};\n    return box.value.id;\n}\n", "field Box<Resource>.value holds Resource, which has a Drop; declare it `owned T value;` in Box", 17},
+		"owned":            {"class Holder\n{\npublic:\n    owned Resource resource;\n};\n", "", 0},
+		"borrowed":         {"ref struct Holder\n{\n    ref const Resource resource;\n}\n", "", 0},
+		"owned generic":    {"template <typename T>\nstruct Box\n{\n    owned T value;\n}\n\nint Use()\n{\n    owned Box<Resource> box = Box<Resource>{Resource{1}};\n    owned Box<int> count = Box<int>{2};\n    return box.value.id + count.value;\n}\n", "", 0},
+		"plain generic":    {"template <typename T>\nstruct Box\n{\n    T value;\n}\n\nint Use()\n{\n    Box<int> count = Box<int>{2};\n    return count.value;\n}\n", "", 0},
 	} {
-		cases = append(cases, innateAgreementCase{"cv4653/" + name + ".concept", cv4653Header + body})
+		name, tc := name, tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := Parse("cv4653.concept", cv4653Header+tc.body)
+			if tc.message == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var diagnostic Diagnostic
+			if !errors.As(err, &diagnostic) || diagnostic.Code != "CV4653" {
+				t.Fatalf("expected CV4653, got %v", err)
+			}
+			if diagnostic.Message != tc.message || diagnostic.Span.Line != tc.line {
+				t.Fatalf("got %q at line %d", diagnostic.Message, diagnostic.Span.Line)
+			}
+			if diagnostic.Proof == nil || !strings.Contains(diagnostic.Proof.Reason, "DroppableFieldIsOwned (CV4653)") {
+				t.Fatalf("the diagnostic carries the innate concept's proof: %+v", diagnostic.Proof)
+			}
+		})
 	}
-	assertInnateAgreement(t, "CV4653", cases)
 }

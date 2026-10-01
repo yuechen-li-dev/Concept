@@ -561,9 +561,7 @@ type evt1AnalysisOptions struct {
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
 // retired rule runs only when an agreement test asks for it, and is deleted
 // once the switch has held.
-var evt1RetiredGoRules = map[string]bool{
-	"CV4653": true,
-}
+var evt1RetiredGoRules = map[string]bool{}
 
 func (e *semanticEnv) goRule(code string) bool {
 	if e.options.goRulesOn[code] {
@@ -1322,14 +1320,6 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 	if err := evt1InstantiateGenericDrops(env); err != nil {
 		return nil, err
 	}
-	for _, structDecl := range module.Structs {
-		if !env.goRule("CV4653") {
-			break
-		}
-		if err := evt1ValidateDropFieldsAreOwned(env, structDecl, nil); err != nil {
-			return nil, err
-		}
-	}
 	if err := evt1ValidateGenericInstanceStructs(env, module); err != nil {
 		return nil, err
 	}
@@ -1371,18 +1361,6 @@ func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
 		if err := evt1ValidateStructFieldEmbedding(env, instance); err != nil {
 			return err
 		}
-		var template *StructDecl
-		if application, ok := env.genericTypeApplications[name]; ok {
-			if generic, ok := env.genericTypes[application.Name]; ok {
-				template = &generic.Struct
-			}
-		}
-		if !env.goRule("CV4653") {
-			continue
-		}
-		if err := evt1ValidateDropFieldsAreOwned(env, instance, template); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -1411,28 +1389,6 @@ func evt1ValidateStructFieldEmbedding(env *semanticEnv, structDecl StructDecl) e
 		if !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
 			return evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
 		}
-	}
-	return nil
-}
-
-// evt1ValidateDropFieldsAreOwned rejects a field whose type has a Drop but
-// which is not declared `owned`. Structural Drop runs only for owned fields,
-// so such a field would copy destruction authority in and never release it.
-// For a generic instance, template is the generic declaration, so the fix
-// names the field as the template spells it.
-func evt1ValidateDropFieldsAreOwned(env *semanticEnv, structDecl StructDecl, template *StructDecl) error {
-	for i, field := range structDecl.Fields {
-		if field.Type.isOwned() || field.Type.isBorrowLike() {
-			continue
-		}
-		if evt1DropFunction(env, field.Type) == nil {
-			continue
-		}
-		if template != nil && i < len(template.Fields) {
-			spelled := template.Fields[i].Type.String()
-			return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;` in %s", structDecl.Name, field.Name, field.Type.Name, spelled, field.Name, template.Name), field.Span)
-		}
-		return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;`", structDecl.Name, field.Name, field.Type.Name, field.Type.Name, field.Name), field.Span)
 	}
 	return nil
 }

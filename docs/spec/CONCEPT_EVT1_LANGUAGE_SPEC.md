@@ -1646,7 +1646,9 @@ variadic/template-metaprogramming sublanguage.
 
 Structural Drop releases `owned` fields in reverse declaration order. A field
 whose type has a Drop must be declared `owned`; otherwise the aggregate would
-hold destruction authority it never exercises, and the declaration is CV4653.
+hold destruction authority it never exercises, and the declaration is CV4653. This rule
+is the innate concept `DroppableFieldIsOwned`, and it applies to closed
+generic instances, where the fix is `owned T` in the template.
 
 `SizeOf<T>()` and `AlignOf<T>()` are compile-time-only `usize` queries over the
 existing fixed-layout geometry authority. They accept a generic parameter

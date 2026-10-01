@@ -243,6 +243,27 @@ Each Go rule moves in three commits:
    the agreement test only.
 3. **Delete.** The Go rule is removed.
 
+### As built in IC5
+
+CV4653 is the first rule written in Concept. `DroppableFieldIsOwned` in
+`Innate.concept` reproduces the Go rule's judgment and wording; two
+observations, `TemplateName` and `DeclaredTypeName`, give it the template
+spelling for generic instances. The protocol ran as designed:
+
+1. Shadow: both implementations ran; `evt1AnalysisOptions` let a test run
+   each alone, and the agreement test compared them over every corpus file
+   (valid and invalid) plus seven targeted cases. They agreed on code, site,
+   and message everywhere.
+2. Switch: the Go rule was retired (`evt1RetiredGoRules`) and ran only in the
+   agreement test.
+3. Delete: the Go rule is gone. The agreement harness
+   (`assertInnateAgreement`) stays for the next rule; CV4653's cases are now
+   direct tests of the innate concept.
+
+A CV4653 diagnostic now carries the innate concept's proof graph, so
+`concept check` prints which concept refuted the field and `concept explain`
+on the field shows it.
+
 ## Pilots
 
 1. **CV4653, droppable fields are owned.** Per field, no iteration, a corpus
@@ -266,7 +287,7 @@ clean, the mechanism is ready for the rest of the declarative layer.
 | IC2 | `declaration` / `typename` subject values; observation list; `Verdict` shape tested (the enum itself ships in the innate module, IC3); done |
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash; done |
 | IC4 | Application engine, proof-graph nodes, `explain`, `INNATE_UNDECIDED`; done |
-| IC5 | CV4653: shadow, switch, delete |
+| IC5 | CV4653: shadow, switch, delete; done (`4d3b92a`, `c7ebe48`, and the deletion) |
 | IC6 | C_ABI_REPR_INVALID: shadow, switch, delete; spec section |
 
 ## Not in the MVP
