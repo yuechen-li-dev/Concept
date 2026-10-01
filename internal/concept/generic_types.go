@@ -88,6 +88,12 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			application.TypeArgs[i] = resolved
 		}
 		if decl.Parameters[i].Kind == "type" {
+			resolved, err := evt1ResolveType(env, nil, arg)
+			if err != nil {
+				return Type{}, err
+			}
+			arg = resolved
+			application.TypeArgs[i] = resolved
 			if arg.Kind == TypeTemplateValue {
 				return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_KIND", "type template parameter requires a type", arg.Span)
 			}
@@ -104,19 +110,23 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 		parts[i] = arg.String()
 	}
 	identity := decl.Name + "<" + strings.Join(parts, ", ") + ">"
-	if instance, ok := env.genericTypeInstances[identity]; ok {
-		env.structs[identity] = instance
-		env.genericTypeApplications[identity] = application
-		return evt1AppliedConcreteType(application, identity), nil
+	metadata := evt1NewGenericApplication(decl, application.TypeArgs)
+	key := evt1GenericApplicationKey(metadata)
+	if name, ok := env.genericTypeKeys[key]; ok {
+		return evt1AppliedConcreteType(application, name, metadata), nil
 	}
-	if env.genericInstantiating[identity] {
+	if previous, ok := env.structs[identity]; ok && !evt1GenericApplicationsEqual(previous.Application, metadata) {
+		return Type{}, evt1Diagnostic("GENERIC_IDENTITY_COLLISION", "distinct generic applications have the same display spelling: "+identity, application.Span)
+	}
+	if env.genericInstantiating[key] {
 		return Type{}, evt1Diagnostic("GENERIC_RECURSIVE_INSTANTIATION", "recursive generic instantiation: "+identity, application.Span)
 	}
-	env.genericInstantiating[identity] = true
-	defer delete(env.genericInstantiating, identity)
+	env.genericInstantiating[key] = true
+	defer delete(env.genericInstantiating, key)
 
 	instance := evt1CloneStructDecl(decl.Struct)
 	instance.Name = identity
+	instance.Application = metadata
 	for i := range instance.Fields {
 		fieldType := instance.Fields[i].Type
 		for j, param := range decl.Parameters {
@@ -162,6 +172,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			if method.Params[k].Name == "self" {
 				method.Params[k].Type.Name = identity
 				method.Params[k].Type.Kind = TypeStruct
+				method.Params[k].Type.Application = metadata
 			}
 		}
 		instance.Methods[i] = method
@@ -183,6 +194,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	}
 	env.structs[identity] = instance
 	env.genericTypeInstances[identity] = instance
+	env.genericTypeKeys[key] = identity
 	env.genericTypeApplications[identity] = application
 	for _, method := range instance.Methods {
 		duplicate := false
@@ -201,7 +213,7 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 		fields[field.Name] = field.Type
 	}
 	env.fieldSets[identity] = fields
-	return evt1AppliedConcreteType(application, identity), nil
+	return evt1AppliedConcreteType(application, identity, metadata), nil
 }
 
 func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args []Type) Type {
@@ -277,8 +289,8 @@ func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args [
 	return t
 }
 
-func evt1AppliedConcreteType(source Type, identity string) Type {
-	return Type{Name: identity, Kind: TypeStruct, Ownership: source.Ownership, Const: source.Const, Scoped: source.Scoped, Imported: source.Imported, Unsafe: source.Unsafe, Span: source.Span}
+func evt1AppliedConcreteType(source Type, identity string, application *GenericApplication) Type {
+	return Type{Name: identity, Kind: TypeStruct, Application: application, Ownership: source.Ownership, Const: source.Const, Scoped: source.Scoped, Imported: source.Imported, Unsafe: source.Unsafe, Span: source.Span}
 }
 
 // evt1StructView returns the field structure of either a concrete nominal

@@ -1,0 +1,14 @@
+module Closure.CPair;
+profile Core;
+[[repr(C)]]
+template <typename T>
+record struct Pair
+{
+    T first;
+    T second;
+};
+static_assert(SizeOf<Pair<int>>() == 8, "closed repr C pair size");
+static_assert(AlignOf<Pair<int>>() == 4, "closed repr C pair alignment");
+Pair<int> Make() {
+    return Pair<int>{second = 2, first = 1};
+}

@@ -90,7 +90,7 @@ func evt1InnateSubjects(env *semanticEnv, module Module) []evt1DeclarationRef {
 		}
 	}
 	for _, decl := range module.Structs {
-		if decl.Module == module.Name && !strings.Contains(decl.Name, "<") {
+		if decl.Module == module.Name && decl.Application == nil {
 			addType(decl.Name)
 		}
 	}

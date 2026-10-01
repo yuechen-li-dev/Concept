@@ -200,7 +200,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Name:               structDecl.Name,
 			BitsRepresentation: structDecl.BitsRepresentation,
 			BitFields:          append([]BitFieldDecl{}, structDecl.BitFields...),
-			CName:              evt1CName(structDecl.Name),
+			CName:              evt1StructCName(structDecl),
 			Immovable:          structDecl.Immovable,
 			Record:             structDecl.Record,
 			Ref:                structDecl.Ref,
@@ -1901,7 +1901,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		if len(l.module.TypeAliases) == 0 && !spanStructs[decl.Name] {
 			continue
 		}
-		header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1CName(decl.Name), evt1CName(decl.Name)))
+		header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1StructCName(decl), evt1StructCName(decl)))
 		forwardCount++
 	}
 	if forwardCount > 0 {
@@ -2538,7 +2538,7 @@ func evt1AutomataDropCName(automataName string) string { return evt1CName(automa
 
 func (l *lowering) structHeader(structDecl StructDecl) string {
 	var b strings.Builder
-	name := evt1CName(structDecl.Name)
+	name := evt1StructCName(structDecl)
 	b.WriteString(fmt.Sprintf("typedef struct %s {\n", name))
 	if len(structDecl.Fields) == 0 {
 		// C11 has no empty structs. The byte is an ABI-only placeholder; Concept
@@ -2587,8 +2587,8 @@ func (l *lowering) semanticViewDeclarations() string {
 
 func (l *lowering) structConstructor(structDecl StructDecl) string {
 	var b strings.Builder
-	typeName := evt1CName(structDecl.Name)
-	ctor := evt1StructConstructorName(structDecl.Name)
+	typeName := evt1StructCName(structDecl)
+	ctor := evt1StructConstructorName(structDecl)
 	b.WriteString(fmt.Sprintf("static %s %s(", typeName, ctor))
 	if len(structDecl.Fields) == 0 {
 		b.WriteString("void")
@@ -2688,8 +2688,8 @@ func (l *lowering) enumConstructors(enumDecl EnumDecl) string {
 	return b.String()
 }
 
-func evt1StructConstructorName(structName string) string {
-	return evt1CName(structName) + "_make"
+func evt1StructConstructorName(decl StructDecl) string {
+	return evt1StructCName(decl) + "_make"
 }
 
 func evt1ConstructorName(enumName, variantName string) string {
@@ -2769,6 +2769,9 @@ func evt1CType(t Type) string {
 	}
 	if builtin, ok := evt1BuiltinDefinition(t.Name); ok {
 		return builtin.CType
+	}
+	if t.Application != nil {
+		return evt1GenericCName(t.Application)
 	}
 	return evt1CName(t.Name)
 }
@@ -4560,7 +4563,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return prelude.String(), ctor + "(" + strings.Join(args, ", ") + ")", enumType
 	case *StructConstructExpr:
-		structType := Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}
+		structType := evt1CanonicalType(f.l.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span})
 		var prelude strings.Builder
 		var args []string
 		var initializers []string
@@ -4602,7 +4605,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if !evt1TypeCopyable(f.l.env, structType) {
 			return prelude.String(), "(" + evt1CType(structType) + "){ " + strings.Join(initializers, ", ") + " }", structType
 		}
-		return prelude.String(), evt1StructConstructorName(e.StructName) + "(" + strings.Join(args, ", ") + ")", structType
+		return prelude.String(), evt1StructConstructorName(structDecl) + "(" + strings.Join(args, ", ") + ")", structType
 	case *WithExpr:
 		basePrelude, baseExpr, baseType := f.lowerExpr(e.Base, indent)
 		resultTemp := f.nextTemp("record_with")
@@ -5182,7 +5185,7 @@ func evt1RenderCValue(env *semanticEnv, value Value) string {
 		for _, field := range structDecl.Fields {
 			parts = append(parts, evt1RenderCValue(env, value.Fields[field.Name]))
 		}
-		return evt1StructConstructorName(value.StructName) + "(" + strings.Join(parts, ", ") + ")"
+		return evt1StructConstructorName(structDecl) + "(" + strings.Join(parts, ", ") + ")"
 	case ValueEnum:
 		parts := make([]string, 0, len(value.Payload))
 		for _, entry := range value.Payload {

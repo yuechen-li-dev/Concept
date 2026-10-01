@@ -3,7 +3,6 @@ package concept
 import (
 	"fmt"
 	"sort"
-	"strings"
 )
 
 // DeclarationKind describes a checked semantic declaration, not a token shape.
@@ -61,7 +60,7 @@ func DeclarationSubjects(module Module) []DeclarationSubject {
 	for _, decl := range module.Structs {
 		// Closed generic instances are semantic types, but are not new authored
 		// declarations and must not acquire a second naming obligation.
-		if strings.Contains(decl.Name, "<") {
+		if decl.Application != nil {
 			continue
 		}
 		add(TypeDeclaration, decl.Name, decl.Module, DeclarationAuthored, decl.Span)

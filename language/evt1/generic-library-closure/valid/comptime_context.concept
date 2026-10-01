@@ -1,0 +1,37 @@
+module Closure.Context;
+profile Core;
+
+record struct Pair {
+    int first;
+    int second;
+}
+enum Payload {
+    Value(Pair pair), Empty
+}
+comptime int Index(int value) {
+    return value;
+}
+comptime int Sum(int<array>[2] values) {
+    return values[0] + values[1];
+}
+comptime int Evaluate()
+{
+    int<array>[2] values =[1, 2];
+    int first = values[Index(values[1] - 2)];
+    int extra = Sum([Index(first) + 3, 3]);
+    Payload payload = Payload::Value(Pair{Sum([Index(values[1]) - 2, 1]), 2});
+    int total = 0;
+    foreach(int value in values) {
+        total = total + value;
+    }
+    return match (payload)
+    {
+        Payload::Value(pair) => match
+        {
+            when pair.first == 1 => total + pair.second + extra,
+            otherwise => 0,
+        },
+        Payload::Empty => 0,
+    };
+}
+static_assert(Evaluate() == 12, "nested validation retains comptime context");

@@ -137,7 +137,7 @@ func evt1TypenameValue(t Type) Value {
 func evt1TypeDeclarationRef(env *semanticEnv, name string) (evt1DeclarationRef, bool) {
 	if decl, ok := env.structs[name]; ok {
 		provenance := DeclarationAuthored
-		if strings.Contains(name, "<") {
+		if decl.Application != nil {
 			provenance = DeclarationGenerated
 		}
 		return evt1DeclarationRef{Kind: TypeDeclaration, Name: decl.Name, Owner: decl.Module, Index: -1, Provenance: provenance, Site: decl.Span}, true

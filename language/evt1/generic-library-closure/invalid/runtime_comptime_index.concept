@@ -1,0 +1,11 @@
+module Closure.RuntimeIndex;
+profile Core;
+comptime int Index(int value) {
+    return value;
+}
+int Runtime(int runtimeIndex)
+{
+    int<array>[2] values =[1, 2];
+    values[Index(runtimeIndex)] = 3;
+    return values[0];
+}

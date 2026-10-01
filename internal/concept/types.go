@@ -63,6 +63,7 @@ type Type struct {
 	Unsafe              bool                `json:"unsafe,omitempty"`
 	PointerTo           *Type               `json:"pointer_to,omitempty"`
 	TypeArgs            []Type              `json:"type_args,omitempty"`
+	Application         *GenericApplication `json:"generic_application,omitempty"`
 	TensorRank          int                 `json:"tensor_rank,omitempty"`
 	TensorSpelling      string              `json:"-"`
 	AsyncOrigin         string              `json:"async_origin,omitempty"`
@@ -104,6 +105,9 @@ func (t Type) String() string {
 		parts = append(parts, "const")
 	}
 	base := t.Name
+	if t.Application != nil {
+		base = t.Application.Type().String()
+	}
 	if t.Kind == TypeCallable || t.Kind == TypeCallback {
 		var params []string
 		for _, param := range t.CallableParams {
@@ -155,7 +159,10 @@ func (t Type) Equal(other Type) bool {
 	if leftIsFloat != rightIsFloat || (leftIsFloat && leftFloat.Representation != rightFloat.Representation) {
 		return false
 	}
-	if t.Name != other.Name ||
+	if !evt1GenericApplicationsEqual(t.Application, other.Application) {
+		return false
+	}
+	if (t.Application == nil && t.Name != other.Name) ||
 		t.Kind != other.Kind ||
 		t.Ownership != other.Ownership ||
 		t.Const != other.Const ||
@@ -323,23 +330,24 @@ type StreamChannel struct {
 }
 
 type StructDecl struct {
-	Name                       string         `json:"name"`
-	BitsRepresentation         string         `json:"bits_representation,omitempty"`
-	BitFields                  []BitFieldDecl `json:"bit_fields,omitempty"`
-	Module                     string         `json:"module,omitempty"`
-	Attributes                 []Attribute    `json:"attributes,omitempty"`
-	Immovable                  bool           `json:"immovable"`
-	Record                     bool           `json:"record"`
-	Ref                        bool           `json:"ref,omitempty"`
-	Class                      bool           `json:"class,omitempty"`
-	Table                      bool           `json:"table,omitempty"`
-	TableSized                 bool           `json:"table_sized,omitempty"`
-	TableCardinalityExpression string         `json:"table_cardinality_expression,omitempty"`
-	TableCardinality           int            `json:"table_cardinality,omitempty"`
-	Fields                     []Field        `json:"fields"`
-	Methods                    []FunctionDecl `json:"methods,omitempty"`
-	Span                       Span           `json:"span"`
-	RecordSpan                 Span           `json:"record_span,omitempty"`
+	Name                       string              `json:"name"`
+	Application                *GenericApplication `json:"generic_application,omitempty"`
+	BitsRepresentation         string              `json:"bits_representation,omitempty"`
+	BitFields                  []BitFieldDecl      `json:"bit_fields,omitempty"`
+	Module                     string              `json:"module,omitempty"`
+	Attributes                 []Attribute         `json:"attributes,omitempty"`
+	Immovable                  bool                `json:"immovable"`
+	Record                     bool                `json:"record"`
+	Ref                        bool                `json:"ref,omitempty"`
+	Class                      bool                `json:"class,omitempty"`
+	Table                      bool                `json:"table,omitempty"`
+	TableSized                 bool                `json:"table_sized,omitempty"`
+	TableCardinalityExpression string              `json:"table_cardinality_expression,omitempty"`
+	TableCardinality           int                 `json:"table_cardinality,omitempty"`
+	Fields                     []Field             `json:"fields"`
+	Methods                    []FunctionDecl      `json:"methods,omitempty"`
+	Span                       Span                `json:"span"`
+	RecordSpan                 Span                `json:"record_span,omitempty"`
 }
 
 // BitFieldDecl describes a value projection. End is inclusive; no C bitfield
@@ -1920,6 +1928,7 @@ type semanticEnv struct {
 	foreignByOperation      map[string]ForeignContractDecl
 	genericTypes            map[string]GenericTypeDecl
 	genericTypeInstances    map[string]StructDecl
+	genericTypeKeys         map[string]string
 	genericTypeApplications map[string]Type
 	genericInstantiating    map[string]bool
 }
@@ -1971,6 +1980,7 @@ func newSemanticEnv(profile *ProfileDefinition) *semanticEnv {
 		foreignByOperation:      map[string]ForeignContractDecl{},
 		genericTypes:            map[string]GenericTypeDecl{},
 		genericTypeInstances:    map[string]StructDecl{},
+		genericTypeKeys:         map[string]string{},
 		genericTypeApplications: map[string]Type{},
 		genericInstantiating:    map[string]bool{},
 	}

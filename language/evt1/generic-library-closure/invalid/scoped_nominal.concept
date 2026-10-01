@@ -1,0 +1,6 @@
+module Closure.ScopedNominal;
+profile Core;
+struct Item {
+    int value;
+}
+void Read(scoped Item value) { }

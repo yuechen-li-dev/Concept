@@ -1,5 +1,18 @@
 # Reusable semantic modules
 
+R9a retains the `concept-module.v1` envelope and requires
+`generic_application_schema: "concept-generic-application.v1"`. Rebuild older
+artifacts: the loader reports `MODULE_GENERIC_SCHEMA_STALE`; it never reparses
+nominal names for compatibility. The inspectable `generic_applications` list
+matches the payload's closed declarations. Each application stores its defining
+module and declaration name plus ordered, tagged type or typed integer arguments.
+Nested applications retain this structure; aliases follow ordinary canonical
+resolution. Types and closed declarations both retain application metadata.
+Display spelling is derived; C symbols include a structural identity digest.
+
+Self-hosted frontend stages consume structured generic application identity;
+they do not port Stage-0 string reparsing.
+
 `concept-module.v1` can carry symbolic generic method access summaries.
 Artifact-only consumers instantiate those summaries with their own concrete
 type and value bindings. Older artifacts without the summary supply no

@@ -369,7 +369,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return Value{
 			Kind:       ValueStruct,
-			Type:       Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span},
+			Type:       evt1CanonicalType(state.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}),
 			StructName: e.StructName,
 			Fields:     fields,
 		}, nil

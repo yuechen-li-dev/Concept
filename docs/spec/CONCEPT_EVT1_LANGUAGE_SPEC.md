@@ -1,5 +1,12 @@
 # Concept EVT1 language specification
 
+R9a closure: generic ownership remains explicitly authored (`owned T value`), even
+for trivial instantiations. Generic `[[repr(C)]] record struct` declarations are admitted;
+each closed plain-data instance establishes C value/layout legality. Generic identity
+and artifact transport are structural. Unsupported `unsafe`/`imported` type modifiers
+and conflicting/repeated qualifiers reject; unsafe asm and module imports remain.
+Named aggregate fields evaluate in source expression order. Defaults are unsupported.
+
 Status: R5 language-core semantics frozen for R6 tooling
 
 This document defines the authority categories and the smallest currently

@@ -1404,6 +1404,8 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 		aggregate, err = p.parseStructDecl(false, false, true)
 	} else if p.peekLexeme() == "struct" {
 		aggregate, err = p.parseStructDecl(false, false, false)
+	} else if p.peekLexeme() == "record" {
+		aggregate, err = p.parseStructDecl(false, true, false)
 	} else {
 		aggregate, err = p.parseClassDecl()
 	}
@@ -2453,24 +2455,37 @@ func (p *parser) parseType(conceptParam string) (Type, error) {
 	for {
 		switch p.peekLexeme() {
 		case "unsafe":
-			t.Unsafe = true
-			p.next()
+			return Type{}, evt1Diagnostic("TYPE_QUALIFIER_UNSUPPORTED", "unsafe type qualifiers have no qualified semantics; use an explicit foreign contract or unsafe asm", p.currentSpan())
 		case "imported":
-			t.Imported = true
-			p.next()
+			return Type{}, evt1Diagnostic("TYPE_QUALIFIER_UNSUPPORTED", "imported type qualifiers have no qualified semantics; import the defining semantic module", p.currentSpan())
 		case "owned":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "owned"
 			p.next()
 		case "borrow":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "borrow"
 			p.next()
 		case "ref":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "ref"
 			p.next()
 		case "scoped":
+			if t.Scoped {
+				return Type{}, evt1Diagnostic("TYPE_QUALIFIER_DUPLICATE", "write scoped only once", p.currentSpan())
+			}
 			t.Scoped = true
 			p.next()
 		case "const":
+			if t.Const {
+				return Type{}, evt1Diagnostic("TYPE_QUALIFIER_DUPLICATE", "write const only once", p.currentSpan())
+			}
 			t.Const = true
 			p.next()
 		default:
