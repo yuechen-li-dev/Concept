@@ -1,0 +1,27 @@
+profile Core;
+
+// CV4653 applies to closed generic instances: Box<Resource> holds a
+// Resource in a field that is not `owned`, so its Drop would never run. The
+// template must declare `owned T value;`.
+class Resource
+{
+public:
+    int id;
+};
+
+void Drop(owned Resource resource)
+{
+}
+
+template <typename T>
+struct Box
+{
+    T value;
+}
+
+int Use()
+{
+    owned Resource resource = Resource{7};
+    owned Box<Resource> box = Box<Resource>{move resource};
+    return box.value.id;
+}

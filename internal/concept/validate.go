@@ -796,10 +796,8 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
-		if evt1HasCRepr(structDecl.Attributes) {
-			if ok, reason := evt1CABIValue(env, Type{Name: structDecl.Name, Kind: TypeStruct}, map[string]bool{}); !ok {
-				return nil, evt1Diagnostic("C_ABI_REPR_INVALID", structDecl.Name+": "+reason, structDecl.Span)
-			}
+		if err := evt1ValidateCRepr(env, structDecl); err != nil {
+			return nil, err
 		}
 		fields := map[string]Type{}
 		for _, field := range structDecl.Fields {
@@ -858,19 +856,8 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
-		for _, field := range structDecl.Fields {
-			if field.Type.Kind == TypeCallable && field.Type.CallableProvenance != string(evt1ProvenanceStatic) && !structDecl.Ref {
-				return nil, evt1Diagnostic("CALLABLE_FIELD_REF_ESCAPE", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound callable field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
-			}
-			if field.Type.isReference() && !structDecl.Ref {
-				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain reference field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
-			}
-			if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
-				return nil, evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
-			}
-			if !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
-				return nil, evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
-			}
+		if err := evt1ValidateStructFieldEmbedding(env, structDecl); err != nil {
+			return nil, err
 		}
 	}
 	for _, enumDecl := range module.Enums {
@@ -1297,26 +1284,102 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	if err := evt1InstantiateGenericDrops(env); err != nil {
 		return nil, err
 	}
-	if err := evt1ValidateDropFieldsAreOwned(env, module); err != nil {
+	for _, structDecl := range module.Structs {
+		if err := evt1ValidateDropFieldsAreOwned(env, structDecl, nil); err != nil {
+			return nil, err
+		}
+	}
+	if err := evt1ValidateGenericInstanceStructs(env, module); err != nil {
 		return nil, err
 	}
 	return env, nil
 }
 
+// evt1ValidateGenericInstanceStructs applies the declaration rules for
+// structs to the closed generic instances this analysis materialized. Parse
+// materializes them into the module only after analysis, and Generate
+// re-analyzes the module with them in place; checking them here keeps
+// `concept check` exactly as strict as code generation.
+func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
+	declared := map[string]bool{}
+	for _, structDecl := range module.Structs {
+		declared[structDecl.Name] = true
+	}
+	names := make([]string, 0, len(env.genericTypeInstances))
+	for name := range env.genericTypeInstances {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		instance := env.genericTypeInstances[name]
+		if declared[instance.Name] {
+			continue
+		}
+		if err := evt1ValidateCRepr(env, instance); err != nil {
+			return err
+		}
+		if err := evt1ValidateStructFieldEmbedding(env, instance); err != nil {
+			return err
+		}
+		var template *StructDecl
+		if application, ok := env.genericTypeApplications[name]; ok {
+			if generic, ok := env.genericTypes[application.Name]; ok {
+				template = &generic.Struct
+			}
+		}
+		if err := evt1ValidateDropFieldsAreOwned(env, instance, template); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func evt1ValidateCRepr(env *semanticEnv, structDecl StructDecl) error {
+	if !evt1HasCRepr(structDecl.Attributes) {
+		return nil
+	}
+	if ok, reason := evt1CABIValue(env, Type{Name: structDecl.Name, Kind: TypeStruct}, map[string]bool{}); !ok {
+		return evt1Diagnostic("C_ABI_REPR_INVALID", structDecl.Name+": "+reason, structDecl.Span)
+	}
+	return nil
+}
+
+func evt1ValidateStructFieldEmbedding(env *semanticEnv, structDecl StructDecl) error {
+	for _, field := range structDecl.Fields {
+		if field.Type.Kind == TypeCallable && field.Type.CallableProvenance != string(evt1ProvenanceStatic) && !structDecl.Ref {
+			return evt1Diagnostic("CALLABLE_FIELD_REF_ESCAPE", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound callable field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
+		}
+		if field.Type.isReference() && !structDecl.Ref {
+			return evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain reference field %s; declare a ref struct", structDecl.Name, field.Name), field.Span)
+		}
+		if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
+			return evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
+		}
+		if !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
+			return evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
+		}
+	}
+	return nil
+}
+
 // evt1ValidateDropFieldsAreOwned rejects a field whose type has a Drop but
 // which is not declared `owned`. Structural Drop runs only for owned fields,
 // so such a field would copy destruction authority in and never release it.
-func evt1ValidateDropFieldsAreOwned(env *semanticEnv, module Module) error {
-	for _, structDecl := range module.Structs {
-		for _, field := range structDecl.Fields {
-			if field.Type.isOwned() || field.Type.isBorrowLike() {
-				continue
-			}
-			if evt1DropFunction(env, field.Type) == nil {
-				continue
-			}
-			return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;`", structDecl.Name, field.Name, field.Type.Name, field.Type.Name, field.Name), field.Span)
+// For a generic instance, template is the generic declaration, so the fix
+// names the field as the template spells it.
+func evt1ValidateDropFieldsAreOwned(env *semanticEnv, structDecl StructDecl, template *StructDecl) error {
+	for i, field := range structDecl.Fields {
+		if field.Type.isOwned() || field.Type.isBorrowLike() {
+			continue
 		}
+		if evt1DropFunction(env, field.Type) == nil {
+			continue
+		}
+		if template != nil && i < len(template.Fields) {
+			spelled := template.Fields[i].Type.String()
+			return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;` in %s", structDecl.Name, field.Name, field.Type.Name, spelled, field.Name, template.Name), field.Span)
+		}
+		return evt1Diagnostic("CV4653", fmt.Sprintf("field %s.%s holds %s, which has a Drop; declare it `owned %s %s;`", structDecl.Name, field.Name, field.Type.Name, field.Type.Name, field.Name), field.Span)
 	}
 	return nil
 }

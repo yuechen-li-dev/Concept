@@ -1,0 +1,28 @@
+profile Core;
+
+// A generic container owns its element: `owned T value;` releases a
+// droppable element through structural Drop, and is an ordinary field for
+// plain data such as int.
+class Resource
+{
+public:
+    int id;
+};
+
+void Drop(owned Resource resource)
+{
+}
+
+template <typename T>
+struct Box
+{
+    owned T value;
+}
+
+int Use()
+{
+    owned Resource resource = Resource{7};
+    owned Box<Resource> box = Box<Resource>{move resource};
+    owned Box<int> count = Box<int>{3};
+    return box.value.id + count.value;
+}

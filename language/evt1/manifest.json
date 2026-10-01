@@ -2,8 +2,8 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 418,
-    "static_invalid": 317,
+    "valid": 419,
+    "static_invalid": 318,
     "runtime_negative": 14,
     "compatibility": 5,
     "expected_divergence": 4
@@ -11,7 +11,7 @@
   "subsystems": [
     { "subsystem": "Foundation", "path": "foundation", "valid": 5, "static_invalid": 16, "runtime_negative": [], "historical_milestones": ["R1"] },
     { "subsystem": "Values", "path": "values", "valid": 13, "static_invalid": 19, "runtime_negative": [], "historical_milestones": ["R2"] },
-    { "subsystem": "Ownership", "path": "ownership", "valid": 17, "static_invalid": 16, "runtime_negative": [], "historical_milestones": ["R3", "R7fR"] },
+    { "subsystem": "Ownership", "path": "ownership", "valid": 18, "static_invalid": 17, "runtime_negative": [], "historical_milestones": ["R3", "R7fR"] },
     { "subsystem": "Lexical lifetime", "path": "lifetime/lexical", "valid": 6, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R4a"] },
     { "subsystem": "Relational lifetime", "path": "lifetime/relational", "valid": 6, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R4b"] },
     { "subsystem": "Failure", "path": "failure", "valid": 14, "static_invalid": 10, "runtime_negative": [], "historical_milestones": ["R4c"] },

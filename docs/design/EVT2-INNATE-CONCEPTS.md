@@ -211,7 +211,7 @@ clean, the mechanism is ready for the rest of the declarative layer.
 
 | Step | Content |
 | --- | --- |
-| IC0 | Make `concept check` agree with `emit-c` on generic instances (see Findings) |
+| IC0 | Make `concept check` agree with `emit-c` on generic instances (see Findings): done |
 | IC1 | `comptime` `if`, `for`, string `+`; tests |
 | IC2 | `declaration` / `typename` subject values; observation list; `Verdict` |
 | IC3 | Embedded innate module, `innate concept`, kind-narrowed parameters, `[[diagnostic]]`, artifact hash |
@@ -236,6 +236,12 @@ clean, the mechanism is ready for the rest of the declarative layer.
   rejected by `concept emit-c` with CV4653. The gate is weaker than the code
   generator. This is the same accepted-but-inert class as CV4653 itself, so IC0
   fixes it before innate concepts depend on instance checking.
+  Fixed in IC0: Parse materializes generic instances only after analysis, and
+  Generate re-analyzes with them in place, so every struct-declaration rule
+  (C_ABI_REPR_INVALID, CV4525, CV4138, CALLABLE_FIELD_REF_ESCAPE, CV4653)
+  ran on instances only during code generation. Analysis now applies those
+  rules to the instances it materialized. A corpus test holds the line: `check`
+  alone rejects every static-invalid corpus file.
 - **Ownership of generic fields is a language question.** Under CV4653, a
   generic container must write `owned T value;` (which works, and `Box<int>`
   still compiles). The alternative is that structural Drop releases every field
