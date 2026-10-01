@@ -10,6 +10,7 @@ func evt1NewVulkanProfileDefinition() ProfileDefinition {
 		BuiltinEnums: []EnumDecl{
 			evt1BuiltinStepOutcomeEnum(),
 			evt1BuiltinNumericCastErrorEnum(),
+			evt1BuiltinTypeShapeEnum(),
 		},
 		AdmittedImports:    map[string]struct{}{},
 		AllowDomainImports: true,

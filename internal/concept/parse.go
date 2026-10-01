@@ -3514,6 +3514,9 @@ func (p *parser) parseInferredVarDecl(isConst bool, qualifierSpan Span) (Stateme
 
 func (p *parser) parseMatchStmt() (Statement, error) {
 	start := p.next().Span
+	if p.peekLexeme() == "{" {
+		return p.parseGuardedMatchStmt(start)
+	}
 	if _, err := p.expect("("); err != nil {
 		return nil, err
 	}
@@ -4244,6 +4247,9 @@ func (p *parser) parseWhileStmt() (Statement, error) {
 
 func (p *parser) parseMatchExpr() (Expr, error) {
 	start := p.next().Span
+	if p.peekLexeme() == "{" {
+		return p.parseGuardedMatchExpr(start)
+	}
 	if _, err := p.expect("("); err != nil {
 		return nil, err
 	}
@@ -4865,4 +4871,117 @@ func isUnsupportedStandardUnit(name string) bool {
 		return true
 	}
 	return false
+}
+
+// A guarded match has no subject: its arms are `when condition => ...`,
+// tried in order, and `otherwise => ...` last. It reads as a decision table
+// and means exactly an if/else chain, which is what it becomes: the
+// expression form an IfExpr chain, the statement form an IfStmt chain.
+type guardedArm struct {
+	condition Expr
+	value     Expr
+	block     Block
+	span      Span
+}
+
+func (p *parser) parseGuardedArms(statement bool) ([]guardedArm, *guardedArm, error) {
+	if _, err := p.expect("{"); err != nil {
+		return nil, nil, err
+	}
+	var arms []guardedArm
+	var otherwise *guardedArm
+	for !p.done() && p.peekLexeme() != "}" {
+		if otherwise != nil {
+			return nil, nil, evt1Diagnostic("MATCH_GUARD_ORDER", "otherwise is the last arm of a guarded match", p.currentSpan())
+		}
+		arm := guardedArm{span: p.currentSpan()}
+		switch p.peekLexeme() {
+		case "when":
+			p.next()
+			condition, err := p.parseExpr()
+			if err != nil {
+				return nil, nil, err
+			}
+			arm.condition = condition
+		case "otherwise":
+			p.next()
+		default:
+			return nil, nil, evt1Diagnostic("MATCH_GUARD_ARM", "a match without a subject has `when condition => ...` arms and a final `otherwise => ...`", p.currentSpan())
+		}
+		if _, err := p.expect("=>"); err != nil {
+			return nil, nil, err
+		}
+		if statement {
+			if p.peekLexeme() != "{" {
+				return nil, nil, evt1Diagnostic("CV4118", "statement-form match arms require braced blocks", p.currentSpan())
+			}
+			block, err := p.parseBlock()
+			if err != nil {
+				return nil, nil, err
+			}
+			arm.block = block
+			if p.peekLexeme() == "," {
+				p.next()
+			}
+		} else {
+			if p.peekLexeme() == "{" {
+				return nil, nil, evt1Diagnostic("CV4117", "expression-form match arms require a single expression, not a statement block", p.currentSpan())
+			}
+			value, err := p.parseExpr()
+			if err != nil {
+				return nil, nil, err
+			}
+			arm.value = value
+			if p.peekLexeme() == "," {
+				p.next()
+			} else if p.peekLexeme() != "}" {
+				return nil, nil, evt1Diagnostic("CV4014", "expression-form match arms must be comma-separated", p.currentSpan())
+			}
+		}
+		if arm.condition == nil {
+			otherwise = &arm
+		} else {
+			arms = append(arms, arm)
+		}
+	}
+	if _, err := p.expect("}"); err != nil {
+		return nil, nil, err
+	}
+	if len(arms) == 0 {
+		return nil, nil, evt1Diagnostic("MATCH_GUARD_ARM", "a guarded match needs at least one `when` arm", p.currentSpan())
+	}
+	return arms, otherwise, nil
+}
+
+func (p *parser) parseGuardedMatchExpr(start Span) (Expr, error) {
+	arms, otherwise, err := p.parseGuardedArms(false)
+	if err != nil {
+		return nil, err
+	}
+	if otherwise == nil {
+		return nil, evt1Diagnostic("MATCH_GUARD_OTHERWISE", "an expression-form guarded match must end with `otherwise => value`, so it always has a value", start)
+	}
+	result := otherwise.value
+	for i := len(arms) - 1; i >= 0; i-- {
+		result = &IfExpr{Condition: arms[i].condition, Then: arms[i].value, Else: result, Span: arms[i].span}
+	}
+	return result, nil
+}
+
+func (p *parser) parseGuardedMatchStmt(start Span) (Statement, error) {
+	arms, otherwise, err := p.parseGuardedArms(true)
+	if err != nil {
+		return nil, err
+	}
+	var rest *Block
+	if otherwise != nil {
+		block := otherwise.block
+		rest = &block
+	}
+	var result *IfStmt
+	for i := len(arms) - 1; i >= 0; i-- {
+		result = &IfStmt{Condition: arms[i].condition, Then: arms[i].block, Else: rest, Span: arms[i].span}
+		rest = &Block{Statements: []Statement{result}, Span: arms[i].span}
+	}
+	return result, nil
 }

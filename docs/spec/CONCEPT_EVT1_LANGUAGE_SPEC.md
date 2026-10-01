@@ -369,6 +369,26 @@ return match (status)
 Missing or duplicate variants are errors. The bounded Go pattern subset does
 not establish wildcard, guard, range, or recursive-pattern law for EVT1.
 
+**Guarded match (EVT2).** A match without a subject is a decision table:
+`when condition => ...` arms are tried in order and the first true guard
+selects; later guards are not evaluated. The expression form must end with
+`otherwise => value` (`MATCH_GUARD_OTHERWISE`); the statement form may omit
+it. `otherwise` is last (`MATCH_GUARD_ORDER`) and at least one `when` arm is
+required (`MATCH_GUARD_ARM`). A guarded match means exactly the corresponding
+`if`/`else` chain, at runtime and at compile time:
+
+```concept
+return match
+{
+    when n < 0 => -1,
+    when n == 0 => 0,
+    otherwise => 1,
+};
+```
+
+Guards on enum-pattern arms (`Status::Ready(value) when value > 0 => ...`) are
+not yet admitted.
+
 ## 11. Functions
 
 **Canonical EVT1 foundation.** Ordinary functions use return-type-first
@@ -503,7 +523,11 @@ a checked declaration and a checked type, compared only with `==`/`!=`. A
 compile-time function inspects them through the closed `compiler.*`
 observation set (for example `compiler.TypeOf(field)`,
 `compiler.HasDrop(type)`), which projects checked semantic state and never
-judges it. Observations are compile-time only (`OBSERVATION_RUNTIME`); unknown
+judges it. `compiler.Shape(type)` classifies a type as one
+`TypeShape` (Scalar, Handle, FixedArray, RuntimeArray, Record, Struct, Enum,
+Owned, Reference, Pointer, Dyn, Callable, Async, Generic, Other); a match on
+it must decide every shape, so adding a shape breaks every rule that has not
+decided it. Observations are compile-time only (`OBSERVATION_RUNTIME`); unknown
 names are `OBSERVATION_UNKNOWN`. A type that is or contains a subject is
 compile-time only: runtime signatures and locals reject it
 (`COMPTIME_ONLY_TYPE`), and such aggregates are erased before lowering. The

@@ -306,6 +306,25 @@ before the shadow step:
 attribute's own syntax checks (reflection.go) also stay: they check the
 attribute, not the aggregate.
 
+### After the pilots: TypeShape and guarded match
+
+The pilots read as if/return chains because they classified types with
+boolean observations and early returns. Two additions fix the shape of the
+code rather than its length:
+
+- `compiler.Shape(typename)` returns a builtin, compile-time-only
+  `TypeShape` enum. `CValueProblem` is now one exhaustive `match` over it;
+  a new shape stops the innate module from compiling until the rule decides
+  what it means.
+- Guarded match, `match { when c => x, ..., otherwise => y }`, is a decision
+  table that lowers to the if/else chain it means. `CRecordProblem`,
+  `CReprIsPlainDataHolds`, and `DroppableFieldIsOwnedHolds` are written with
+  it; guards are lazy, so the record's fields are walked only after the
+  record itself qualifies.
+
+Deferred: guards on enum-pattern arms, and a generic `Verdict<H, R>` (typed
+evidence and refutations), which needs templates at compile time.
+
 ### Verdict on the pilots
 
 Both rules read at least as well in Concept as in Go: the per-field rule is a

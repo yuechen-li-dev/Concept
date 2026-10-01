@@ -53,7 +53,7 @@ func evt1CoreBuiltinDefinitions() map[string]BuiltinTypeDefinition {
 var coreProfileDefinition = ProfileDefinition{
 	Name:         "Core",
 	BuiltinTypes: evt1CoreBuiltinDefinitions(),
-	BuiltinEnums: []EnumDecl{evt1BuiltinStepOutcomeEnum(), evt1BuiltinNumericCastErrorEnum()},
+	BuiltinEnums: []EnumDecl{evt1BuiltinStepOutcomeEnum(), evt1BuiltinNumericCastErrorEnum(), evt1BuiltinTypeShapeEnum()},
 }
 
 var profileDefinitions = map[string]*ProfileDefinition{

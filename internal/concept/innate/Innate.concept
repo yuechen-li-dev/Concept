@@ -33,18 +33,15 @@ innate concept DroppableFieldIsOwned<FieldDeclaration F>
 comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
 {
     typename held = compiler.TypeOf(field);
-    if (compiler.Owned(field) or compiler.IsBorrowLike(held) or not compiler.HasDrop(held))
-    {
-        return Verdict::Holds;
-    }
     string heldName = compiler.TypeName(held);
-    string problem = "field " + compiler.QualifiedName(field) + " holds " + heldName + ", which has a Drop; ";
     string template = compiler.TemplateName(compiler.Parent(field));
-    if (template != "")
+    string problem = "field " + compiler.QualifiedName(field) + " holds " + heldName + ", which has a Drop; ";
+    return match
     {
-        return Verdict::Refuted(field, problem + "declare it `owned " + compiler.DeclaredTypeName(field) + " " + compiler.Name(field) + ";` in " + template);
-    }
-    return Verdict::Refuted(field, problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`");
+        when compiler.Owned(field) or compiler.IsBorrowLike(held) or not compiler.HasDrop(held) => Verdict::Holds,
+        when template != "" => Verdict::Refuted(field, problem + "declare it `owned " + compiler.DeclaredTypeName(field) + " " + compiler.Name(field) + ";` in " + template),
+        otherwise => Verdict::Refuted(field, problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`"),
+    };
 }
 
 // ---- C ABI -----------------------------------------------------------------
@@ -61,54 +58,62 @@ innate concept CReprIsPlainData<TypeDeclaration T>
 
 comptime Verdict CReprIsPlainDataHolds(declaration aggregate)
 {
-    if (not compiler.HasAttributeArgument(aggregate, "repr", "C") or not compiler.IsStruct(compiler.TypeOf(aggregate)))
+    typename self = compiler.TypeOf(aggregate);
+    string problem = CValueProblem(self);
+    return match
     {
-        return Verdict::Holds;
-    }
-    string problem = CValueProblem(compiler.TypeOf(aggregate));
-    if (problem == "")
-    {
-        return Verdict::Holds;
-    }
-    return Verdict::Refuted(aggregate, compiler.Name(aggregate) + ": " + problem);
+        when not compiler.HasAttributeArgument(aggregate, "repr", "C") or not compiler.IsStruct(self) => Verdict::Holds,
+        when problem == "" => Verdict::Holds,
+        otherwise => Verdict::Refuted(aggregate, compiler.Name(aggregate) + ": " + problem),
+    };
 }
 
-// Why value is not a C value, or "" when it is.
+// Why value is not a C value, or "" when it is. Every TypeShape is decided
+// here; a new shape stops this from compiling until someone decides it.
 comptime string CValueProblem(typename value) bounded(32)
 {
-    if (compiler.IsBorrowLike(value) or compiler.IsOwnedType(value))
+    return match (compiler.Shape(value))
     {
-        return "borrowed, owned, or pointer fields need a separate explicit foreign contract";
-    }
-    if (compiler.IsArray(value))
-    {
-        if (compiler.RuntimeShape(value))
+        TypeShape::Scalar(name) => match
         {
-            return "array extent is not fixed";
-        }
-        return CValueProblem(compiler.Element(value));
-    }
-    if (compiler.HasTypeArguments(value) or compiler.IsCallable(value) or compiler.IsAsync(value))
+            when IsCScalar(name) => "",
+            otherwise => "type is not a supported C scalar or aggregate",
+        },
+        TypeShape::Handle(name) => "",
+        TypeShape::FixedArray(element) => CValueProblem(element),
+        TypeShape::RuntimeArray(element) => "array extent is not fixed",
+        TypeShape::Record(record) => CRecordProblem(record, value),
+        TypeShape::Struct(aggregate) => CRecordProblem(aggregate, value),
+        TypeShape::Enum(decl) => "type is not a supported C scalar or aggregate",
+        TypeShape::Owned(target) => "borrowed, owned, or pointer fields need a separate explicit foreign contract",
+        TypeShape::Reference(target) => "borrowed, owned, or pointer fields need a separate explicit foreign contract",
+        TypeShape::Pointer(target) => "borrowed, owned, or pointer fields need a separate explicit foreign contract",
+        TypeShape::Dyn(spelling) => "borrowed, owned, or pointer fields need a separate explicit foreign contract",
+        TypeShape::Callable(spelling) => "field has no fixed C value representation",
+        TypeShape::Async(spelling) => "field has no fixed C value representation",
+        TypeShape::Generic(applied) => "field has no fixed C value representation",
+        TypeShape::Other(spelling) => "type is not a supported C scalar or aggregate",
+    };
+}
+
+// A struct is a C value when it is a nonempty [[repr(C)]] record of C values
+// without destruction authority. Arms are tried in order, so the fields are
+// walked only once the record itself qualifies.
+comptime string CRecordProblem(declaration record, typename value) bounded(32)
+{
+    return match
     {
-        return "field has no fixed C value representation";
-    }
-    if (IsCScalar(compiler.NominalName(value)) or compiler.IsHandle(value))
-    {
-        return "";
-    }
-    if (not compiler.IsStruct(value))
-    {
-        return "type is not a supported C scalar or aggregate";
-    }
-    declaration record = compiler.Declaration(value);
-    if (not compiler.HasAttributeArgument(record, "repr", "C"))
-    {
-        return "aggregate lacks [[repr(C)]]";
-    }
-    if (not compiler.IsRecord(record) or compiler.IsRefStruct(record) or compiler.IsImmovable(record) or compiler.IsClass(record) or compiler.IsTable(record) or compiler.FieldCount(record) == 0)
-    {
-        return "repr(C) requires a nonempty record struct";
-    }
+        when not compiler.HasAttributeArgument(record, "repr", "C") => "aggregate lacks [[repr(C)]]",
+        when not compiler.IsRecord(record) or compiler.IsRefStruct(record) or compiler.IsImmovable(record) or compiler.IsClass(record) or compiler.IsTable(record) or compiler.FieldCount(record) == 0 => "repr(C) requires a nonempty record struct",
+        when CFieldsProblem(record) != "" => CFieldsProblem(record),
+        when compiler.NeedsDrop(value) => "aggregate carries destruction authority",
+        otherwise => "",
+    };
+}
+
+// The first field that is not a C value, with its path.
+comptime string CFieldsProblem(declaration record) bounded(32)
+{
     for (i in 0..compiler.FieldCount(record))
     {
         declaration field = compiler.Field(record, i);
@@ -117,10 +122,6 @@ comptime string CValueProblem(typename value) bounded(32)
         {
             return "field " + compiler.Name(field) + ": " + problem;
         }
-    }
-    if (compiler.NeedsDrop(value))
-    {
-        return "aggregate carries destruction authority";
     }
     return "";
 }

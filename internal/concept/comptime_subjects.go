@@ -199,6 +199,90 @@ func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args 
 	return *result, nil
 }
 
+// ---- TypeShape ------------------------------------------------------------
+
+const evt1TypeShapeName = "TypeShape"
+
+// evt1BuiltinTypeShapeEnum is what compiler.Shape returns: every type has
+// exactly one shape, so a rule that matches on it must say what each shape
+// means, and a new shape breaks every rule that has not decided yet.
+func evt1BuiltinTypeShapeEnum() EnumDecl {
+	declaration := Type{Name: evt1DeclarationTypeName, Kind: TypeBuiltin}
+	typename := Type{Name: evt1TypenameTypeName, Kind: TypeBuiltin}
+	text := Type{Name: "string", Kind: TypeBuiltin}
+	variant := func(tag int, name string, payload ...Field) VariantDecl {
+		return VariantDecl{Name: name, Tag: tag, Payload: payload}
+	}
+	return EnumDecl{Name: evt1TypeShapeName, Variants: []VariantDecl{
+		variant(0, "Scalar", Field{Name: "name", Type: text}),
+		variant(1, "Handle", Field{Name: "name", Type: text}),
+		variant(2, "FixedArray", Field{Name: "element", Type: typename}),
+		variant(3, "RuntimeArray", Field{Name: "element", Type: typename}),
+		variant(4, "Record", Field{Name: "record", Type: declaration}),
+		variant(5, "Struct", Field{Name: "aggregate", Type: declaration}),
+		variant(6, "Enum", Field{Name: "decl", Type: declaration}),
+		variant(7, "Owned", Field{Name: "target", Type: typename}),
+		variant(8, "Reference", Field{Name: "target", Type: typename}),
+		variant(9, "Pointer", Field{Name: "target", Type: typename}),
+		variant(10, "Dyn", Field{Name: "spelling", Type: text}),
+		variant(11, "Callable", Field{Name: "spelling", Type: text}),
+		variant(12, "Async", Field{Name: "spelling", Type: text}),
+		variant(13, "Generic", Field{Name: "applied", Type: typename}),
+		variant(14, "Other", Field{Name: "spelling", Type: text}),
+	}}
+}
+
+// evt1TypeShape classifies t. Ownership and reference wrap a type, so they
+// are decided first; Other covers storage kinds no rule distinguishes yet.
+func evt1TypeShape(env *semanticEnv, t Type, span Span) Value {
+	shape := func(variant string, payload Value) Value {
+		return Value{Kind: ValueEnum, Type: Type{Name: evt1TypeShapeName, Kind: TypeEnum, Span: span}, EnumName: evt1TypeShapeName, Variant: variant, Payload: []Value{payload}}
+	}
+	text := func(s string) Value {
+		t, _ := evt1BuiltinType("string", span)
+		return Value{Kind: ValueString, Type: t, StringValue: s}
+	}
+	value := t.valueType()
+	switch {
+	case t.isOwned():
+		return shape("Owned", evt1TypenameValue(value))
+	case t.isBorrow() || t.isReference():
+		return shape("Reference", evt1TypenameValue(t.borrowBase()))
+	case t.PointerTo != nil:
+		return shape("Pointer", evt1TypenameValue(*t.PointerTo))
+	case t.Kind == TypeDyn:
+		return shape("Dyn", text(t.String()))
+	case t.ArrayElem != nil && evt1StorageHasRuntimeShape(t):
+		return shape("RuntimeArray", evt1TypenameValue(*t.ArrayElem))
+	case t.ArrayElem != nil:
+		return shape("FixedArray", evt1TypenameValue(*t.ArrayElem))
+	case t.Kind == TypeCallable || t.Kind == TypeCallback:
+		return shape("Callable", text(t.String()))
+	case t.Kind == TypeAsync:
+		return shape("Async", text(t.String()))
+	case len(t.TypeArgs) != 0:
+		return shape("Generic", evt1TypenameValue(value))
+	case evt1IsHandle(env, value):
+		return shape("Handle", text(value.Name))
+	}
+	if _, builtin := evt1BuiltinType(value.Name, span); builtin && value.Name != "void" && !evt1IsSubjectTypeName(value.Name) {
+		return shape("Scalar", text(value.Name))
+	}
+	if decl, ok := env.structs[value.Name]; ok {
+		ref, _ := evt1TypeDeclarationRef(env, value.Name)
+		if decl.Record && !decl.Ref && !decl.Class && !decl.Table && !decl.Immovable {
+			return shape("Record", evt1DeclarationValue(ref))
+		}
+		return shape("Struct", evt1DeclarationValue(ref))
+	}
+	if _, ok := env.enums[value.Name]; ok {
+		if ref, ok := evt1TypeDeclarationRef(env, value.Name); ok {
+			return shape("Enum", evt1DeclarationValue(ref))
+		}
+	}
+	return shape("Other", text(t.String()))
+}
+
 // ---- Observations ---------------------------------------------------------
 
 type evt1Observation struct {
@@ -234,6 +318,7 @@ var evt1Observations = map[string]evt1Observation{
 	"DeclaredTypeName":     {[]string{"declaration"}, "string"},
 	// types
 	"TypeName":         {[]string{"typename"}, "string"},
+	"Shape":            {[]string{"typename"}, evt1TypeShapeName},
 	"NominalName":      {[]string{"typename"}, "string"},
 	"IsScalar":         {[]string{"typename"}, "bool"},
 	"IsHandle":         {[]string{"typename"}, "bool"},
@@ -296,6 +381,9 @@ func validateObservationCall(env *semanticEnv, scope *evt1Scope, e *CallExpr, te
 		}
 	}
 	e.Intrinsic = "observation"
+	if observation.result == evt1TypeShapeName {
+		return Type{Name: evt1TypeShapeName, Kind: TypeEnum, Span: e.Span}, nil
+	}
 	result, _ := evt1BuiltinType(observation.result, e.Span)
 	return result, nil
 }
@@ -463,6 +551,8 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 		return text(value.String())
 	case "NominalName":
 		return text(value.Name)
+	case "Shape":
+		return evt1TypeShape(env, t, e.Span), nil
 	case "IsScalar":
 		_, builtin := evt1BuiltinType(value.Name, e.Span)
 		return boolean(builtin && value.Kind == TypeBuiltin && value.ArrayElem == nil && value.PointerTo == nil && value.Name != "void" && !evt1IsSubjectTypeName(value.Name))
