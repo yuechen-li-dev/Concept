@@ -17,3 +17,32 @@ enum Verdict
     Holds,
     Refuted(declaration at, string message),
 }
+
+// ---- Ownership -------------------------------------------------------------
+
+// Structural Drop releases a value's `owned` fields. A field whose type has a
+// Drop but is not declared `owned` would hold destruction authority it never
+// exercises, so its resource would leak. In a generic instance the fix belongs
+// in the template.
+[[diagnostic("CV4653")]]
+innate concept DroppableFieldIsOwned<FieldDeclaration F>
+{
+    requires DroppableFieldIsOwnedHolds(F);
+}
+
+comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
+{
+    typename held = compiler.TypeOf(field);
+    if (compiler.Owned(field) or compiler.IsBorrowLike(held) or not compiler.HasDrop(held))
+    {
+        return Verdict::Holds;
+    }
+    string heldName = compiler.TypeName(held);
+    string problem = "field " + compiler.QualifiedName(field) + " holds " + heldName + ", which has a Drop; ";
+    string template = compiler.TemplateName(compiler.Parent(field));
+    if (template != "")
+    {
+        return Verdict::Refuted(field, problem + "declare it `owned " + compiler.DeclaredTypeName(field) + " " + compiler.Name(field) + ";` in " + template);
+    }
+    return Verdict::Refuted(field, problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`");
+}

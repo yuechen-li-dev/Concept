@@ -32,7 +32,8 @@ const evt1InnatePrerequisiteDepth = 8
 func evt1ApplyInnateConcepts(env *semanticEnv, module Module, innate evt1InnateSet) error {
 	var concepts []ConceptDecl
 	for _, decl := range innate.module.Concepts {
-		if decl.Innate {
+		code, _ := evt1InnateDiagnosticCode(decl)
+		if decl.Innate && !env.options.innateOff[code] {
 			concepts = append(concepts, decl)
 		}
 	}

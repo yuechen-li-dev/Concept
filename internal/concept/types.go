@@ -1866,6 +1866,7 @@ type MIRAsmOperand struct {
 }
 
 type semanticEnv struct {
+	options                 evt1AnalysisOptions
 	innateAuthority         bool
 	handles                 map[string]HandleDecl
 	sourcePath              string

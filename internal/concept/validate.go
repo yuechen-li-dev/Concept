@@ -547,7 +547,20 @@ func validateModule(module Module) error {
 	return err
 }
 
+// evt1AnalysisOptions selects which implementation of a rule runs while it
+// moves from Go into an innate concept: goRulesOff retires Go rules by
+// diagnostic code, innateOff skips innate concepts by diagnostic code. The
+// zero value is the compiler's normal configuration.
+type evt1AnalysisOptions struct {
+	goRulesOff map[string]bool
+	innateOff  map[string]bool
+}
+
 func analyzeModule(module Module) (*semanticEnv, error) {
+	return evt1AnalyzeModule(module, evt1AnalysisOptions{})
+}
+
+func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv, error) {
 	profile, ok := evt1ProfileDefinition(module.Profile)
 	if !ok {
 		return nil, evt1Diagnostic("CV4001", "module profile must be Core or Vulkan", Span{Line: 1, Column: 1})
@@ -559,6 +572,7 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 	env.moduleName = module.Name
 	env.sourcePath = module.Path
 	env.innateAuthority = module.innateAuthority
+	env.options = options
 	env.declarationSubjects = DeclarationSubjects(module)
 	for _, summary := range module.ImportedHardwareEffects {
 		env.importedHardwareEffects[evt1OperationEffectKey(summary.Operation, summary.Signature)] = summary
@@ -1293,6 +1307,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 		return nil, err
 	}
 	for _, structDecl := range module.Structs {
+		if env.options.goRulesOff["CV4653"] {
+			break
+		}
 		if err := evt1ValidateDropFieldsAreOwned(env, structDecl, nil); err != nil {
 			return nil, err
 		}
@@ -1343,6 +1360,9 @@ func evt1ValidateGenericInstanceStructs(env *semanticEnv, module Module) error {
 			if generic, ok := env.genericTypes[application.Name]; ok {
 				template = &generic.Struct
 			}
+		}
+		if env.options.goRulesOff["CV4653"] {
+			continue
 		}
 		if err := evt1ValidateDropFieldsAreOwned(env, instance, template); err != nil {
 			return err

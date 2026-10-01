@@ -230,6 +230,8 @@ var evt1Observations = map[string]evt1Observation{
 	"IsRefStruct":          {[]string{"declaration"}, "bool"},
 	"IsImmovable":          {[]string{"declaration"}, "bool"},
 	"IsTable":              {[]string{"declaration"}, "bool"},
+	"TemplateName":         {[]string{"declaration"}, "string"},
+	"DeclaredTypeName":     {[]string{"declaration"}, "string"},
 	// types
 	"TypeName":         {[]string{"typename"}, "string"},
 	"IsScalar":         {[]string{"typename"}, "bool"},
@@ -419,6 +421,25 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 				}
 			}
 			return boolean(false)
+		case "TemplateName":
+			if ref.Kind != TypeDeclaration {
+				return fail(ref.qualifiedName() + " is not a type declaration")
+			}
+			if application, ok := env.genericTypeApplications[ref.Name]; ok {
+				return text(application.Name)
+			}
+			return text("")
+		case "DeclaredTypeName":
+			f, ok := field()
+			if !ok {
+				return fail(ref.qualifiedName() + " is not a field")
+			}
+			if application, ok := env.genericTypeApplications[ref.Parent]; ok {
+				if generic, ok := env.genericTypes[application.Name]; ok && ref.Index < len(generic.Struct.Fields) {
+					return text(generic.Struct.Fields[ref.Index].Type.String())
+				}
+			}
+			return text(f.Type.String())
 		case "IsRecord", "IsClass", "IsRefStruct", "IsImmovable", "IsTable":
 			if !isStruct {
 				return boolean(false)
