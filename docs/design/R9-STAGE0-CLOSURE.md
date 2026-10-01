@@ -1,5 +1,13 @@
 # R9a Stage-0 closure
 
+CV4138 now belongs to the innate field concept
+`MovableFieldDoesNotEmbedImmovable`. Its predicate projects immovability and
+raw/sparse storage from existing semantic observations, preserves the former
+Go diagnostic and field site, and attaches the ordinary innate proof graph.
+Shadow and switch agreement covered every registered valid/invalid specimen
+and directed field cases before the Go implementation was deleted. Closed
+generics loaded through semantic artifacts are subject to the same rule.
+
 R9a removes Stage-0 debt before frontend self-hosting. It does not freeze Stage-0
 or begin R9b. Owner decisions supersede undecided alternatives in the October ledger.
 

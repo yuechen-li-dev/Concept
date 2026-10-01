@@ -15,7 +15,7 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | B3 | Touched diagnostics name fixes | Qualifiers, scoped, attributes, stale artifacts, repr |
 | B4 | Generic repr(C) records admitted after closure | Artifact/native Pair<int>; resource pair rejects |
 | B5 | Pending | Parser lacks runtime comptime if/for; deferred open AST and closed expansion needed |
-| C1 | Next migration selected: CV4138 | Shadow/switch/delete qualification follows |
+| C1 | CV4138 field family migrated | Corpus shadow agreement, authoritative switch, Go deletion; array/generic/artifact tests |
 | C2 | Existing type/struct-field subjects retained | Enum payload and function observations pending |
 | C3 | Pending | PREDICATE_REQUIREMENT_SCOPE; proof evaluator lacks predicate arm |
 | C4 | Intentionally deferred | Fact-granting trust model requires later research |

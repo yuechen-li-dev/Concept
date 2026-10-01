@@ -140,7 +140,7 @@ a misspelled kind is an unknown observation (a compile error), not a silent
 | `HasAttribute(declaration, string)`, `HasAttributeArgument(declaration, string, string)` | `bool` |
 | `IsRecord`, `IsClass`, `IsRefStruct`, `IsImmovable`, `IsTable` (`declaration`) | `bool` |
 | `TypeName(typename)` | canonical spelling without ownership |
-| `IsScalar`, `IsHandle`, `IsStruct`, `IsEnum`, `IsArray`, `IsPointer`, `IsBorrowLike`, `IsOwnedType`, `IsCallable`, `IsDyn`, `IsAsync`, `HasTypeArguments`, `RuntimeShape` (`typename`) | `bool` |
+| `IsScalar`, `IsHandle`, `IsStruct`, `IsEnum`, `IsArray`, `IsPointer`, `IsBorrowLike`, `IsImmovableType`, `IsPartialStorage`, `IsOwnedType`, `IsCallable`, `IsDyn`, `IsAsync`, `HasTypeArguments`, `RuntimeShape` (`typename`) | `bool` |
 | `Element(typename)` | array element type |
 | `Declaration(typename)` | the struct or enum declaration of a nominal type |
 | `HasDrop(typename)`, `NeedsDrop(typename)` | the type has its own Drop; the type needs dropping (own or structural) |

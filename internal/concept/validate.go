@@ -563,7 +563,7 @@ type evt1AnalysisOptions struct {
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
 // retired rule runs only when an agreement test asks for it, and is deleted
 // once the switch has held.
-var evt1RetiredGoRules = map[string]bool{"CV4138": true}
+var evt1RetiredGoRules = map[string]bool{}
 
 func (e *semanticEnv) goRule(code string) bool {
 	if e.options.goRulesOn[code] {
@@ -1379,9 +1379,6 @@ func evt1ValidateStructFieldEmbedding(env *semanticEnv, structDecl StructDecl) e
 		}
 		if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
 			return evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
-		}
-		if env.goRule("CV4138") && !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
-			return evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
 		}
 	}
 	return nil
