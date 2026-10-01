@@ -185,3 +185,50 @@ comptime int B = Backwards(5);
 		})
 	}
 }
+
+func TestComptimeRecursionNeedsAnExplicitBound(t *testing.T) {
+	t.Parallel()
+	ok := comptimeControlFlowModule(`comptime int Depth(int n) bounded(8)
+{
+    if (n == 0) { return 0; }
+    return 1 + Depth(n - 1);
+}
+
+comptime bool Even(int n) bounded(8)
+{
+    if (n == 0) { return true; }
+    return Odd(n - 1);
+}
+
+comptime bool Odd(int n) bounded(8)
+{
+    if (n == 0) { return false; }
+    return Even(n - 1);
+}
+
+static_assert(Depth(7) == 7, "bounded self-recursion");
+static_assert(Even(6) and Odd(5), "bounded mutual recursion");
+`)
+	if _, err := Parse("recursion.concept", ok); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name, body, code string
+	}{
+		{"unbounded", "comptime int Loop(int n) { return Loop(n); }\n", "CV4217"},
+		{"one side unbounded", "comptime int A(int n) bounded(4) { return B(n); }\ncomptime int B(int n) { return A(n); }\n", "CV4217"},
+		{"bound exceeded", "comptime int Depth(int n) bounded(3)\n{\n    if (n == 0) { return 0; }\n    return 1 + Depth(n - 1);\n}\nstatic_assert(Depth(5) == 5, \"too deep\");\n", "CV4206"},
+		{"bound range", "comptime int Depth(int n) bounded(0) { return n; }\n", "CV4217"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := Parse("recursion.concept", comptimeControlFlowModule(tc.body))
+			var diagnostic Diagnostic
+			if !errors.As(err, &diagnostic) || diagnostic.Code != tc.code {
+				t.Fatalf("expected %s, got %v", tc.code, err)
+			}
+		})
+	}
+}

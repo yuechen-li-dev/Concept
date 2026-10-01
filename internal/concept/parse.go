@@ -2415,6 +2415,21 @@ func (p *parser) parseFunctionDecl(conceptParam string, comptime bool) (Function
 	if _, err := p.expect(")"); err != nil {
 		return FunctionDecl{}, err
 	}
+	if comptime && p.peekLexeme() == "bounded" {
+		bounded := p.next()
+		if _, err := p.expect("("); err != nil {
+			return FunctionDecl{}, err
+		}
+		limit := p.next()
+		value, err := strconv.Atoi(limit.Lexeme)
+		if err != nil || value < 1 || value > evt1ComptimeMaxCallDepth {
+			return FunctionDecl{}, evt1Diagnostic("CV4217", fmt.Sprintf("comptime recursion bound must be an integer from 1 to %d", evt1ComptimeMaxCallDepth), bounded.Span)
+		}
+		if _, err := p.expect(")"); err != nil {
+			return FunctionDecl{}, err
+		}
+		fn.RecursionBound = value
+	}
 	if p.peekLexeme() == ";" {
 		p.next()
 		return fn, nil

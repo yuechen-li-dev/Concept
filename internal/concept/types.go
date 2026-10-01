@@ -507,19 +507,22 @@ type GenericTypeDecl struct {
 }
 
 type FunctionDecl struct {
-	Comptime   bool             `json:"comptime,omitempty"`
-	Async      bool             `json:"async,omitempty"`
-	Attributes []Attribute      `json:"attributes,omitempty"`
-	Name       string           `json:"name"`
-	ReturnType Type             `json:"return_type"`
-	Params     []Param          `json:"params,omitempty"`
-	Body       *Block           `json:"body,omitempty"`
-	MethodOf   string           `json:"method_of,omitempty"`
-	Visibility string           `json:"visibility,omitempty"`
-	ExternABI  string           `json:"extern_abi,omitempty"`
-	Module     string           `json:"module,omitempty"`
-	Span       Span             `json:"span"`
-	Generated  *GeneratedOrigin `json:"generated,omitempty"`
+	Comptime bool `json:"comptime,omitempty"`
+	// RecursionBound is a comptime function's `bounded(N)`: the most
+	// activations of it that may be live at once. Zero forbids recursion.
+	RecursionBound int              `json:"recursion_bound,omitempty"`
+	Async          bool             `json:"async,omitempty"`
+	Attributes     []Attribute      `json:"attributes,omitempty"`
+	Name           string           `json:"name"`
+	ReturnType     Type             `json:"return_type"`
+	Params         []Param          `json:"params,omitempty"`
+	Body           *Block           `json:"body,omitempty"`
+	MethodOf       string           `json:"method_of,omitempty"`
+	Visibility     string           `json:"visibility,omitempty"`
+	ExternABI      string           `json:"extern_abi,omitempty"`
+	Module         string           `json:"module,omitempty"`
+	Span           Span             `json:"span"`
+	Generated      *GeneratedOrigin `json:"generated,omitempty"`
 }
 
 type OperationEffectDecl struct {

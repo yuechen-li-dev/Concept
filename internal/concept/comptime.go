@@ -873,6 +873,17 @@ func evt1EvalComptimeCall(state *evt1ComptimeState, scope *evt1EvalScope, name s
 	if len(fn.Params) != len(args) {
 		return Value{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong constructor or call payload count for %s: expected %d but got %d", name, len(fn.Params), len(args)), span)
 	}
+	if fn.RecursionBound > 0 {
+		active := 0
+		for _, frame := range state.stack {
+			if frame == "comptime fn "+name {
+				active++
+			}
+		}
+		if active >= fn.RecursionBound {
+			return Value{}, evt1Diagnostic("CV4206", fmt.Sprintf("comptime function %s exceeds its recursion bound %d", name, fn.RecursionBound), span)
+		}
+	}
 	if err := state.push("comptime fn " + name); err != nil {
 		return Value{}, err
 	}

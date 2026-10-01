@@ -1647,8 +1647,24 @@ func validateComptimeFunctionCycles(module Module, env *semanticEnv) error {
 	var dfs func(name string, path []string) error
 	dfs = func(name string, path []string) error {
 		if visiting[name] {
-			cycle := append(path, name)
-			return evt1Diagnostic("CV4217", "comptime recursion is not allowed: "+strings.Join(cycle, " -> "), env.comptimeFunctions[name].Span)
+			cycle := append(append([]string{}, path...), name)
+			start := 0
+			for i, step := range cycle {
+				if step == name {
+					start = i
+					break
+				}
+			}
+			// Recursion is admitted when every function on the cycle states
+			// its bound, as a comptime while does.
+			bounded := true
+			for _, step := range cycle[start:] {
+				bounded = bounded && env.comptimeFunctions[step].RecursionBound > 0
+			}
+			if bounded {
+				return nil
+			}
+			return evt1Diagnostic("CV4217", "comptime recursion requires an explicit bound on every function in the cycle, such as `comptime int F(int n) bounded(8)`: "+strings.Join(cycle[start:], " -> "), env.comptimeFunctions[name].Span)
 		}
 		if visited[name] {
 			return nil

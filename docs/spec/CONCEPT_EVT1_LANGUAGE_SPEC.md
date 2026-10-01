@@ -491,6 +491,12 @@ Spans and iterator protocols are runtime iteration. `string + string`
 concatenates compile-time strings, bounded in length; at runtime strings are
 borrowed literals and concatenation is `STRING_CONCAT_RUNTIME`.
 
+A compile-time function may recurse only when it states its bound, as a
+compile-time `while` does: `comptime string Problem(typename t) bounded(8)`.
+Every function on a recursion cycle must carry a bound from 1 to the call-depth
+limit (CV4217 otherwise); a call that would exceed its function's live
+activations is CV4206.
+
 `declaration` and `typename` are compile-time subject types: opaque values for
 a checked declaration and a checked type, compared only with `==`/`!=`. A
 compile-time function inspects them through the closed `compiler.*`
