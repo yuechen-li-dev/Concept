@@ -16,8 +16,8 @@ qualification are appended after closeout. R9b and frontend self-hosting are not
 | B4 | Generic repr(C) records admitted after closure | Artifact/native Pair<int>; resource pair rejects |
 | B5 | Pending | Parser lacks runtime comptime if/for; deferred open AST and closed expansion needed |
 | C1 | CV4138 field family migrated | Corpus shadow agreement, authoritative switch, Go deletion; array/generic/artifact tests |
-| C2 | Existing type/struct-field subjects retained | Enum payload and function observations pending |
-| C3 | Pending | PREDICATE_REQUIREMENT_SCOPE; proof evaluator lacks predicate arm |
+| C2 | Type/struct-field subjects; bounded function observations | Parameter count/type, result type, C linkage; enum-payload migration deferred |
+| C3 | Declared predicate requirements implemented | Verdict/bool, typename/declaration binding, ordinary proof graph, artifact/native and policy lexical-environment tests |
 | C4 | Intentionally deferred | Fact-granting trust model requires later research |
 | C5 | Intentionally deferred | Pattern guard binding/fallthrough unnecessary here |
 | C6 | Intentionally deferred | Verdict<H,R> requires generic comptime support |

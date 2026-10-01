@@ -1,0 +1,5 @@
+module Closure.BadPredicate;
+profile Core;
+comptime bool IsInt(typename type) { return compiler.TypeName(type) == "int"; }
+concept IntegerOnly<T> { requires IsInt(T); }
+requires IntegerOnly<bool>;

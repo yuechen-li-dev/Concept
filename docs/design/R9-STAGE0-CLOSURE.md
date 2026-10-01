@@ -1,5 +1,24 @@
 # R9a Stage-0 closure
 
+Declared concepts may require comptime predicates over bound `typename` and
+`declaration` arguments. Predicates return bool or the existing exact Verdict
+shape. True/Holds proves that requirement; false/Refuted disproves it; evaluator
+or observation failure remains Unknown. Ordinary concept assertions and project
+lint use the existing proof graph. Predicate nodes have Declared origin and do
+not add MIR semantic facts or compiler-analysis authority. Closed constraints
+also evaluate their predicate requirements; they cannot silently skip them.
+
+Project policy evaluates predicates in the manifest's checked lexical environment
+with observations bound to the checked program environment. Helper functions,
+globals and imported definitions remain available to predicates without entering
+the program's function lookup. Root manifest policy activation remains local.
+Predicate structures and comptime functions survive ordinary semantic artifacts.
+
+Function observations project checked signature facts: `IsFunction`,
+`ParameterCount`, `ParameterType`, `ResultType`, and `IsExternC`. Parameter indices
+are bounds checked. They do not grant ABI legality or effect facts. Enum payload
+rules and fact-granting innate concepts are not migrated by this change.
+
 Ordinary integral scalar representations may index storage, spans, strings and
 tensors. Signed indices check negativity; all compare against extent at uint64
 width before pointer-offset use, without narrowing to int or size_t first. Unknown

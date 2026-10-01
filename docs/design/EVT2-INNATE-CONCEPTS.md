@@ -137,6 +137,8 @@ a misspelled kind is an unknown observation (a compile error), not a silent
 | `TypeOf(declaration)` | a field's declared type, or the type a type declaration declares |
 | `Owned(declaration)` | `bool`: the field is declared `owned` |
 | `FieldCount(declaration)`, `Field(declaration, int)` | a struct, class, or record's fields, in order |
+| `IsFunction(declaration)`, `IsExternC(declaration)` | checked function/method kind and C linkage |
+| `ParameterCount(declaration)`, `ParameterType(declaration, int)`, `ResultType(declaration)` | checked signature projections; parameter bounds are enforced |
 | `HasAttribute(declaration, string)`, `HasAttributeArgument(declaration, string, string)` | `bool` |
 | `IsRecord`, `IsClass`, `IsRefStruct`, `IsImmovable`, `IsTable` (`declaration`) | `bool` |
 | `TypeName(typename)` | canonical spelling without ownership |

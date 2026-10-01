@@ -344,6 +344,12 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, Parameters: append([]GenericParameter{}, conceptDecl.Parameters...), Interface: conceptDecl.Interface, SourceSpan: conceptDecl.Span}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
+			case *PredicateRequirement:
+				entry := MIRConceptRequirement{Kind: "predicate", Name: r.Predicate, SourceSpan: r.Span}
+				for _, subject := range r.Subjects {
+					entry.Params = append(entry.Params, MIRName{Name: subject.Name})
+				}
+				mirConcept.Requirements = append(mirConcept.Requirements, entry)
 			case *OperationRequirement:
 				entry := MIRConceptRequirement{
 					Kind:       "operation",

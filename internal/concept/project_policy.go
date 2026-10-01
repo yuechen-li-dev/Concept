@@ -43,22 +43,27 @@ type LintFinding struct {
 // LoadProjectPolicies checks the ordinary Concept manifest first, then binds
 // its immutable LintPolicy values. The manifest owns policy source identity.
 func LoadProjectPolicies(path string, roots []string) ([]LintPolicy, []ConceptDecl, error) {
+	policies, module, err := loadProjectPolicyModule(path, roots)
+	return policies, module.Concepts, err
+}
+
+func loadProjectPolicyModule(path string, roots []string) ([]LintPolicy, Module, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, Module{}, err
 	}
 	module, err := ParseWithSemanticModuleRoots(filepath.ToSlash(path), string(body), roots)
 	if err != nil && strings.Contains(err.Error(), "MODULE_IMPORT_MISSING") {
 		module, err = ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), roots)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, Module{}, err
 	}
 	// The resolved module includes imported declarations. Only values authored
 	// in this manifest activate this project's lint policy.
 	local, err := parseSyntaxModule(filepath.ToSlash(path), string(body))
 	if err != nil {
-		return nil, nil, err
+		return nil, Module{}, err
 	}
 	var policies []LintPolicy
 	for _, decl := range local.ComptimeDecls {
@@ -67,38 +72,42 @@ func LoadProjectPolicies(path string, roots []string) ([]LintPolicy, []ConceptDe
 		}
 		value, ok := decl.Value.(*StructConstructExpr)
 		if !ok || len(value.Args) != 4 {
-			return nil, nil, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy requires concept, severity, kind, and subject strings", decl.Span)
+			return nil, Module{}, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy requires concept, severity, kind, and subject strings", decl.Span)
 		}
 		parts := make([]string, 4)
 		for i, arg := range value.Args {
 			literal, ok := arg.(*StringLiteral)
 			if !ok {
-				return nil, nil, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy fields must be immutable string literals", decl.Span)
+				return nil, Module{}, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy fields must be immutable string literals", decl.Span)
 			}
 			parts[i] = literal.Value
 		}
 		if parts[0] == "" {
-			return nil, nil, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy concept identity is empty", decl.Span)
+			return nil, Module{}, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy concept identity is empty", decl.Span)
 		}
 		severity := LintSeverity(parts[1])
 		if severity != LintWarning && severity != LintError {
-			return nil, nil, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy severity must be warning or error", decl.Span)
+			return nil, Module{}, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy severity must be warning or error", decl.Span)
 		}
 		kind := DeclarationKind(parts[2])
 		if kind != "" && canonicalDeclarationStyle(kind) == "" {
-			return nil, nil, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy declaration kind is unknown", decl.Span)
+			return nil, Module{}, evt1Diagnostic("LINT_MANIFEST_INVALID", "LintPolicy declaration kind is unknown", decl.Span)
 		}
 		policies = append(policies, LintPolicy{Identity: parts[0], Severity: severity, Kind: kind, Name: parts[3], Source: filepath.ToSlash(path), Site: decl.Span})
 	}
-	return policies, module.Concepts, nil
+	return policies, module, nil
 }
 
 // LintModule uses the same concept proof projector as Assert.Concept. The
 // manifest selects subjects and severity; neither alters proposition truth.
 func LintModule(module Module, policies []LintPolicy, manifestConcepts []ConceptDecl) ([]LintFinding, error) {
+	return lintModuleWithPredicateEnvironment(module, policies, manifestConcepts, nil)
+}
+
+func lintModuleWithPredicateEnvironment(module Module, policies []LintPolicy, manifestConcepts []ConceptDecl, predicates *semanticEnv) ([]LintFinding, error) {
 	bound := module
 	bound.Concepts = append(append([]ConceptDecl{}, module.Concepts...), manifestConcepts...)
-	env, err := analyzeModule(bound)
+	env, err := evt1AnalyzeModule(bound, evt1AnalysisOptions{policyPredicates: predicates})
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +198,11 @@ func buildPolicyProof(env *semanticEnv, policy LintPolicy, subject DeclarationSu
 
 func ExplainPolicy(path, identity, subjectName string, roots []string) (ProofGraph, error) {
 	projectRoot := filepath.Dir(path)
-	policies, concepts, err := LoadProjectPolicies(filepath.Join(projectRoot, "manifest.concept"), append(append([]string{}, roots...), projectRoot))
+	policies, policyModule, err := loadProjectPolicyModule(filepath.Join(projectRoot, "manifest.concept"), append(append([]string{}, roots...), projectRoot))
+	if err != nil {
+		return ProofGraph{}, err
+	}
+	predicates, err := analyzeModule(policyModule)
 	if err != nil {
 		return ProofGraph{}, err
 	}
@@ -206,8 +219,8 @@ func ExplainPolicy(path, identity, subjectName string, roots []string) (ProofGra
 		return ProofGraph{}, err
 	}
 	bound := module
-	bound.Concepts = append(append([]ConceptDecl{}, module.Concepts...), concepts...)
-	env, err := analyzeModule(bound)
+	bound.Concepts = append(append([]ConceptDecl{}, module.Concepts...), policyModule.Concepts...)
+	env, err := evt1AnalyzeModule(bound, evt1AnalysisOptions{policyPredicates: predicates})
 	if err != nil {
 		return ProofGraph{}, err
 	}
@@ -257,8 +270,15 @@ func LintPath(target string, roots []string) ([]LintFinding, error) {
 	manifestPath := filepath.Join(projectRoot, "manifest.concept")
 	var policies []LintPolicy
 	var policyConcepts []ConceptDecl
+	var predicates *semanticEnv
 	if _, err := os.Stat(manifestPath); err == nil {
-		policies, policyConcepts, err = LoadProjectPolicies(manifestPath, append(append([]string{}, roots...), projectRoot))
+		var policyModule Module
+		policies, policyModule, err = loadProjectPolicyModule(manifestPath, append(append([]string{}, roots...), projectRoot))
+		if err != nil {
+			return nil, err
+		}
+		policyConcepts = policyModule.Concepts
+		predicates, err = analyzeModule(policyModule)
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +324,7 @@ func LintPath(target string, roots []string) ([]LintFinding, error) {
 		if err != nil {
 			return nil, err
 		}
-		current, err := LintModule(module, policies, policyConcepts)
+		current, err := lintModuleWithPredicateEnvironment(module, policies, policyConcepts, predicates)
 		if err != nil {
 			return nil, err
 		}

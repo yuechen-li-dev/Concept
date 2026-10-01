@@ -304,6 +304,11 @@ var evt1Observations = map[string]evt1Observation{
 	"QualifiedName":        {[]string{"declaration"}, "string"},
 	"IsType":               {[]string{"declaration"}, "bool"},
 	"IsField":              {[]string{"declaration"}, "bool"},
+	"IsFunction":           {[]string{"declaration"}, "bool"},
+	"ParameterCount":       {[]string{"declaration"}, "int"},
+	"ParameterType":        {[]string{"declaration", "int"}, "typename"},
+	"ResultType":           {[]string{"declaration"}, "typename"},
+	"IsExternC":            {[]string{"declaration"}, "bool"},
 	"IsAuthored":           {[]string{"declaration"}, "bool"},
 	"IsGenerated":          {[]string{"declaration"}, "bool"},
 	"IsForeign":            {[]string{"declaration"}, "bool"},
@@ -449,6 +454,26 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 			return boolean(ref.Kind == TypeDeclaration)
 		case "IsField":
 			return boolean(ref.Kind == FieldDeclaration)
+		case "IsFunction":
+			return boolean(ref.Kind == FunctionDeclaration || ref.Kind == MethodDeclaration)
+		case "ParameterCount", "ParameterType", "ResultType", "IsExternC":
+			fn, ok := evt1SubjectFunction(env, ref)
+			if !ok {
+				return fail(ref.qualifiedName() + " is not an available function or method declaration")
+			}
+			switch e.Callee {
+			case "ParameterCount":
+				return integer(len(fn.Params))
+			case "ParameterType":
+				if args[1].WideUint || args[1].IntValue < 0 || args[1].IntValue >= len(fn.Params) {
+					return fail("parameter index is out of bounds for " + ref.qualifiedName())
+				}
+				return evt1TypenameValue(fn.Params[args[1].IntValue].Type), nil
+			case "ResultType":
+				return evt1TypenameValue(fn.ReturnType), nil
+			case "IsExternC":
+				return boolean(fn.ExternABI == "C")
+			}
 		case "IsAuthored":
 			return boolean(ref.Provenance == DeclarationAuthored)
 		case "IsGenerated":

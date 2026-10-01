@@ -555,10 +555,11 @@ func validateModule(module Module) error {
 // innate concepts by diagnostic code. The zero value is the compiler's normal
 // configuration.
 type evt1AnalysisOptions struct {
-	goRulesOff    map[string]bool
-	goRulesOn     map[string]bool
-	innateOff     map[string]bool
-	innateMetrics *evt1InnateMetrics
+	goRulesOff       map[string]bool
+	goRulesOn        map[string]bool
+	innateOff        map[string]bool
+	innateMetrics    *evt1InnateMetrics
+	policyPredicates *semanticEnv
 }
 
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
@@ -6723,6 +6724,15 @@ func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, a
 	concreteType := arguments[0]
 	for _, req := range conceptDecl.Requirements {
 		switch r := req.(type) {
+		case *PredicateRequirement:
+			outcome, detail, at := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
+			if outcome != FactProven {
+				code := "PREDICATE_REQUIREMENT_UNSATISFIED"
+				if outcome == FactUnknown {
+					code = "PREDICATE_REQUIREMENT_UNDECIDED"
+				}
+				return evt1Diagnostic(code, fmt.Sprintf("%s requires %s: %s", strings.Join(path, " -> "), r.Predicate, detail), at)
+			}
 		case *PrerequisiteRequirement:
 			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(r), bindings)
 			if err := checkConceptApplicationSatisfaction(env, r.ConceptName, nestedArguments, path, span); err != nil {
