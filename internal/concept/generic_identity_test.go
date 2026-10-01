@@ -131,3 +131,36 @@ func TestR9aOldOrInconsistentGenericArtifactsRejected(t *testing.T) {
 		t.Fatalf("metadata mismatch admitted: %v", err)
 	}
 }
+
+func TestR9aGenericArrayIdentityExcludesTableColumnProvenance(t *testing.T) {
+	module, err := Parse("column_identity.concept", `module Closure.ColumnIdentity; profile Core;
+template <typename T> struct Marker { int value; }
+record table<3> Catalog { int ID; }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := analyzeModule(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	column := env.fieldSets["Catalog"]["ID"]
+	if !column.Column || column.ArrayElem == nil {
+		t.Fatal("fixture is not a table column")
+	}
+	ordinary := column
+	ordinary.Column = false
+	first, err := evt1InstantiateGenericType(env, Type{Name: "Marker", Kind: TypeApplied, TypeArgs: []Type{column}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := evt1InstantiateGenericType(env, Type{Name: "Marker", Kind: TypeApplied, TypeArgs: []Type{ordinary}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Equal(second) || len(env.genericTypeKeys) != 1 {
+		t.Fatal("field provenance split array identity")
+	}
+	if !env.fieldSets["Catalog"]["ID"].Column {
+		t.Fatal("identity normalization mutated table semantics")
+	}
+}

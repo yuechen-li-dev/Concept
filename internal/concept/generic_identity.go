@@ -145,6 +145,18 @@ func evt1GenericIdentityType(t Type) Type {
 func evt1GenericMetadataType(t Type, retainSymbols bool) Type {
 	t.Span = Span{}
 	t.Imported = false
+	// Column marks a table field's declaration provenance. The same array
+	// passed as a type argument has ordinary array identity, not field identity.
+	t.Column = false
+	if t.ArrayElem != nil {
+		t.ArrayLengthExpr = nil
+		t.Shape = append([]StorageDimension(nil), t.Shape...)
+		for i := range t.Shape {
+			if !t.Shape[i].Runtime {
+				t.Shape[i].Expr = nil
+			}
+		}
+	}
 	if t.Application != nil {
 		copy := *t.Application
 		copy.Arguments = append([]GenericArgument(nil), copy.Arguments...)

@@ -88,7 +88,7 @@ func TestCAbiAdmissionRejectsUnsafeRepresentations(t *testing.T) {
 		{"bool field", `profile Core; [[repr(C)]] record struct Pair { bool x; int y; }`, "C_ABI_REPR_INVALID", "field x"},
 		{"pointer field", `profile Core; [[repr(C)]] record struct Pair { byte* data; int count; }`, "C_ABI_REPR_INVALID", "field data"},
 		{"bad repr", `profile Core; [[repr(packed)]] record struct Pair { int x; int y; }`, "C_ABI_REPR_INVALID", "only [[repr(C)]]"},
-		{"enum repr", `profile Core; [[repr(C)]] enum Kind { One, Two, }`, "C_ABI_REPR_INVALID", "non-generic record struct"},
+		{"enum repr", `profile Core; [[repr(C)]] enum Kind { One, Two, }`, "C_ABI_REPR_INVALID", "requires a record struct"},
 		{"enum boundary", `profile Core; enum Kind { One, Two, } extern "C" Kind GetKind();`, "EXTERN_C_ABI_TYPE_INVALID", "enum lacks an explicit fixed underlying"},
 		{"bad offset", `profile Core; [[repr(C)]] record struct Pair { int x; int y; } static_assert(OffsetOf<Pair>(Pair.missing) == 0, "bad");`, "C_ABI_OFFSET_INVALID", "unknown field Pair.missing"},
 	}
