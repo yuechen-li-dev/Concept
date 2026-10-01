@@ -44,6 +44,26 @@ comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
     };
 }
 
+// A movable aggregate cannot copy an immovable value through one of its
+// fields. Raw and sparse storage carry their own initialization authority;
+// references carry a borrow rather than the value.
+[[diagnostic("CV4138")]]
+innate concept MovableFieldDoesNotEmbedImmovable<FieldDeclaration F>
+{
+    requires MovableFieldDoesNotEmbedImmovableHolds(F);
+}
+
+comptime Verdict MovableFieldDoesNotEmbedImmovableHolds(declaration field)
+{
+    declaration parent = compiler.Parent(field);
+    typename held = compiler.TypeOf(field);
+    return match
+    {
+        when compiler.IsImmovable(parent) or compiler.IsPartialStorage(held) or compiler.IsBorrowLike(held) or not compiler.IsImmovableType(held) => Verdict::Holds,
+        otherwise => Verdict::Refuted(field, "struct " + compiler.Name(parent) + " cannot embed immovable field " + compiler.TypeName(held)),
+    };
+}
+
 // ---- C ABI -----------------------------------------------------------------
 
 // A [[repr(C)]] struct is a C value: a nonempty record whose fields are C

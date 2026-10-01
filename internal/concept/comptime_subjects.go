@@ -327,6 +327,8 @@ var evt1Observations = map[string]evt1Observation{
 	"IsArray":          {[]string{"typename"}, "bool"},
 	"IsPointer":        {[]string{"typename"}, "bool"},
 	"IsBorrowLike":     {[]string{"typename"}, "bool"},
+	"IsImmovableType":  {[]string{"typename"}, "bool"},
+	"IsPartialStorage": {[]string{"typename"}, "bool"},
 	"IsOwnedType":      {[]string{"typename"}, "bool"},
 	"IsCallable":       {[]string{"typename"}, "bool"},
 	"IsDyn":            {[]string{"typename"}, "bool"},
@@ -570,6 +572,10 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 		return boolean(t.PointerTo != nil)
 	case "IsBorrowLike":
 		return boolean(t.isBorrowLike())
+	case "IsImmovableType":
+		return boolean(evt1IsImmovableValueType(env, t))
+	case "IsPartialStorage":
+		return boolean(t.StorageKind == StorageRaw || t.StorageKind == StorageSparse)
 	case "IsOwnedType":
 		return boolean(t.isOwned())
 	case "IsCallable":
