@@ -110,7 +110,6 @@ func TestInnateConceptRules(t *testing.T) {
 		{"verdict shape", true, "enum Verdict\n{\n    Holds,\n    Refuted(string message),\n}\n", "INNATE_VERDICT_SHAPE"},
 		{"kind parameter on a declared concept", false, "concept Fields<FieldDeclaration F>\n{\n    requires compiler.Authored(F);\n}\n", "INNATE_KIND_PARAMETER"},
 		{"diagnostic on a declared concept", false, "[[diagnostic(\"CV9999\")]]\nconcept Fields<declaration F>\n{\n    requires compiler.Authored(F);\n}\n", "CONCEPT_ATTRIBUTE_INVALID"},
-		{"predicate in a declared concept", false, innateTestVerdict + "concept Fields<declaration F>\n{\n    requires Check(F);\n}\ncomptime Verdict Check(declaration d) { return Verdict::Holds; }\n", "PREDICATE_REQUIREMENT_SCOPE"},
 	}
 	for _, tc := range cases {
 		tc := tc

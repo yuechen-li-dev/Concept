@@ -1,0 +1,4 @@
+module Closure.BadPredicate;
+profile Core;
+comptime int Count(typename type) { return 1; }
+concept Wrong<T> { requires Count(T); }

@@ -1,0 +1,3 @@
+module Closure.OwnershipConflict;
+profile Core;
+void Read(owned ref int value) {}

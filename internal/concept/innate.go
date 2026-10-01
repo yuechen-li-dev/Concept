@@ -184,31 +184,35 @@ func evt1ValidateInnateConceptDecl(env *semanticEnv, decl ConceptDecl) error {
 // predicate is a comptime function from declaration subjects to Verdict,
 // applied to the concept's declaration parameters.
 func evt1ValidatePredicateRequirement(env *semanticEnv, decl ConceptDecl, r *PredicateRequirement) error {
-	if !decl.Innate {
-		return evt1Diagnostic("PREDICATE_REQUIREMENT_SCOPE", fmt.Sprintf("requires %s(...): predicate requirements are admitted in innate concepts", r.Predicate), r.Span)
-	}
-	fn, ok := env.comptimeFunctions[r.Predicate]
+	predicates := evt1PredicateEnvironment(env, decl)
+	fn, ok := predicates.comptimeFunctions[r.Predicate]
 	if !ok {
 		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("%s is not a comptime function", r.Predicate), r.Span)
 	}
-	if fn.ReturnType.Name != "Verdict" || len(fn.ReturnType.TypeArgs) != 0 || fn.ReturnType.ArrayElem != nil {
-		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s must return Verdict, not %s", r.Predicate, fn.ReturnType.String()), r.Span)
+	if fn.ReturnType.Name != "Verdict" && (decl.Innate || fn.ReturnType.Name != "bool") || len(fn.ReturnType.TypeArgs) != 0 || fn.ReturnType.ArrayElem != nil || fn.ReturnType.isBorrowLike() || fn.ReturnType.isOwned() {
+		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s must return Verdict (or bool in a declared concept), not %s", r.Predicate, fn.ReturnType.String()), r.Span)
+	}
+	if fn.ReturnType.Name == "Verdict" && !decl.Innate {
+		if err := evt1ValidateVerdictShape(predicates); err != nil {
+			return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", "predicate "+r.Predicate+" requires enum Verdict { Holds, Refuted(declaration at, string message) }; "+err.Error(), r.Span)
+		}
 	}
 	if len(fn.Params) != len(r.Subjects) {
 		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s takes %d declaration(s), got %d", r.Predicate, len(fn.Params), len(r.Subjects)), r.Span)
 	}
 	for i, subject := range r.Subjects {
-		if fn.Params[i].Type.Name != evt1DeclarationTypeName {
-			return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s parameter %s must be a declaration", r.Predicate, fn.Params[i].Name), r.Span)
+		parameterType := fn.Params[i].Type
+		if parameterType.Name != evt1DeclarationTypeName && (decl.Innate || parameterType.Name != evt1TypenameTypeName) || parameterType.isBorrowLike() || parameterType.isOwned() || parameterType.ArrayElem != nil {
+			return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s parameter %s must be a declaration or typename subject", r.Predicate, fn.Params[i].Name), r.Span)
 		}
 		found := false
 		for _, parameter := range evt1ConceptParameters(decl) {
-			if parameter.Kind == "declaration" && parameter.Name == subject.Name {
+			if parameter.Name == subject.Name && (parameter.Kind == "declaration" && parameterType.Name == evt1DeclarationTypeName || parameter.Kind == "type" && parameterType.Name == evt1TypenameTypeName) {
 				found = true
 			}
 		}
 		if !found {
-			return evt1Diagnostic("CONCEPT_DECLARATION_ARGUMENT_INVALID", fmt.Sprintf("%s is not a declaration parameter of %s", subject.Name, decl.Name), subject.Span)
+			return evt1Diagnostic("CONCEPT_DECLARATION_ARGUMENT_INVALID", fmt.Sprintf("%s is not a matching semantic parameter of %s", subject.Name, decl.Name), subject.Span)
 		}
 	}
 	return nil

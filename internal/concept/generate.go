@@ -200,7 +200,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Name:               structDecl.Name,
 			BitsRepresentation: structDecl.BitsRepresentation,
 			BitFields:          append([]BitFieldDecl{}, structDecl.BitFields...),
-			CName:              evt1CName(structDecl.Name),
+			CName:              evt1StructCName(structDecl),
 			Immovable:          structDecl.Immovable,
 			Record:             structDecl.Record,
 			Ref:                structDecl.Ref,
@@ -344,6 +344,12 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mirConcept := MIRConcept{Name: conceptDecl.Name, TypeParam: conceptDecl.TypeParam, Parameters: append([]GenericParameter{}, conceptDecl.Parameters...), Interface: conceptDecl.Interface, SourceSpan: conceptDecl.Span}
 		for _, req := range conceptDecl.Requirements {
 			switch r := req.(type) {
+			case *PredicateRequirement:
+				entry := MIRConceptRequirement{Kind: "predicate", Name: r.Predicate, SourceSpan: r.Span}
+				for _, subject := range r.Subjects {
+					entry.Params = append(entry.Params, MIRName{Name: subject.Name})
+				}
+				mirConcept.Requirements = append(mirConcept.Requirements, entry)
 			case *OperationRequirement:
 				entry := MIRConceptRequirement{
 					Kind:       "operation",
@@ -1102,6 +1108,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectExprMIROps(env, s.Value, fn, templateInfo)
 			}
 		case *ForeachStmt:
+			if s.Comptime && templateInfo != nil {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "comptime_for_deferred", Detail: s.ItemName, SourceSpan: s.Span})
+				continue
+			}
 			mode := "Value"
 			if s.ItemType.Ownership == "ref" {
 				mode = "Ref"
@@ -1208,6 +1218,10 @@ func collectMIROps(env *semanticEnv, block *Block, fn *MIRFunction, templateInfo
 				collectMIROps(env, s.Else, fn, templateInfo)
 			}
 		case *IfStmt:
+			if s.Comptime && templateInfo != nil {
+				fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "comptime_if_deferred", SourceSpan: s.Span})
+				continue
+			}
 			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "if_stmt", SourceSpan: s.Span})
 			collectExprMIROps(env, s.Condition, fn, templateInfo)
 			collectMIROps(env, &s.Then, fn, templateInfo)
@@ -1901,7 +1915,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		if len(l.module.TypeAliases) == 0 && !spanStructs[decl.Name] {
 			continue
 		}
-		header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1CName(decl.Name), evt1CName(decl.Name)))
+		header.WriteString(fmt.Sprintf("typedef struct %s %s;\n", evt1StructCName(decl), evt1StructCName(decl)))
 		forwardCount++
 	}
 	if forwardCount > 0 {
@@ -2049,6 +2063,9 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	rawBody := body.String()
 	integerSupport := evt1DefinedIntegerArithmeticHelpers(l.symbolBase, rawBody)
 	var support strings.Builder
+	if strings.Contains(rawBody, "strlen(") && !strings.Contains(rawBody, "#include <string.h>") {
+		support.WriteString("#include <string.h>\n")
+	}
 	if strings.Contains(rawBody, "concept_abort_invalid_tag(") {
 		support.WriteString("_Noreturn static void concept_abort_invalid_tag(const char* enum_name) {\n")
 		support.WriteString("  fprintf(stderr, \"invalid enum tag for %s\\n\", enum_name);\n")
@@ -2062,6 +2079,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	if strings.Contains(rawBody, "concept_verify_bounds(") {
 		support.WriteString("static void concept_verify_bounds(const char* reason, const char* source, int line, int column, int64_t index, size_t extent) {\n")
 		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%lld extent=%zu\\n\", reason, source, line, column, (long long)index, extent);\n")
+		support.WriteString("  abort();\n}\n\n")
+	}
+	if strings.Contains(rawBody, "concept_verify_unsigned_bounds(") {
+		support.WriteString("static void concept_verify_unsigned_bounds(const char* reason, const char* source, int line, int column, uint64_t index, size_t extent) {\n")
+		support.WriteString("  fprintf(stderr, \"Concept verify: compiler-derived bounds violated: %s at %s:%d:%d: index=%llu extent=%zu\\n\", reason, source, line, column, (unsigned long long)index, extent);\n")
 		support.WriteString("  abort();\n}\n\n")
 	}
 	if strings.Contains(rawBody, "concept_verify_foreign_nonnull(") {
@@ -2538,7 +2560,7 @@ func evt1AutomataDropCName(automataName string) string { return evt1CName(automa
 
 func (l *lowering) structHeader(structDecl StructDecl) string {
 	var b strings.Builder
-	name := evt1CName(structDecl.Name)
+	name := evt1StructCName(structDecl)
 	b.WriteString(fmt.Sprintf("typedef struct %s {\n", name))
 	if len(structDecl.Fields) == 0 {
 		// C11 has no empty structs. The byte is an ABI-only placeholder; Concept
@@ -2587,8 +2609,8 @@ func (l *lowering) semanticViewDeclarations() string {
 
 func (l *lowering) structConstructor(structDecl StructDecl) string {
 	var b strings.Builder
-	typeName := evt1CName(structDecl.Name)
-	ctor := evt1StructConstructorName(structDecl.Name)
+	typeName := evt1StructCName(structDecl)
+	ctor := evt1StructConstructorName(structDecl)
 	b.WriteString(fmt.Sprintf("static %s %s(", typeName, ctor))
 	if len(structDecl.Fields) == 0 {
 		b.WriteString("void")
@@ -2688,8 +2710,8 @@ func (l *lowering) enumConstructors(enumDecl EnumDecl) string {
 	return b.String()
 }
 
-func evt1StructConstructorName(structName string) string {
-	return evt1CName(structName) + "_make"
+func evt1StructConstructorName(decl StructDecl) string {
+	return evt1StructCName(decl) + "_make"
 }
 
 func evt1ConstructorName(enumName, variantName string) string {
@@ -2769,6 +2791,9 @@ func evt1CType(t Type) string {
 	}
 	if builtin, ok := evt1BuiltinDefinition(t.Name); ok {
 		return builtin.CType
+	}
+	if t.Application != nil {
+		return evt1GenericCName(t.Application)
 	}
 	return evt1CName(t.Name)
 }
@@ -3926,7 +3951,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			prelude.WriteString(basePrelude + indexPrelude)
 			prelude.WriteString(ind(indent) + fmt.Sprintf("const char *%s = %s;\n", baseTemp, base))
 			prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(indexType), indexTemp, index))
-			prelude.WriteString(ind(indent) + fmt.Sprintf("if ((int64_t)%s < 0 || (uint64_t)%s >= strlen(%s)) { concept_panic(\"string index out of bounds\", %d, %d); }\n", indexTemp, indexTemp, baseTemp, e.Span.Line, e.Span.Column))
+			prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s) { concept_panic(\"string index out of bounds\", %d, %d); }\n", evt1IndexGuard(indexTemp, "strlen("+baseTemp+")", indexType), e.Span.Line, e.Span.Column))
 			return prelude.String(), fmt.Sprintf("((uint8_t)%s[%s])", baseTemp, indexTemp), Type{Name: "byte", Kind: TypeBuiltin, Span: e.Span}
 		}
 		return f.lowerStorageIndex(e, indent, false)
@@ -4018,6 +4043,9 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		prelude, value, valueType := f.lowerExpr(e.Value, indent)
 		if e.Op == "not" {
 			return prelude, "(!" + value + ")", Type{Name: "bool", Kind: TypeBuiltin}
+		}
+		if e.Op == "~" {
+			return prelude, "((" + evt1CType(valueType) + ")(~(" + value + ")))", valueType
 		}
 		return prelude, "(" + e.Op + value + ")", valueType
 	case *MoveExpr:
@@ -4560,7 +4588,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return prelude.String(), ctor + "(" + strings.Join(args, ", ") + ")", enumType
 	case *StructConstructExpr:
-		structType := Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}
+		structType := evt1CanonicalType(f.l.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span})
 		var prelude strings.Builder
 		var args []string
 		var initializers []string
@@ -4602,7 +4630,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if !evt1TypeCopyable(f.l.env, structType) {
 			return prelude.String(), "(" + evt1CType(structType) + "){ " + strings.Join(initializers, ", ") + " }", structType
 		}
-		return prelude.String(), evt1StructConstructorName(e.StructName) + "(" + strings.Join(args, ", ") + ")", structType
+		return prelude.String(), evt1StructConstructorName(structDecl) + "(" + strings.Join(args, ", ") + ")", structType
 	case *WithExpr:
 		basePrelude, baseExpr, baseType := f.lowerExpr(e.Base, indent)
 		resultTemp := f.nextTemp("record_with")
@@ -5182,7 +5210,7 @@ func evt1RenderCValue(env *semanticEnv, value Value) string {
 		for _, field := range structDecl.Fields {
 			parts = append(parts, evt1RenderCValue(env, value.Fields[field.Name]))
 		}
-		return evt1StructConstructorName(value.StructName) + "(" + strings.Join(parts, ", ") + ")"
+		return evt1StructConstructorName(structDecl) + "(" + strings.Join(parts, ", ") + ")"
 	case ValueEnum:
 		parts := make([]string, 0, len(value.Payload))
 		for _, entry := range value.Payload {

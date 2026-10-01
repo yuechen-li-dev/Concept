@@ -1,0 +1,39 @@
+module Closure.StaticControl;
+profile Core;
+template <typename T>
+int Select(int value) {
+    comptime auto width = SizeOf<T>();
+    comptime if (width == 4) { return value + 1; }
+    else { return value + 2; }
+}
+template <typename T>
+int OnlyFour(int value) {
+    comptime if (SizeOf<T>() == 4) { return value; }
+    else { return NotAnOperation(value); }
+}
+template <usize N>
+int Repeat(int value) {
+    int total = 0;
+    comptime for (i in 0 .. N) {
+        total += value + i;
+        comptime if (i == 1) {
+            total += 10;
+        }
+        else {
+            total += 0;
+        }
+    }
+    return total;
+}
+int Fixed(int value) {
+    comptime auto steps =[1, 2, 3];
+    int total = 0;
+    comptime for (i in steps) {
+        total += value * i;
+    }
+    comptime if (true) { return total; }
+    else { return NotAnOperation(value); }
+}
+int Run() {
+    return Select<int>(3) + Select<double>(3) + OnlyFour<int>(3) + Repeat<4>(3) + Fixed(3);
+}

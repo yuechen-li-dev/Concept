@@ -67,6 +67,7 @@ type evt1ComptimeState struct {
 	stack          []string
 	globalState    map[string]string
 	staticMessages map[*StaticAssert]string
+	usage          *evt1ComptimeUsage
 }
 
 func newEVT1ComptimeState(env *semanticEnv) *evt1ComptimeState {
@@ -81,8 +82,11 @@ func newEVT1ComptimeState(env *semanticEnv) *evt1ComptimeState {
 
 func (s *evt1ComptimeState) push(frame string) error {
 	s.stack = append(s.stack, frame)
+	if s.usage != nil {
+		s.usage.Depth = max(s.usage.Depth, len(s.stack))
+	}
 	if len(s.stack) > evt1ComptimeMaxCallDepth {
-		return evt1Diagnostic("CV4211", "comptime call depth exceeded at "+strings.Join(s.stack, " -> "), Span{})
+		return evt1Diagnostic("CV4211", fmt.Sprintf("comptime call depth %d exceeds limit %d at %s", len(s.stack), evt1ComptimeMaxCallDepth, strings.Join(s.stack, " -> ")), Span{})
 	}
 	return nil
 }
@@ -95,12 +99,15 @@ func (s *evt1ComptimeState) pop() {
 
 func (s *evt1ComptimeState) spend(span Span, cost int) error {
 	s.fuel -= cost
+	if s.usage != nil {
+		s.usage.Fuel = evt1ComptimeMaxFuel - s.fuel
+	}
 	if s.fuel < 0 {
 		path := strings.Join(s.stack, " -> ")
 		if path == "" {
 			path = "<root>"
 		}
-		return evt1Diagnostic("CV4204", "comptime fuel exhausted along "+path, span)
+		return evt1Diagnostic("CV4204", fmt.Sprintf("comptime fuel exhausted: used %d, limit %d along %s", evt1ComptimeMaxFuel-s.fuel, evt1ComptimeMaxFuel, path), span)
 	}
 	return nil
 }
@@ -257,6 +264,9 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		return evt1EvalExprTyped(state, scope, e.Value, expected)
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
+		if e.Unsigned {
+			t, _ = evt1BuiltinType("uint", e.Span)
+		}
 		if expected != nil && evt1IntegralRepresentation(*expected) {
 			t = expected.valueType()
 		}
@@ -295,6 +305,8 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return evt1EvaluateGlobalComptimeDecl(state, decl)
 		}
 		return Value{}, evt1Diagnostic("CV4200", fmt.Sprintf("name %s is not available in comptime evaluation", e.Name), e.Span)
+	case *ComptimeValueExpr:
+		return e.Value, nil
 	case *UnaryExpr:
 		value, err := evt1EvalExpr(state, scope, e.Value)
 		if err != nil {
@@ -311,6 +323,29 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 				return Value{}, evt1Diagnostic("CV4201", "not requires bool", e.Span)
 			}
 			return Value{Kind: ValueBool, Type: value.Type, BoolValue: !value.BoolValue}, nil
+		case "~":
+			negativeAllowed, _, _, width, ok := evt1IntegerTypeRange(value.Type)
+			if !ok || value.Kind != ValueInt || value.Type.Quantity != nil {
+				return Value{}, evt1Diagnostic("CV4201", "bitwise ~ requires an integer scalar representation", e.Span)
+			}
+			if negativeAllowed {
+				return Value{Kind: ValueInt, Type: value.Type, IntValue: ^value.IntValue}, nil
+			}
+			bits := uint64(value.IntValue)
+			if value.WideUint {
+				bits = value.UintValue
+			}
+			bits = ^bits
+			if width < 64 {
+				bits &= (uint64(1) << width) - 1
+			}
+			result := Value{Kind: ValueInt, Type: value.Type}
+			if bits > uint64(^uint(0)>>1) {
+				result.UintValue, result.WideUint = bits, true
+			} else {
+				result.IntValue = int(bits)
+			}
+			return result, nil
 		default:
 			return Value{}, evt1Diagnostic("CV4201", "unsupported comptime unary operator "+e.Op, e.Span)
 		}
@@ -347,8 +382,8 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 				return Value{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
 			}
 			extent := base.Type.Shape[i].Extent
-			if index.IntValue < 0 || index.IntValue >= extent {
-				return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("storage index %d is out of range for extent %d", index.IntValue, extent), indexExpr.exprSpan())
+			if evt1IndexOutOfBounds(index, extent) {
+				return Value{}, evt1Diagnostic("CV4233", fmt.Sprintf("storage index %s is out of range for extent %d", index.Render(), extent), indexExpr.exprSpan())
 			}
 			offset = offset*extent + index.IntValue
 		}
@@ -369,7 +404,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return Value{
 			Kind:       ValueStruct,
-			Type:       Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span},
+			Type:       evt1CanonicalType(state.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}),
 			StructName: e.StructName,
 			Fields:     fields,
 		}, nil
@@ -980,6 +1015,9 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 			if bound.IntValue > evt1ComptimeMaxLoopBound {
 				return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", bound.IntValue, evt1ComptimeMaxLoopBound), s.Bound.exprSpan())
 			}
+			if state.usage != nil {
+				state.usage.Loop = max(state.usage.Loop, int(bound.IntValue))
+			}
 			if err := state.push(fmt.Sprintf("while[%d]", bound.IntValue)); err != nil {
 				return nil, err
 			}
@@ -1101,25 +1139,12 @@ func evt1ExecComptimeBlock(state *evt1ComptimeState, scope *evt1EvalScope, block
 // descending by `descend`, with the same direction rule. Each iteration costs
 // fuel and the iteration count is bounded like `while ... bounded`.
 func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *ForeachStmt, returnType Type) (*Value, error) {
-	var items []Value
-	if rangeExpr, ok := stmt.Source.(*BinaryExpr); ok && (rangeExpr.Op == ".." || rangeExpr.Op == "step" || rangeExpr.Op == "descend") {
-		values, err := evt1ComptimeRangeValues(state, scope, rangeExpr, stmt.ItemType)
-		if err != nil {
-			return nil, err
-		}
-		items = values
-	} else {
-		source, err := evt1EvalExpr(state, scope, stmt.Source)
-		if err != nil {
-			return nil, err
-		}
-		if source.Kind != ValueArray {
-			return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array", stmt.Source.exprSpan())
-		}
-		items = source.Elements
+	items, err := evt1ComptimeIteratorValues(state, scope, stmt.Source, stmt.ItemType, stmt.Span)
+	if err != nil {
+		return nil, err
 	}
-	if len(items) > evt1ComptimeMaxLoopBound {
-		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), stmt.Span)
+	if state.usage != nil {
+		state.usage.Loop = max(state.usage.Loop, len(items))
 	}
 	if err := state.push(fmt.Sprintf("for[%d]", len(items))); err != nil {
 		return nil, err
@@ -1140,6 +1165,31 @@ func evt1ExecComptimeFor(state *evt1ComptimeState, scope *evt1EvalScope, stmt *F
 		}
 	}
 	return nil, nil
+}
+
+// Both evaluated loops and runtime static expansion share iterator semantics.
+func evt1ComptimeIteratorValues(state *evt1ComptimeState, scope *evt1EvalScope, sourceExpr Expr, itemType Type, span Span) ([]Value, error) {
+	var items []Value
+	if rangeExpr, ok := sourceExpr.(*BinaryExpr); ok && (rangeExpr.Op == ".." || rangeExpr.Op == "step" || rangeExpr.Op == "descend") {
+		values, err := evt1ComptimeRangeValues(state, scope, rangeExpr, itemType)
+		if err != nil {
+			return nil, err
+		}
+		items = values
+	} else {
+		source, err := evt1EvalExpr(state, scope, sourceExpr)
+		if err != nil {
+			return nil, err
+		}
+		if source.Kind != ValueArray {
+			return nil, evt1Diagnostic("FOREACH_ITERATOR_INVALID", "comptime for iterates a range or a fixed array", sourceExpr.exprSpan())
+		}
+		items = source.Elements
+	}
+	if len(items) > evt1ComptimeMaxLoopBound {
+		return nil, evt1Diagnostic("CV4206", fmt.Sprintf("comptime loop bound %d exceeds limit %d", len(items), evt1ComptimeMaxLoopBound), span)
+	}
+	return items, nil
 }
 
 func evt1ComptimeRangeValues(state *evt1ComptimeState, scope *evt1EvalScope, expr *BinaryExpr, itemType Type) ([]Value, error) {
@@ -1207,6 +1257,9 @@ func evt1EvalArrayLiteral(state *evt1ComptimeState, scope *evt1EvalScope, expr A
 	}
 	if expandedCount > evt1ComptimeMaxLiteralElements {
 		return Value{}, evt1Diagnostic("CV4224", fmt.Sprintf("array literal element count %d exceeds compile-time evaluation limit %d", expandedCount, evt1ComptimeMaxLiteralElements), expr.Span)
+	}
+	if state.usage != nil {
+		state.usage.Array = max(state.usage.Array, expandedCount)
 	}
 	literalElements := expr.Elements
 	if arrayType.StorageKind == StorageNDArray {

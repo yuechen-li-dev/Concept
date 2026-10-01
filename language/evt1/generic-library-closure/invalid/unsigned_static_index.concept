@@ -1,0 +1,7 @@
+module Closure.BadIndex;
+profile Core;
+comptime uint64 Huge = 18446744073709551615u;
+int Bad() {
+    int<array>[2] values =[1, 2];
+    return values[Huge];
+}

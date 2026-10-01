@@ -399,9 +399,16 @@ int Main()
 		t.Fatal(err)
 	}
 	body := string(outputs["generic_class_basic.generated.c"])
-	if !strings.Contains(body, "const concept_holder_int_* self") {
-		t.Fatalf("generic method did not lower with a concrete owner type:\n%s", body)
+	owner := ""
+	for _, decl := range module.Structs {
+		if decl.Application != nil && decl.Application.Declaration.Name == "Holder" {
+			owner = evt1StructCName(decl)
+		}
 	}
+	if owner == "" || !strings.Contains(body, "const "+owner+"* self") {
+		t.Fatalf("generic method did not lower with a structurally identified concrete owner type:\n%s", body)
+	}
+	runFoundationNativeHarness(t, outputs, "generic_class_harness.c", "#include \"generic_class_basic.generated.h\"\nint main(void) { return concept_generic_class_basic_main() == 9 ? 0 : 1; }\n")
 }
 
 func TestGenericAndEffectArtifactsAreByteIdenticalAcross100Runs(t *testing.T) {

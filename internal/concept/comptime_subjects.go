@@ -137,7 +137,7 @@ func evt1TypenameValue(t Type) Value {
 func evt1TypeDeclarationRef(env *semanticEnv, name string) (evt1DeclarationRef, bool) {
 	if decl, ok := env.structs[name]; ok {
 		provenance := DeclarationAuthored
-		if strings.Contains(name, "<") {
+		if decl.Application != nil {
 			provenance = DeclarationGenerated
 		}
 		return evt1DeclarationRef{Kind: TypeDeclaration, Name: decl.Name, Owner: decl.Module, Index: -1, Provenance: provenance, Site: decl.Span}, true
@@ -168,6 +168,10 @@ func evt1InvokeComptimeFunction(env *semanticEnv, name string, args []Value, spa
 // evt1InvokeComptimeFunctionOn runs a comptime function from env whose
 // observations look at subjects.
 func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args []Value, span Span) (Value, error) {
+	return evt1InvokeComptimeFunctionOnMeasured(env, subjects, name, args, span, nil)
+}
+
+func evt1InvokeComptimeFunctionOnMeasured(env, subjects *semanticEnv, name string, args []Value, span Span, usage *evt1ComptimeUsage) (Value, error) {
 	fn, ok := env.comptimeFunctions[name]
 	if !ok {
 		return Value{}, evt1Diagnostic("CV4210", fmt.Sprintf("%s is not a comptime function", name), span)
@@ -177,6 +181,7 @@ func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args 
 	}
 	state := newEVT1ComptimeState(env)
 	state.subjects = subjects
+	state.usage = usage
 	if err := state.push("comptime fn " + name); err != nil {
 		return Value{}, err
 	}
@@ -299,6 +304,11 @@ var evt1Observations = map[string]evt1Observation{
 	"QualifiedName":        {[]string{"declaration"}, "string"},
 	"IsType":               {[]string{"declaration"}, "bool"},
 	"IsField":              {[]string{"declaration"}, "bool"},
+	"IsFunction":           {[]string{"declaration"}, "bool"},
+	"ParameterCount":       {[]string{"declaration"}, "int"},
+	"ParameterType":        {[]string{"declaration", "int"}, "typename"},
+	"ResultType":           {[]string{"declaration"}, "typename"},
+	"IsExternC":            {[]string{"declaration"}, "bool"},
 	"IsAuthored":           {[]string{"declaration"}, "bool"},
 	"IsGenerated":          {[]string{"declaration"}, "bool"},
 	"IsForeign":            {[]string{"declaration"}, "bool"},
@@ -327,6 +337,8 @@ var evt1Observations = map[string]evt1Observation{
 	"IsArray":          {[]string{"typename"}, "bool"},
 	"IsPointer":        {[]string{"typename"}, "bool"},
 	"IsBorrowLike":     {[]string{"typename"}, "bool"},
+	"IsImmovableType":  {[]string{"typename"}, "bool"},
+	"IsPartialStorage": {[]string{"typename"}, "bool"},
 	"IsOwnedType":      {[]string{"typename"}, "bool"},
 	"IsCallable":       {[]string{"typename"}, "bool"},
 	"IsDyn":            {[]string{"typename"}, "bool"},
@@ -442,6 +454,26 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 			return boolean(ref.Kind == TypeDeclaration)
 		case "IsField":
 			return boolean(ref.Kind == FieldDeclaration)
+		case "IsFunction":
+			return boolean(ref.Kind == FunctionDeclaration || ref.Kind == MethodDeclaration)
+		case "ParameterCount", "ParameterType", "ResultType", "IsExternC":
+			fn, ok := evt1SubjectFunction(env, ref)
+			if !ok {
+				return fail(ref.qualifiedName() + " is not an available function or method declaration")
+			}
+			switch e.Callee {
+			case "ParameterCount":
+				return integer(len(fn.Params))
+			case "ParameterType":
+				if args[1].WideUint || args[1].IntValue < 0 || args[1].IntValue >= len(fn.Params) {
+					return fail("parameter index is out of bounds for " + ref.qualifiedName())
+				}
+				return evt1TypenameValue(fn.Params[args[1].IntValue].Type), nil
+			case "ResultType":
+				return evt1TypenameValue(fn.ReturnType), nil
+			case "IsExternC":
+				return boolean(fn.ExternABI == "C")
+			}
 		case "IsAuthored":
 			return boolean(ref.Provenance == DeclarationAuthored)
 		case "IsGenerated":
@@ -570,6 +602,10 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 		return boolean(t.PointerTo != nil)
 	case "IsBorrowLike":
 		return boolean(t.isBorrowLike())
+	case "IsImmovableType":
+		return boolean(evt1IsImmovableValueType(env, t))
+	case "IsPartialStorage":
+		return boolean(t.StorageKind == StorageRaw || t.StorageKind == StorageSparse)
 	case "IsOwnedType":
 		return boolean(t.isOwned())
 	case "IsCallable":

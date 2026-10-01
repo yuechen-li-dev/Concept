@@ -981,6 +981,11 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		detail := ""
 		requirementOrigin := FactOriginDeclared
 		switch requirement := raw.(type) {
+		case *PredicateRequirement:
+			label = "predicate " + requirement.Predicate
+			requirementOutcome, detail, _ = evt1EvaluateDeclaredPredicate(env, decl, requirement, bindings, declarationBindings)
+			// Requirement truth is declared provenance, never a compiler fact.
+			requirementOrigin = FactOriginDeclared
 		case *PrerequisiteRequirement:
 			var nested []conceptSemanticArgument
 			if len(declarationBindings) != 0 {

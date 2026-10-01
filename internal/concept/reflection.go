@@ -52,7 +52,7 @@ func evt1ReflectableAttributes(attributes []Attribute, span Span, allowCRepr boo
 		}
 		if attribute.Name == "repr" {
 			if !allowCRepr {
-				return evt1Diagnostic("C_ABI_REPR_INVALID", "[[repr(C)]] requires a non-generic record struct", attribute.Span)
+				return evt1Diagnostic("C_ABI_REPR_INVALID", "[[repr(C)]] requires a record struct", attribute.Span)
 			}
 			if len(attribute.Args) != 1 {
 				return evt1Diagnostic("C_ABI_REPR_INVALID", "repr requires exactly one C argument", attribute.Span)
@@ -81,21 +81,6 @@ func evt1HasReflectPermission(attributes []Attribute) bool {
 
 func evt1BuildReflectionResults(module *Module, env *semanticEnv) error {
 	module.ReflectionResults = nil
-	for _, decl := range module.Structs {
-		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span, true); err != nil {
-			return err
-		}
-	}
-	for _, decl := range module.Enums {
-		if err := evt1ReflectableAttributes(decl.Attributes, decl.Span, false); err != nil {
-			return err
-		}
-	}
-	for _, decl := range module.GenericTypes {
-		if err := evt1ReflectableAttributes(decl.Struct.Attributes, decl.Span, false); err != nil {
-			return err
-		}
-	}
 	for _, request := range module.ReflectionRequests {
 		info, err := evt1ReflectType(env, request)
 		if err != nil {

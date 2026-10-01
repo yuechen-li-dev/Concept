@@ -1,8 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
-
 extern "C" usize strlen(string text);
-
 // The wire format is produced by EncodeMachineBridge in Stage-0. All byte
 // access is bounded; no source text or MachineIR printer output is accepted.
 enum BackendError
@@ -15,13 +13,11 @@ enum BackendError
     BufferFull,
     InvalidEncoding,
 }
-
 enum Register
 {
     RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
     R8, R9, R10, R11, R12, R13, R14, R15,
 }
-
 enum OperandKind {
     None, Virtual, Physical, Immediate, Slot, Memory, Block,
 }
@@ -34,7 +30,6 @@ enum Condition {
     None, Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     Below, BelowEqual, Above, AboveEqual, Overflow, Carry,
 }
-
 record struct BridgeText {
     int offset;
     int length;
@@ -43,7 +38,6 @@ ref struct BridgeReader {
     ReadOnlySpan<byte> data;
     int offset;
 }
-
 Result<int, BackendError> ReadI32(ref BridgeReader reader)
 {
     if (reader.offset < 0 or Len(reader.data) - reader.offset < 4)
@@ -59,7 +53,6 @@ Result<int, BackendError> ReadI32(ref BridgeReader reader)
     reader.offset = reader.offset + 4;
     return Result::Ok(value);
 }
-
 Result<int, BackendError> ReadCount(ref BridgeReader reader)
 {
     int count = ReadI32(ref reader) ?;
@@ -67,7 +60,6 @@ Result<int, BackendError> ReadCount(ref BridgeReader reader)
     { return Result::Error(BackendError::BridgeInvalid); }
     return Result::Ok(count);
 }
-
 Result<BridgeText, BackendError> ReadText(ref BridgeReader reader)
 {
     int length = ReadCount(ref reader) ?;
@@ -77,7 +69,6 @@ Result<BridgeText, BackendError> ReadText(ref BridgeReader reader)
     reader.offset = reader.offset + length;
     return Result::Ok(text);
 }
-
 bool TextEquals(ref const BridgeReader reader, BridgeText text, string expected)
 {
     if (text.length !=(strlen(expected) as int)) { return false; }
@@ -87,7 +78,6 @@ bool TextEquals(ref const BridgeReader reader, BridgeText text, string expected)
     }
     return true;
 }
-
 Result<void, BackendError> SkipStrings(ref BridgeReader reader)
 {
     int count = ReadCount(ref reader) ?;
@@ -96,14 +86,12 @@ Result<void, BackendError> SkipStrings(ref BridgeReader reader)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> SkipSpan(ref BridgeReader reader)
 {
     ReadI32(ref reader) ?;
     ReadI32(ref reader) ?;
     return Result::Ok();
 }
-
 Result<int, BackendError> ReadBridgeHeader(ref BridgeReader reader)
 {
     if (Len(reader.data) < 8)
@@ -116,7 +104,6 @@ Result<int, BackendError> ReadBridgeHeader(ref BridgeReader reader)
     reader.offset = 8;
     return ReadCount(ref reader);
 }
-
 record struct MachineOperand
 {
     OperandKind kind;
@@ -131,7 +118,6 @@ record struct MachineOperand
     BridgeText region;
     bool signedValue;
 }
-
 record struct MachineInstruction
 {
     Opcode op;
@@ -148,7 +134,6 @@ record struct MachineInstruction
     int sourceLine;
     int sourceColumn;
 }
-
 record struct MachineBlock
 {
     int id;
@@ -163,7 +148,6 @@ record struct MachineBlock
     int sourceLine;
     int sourceColumn;
 }
-
 record struct MachineVReg {
     int id;
     int width;
@@ -189,7 +173,6 @@ record struct MachineArg
     bool onStack;
     int virtualReg;
 }
-
 struct BackendFunction
 {
     BridgeText identity;
@@ -210,7 +193,6 @@ struct BackendFunction
     MachineInstruction[512] instructions;
     int instructionCount;
 }
-
 MachineOperand EmptyOperand()
 {
     return MachineOperand {
@@ -218,7 +200,6 @@ MachineOperand EmptyOperand()
         BridgeText{0, 0}, BridgeText{0, 0}, false
     };
 }
-
 MachineInstruction EmptyInstruction()
 {
     return MachineInstruction {
@@ -226,7 +207,6 @@ MachineInstruction EmptyInstruction()
         EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0
     };
 }
-
 BackendFunction EmptyFunction()
 {
     return BackendFunction {
@@ -247,12 +227,10 @@ BackendFunction EmptyFunction()
         [EmptyInstruction() ...], 0
     };
 }
-
 Result<Register, BackendError> ReadRegister(ref BridgeReader reader)
 {
     return RegisterFromID(ReadI32(ref reader) ?);
 }
-
 Result<OperandKind, BackendError> ReadOperandKind(ref BridgeReader reader)
 {
     int value = ReadI32(ref reader) ?;
@@ -268,7 +246,6 @@ Result<OperandKind, BackendError> ReadOperandKind(ref BridgeReader reader)
         _ => Result::Error(BackendError::BridgeInvalid),
     };
 }
-
 Result<Opcode, BackendError> ReadOpcode(ref BridgeReader reader)
 {
     int value = ReadI32(ref reader) ?;
@@ -293,7 +270,6 @@ Result<Opcode, BackendError> ReadOpcode(ref BridgeReader reader)
         _ => Result::Error(BackendError::BridgeInvalid),
     };
 }
-
 Result<Condition, BackendError> ReadCondition(ref BridgeReader reader)
 {
     int value = ReadI32(ref reader) ?;
@@ -315,7 +291,6 @@ Result<Condition, BackendError> ReadCondition(ref BridgeReader reader)
         _ => Result::Error(BackendError::BridgeInvalid),
     };
 }
-
 Result<bool, BackendError> ReadBool(ref BridgeReader reader)
 {
     int value = ReadI32(ref reader) ?;
@@ -323,7 +298,6 @@ Result<bool, BackendError> ReadBool(ref BridgeReader reader)
     if (value == 1) { return Result::Ok(true); }
     return Result::Error(BackendError::BridgeInvalid);
 }
-
 Result<MachineOperand, BackendError> ReadOperand(ref BridgeReader reader)
 {
     int id = ReadI32(ref reader) ?;
@@ -342,12 +316,10 @@ Result<MachineOperand, BackendError> ReadOperand(ref BridgeReader reader)
         index, scale, displacement, literal, region, signedValue
     });
 }
-
 bool ValidWidth(int width)
 {
     return width == 1 or width == 2 or width == 4 or width == 8;
 }
-
 Result<void, BackendError> ValidateOperand(
 ref const BackendFunction function, MachineOperand operand)
 {
@@ -375,7 +347,6 @@ ref const BackendFunction function, MachineOperand operand)
     if (not valid) { return Result::Error(BackendError::BridgeInvalid); }
     return Result::Ok();
 }
-
 Result<void, BackendError> ReadFunction(ref BridgeReader reader, ref BackendFunction function)
 {
     function.identity = ReadText(ref reader) ?;
@@ -498,7 +469,6 @@ Result<void, BackendError> ReadFunction(ref BridgeReader reader, ref BackendFunc
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> DecodeFunction(
 ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function)
 {
@@ -520,7 +490,6 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function)
     function = selected;
     return Result::Ok();
 }
-
 struct Allocation
 {
     int[512] start;
@@ -528,7 +497,6 @@ struct Allocation
     Register[512] physical;
     bool[512] assigned;
 }
-
 // A bounds/overflow check splits one LIR block into several MachineIR blocks.
 // Keep those continuations adjacent before computing linear intervals. Appended
 // checks otherwise create artificial overlapping intervals across unrelated
@@ -537,8 +505,8 @@ Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
 {
     MachineBlock[128] originalBlocks = function.blocks;
     MachineInstruction[512] originalInstructions = function.instructions;
-    bool[128] seen = [false ...];
-    int[128] remap = [0 ...];
+    bool[128] seen =[false ...];
+    int[128] remap =[0 ...];
     int nextBlock = 0;
     int nextInstruction = 0;
     for (first in 0 .. function.blockCount)
@@ -594,12 +562,10 @@ Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
     }
     return Result::Ok();
 }
-
 Allocation EmptyAllocation()
 {
     return Allocation{[2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...]};
 }
-
 void TouchInterval(ref Allocation allocation, int id, int position)
 {
     if (position < allocation.start[id]) {
@@ -609,7 +575,6 @@ void TouchInterval(ref Allocation allocation, int id, int position)
         allocation.end[id] = position;
     }
 }
-
 void TouchOperand(ref Allocation allocation, MachineOperand operand, int position)
 {
     if (operand.kind == OperandKind::Virtual)
@@ -626,9 +591,9 @@ void TouchOperand(ref Allocation allocation, MachineOperand operand, int positio
         }
     }
 }
-
-struct LivenessBits { int[17] words; }
-
+struct LivenessBits {
+    int[17] words;
+}
 struct Liveness
 {
     // 128 blocks * 17 words of 31 bits: 512 virtual registers per block. The same
@@ -638,22 +603,25 @@ struct Liveness
     LivenessBits[128] liveIn;
     LivenessBits[128] liveOut;
 }
-
 Liveness EmptyLiveness()
 {
-    return Liveness{[LivenessBits{[0 ...]} ...],[LivenessBits{[0 ...]} ...],
-    [LivenessBits{[0 ...]} ...],[LivenessBits{[0 ...]} ...]};
+    return Liveness {
+        [LivenessBits{[0 ...]}
+        ...],[LivenessBits{[0 ...]}
+        ...],
+        [LivenessBits{[0 ...]}
+        ...],[LivenessBits{[0 ...]}
+        ...]
+    };
 }
-
 void MarkUse(ref Liveness liveness, int block, int id)
 {
     int index = id / 31;
-    int bit = 1 << (id % 31);
+    int bit = 1 <<(id % 31);
     if ((liveness.def[block].words[index] & bit) == 0) {
         liveness.use[block].words[index] = liveness.use[block].words[index] | bit;
     }
 }
-
 void MarkOperandUse(ref Liveness liveness, int block, MachineOperand operand)
 {
     if (operand.kind == OperandKind::Virtual)
@@ -670,7 +638,6 @@ void MarkOperandUse(ref Liveness liveness, int block, MachineOperand operand)
         }
     }
 }
-
 Result<void, BackendError> ComputeLiveness(
 ref const BackendFunction function, ref Liveness liveness)
 {
@@ -701,7 +668,7 @@ ref const BackendFunction function, ref Liveness liveness)
             {
                 int id = instruction.destination.id;
                 int index = id / 31;
-                int bit = 1 << (id % 31);
+                int bit = 1 <<(id % 31);
                 liveness.def[bi].words[index] = liveness.def[bi].words[index] | bit;
             }
         }
@@ -721,7 +688,7 @@ ref const BackendFunction function, ref Liveness liveness)
             if (block.terminator == Opcode::Jcc and
             (block.falseBlock < 0 or block.falseBlock >= function.blockCount))
             { return Result::Error(BackendError::BridgeInvalid); }
-            for (word in 0 .. (function.virtualRegCount + 30) / 31)
+            for (word in 0 ..(function.virtualRegCount + 30) / 31)
             {
                 int outgoing = 0;
                 if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
@@ -734,7 +701,7 @@ ref const BackendFunction function, ref Liveness liveness)
                 }
                 int allBits = 2147483647;
                 int incoming = liveness.use[bi].words[word] |
-                (outgoing & (liveness.def[bi].words[word] ^ allBits));
+                (outgoing &(liveness.def[bi].words[word] ^ allBits));
                 if (outgoing != liveness.liveOut[bi].words[word] or
                 incoming != liveness.liveIn[bi].words[word])
                 {
@@ -748,7 +715,6 @@ ref const BackendFunction function, ref Liveness liveness)
     }
     return Result::Error(BackendError::BridgeInvalid);
 }
-
 // Live-in/out edges extend intervals across branches and loop backedges.
 // The layout order stays deterministic even when the CFG is cyclic.
 Result<void, BackendError> ComputeIntervals(
@@ -762,7 +728,7 @@ ref const BackendFunction function, ref Allocation allocation)
         for (id in 0 .. function.virtualRegCount)
         {
             int index = id / 31;
-            int bit = 1 << (id % 31);
+            int bit = 1 <<(id % 31);
             if ((liveness.liveIn[bi].words[index] & bit) != 0)
             {
                 TouchInterval(ref allocation, id, block.firstInstruction);
@@ -790,7 +756,6 @@ ref const BackendFunction function, ref Allocation allocation)
     }
     return Result::Ok();
 }
-
 Register PoolRegister(int ordinal)
 {
     if (ordinal == 0) { return Register::R10; }
@@ -799,7 +764,6 @@ Register PoolRegister(int ordinal)
     if (ordinal == 3) { return Register::R8; }
     return Register::R9;
 }
-
 // R10/R11/RAX handle the initial ABI copies. R8/R9 become available only
 // after their incoming arguments have been copied, which happens before any
 // later value can require a fourth register. Spills remain explicit failure.
@@ -842,7 +806,6 @@ ref const BackendFunction function, ref Allocation allocation)
     }
     return Result::Ok();
 }
-
 struct ByteWriter {
     Span<byte> bytes;
     int offset;
@@ -857,13 +820,18 @@ struct EncodingPlan
     BranchFixup[256] fixups;
     int fixupCount;
 }
-
+// Scratch storage belongs to the caller; no phase allocates a hidden heap.
+struct EncodingWorkspace
+{
+    Span<int> blockOffsets;
+    Span<BranchFixup> fixups;
+    int fixupCount;
+}
 struct FinalizedFrame
 {
     int byteCount;
     int[64] slotOffsets;
 }
-
 Result<FinalizedFrame, BackendError> FinalizeFrame(ref const BackendFunction function)
 {
     if (function.hasCalls or function.frameShadowSpace != 0 or
@@ -896,7 +864,6 @@ Result<FinalizedFrame, BackendError> FinalizeFrame(ref const BackendFunction fun
     }
     return Result::Ok(move frame);
 }
-
 EncodingPlan EmptyEncodingPlan()
 {
     return EncodingPlan {
@@ -904,7 +871,6 @@ EncodingPlan EmptyEncodingPlan()
         ...], 0
     };
 }
-
 Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
 {
     if (value < 0 or value > 255 or writer.offset >= Len(writer.bytes))
@@ -913,7 +879,6 @@ Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
     writer.offset = writer.offset + 1;
     return Result::Ok();
 }
-
 Result<void, BackendError> WriteI32LE(ref ByteWriter writer, int value)
 {
     int remaining = value;
@@ -928,7 +893,6 @@ Result<void, BackendError> WriteI32LE(ref ByteWriter writer, int value)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> PatchI32LE(ref ByteWriter writer, int offset, int value)
 {
     if (offset < 0 or offset > writer.offset - 4)
@@ -939,7 +903,6 @@ Result<void, BackendError> PatchI32LE(ref ByteWriter writer, int offset, int val
     writer.offset = saved;
     return Result::Ok();
 }
-
 Result<Register, BackendError> RegisterFromID(int id)
 {
     return match (id)
@@ -963,7 +926,6 @@ Result<Register, BackendError> RegisterFromID(int id)
         _ => Result::Error(BackendError::BridgeInvalid),
     };
 }
-
 int RegisterEncoding(Register reg)
 {
     return match (reg)
@@ -986,7 +948,6 @@ int RegisterEncoding(Register reg)
         Register::R15 => 15,
     };
 }
-
 Result<Register, BackendError> ResolveRegister(
 ref const Allocation allocation, MachineOperand operand)
 {
@@ -1000,7 +961,6 @@ ref const Allocation allocation, MachineOperand operand)
     { return RegisterFromID(operand.id); }
     return Result::Error(BackendError::UnsupportedInstruction);
 }
-
 Result<void, BackendError> WriteRex(
 ref ByteWriter writer, bool wide, int regCode, int rmCode)
 {
@@ -1019,7 +979,6 @@ ref ByteWriter writer, bool wide, int regCode, int rmCode)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> WriteRegReg(
 ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
 {
@@ -1032,7 +991,6 @@ ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
     WriteByte(ref writer, 192 +(regCode % 8) * 8 + rmCode % 8) ?;
     return Result::Ok();
 }
-
 int ScaleBits(int scale)
 {
     if (scale == 1) { return 0; }
@@ -1041,7 +999,6 @@ int ScaleBits(int scale)
     if (scale == 8) { return 3; }
     return - 1;
 }
-
 Result<void, BackendError> WriteMemoryReg(
 ref ByteWriter writer, ref const Allocation allocation,
 int opcode, Register reg, MachineOperand memory, int width)
@@ -1118,7 +1075,6 @@ int opcode, Register reg, MachineOperand memory, int width)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> WriteStackReg(
 ref ByteWriter writer, ref const FinalizedFrame frame,
 int opcode, Register reg, MachineOperand slot, int width)
@@ -1153,7 +1109,6 @@ int opcode, Register reg, MachineOperand slot, int width)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> WriteStackAdjustment(ref ByteWriter writer, bool subtract, int bytes)
 {
     if (bytes == 0) { return Result::Ok(); }
@@ -1183,7 +1138,6 @@ Result<void, BackendError> WriteStackAdjustment(ref ByteWriter writer, bool subt
     }
     return Result::Ok();
 }
-
 Result<int, BackendError> ParseI32Literal(
 ref const BridgeReader reader, BridgeText text)
 {
@@ -1220,7 +1174,6 @@ ref const BridgeReader reader, BridgeText text)
     }
     return Result::Ok(value);
 }
-
 Result<void, BackendError> WriteMovImmediate(
 ref ByteWriter writer, Register destination, int value, int width)
 {
@@ -1245,7 +1198,6 @@ ref ByteWriter writer, Register destination, int value, int width)
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> WriteCompareImmediate(
 ref ByteWriter writer, Register left, int value, int width)
 {
@@ -1257,7 +1209,6 @@ ref ByteWriter writer, Register left, int value, int width)
     WriteI32LE(ref writer, value) ?;
     return Result::Ok();
 }
-
 int ConditionEncoding(Condition condition)
 {
     return match (condition)
@@ -1277,7 +1228,6 @@ int ConditionEncoding(Condition condition)
         Condition::Carry => 2,
     };
 }
-
 Result<void, BackendError> AddFixup(
 ref ByteWriter writer, ref EncodingPlan plan, int target)
 {
@@ -1288,7 +1238,18 @@ ref ByteWriter writer, ref EncodingPlan plan, int target)
     WriteI32LE(ref writer, 0) ?;
     return Result::Ok();
 }
-
+Result<void, BackendError> AddWorkspaceFixup(
+ref ByteWriter writer, ref EncodingWorkspace workspace, int target)
+{
+    if (target < 0 or target >= Len(workspace.blockOffsets))
+    { return Result::Error(BackendError::InvalidEncoding); }
+    if (workspace.fixupCount >= Len(workspace.fixups))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    workspace.fixups[workspace.fixupCount] = BranchFixup{writer.offset, target};
+    workspace.fixupCount += 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -1306,7 +1267,9 @@ MachineInstruction instruction)
         int opcode = 141;
         if (instruction.op == Opcode::Load) {
             opcode = 139;
-            if (instruction.width == 1) { opcode = 138; }
+            if (instruction.width == 1) {
+                opcode = 138;
+            }
         }
         if (instruction.source0.kind == OperandKind::Slot)
         {
@@ -1320,7 +1283,9 @@ MachineInstruction instruction)
     {
         Register source = ResolveRegister(ref const allocation, instruction.source0) ?;
         int opcode = 137;
-        if (instruction.width == 1) { opcode = 136; }
+        if (instruction.width == 1) {
+            opcode = 136;
+        }
         if (instruction.destination.kind == OperandKind::Slot)
         {
             return WriteStackReg(ref writer, ref const frame, opcode,
@@ -1403,14 +1368,27 @@ MachineInstruction instruction)
     }
     return Result::Error(BackendError::UnsupportedInstruction);
 }
-
 // Callers must discard output on Error; the published count is transactional.
-Result<int, BackendError> EncodeFunction(
+Result<int, BackendError> EncodeFunctionWithWorkspace(
 ref const BridgeReader reader, ref const BackendFunction function,
-ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan)
 {
     ByteWriter writer = ByteWriter{output, 0};
-    EncodingPlan plan = EmptyEncodingPlan();
+    if (function.blockCount < 0 or function.blockCount > Len(plan.blockOffsets))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    int requiredFixups = 0;
+    for (bi in 0 .. function.blockCount)
+    {
+        if (function.blocks[bi].terminator == Opcode::Jmp) {
+            requiredFixups += 1;
+        }
+        if (function.blocks[bi].terminator == Opcode::Jcc) {
+            requiredFixups += 2;
+        }
+    }
+    if (requiredFixups > Len(plan.fixups))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    plan.fixupCount = 0;
     WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
     for (bi in 0 .. function.blockCount)
     {
@@ -1425,16 +1403,16 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
         {
             Opcode::Jmp => {
                 WriteByte(ref writer, 233) ?;
-                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.trueBlock) ?;
             }
             Opcode::Jcc => {
                 int condition = ConditionEncoding(block.condition);
                 if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
                 WriteByte(ref writer, 15) ?;
                 WriteByte(ref writer, 128 + condition) ?;
-                AddFixup(ref writer, ref plan, block.trueBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.trueBlock) ?;
                 WriteByte(ref writer, 233) ?;
-                AddFixup(ref writer, ref plan, block.falseBlock) ?;
+                AddWorkspaceFixup(ref writer, ref plan, block.falseBlock) ?;
             }
             Opcode::Ret => {
                 WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
@@ -1465,7 +1443,33 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
     }
     return Result::Ok(writer.offset);
 }
-
+// Compatibility entry point retains the original bounded inline scratch budget.
+Result<int, BackendError> EncodeFunction(
+ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
+{
+    EncodingPlan storage = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(storage.blockOffsets), Span(storage.fixups), 0
+    };
+    return EncodeFunctionWithWorkspace(ref const reader, ref const function,
+    ref const allocation, ref const frame, output, ref workspace);
+}
+Result<int, BackendError> EmitFunctionWithWorkspace(
+ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output,
+Span<int> blockOffsets, Span<BranchFixup> fixups)
+{
+    BackendFunction function = EmptyFunction();
+    DecodeFunction(artifact, ordinal, ref function) ?;
+    LayoutLoweredBlocks(ref function) ?;
+    Allocation allocation = EmptyAllocation();
+    AllocateRegisters(ref const function, ref allocation) ?;
+    FinalizedFrame frame = FinalizeFrame(ref const function) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    EncodingWorkspace workspace = EncodingWorkspace{blockOffsets, fixups, 0};
+    return EncodeFunctionWithWorkspace(ref const reader, ref const function,
+    ref const allocation, ref const frame, output, ref workspace);
+}
 Result<int, BackendError> EmitFunction(
 ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
 {
@@ -1479,12 +1483,13 @@ ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
     return EncodeFunction(ref const reader, ref const function, ref const allocation,
     ref const frame, output);
 }
-
 void BackendFacts()
 {
-	Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
+    Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
     Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
     Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
+    Assert.Concept<NoAllocation>(EncodeFunctionWithWorkspace, "caller-supplied encoding scratch");
+    Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
     Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
 }

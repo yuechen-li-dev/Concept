@@ -400,7 +400,7 @@ func TestSemanticModuleGraphRejectsMissingCycleSchemaAndCorruption(t *testing.T)
 	}
 	var unsupported SemanticModuleArtifact
 	_ = json.Unmarshal(leaf, &unsupported)
-	unsupported.SchemaVersion = "concept-module.v2"
+	unsupported.SchemaVersion = "concept-module.unsupported"
 	unsupported.ContentSHA256, _ = semanticArtifactHash(unsupported)
 	unsupportedBody, _ := json.Marshal(unsupported)
 	if _, _, err := LoadSemanticModuleArtifact(unsupportedBody); err == nil || !strings.Contains(err.Error(), "MODULE_SCHEMA_UNSUPPORTED") {

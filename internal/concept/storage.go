@@ -629,18 +629,19 @@ func (f *evt1FunctionLowerer) lowerStorageIndex(index *IndexExpr, indent int, pl
 	boundsStrategy := f.plannedStrategyAt(operation, index.Span, "PerAccessRuntime")
 	indexNames := make([]string, 0, len(indices))
 	for i, indexExpr := range indices {
-		indexPrelude, indexValue, _ := f.lowerExpr(indexExpr, indent)
+		indexPrelude, indexValue, indexType := f.lowerExpr(indexExpr, indent)
 		prelude.WriteString(indexPrelude)
 		name := f.nextTemp(fmt.Sprintf("index_%d", i+1))
-		prelude.WriteString(ind(indent) + fmt.Sprintf("int %s = %s;\n", name, indexValue))
+		prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1IndexCType(indexType), name, indexValue))
 		extent := f.lowerStorageExtent(base, baseType, i)
 		if boundsStrategy == "PerAccessRuntime" {
 			if f.l.verify {
 				extentName := f.nextTemp(fmt.Sprintf("extent_%d", i+1))
 				prelude.WriteString(ind(indent) + fmt.Sprintf("size_t %s = (size_t)%s;\n", extentName, extent))
-				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_verify_bounds(%q, %q, %d, %d, (int64_t)%s, %s); }\n", name, name, extentName, evt1StoragePanicReason(baseType), f.l.module.Path, index.Span.Line, index.Span.Column, name, extentName))
+				helper, cast := evt1IndexVerifyCall(indexType)
+				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s) { %s(%q, %q, %d, %d, (%s)%s, %s); }\n", evt1IndexGuard(name, extentName, indexType), helper, evt1StoragePanicReason(baseType), f.l.module.Path, index.Span.Line, index.Span.Column, cast, name, extentName))
 			} else {
-				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s < 0 || (size_t)%s >= %s) { concept_panic(%q, %d, %d); }\n", name, name, extent, evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
+				prelude.WriteString(ind(indent) + fmt.Sprintf("if (%s) { concept_panic(%q, %d, %d); }\n", evt1IndexGuard(name, extent, indexType), evt1StoragePanicReason(baseType), index.Span.Line, index.Span.Column))
 			}
 		}
 		indexNames = append(indexNames, name)

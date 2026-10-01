@@ -15,7 +15,8 @@ import (
 	"sync"
 )
 
-const SemanticModuleSchema = "concept-module.v1"
+const SemanticModuleSchema = "concept-module.v2"
+const GenericApplicationSchema = "concept-generic-application.v1"
 
 type SemanticModuleDependency struct {
 	ModuleIdentity string `json:"module_identity"`
@@ -79,24 +80,26 @@ type SemanticModuleExports struct {
 // The surrounding JSON stays inspectable and carries compatibility, integrity,
 // dependency, export, effect, ownership, and diagnostic-origin summaries.
 type SemanticModuleArtifact struct {
-	SchemaVersion      string                                `json:"schema_version"`
-	CompilerIdentity   string                                `json:"compiler_identity"`
-	InnateIdentity     string                                `json:"innate_identity"`
-	ModuleIdentity     string                                `json:"module_identity"`
-	SourceIdentity     string                                `json:"source_identity"`
-	SourceSHA256       string                                `json:"source_sha256"`
-	ContentSHA256      string                                `json:"content_sha256"`
-	Dependencies       []SemanticModuleDependency            `json:"dependencies,omitempty"`
-	Exports            SemanticModuleExports                 `json:"exports"`
-	OperationEffects   []SemanticModuleEffectSummary         `json:"operation_effect_summaries,omitempty"`
-	HardwareEffects    []SemanticModuleHardwareEffectSummary `json:"hardware_effect_summaries,omitempty"`
-	ValueFactSummaries []SemanticFunctionFactSummary         `json:"value_fact_summaries,omitempty"`
-	Interpretations    []SemanticInterpretationSite          `json:"interpretations,omitempty"`
-	SharedAccessFacts  []MIRSemanticFact                     `json:"shared_access_facts,omitempty"`
-	AccessSummaries    []MIRAccessEntry                      `json:"access_summaries,omitempty"`
-	ForeignContracts   []ForeignContractDecl                 `json:"foreign_contracts,omitempty"`
-	NativeABI          *NativeABIReport                      `json:"native_abi,omitempty"`
-	SemanticPayload    []byte                                `json:"semantic_payload"`
+	SchemaVersion            string                                `json:"schema_version"`
+	GenericApplicationSchema string                                `json:"generic_application_schema"`
+	GenericApplications      []SemanticGenericApplication          `json:"generic_applications,omitempty"`
+	CompilerIdentity         string                                `json:"compiler_identity"`
+	InnateIdentity           string                                `json:"innate_identity"`
+	ModuleIdentity           string                                `json:"module_identity"`
+	SourceIdentity           string                                `json:"source_identity"`
+	SourceSHA256             string                                `json:"source_sha256"`
+	ContentSHA256            string                                `json:"content_sha256"`
+	Dependencies             []SemanticModuleDependency            `json:"dependencies,omitempty"`
+	Exports                  SemanticModuleExports                 `json:"exports"`
+	OperationEffects         []SemanticModuleEffectSummary         `json:"operation_effect_summaries,omitempty"`
+	HardwareEffects          []SemanticModuleHardwareEffectSummary `json:"hardware_effect_summaries,omitempty"`
+	ValueFactSummaries       []SemanticFunctionFactSummary         `json:"value_fact_summaries,omitempty"`
+	Interpretations          []SemanticInterpretationSite          `json:"interpretations,omitempty"`
+	SharedAccessFacts        []MIRSemanticFact                     `json:"shared_access_facts,omitempty"`
+	AccessSummaries          []MIRAccessEntry                      `json:"access_summaries,omitempty"`
+	ForeignContracts         []ForeignContractDecl                 `json:"foreign_contracts,omitempty"`
+	NativeABI                *NativeABIReport                      `json:"native_abi,omitempty"`
+	SemanticPayload          []byte                                `json:"semantic_payload"`
 }
 
 var semanticGobOnce sync.Once
@@ -109,7 +112,7 @@ func registerSemanticGobTypes() {
 			&MachineCompleteStmt{}, &TransitionStmt{}, &TransitionMatchStmt{}, &OnStmt{}, &TransitionInferStmt{}, &TransitionDecideStmt{},
 			&InstanceDecl{}, &AssignStmt{}, &ReturnStmt{}, &AssertStmt{}, &TryStmt{}, &ExprStmt{}, &AsmStmt{},
 			&StaticAssertStmt{}, &MatchStmt{}, &WhileStmt{}, &ForeachStmt{},
-			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
+			&AwaitExpr{}, &InferExpr{}, &DecideExpr{}, &CastExpr{}, &InterpretExpr{}, &NameExpr{}, &ComptimeValueExpr{}, &IntLiteral{}, &FloatLiteral{}, &StringLiteral{}, &BoolLiteral{},
 			&FieldExpr{}, &CallExpr{}, &TemplateCallExpr{}, &BinaryExpr{}, &UnaryExpr{}, &MoveExpr{},
 			&RefExpr{}, &BindExpr{}, &ConstructExpr{}, &StructConstructExpr{}, &CallableExpr{}, &WithExpr{},
 			&ArrayLiteralExpr{}, &RepeatInitializer{}, &IndexExpr{}, &MatchExpr{}, &IfExpr{}, &FailureExpr{}, &ParenExpr{},
@@ -159,6 +162,9 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	if artifact.CompilerIdentity != CompilerID {
 		return artifact, Module{}, fmt.Errorf("MODULE_COMPILER_INCOMPATIBLE: expected %s, got %s", CompilerID, artifact.CompilerIdentity)
 	}
+	if artifact.GenericApplicationSchema != GenericApplicationSchema {
+		return artifact, Module{}, fmt.Errorf("MODULE_GENERIC_SCHEMA_STALE: %s lacks %s structured generic identity; rebuild it", artifact.ModuleIdentity, GenericApplicationSchema)
+	}
 	if artifact.InnateIdentity != InnateIdentity() {
 		return artifact, Module{}, fmt.Errorf("MODULE_INNATE_STALE: %s was checked under innate concepts %q; this compiler carries %s; rebuild it", artifact.ModuleIdentity, artifact.InnateIdentity, InnateIdentity())
 	}
@@ -178,6 +184,9 @@ func LoadSemanticModuleArtifact(body []byte) (SemanticModuleArtifact, Module, er
 	}
 	if module.Name != artifact.ModuleIdentity {
 		return artifact, Module{}, fmt.Errorf("MODULE_IDENTITY_MISMATCH: payload declares %s, artifact declares %s", module.Name, artifact.ModuleIdentity)
+	}
+	if !reflect.DeepEqual(artifact.GenericApplications, semanticGenericApplications(module)) {
+		return artifact, Module{}, fmt.Errorf("MODULE_GENERIC_APPLICATION_MISMATCH: inspectable applications differ from semantic payload")
 	}
 	if !reflect.DeepEqual(module.ForeignContracts, artifact.ForeignContracts) {
 		return artifact, Module{}, fmt.Errorf("MODULE_FOREIGN_CONTRACT_MISMATCH: inspectable foreign declarations differ from semantic payload")
@@ -249,21 +258,23 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 		return nil, err
 	}
 	artifact := SemanticModuleArtifact{
-		SchemaVersion:      SemanticModuleSchema,
-		CompilerIdentity:   CompilerID,
-		InnateIdentity:     InnateIdentity(),
-		ModuleIdentity:     local.Name,
-		SourceIdentity:     local.Name,
-		SourceSHA256:       digest([]byte(source)),
-		Exports:            semanticModuleExports(localWithGenerated, env),
-		OperationEffects:   summarizeModuleEffects(localWithGenerated, env),
-		HardwareEffects:    summarizeModuleHardwareEffects(localWithGenerated, env),
-		ValueFactSummaries: semanticModuleFactSummaries(localWithGenerated, env),
-		Interpretations:    semanticModuleInterpretations(localWithGenerated, env),
-		SharedAccessFacts:  evt1LocalSharedAccessFacts(localWithGenerated, env),
-		AccessSummaries:    evt1LocalAccessSummaries(localWithGenerated, env),
-		ForeignContracts:   append([]ForeignContractDecl{}, local.ForeignContracts...),
-		SemanticPayload:    payload,
+		SchemaVersion:            SemanticModuleSchema,
+		GenericApplicationSchema: GenericApplicationSchema,
+		GenericApplications:      semanticGenericApplications(portable),
+		CompilerIdentity:         CompilerID,
+		InnateIdentity:           InnateIdentity(),
+		ModuleIdentity:           local.Name,
+		SourceIdentity:           local.Name,
+		SourceSHA256:             digest([]byte(source)),
+		Exports:                  semanticModuleExports(localWithGenerated, env),
+		OperationEffects:         summarizeModuleEffects(localWithGenerated, env),
+		HardwareEffects:          summarizeModuleHardwareEffects(localWithGenerated, env),
+		ValueFactSummaries:       semanticModuleFactSummaries(localWithGenerated, env),
+		Interpretations:          semanticModuleInterpretations(localWithGenerated, env),
+		SharedAccessFacts:        evt1LocalSharedAccessFacts(localWithGenerated, env),
+		AccessSummaries:          evt1LocalAccessSummaries(localWithGenerated, env),
+		ForeignContracts:         append([]ForeignContractDecl{}, local.ForeignContracts...),
+		SemanticPayload:          payload,
 	}
 	if report != nil {
 		if identity == nil || report.Identity != *identity {
@@ -580,7 +591,7 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 		for i := range module.Structs {
 			// Materialized generic instances may originate in a dependency
 			// of this artifact. Preserve that owner for ordinary deduplication.
-			if !strings.Contains(module.Structs[i].Name, "<") {
+			if module.Structs[i].Application == nil {
 				module.Structs[i].Module = artifact.ModuleIdentity
 			}
 		}
@@ -703,7 +714,7 @@ func appendSemanticDeclarations(target *Module, source Module) {
 	target.TypeAliases = append(target.TypeAliases, source.TypeAliases...)
 	for _, incoming := range source.Structs {
 		duplicateInstance := false
-		if strings.Contains(incoming.Name, "<") {
+		if incoming.Application != nil {
 			for _, existing := range target.Structs {
 				left, right := existing, incoming
 				// Materialized instances are transported by each consumer artifact;

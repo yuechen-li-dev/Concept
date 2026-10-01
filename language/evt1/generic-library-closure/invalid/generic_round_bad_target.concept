@@ -1,0 +1,9 @@
+module Closure.BadRound;
+profile Core;
+template <typename T>
+Result<T, NumericCastError> RoundTarget(double value) {
+    return RoundTo<T>(value);
+}
+Result<float, NumericCastError> Bad(double value) {
+    return RoundTarget<float>(value);
+}

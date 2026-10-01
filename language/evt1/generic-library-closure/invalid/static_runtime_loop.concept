@@ -1,0 +1,2 @@
+profile Core;
+int Bad(int value) { comptime for (i in 0..value) { value += i; } return value; }

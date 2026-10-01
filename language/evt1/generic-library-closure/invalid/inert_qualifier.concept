@@ -1,0 +1,3 @@
+module Closure.InertQualifier;
+profile Core;
+unsafe int Value() { return 1; }

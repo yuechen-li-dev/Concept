@@ -1,5 +1,20 @@
 # Concept EVT1 language specification
 
+R9a scalar closure: suffix `u` selects canonical `uint` by default and unsigned
+contextual targets when representable. `~` returns the integer operand's type
+and complements exactly its representation width; it is requirable as unary
+`operator~`. Ordinary integer scalar indices check bounds at full width before
+pointer access. Signed indices additionally check negativity. Named rounding
+operations can defer dependent representation checks to closed instantiations;
+float-to-int `as` still requires an explicit rounding operation.
+
+R9a closure: generic ownership remains explicitly authored (`owned T value`), even
+for trivial instantiations. Generic `[[repr(C)]] record struct` declarations are admitted;
+each closed plain-data instance establishes C value/layout legality. Generic identity
+and artifact transport are structural. Unsupported `unsafe`/`imported` type modifiers
+and conflicting/repeated qualifiers reject; unsafe asm and module imports remain.
+Named aggregate fields evaluate in source expression order. Defaults are unsupported.
+
 Status: R5 language-core semantics frozen for R6 tooling
 
 This document defines the authority categories and the smallest currently
@@ -60,7 +75,7 @@ profile Vulkan;
 **Approved R6e extension.** A reusable unit declares `module Dotted.Name;`
 and consumers write `import Dotted.Name;`. The declaration may precede or
 follow `profile`; imports follow them. Core resolves exact local/configured-root
-`concept-module.v1` artifacts. Imports are semantic and never textual.
+`concept-module.v2` artifacts. Imports are semantic and never textual.
 
 ## 4. Naming and formatting
 
@@ -1705,7 +1720,7 @@ summary to Unknown.
 
 ## 32. Approved R6e semantic module substrate
 
-`concept-module.v1` is a deterministic, compiler-versioned, integrity-checked
+`concept-module.v2` is a deterministic, compiler-versioned, integrity-checked
 semantic artifact. It preserves declarations, generic bodies and constraints,
 source spans, structural ownership/provenance inputs, and bounded operation
 summaries without containing backend code. A consumer loads the artifact and
@@ -1745,3 +1760,9 @@ freshness, disjointness, or hidden allocation.
 
 Full C++ ABI, header parsing, generated or verified contracts, callbacks,
 shared foreign ownership, MMIO/volatile, and allocator policy remain deferred.
+
+R9a runtime static controls use `comptime if` and `comptime for` with compile-time
+operands and ordinary runtime bodies. Closed controls select/expand before runtime
+validation. Local inferred constants use `comptime auto name = initializer;`;
+`var` remains a compatibility spelling. Fixed arrays infer their element type and
+extent. Open generic values are resolved when the function is instantiated.

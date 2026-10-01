@@ -1,0 +1,9 @@
+module Closure.RuntimeIndex;
+profile Core;
+int Read(uint64 index) {
+    int<array>[2] values =[1, 2];
+    return values[index];
+}
+int Main() {
+    return Read(4294967297u);
+}

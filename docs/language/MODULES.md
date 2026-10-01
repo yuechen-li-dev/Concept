@@ -1,6 +1,21 @@
 # Reusable semantic modules
 
-`concept-module.v1` can carry symbolic generic method access summaries.
+R9a advances the envelope to `concept-module.v2` for structured generic identity,
+declared predicate requirements and retained static-control ASTs. It requires
+`generic_application_schema: "concept-generic-application.v1"`. Rebuild older
+artifacts: v1 envelopes reject `MODULE_SCHEMA_UNSUPPORTED`, while v2 envelopes
+missing structural metadata reject `MODULE_GENERIC_SCHEMA_STALE`. It never reparses
+nominal names for compatibility. The inspectable `generic_applications` list
+matches the payload's closed declarations. Each application stores its defining
+module and declaration name plus ordered, tagged type or typed integer arguments.
+Nested applications retain this structure; aliases follow ordinary canonical
+resolution. Types and closed declarations both retain application metadata.
+Display spelling is derived; C symbols include a structural identity digest.
+
+Self-hosted frontend stages consume structured generic application identity;
+they do not port Stage-0 string reparsing.
+
+`concept-module.v2` can carry symbolic generic method access summaries.
 Artifact-only consumers instantiate those summaries with their own concrete
 type and value bindings. Older artifacts without the summary supply no
 optimistic shared-access evidence.
@@ -30,7 +45,7 @@ import Standard.Generic;
 ```
 
 `module` gives the unit a semantic name; it is not a filesystem identity.
-`import` consumes a compiled `concept-module.v1` artifact. It never performs
+`import` consumes a compiled `concept-module.v2` artifact. It never performs
 text inclusion and normal consumer compilation never opens imported source.
 Source is authoritative while building a module; the integrity-checked
 artifact is authoritative while compiling a consumer.
@@ -63,7 +78,7 @@ layout, ownership, provenance, MIR, Planner, and backend pipeline. There are no
 runtime dictionaries, reflection tables, or module loader.
 
 R7g1 transports generated function declarations and their origin in the same
-`concept-module.v1` semantic payload. The producing module runs its generator
+`concept-module.v2` semantic payload. The producing module runs its generator
 once during compilation; a consumer imports the checked declaration without
 rerunning that generator. The deterministic envelope hash covers generated
 declaration syntax and provenance.
@@ -133,7 +148,7 @@ R7a provides a bounded local package builder, not a general package manager.
 It discovers `libraries/<Package>/manifest.concept`, evaluates that manifest
 through the ordinary parser and typed semantic path, orders package and module
 dependencies, and emits deterministic `package.json` plus
-`concept-module.v1` artifacts. The immutable manifest records package name,
+`concept-module.v2` artifacts. The immutable manifest records package name,
 author, version, kind, dependencies, and dependency count; current first-party
 manifests use author `CODEX`. There is no registry, remote fetch, solver,
 lockfile, stable binary module ABI, import alias, partial specialization,
@@ -155,7 +170,7 @@ schema. An artifact-only consumer instantiates bump, pool, `Allocation<T,A>`,
 typed Allocate, and constrained Drop without opening module source.
 # Reflection boundary
 
-An imported type can be structurally inspected by `reflect<T>;` only when its defining declaration carries `[[reflect]]`. The compiler resolves the query from the verified `concept-module.v1` artifact identity and semantic payload, without reparsing source. Type-level permission is compile-time-only; see [Reflection](REFLECTION.md).
+An imported type can be structurally inspected by `reflect<T>;` only when its defining declaration carries `[[reflect]]`. The compiler resolves the query from the verified `concept-module.v2` artifact identity and semantic payload, without reparsing source. Type-level permission is compile-time-only; see [Reflection](REFLECTION.md).
 
 ## Project lint policy
 

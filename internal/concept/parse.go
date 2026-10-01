@@ -185,6 +185,9 @@ func lexEVT1(text string) ([]Token, error) {
 					}
 				}
 			}
+			if j < len(text) && text[j] == 'u' && isNumber(text[i:j]) {
+				j++
+			}
 			tokens = append(tokens, Token{Lexeme: text[i:j], Span: start})
 			column += j - i
 			i = j
@@ -247,7 +250,7 @@ func lexEVT1(text string) ([]Token, error) {
 			return nil, evt1Diagnostic("CV4648", "use 'and' instead of '&&'", start)
 		case i+1 < len(text) && text[i:i+2] == "||":
 			return nil, evt1Diagnostic("CV4648", "use 'or' instead of '||'", start)
-		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|", rune(c)):
+		case strings.ContainsRune("(){}[];,:.*+-/=<>!?@%^&|~", rune(c)):
 			tokens = append(tokens, Token{Lexeme: string(c), Span: start})
 			i++
 			column++
@@ -1404,6 +1407,8 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 		aggregate, err = p.parseStructDecl(false, false, true)
 	} else if p.peekLexeme() == "struct" {
 		aggregate, err = p.parseStructDecl(false, false, false)
+	} else if p.peekLexeme() == "record" {
+		aggregate, err = p.parseStructDecl(false, true, false)
 	} else {
 		aggregate, err = p.parseClassDecl()
 	}
@@ -2300,7 +2305,7 @@ func (p *parser) parseConceptRequirement(typeParam string) (ConceptRequirement, 
 	}
 	if nameTok.Lexeme == "operator" {
 		switch p.peekLexeme() {
-		case "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=":
+		case "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", "~":
 			nameTok.Lexeme += p.next().Lexeme
 		default:
 			return nil, evt1Diagnostic("CV4143", "expected supported required operator", p.currentSpan())
@@ -2453,24 +2458,37 @@ func (p *parser) parseType(conceptParam string) (Type, error) {
 	for {
 		switch p.peekLexeme() {
 		case "unsafe":
-			t.Unsafe = true
-			p.next()
+			return Type{}, evt1Diagnostic("TYPE_QUALIFIER_UNSUPPORTED", "unsafe type qualifiers have no qualified semantics; use an explicit foreign contract or unsafe asm", p.currentSpan())
 		case "imported":
-			t.Imported = true
-			p.next()
+			return Type{}, evt1Diagnostic("TYPE_QUALIFIER_UNSUPPORTED", "imported type qualifiers have no qualified semantics; import the defining semantic module", p.currentSpan())
 		case "owned":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "owned"
 			p.next()
 		case "borrow":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "borrow"
 			p.next()
 		case "ref":
+			if t.Ownership != "" {
+				return Type{}, evt1Diagnostic("OWNERSHIP_QUALIFIER_CONFLICT", "write exactly one ownership qualifier: owned, borrow, or ref", p.currentSpan())
+			}
 			t.Ownership = "ref"
 			p.next()
 		case "scoped":
+			if t.Scoped {
+				return Type{}, evt1Diagnostic("TYPE_QUALIFIER_DUPLICATE", "write scoped only once", p.currentSpan())
+			}
 			t.Scoped = true
 			p.next()
 		case "const":
+			if t.Const {
+				return Type{}, evt1Diagnostic("TYPE_QUALIFIER_DUPLICATE", "write const only once", p.currentSpan())
+			}
 			t.Const = true
 			p.next()
 		default:
@@ -2882,6 +2900,20 @@ func (p *parser) parseStatement() (Statement, error) {
 	case "for":
 		return p.parseForeachStmt()
 	case "comptime":
+		if p.pos+1 < len(p.tokens) && (p.tokens[p.pos+1].Lexeme == "if" || p.tokens[p.pos+1].Lexeme == "for") {
+			start := p.next().Span
+			stmt, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			switch s := stmt.(type) {
+			case *IfStmt:
+				s.Comptime, s.Span = true, start
+			case *ForeachStmt:
+				s.Comptime, s.Span = true, start
+			}
+			return stmt, nil
+		}
 		return p.parseLocalComptimeDecl()
 	case "static_assert":
 		assertion, err := p.parseStaticAssert()
@@ -3398,11 +3430,17 @@ func (p *parser) parseInstanceDecl() (Statement, error) {
 }
 
 func (p *parser) parseLocalComptimeDecl() (Statement, error) {
-	decl, err := p.parseComptimeDecl()
+	start, err := p.expect("comptime")
 	if err != nil {
 		return nil, err
 	}
-	return &VarDecl{Comptime: true, Type: decl.Type, Name: decl.Name, Value: decl.Value, Span: decl.Span}, nil
+	stmt, err := p.parseVarDecl()
+	if err != nil {
+		return nil, err
+	}
+	decl := stmt.(*VarDecl)
+	decl.Comptime, decl.Span = true, start.Span
+	return decl, nil
 }
 
 func (p *parser) looksLikeVarDecl() bool {
@@ -3952,7 +3990,7 @@ func (p *parser) parseUnary() (Expr, error) {
 		}
 		return p.parsePostfixExpr(literal, op.Span)
 	}
-	if p.peekLexeme() == "-" || p.peekLexeme() == "not" {
+	if p.peekLexeme() == "-" || p.peekLexeme() == "not" || p.peekLexeme() == "~" {
 		op := p.next()
 		value, err := p.parseUnary()
 		if err != nil {
@@ -4811,6 +4849,7 @@ func isIdentifier(s string) bool {
 }
 
 func isNumber(s string) bool {
+	s = strings.TrimSuffix(s, "u")
 	if s == "" {
 		return false
 	}

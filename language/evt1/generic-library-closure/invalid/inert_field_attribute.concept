@@ -1,0 +1,5 @@
+module Closure.InertAttribute;
+profile Core;
+struct Item {
+    [[repr(C)]] int value;
+}

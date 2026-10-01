@@ -1,0 +1,21 @@
+module Closure.Round;
+profile Core;
+
+template <typename T>
+Result<int, NumericCastError> Truncate(T value) {
+    return TruncTo<int>(value);
+}
+template <typename T>
+Result<T, NumericCastError> RoundTarget(double value) {
+    return RoundTo<T>(value);
+}
+
+Result<int, NumericCastError> UseFloat(float value) {
+    return Truncate<float>(value);
+}
+Result<int, NumericCastError> UseDouble(double value) {
+    return Truncate<double>(value);
+}
+Result<uint8, NumericCastError> UseByte(double value) {
+    return RoundTarget<uint8>(value);
+}

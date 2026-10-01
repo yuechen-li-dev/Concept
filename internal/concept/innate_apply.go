@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Applying innate concepts: after the validator accepts a module, every
@@ -90,7 +91,7 @@ func evt1InnateSubjects(env *semanticEnv, module Module) []evt1DeclarationRef {
 		}
 	}
 	for _, decl := range module.Structs {
-		if decl.Module == module.Name && !strings.Contains(decl.Name, "<") {
+		if decl.Module == module.Name && decl.Application == nil {
 			addType(decl.Name)
 		}
 	}
@@ -145,9 +146,7 @@ func evt1EvaluateInnateConcept(env *semanticEnv, innate evt1InnateSet, decl Conc
 			for i := range r.Subjects {
 				args[i] = evt1DeclarationValue(subject)
 			}
-			evt1InnateEvalMu.Lock()
-			value, err := evt1InvokeComptimeFunctionOn(innate.env, env, r.Predicate, args, r.Span)
-			evt1InnateEvalMu.Unlock()
+			value, err := evt1InvokeInnatePredicate(env, innate.env, r.Predicate, args, subject, r.Span)
 			if err != nil {
 				return FactUnknown, "", subject.Site, fmt.Errorf("%s: %w", r.Predicate, err)
 			}
@@ -195,6 +194,24 @@ func evt1EvaluateInnateConcept(env *semanticEnv, innate evt1InnateSet, decl Conc
 		}
 	}
 	return FactProven, "", subject.Site, nil
+}
+
+func evt1InvokeInnatePredicate(env, innateEnv *semanticEnv, name string, args []Value, subject evt1DeclarationRef, span Span) (Value, error) {
+	metrics := env.options.innateMetrics
+	if metrics == nil {
+		evt1InnateEvalMu.Lock()
+		defer evt1InnateEvalMu.Unlock()
+		return evt1InvokeComptimeFunctionOn(innateEnv, env, name, args, span)
+	}
+	start := time.Now()
+	evt1InnateEvalMu.Lock()
+	locked := time.Now()
+	var usage evt1ComptimeUsage
+	value, err := evt1InvokeComptimeFunctionOnMeasured(innateEnv, env, name, args, span, &usage)
+	finished := time.Now()
+	evt1InnateEvalMu.Unlock()
+	metrics.record(evt1InnateSample{Module: env.moduleName, Predicate: name, Subject: subject.qualifiedName(), Usage: usage, Wait: locked.Sub(start), Execution: finished.Sub(locked)})
+	return value, err
 }
 
 // evt1InnateProofGraph presents the innate concepts that judged one

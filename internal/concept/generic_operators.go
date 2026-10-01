@@ -7,7 +7,7 @@ import "fmt"
 // validator, so its legality cannot drift from a concrete operator expression.
 func evt1RequiredOperatorToken(name string) (string, bool) {
 	switch name {
-	case "operator+", "operator-", "operator*", "operator/", "operator==", "operator!=", "operator<", "operator>", "operator<=", "operator>=":
+	case "operator+", "operator-", "operator*", "operator/", "operator==", "operator!=", "operator<", "operator>", "operator<=", "operator>=", "operator~":
 		return name[len("operator"):], true
 	}
 	return "", false
@@ -44,7 +44,7 @@ func evt1ValidateOpenRequiredOperator(env *semanticEnv, info *evt1TemplateInfo, 
 
 func evt1LookupBuiltinOperatorWitness(env *semanticEnv, required OperationRequirement, span Span, prefix string) (FunctionDecl, error) {
 	op, ok := evt1RequiredOperatorToken(required.Name)
-	if !ok || len(required.Params) < 1 || len(required.Params) > 2 || len(required.Params) == 1 && op != "-" {
+	if !ok || len(required.Params) < 1 || len(required.Params) > 2 || len(required.Params) == 1 && op != "-" && op != "~" || len(required.Params) == 2 && op == "~" {
 		return FunctionDecl{}, evt1Diagnostic("CV4153", fmt.Sprintf("%s is missing required operator %s", prefix, evt1Signature(required.ReturnType, required.Name, required.Params)), span)
 	}
 	scope := newEVT1Scope(nil)

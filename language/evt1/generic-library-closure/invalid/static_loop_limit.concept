@@ -1,0 +1,2 @@
+profile Core;
+int Bad() { comptime for (i in 0..257) { int value = i; } return 0; }

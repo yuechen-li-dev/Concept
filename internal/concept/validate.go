@@ -9,6 +9,8 @@ import (
 )
 
 type evt1Scope struct {
+	staticExpansion   *evt1ComptimeState
+	context           evt1ValidationContext
 	parent            *evt1Scope
 	values            map[string]evt1ValueBinding
 	depth             int
@@ -109,6 +111,8 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 	s := &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
 	if parent != nil {
 		s.returnType = parent.returnType
+		s.staticExpansion = parent.staticExpansion
+		s.context = parent.context
 		s.tryHandlers = parent.tryHandlers
 		s.transitionTargets = parent.transitionTargets
 		s.inAutomataState = parent.inAutomataState
@@ -441,6 +445,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	}
 	out := newEVT1Scope(evt1CloneScope(scope.parent))
 	out.returnType = scope.returnType
+	out.staticExpansion = scope.staticExpansion
 	out.tryHandlers = scope.tryHandlers
 	out.transitionTargets = scope.transitionTargets
 	out.inAutomataState = scope.inAutomataState
@@ -553,9 +558,11 @@ func validateModule(module Module) error {
 // innate concepts by diagnostic code. The zero value is the compiler's normal
 // configuration.
 type evt1AnalysisOptions struct {
-	goRulesOff map[string]bool
-	goRulesOn  map[string]bool
-	innateOff  map[string]bool
+	goRulesOff       map[string]bool
+	goRulesOn        map[string]bool
+	innateOff        map[string]bool
+	innateMetrics    *evt1InnateMetrics
+	policyPredicates *semanticEnv
 }
 
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
@@ -575,6 +582,9 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 }
 
 func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv, error) {
+	if err := evt1ValidateAttributePlacement(module); err != nil {
+		return nil, err
+	}
 	profile, ok := evt1ProfileDefinition(module.Profile)
 	if !ok {
 		return nil, evt1Diagnostic("CV4001", "module profile must be Core or Vulkan", Span{Line: 1, Column: 1})
@@ -635,6 +645,11 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		}
 		typeNames[structDecl.Name] = structDecl.Span
 		env.structs[structDecl.Name] = structDecl
+		if structDecl.Application != nil {
+			env.genericTypeInstances[structDecl.Name] = structDecl
+			env.genericTypeApplications[structDecl.Name] = structDecl.Application.Type()
+			env.genericTypeKeys[evt1GenericApplicationKey(structDecl.Application)] = structDecl.Name
+		}
 	}
 	for _, decl := range module.GenericTypes {
 		if _, exists := env.genericTypes[decl.Name]; exists {
@@ -1370,9 +1385,6 @@ func evt1ValidateStructFieldEmbedding(env *semanticEnv, structDecl StructDecl) e
 		if embedded, ok := env.structs[field.Type.valueType().Name]; ok && embedded.Ref && !structDecl.Ref {
 			return evt1Diagnostic("CV4525", fmt.Sprintf("unrestricted struct %s cannot contain lifetime-bound ref struct field %s", structDecl.Name, field.Name), field.Span)
 		}
-		if !structDecl.Immovable && field.Type.StorageKind != StorageRaw && field.Type.StorageKind != StorageSparse && !field.Type.isBorrowLike() && evt1IsImmovableValueType(env, field.Type) {
-			return evt1Diagnostic("CV4138", fmt.Sprintf("struct %s cannot embed immovable field %s", structDecl.Name, field.Type.String()), field.Span)
-		}
 	}
 	return nil
 }
@@ -2022,7 +2034,31 @@ func collectEscapedArmBindings(block *Block, env *semanticEnv) {
 
 func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Block, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
 	local := newEVT1Scope(scope)
-	for _, stmt := range block.Statements {
+	local.context = evt1ExpressionContext(templateInfo, inComptimeFn)
+	if !inComptimeFn && local.staticExpansion == nil && evt1BlockHasStaticControl(block) {
+		local.staticExpansion = newEVT1ComptimeState(env)
+		if err := local.staticExpansion.push("static expansion " + local.functionName); err != nil {
+			return err
+		}
+	}
+	for statementIndex, stmt := range block.Statements {
+		if !inComptimeFn {
+			if expanded, handled, err := evt1ExpandStaticControl(env, local, stmt, templateInfo); handled {
+				if err != nil {
+					return err
+				}
+				if expanded == nil { // An open generic retains the parsed control.
+					continue
+				}
+				block.Statements[statementIndex] = expanded
+				stmt = expanded
+			}
+		}
+		if local.staticExpansion != nil {
+			if err := local.staticExpansion.spend(stmt.statementSpan(), 1); err != nil {
+				return err
+			}
+		}
 		switch s := stmt.(type) {
 		case *AsmStmt:
 			if err := evt1ValidateAsmStmt(env, local, s, inComptimeFn); err != nil {
@@ -2045,6 +2081,24 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					source: s.Value, declarationSpan: s.Span,
 				})
 				continue
+			}
+			if s.Type.Kind == TypeInferred && s.Comptime {
+				valueType, err := validateExpr(env, local, s.Value, templateInfo, true)
+				if err != nil {
+					return err
+				}
+				if !evt1IsComptimeType(env, valueType) {
+					return evt1Diagnostic("CV4216", fmt.Sprintf("comptime auto initializer type %s is not supported", valueType.String()), s.Span)
+				}
+				dependent, err := evt1StaticControlDependencies(local, s.Value, templateInfo)
+				if err != nil {
+					return err
+				}
+				if dependent {
+					local.declare(s.Name, evt1ValueBinding{t: valueType, mutable: false, comptime: true, source: s.Value, state: evt1StorageInitialized})
+					continue
+				}
+				s.Type = valueType
 			}
 			if s.Type.Kind == TypeInferred {
 				valueType, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn)
@@ -2595,6 +2649,8 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	restore := evt1EnterValidationContext(scope, templateInfo, inComptimeFn)
+	defer restore()
 	if contextual, err := evt1ContextualComptimeInteger(env, expr, expected); err != nil {
 		return Type{}, err
 	} else if contextual {
@@ -2848,7 +2904,7 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 			return Type{}, evt1Diagnostic("CV4584", "stream bind target must be ref or ref const", bind.Span)
 		}
 		stream := env.streams[expected.Name]
-		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return Type{}, err
 		}
@@ -2870,7 +2926,7 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 			return Type{}, evt1Diagnostic("CV4577", "layout bind target must be ref or ref const", bind.Span)
 		}
 		layout := env.layouts[expected.Name]
-		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+		sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return Type{}, err
 		}
@@ -2900,7 +2956,7 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 	if !expected.isReference() || expected.ArrayElem == nil {
 		return Type{}, evt1Diagnostic("CV4563", fmt.Sprintf("bind target must be ref or ref const array/ndarray storage, got %s", expected.String()), bind.Span)
 	}
-	sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, false)
+	sourceExprType, err := validateExpr(env, scope, bind.Source, templateInfo, evt1ValidationIsComptime(scope))
 	if err != nil {
 		return Type{}, err
 	}
@@ -3027,7 +3083,7 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 			if scope == nil {
 				return Type{}, evalErr
 			}
-			extentType, typeErr := validateExpr(env, scope, expr, nil, false)
+			extentType, typeErr := validateExpr(env, scope, expr, scope.context.Template, evt1ValidationIsComptime(scope))
 			if typeErr != nil {
 				return Type{}, typeErr
 			}
@@ -3425,6 +3481,9 @@ func evt1NestedLiteralShape(expr Expr) ([]int, []Expr, bool, bool) {
 }
 
 func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string, allowConceptApp bool) error {
+	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && t.Kind != TypeCallable && t.Kind != TypeCallback && !evt1IsRefStructType(env, evt1CanonicalType(env, t)) && t.Kind != TypeDyn {
+		return evt1Diagnostic("CV4525", "scoped requires a reference or ref struct type; remove scoped or use scoped ref "+t.Name, span)
+	}
 	if t.Kind == TypeRange || (t.Name == "Range" && len(t.TypeArgs) > 0) {
 		if len(t.TypeArgs) != 1 || !evt1IntegralRepresentation(t.TypeArgs[0]) || t.TypeArgs[0].Quantity != nil {
 			return evt1Diagnostic("RANGE_TYPE_INVALID", "Range requires one dimensionless integer element type", span)
@@ -3487,9 +3546,6 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 			return evt1Diagnostic("DYN_REQUIRES_INTERFACE", fmt.Sprintf("dyn requires an interface, got %s", t.Name), span)
 		}
 		return nil
-	}
-	if t.Scoped && !t.isReference() && t.Kind != TypeConceptParam && !evt1IsRefStructType(env, t) && t.Kind != TypeDyn {
-		return evt1Diagnostic("CV4525", fmt.Sprintf("scoped requires a reference or ref struct type, got %s", t.String()), span)
 	}
 	if t.PointerTo != nil {
 		return validateKnownType(env, *t.PointerTo, span, conceptParam, allowConceptApp)
@@ -3616,7 +3672,14 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 }
 
 func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	restore := evt1EnterValidationContext(scope, templateInfo, inComptimeFn)
+	defer restore()
 	switch e := expr.(type) {
+	case *ComptimeValueExpr:
+		if !inComptimeFn {
+			return Type{}, evt1Diagnostic("CV4200", "an evaluator value is only valid in a comptime binding", e.Span)
+		}
+		return e.Value.Type, nil
 	case *InterpretExpr:
 		if err := validateKnownType(env, e.Target, e.Span, "", false); err != nil {
 			return Type{}, err
@@ -3726,6 +3789,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		return e.ResultType, nil
 	case *IntLiteral:
 		t, _ := evt1BuiltinType("int", e.Span)
+		if e.Unsigned {
+			t, _ = evt1BuiltinType("uint", e.Span)
+		}
 		if err := evt1ResolveIntegerLiteral(e, t); err != nil {
 			return Type{}, err
 		}
@@ -4228,11 +4294,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 					return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong constructor or call payload count for %s: expected %d but got %d", e.Callee, len(comptimeFn.Params), len(e.Args)), e.Span)
 				}
 				for i, arg := range e.Args {
-					if err := validateCallArgument(env, scope, comptimeFn.Params[i].Type, arg, argTypes[i], templateInfo); err != nil {
+					parameterType, err := evt1ResolveType(env, scope, comptimeFn.Params[i].Type)
+					if err != nil {
+						return Type{}, err
+					}
+					if err := validateCallArgument(env, scope, parameterType, arg, argTypes[i], templateInfo); err != nil {
 						return Type{}, err
 					}
 				}
-				return evt1CanonicalType(env, comptimeFn.ReturnType), nil
+				return evt1ResolveType(env, scope, comptimeFn.ReturnType)
 			}
 		}
 		fn, err := evt1ResolveOrdinaryCall(env, scope, e.Callee, e.Args, argTypes, templateInfo, e.Span)
@@ -4385,12 +4455,12 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4604", "Span index must be int", indices[0].exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("CV4604", "Span index must be an integer scalar; use an explicit rounding operation for floating values", indices[0].exprSpan())
 			}
 			facts, known := evt1KnownSpanFacts(scope, e.Base)
-			if index, static := evt1StaticInt(env, scope, indices[0]); static && known && facts.LengthStatic && (index < 0 || index >= facts.StaticLength) {
-				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index %d is out of bounds for length %d", index, facts.StaticLength), indices[0].exprSpan())
+			if index, err := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indices[0]); err == nil && known && facts.LengthStatic && evt1IndexOutOfBounds(index, facts.StaticLength) {
+				return Type{}, evt1Diagnostic("CV4604", fmt.Sprintf("Span index %s is out of bounds for length %d", index.Render(), facts.StaticLength), indices[0].exprSpan())
 			}
 			element := evt1SpanElement(baseType)
 			e.SpanIndex, e.SpanElementType = true, &element
@@ -4416,8 +4486,8 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" && indexType.Name != "usize" {
-				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte index must be int or usize", indices[0].exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("STRING_INDEX_INVALID", "string byte index must be an integer scalar", indices[0].exprSpan())
 			}
 			out, _ := evt1BuiltinType("byte", e.Span)
 			return out, nil
@@ -4438,24 +4508,24 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index requires %d index(es), got %d", baseType.StorageKind, rank, len(indices)), e.Span)
 		}
 		for i, indexExpr := range indices {
-			indexType, err := validateExpr(env, scope, indexExpr, templateInfo, true)
+			indexType, err := validateExpr(env, scope, indexExpr, templateInfo, inComptimeFn)
 			if err != nil {
 				return Type{}, err
 			}
-			if indexType.Name != "int" {
-				return Type{}, evt1Diagnostic("CV4232", "storage index must be int", indexExpr.exprSpan())
+			if !evt1IndexInteger(indexType) {
+				return Type{}, evt1Diagnostic("CV4232", "storage index must be an integer scalar; use an explicit rounding operation for floating values", indexExpr.exprSpan())
 			}
 			indexValue, evalErr := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indexExpr)
 			if evalErr == nil && !baseType.Shape[i].Runtime {
 				if indexValue.Kind != ValueInt {
 					return Type{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
 				}
-				if indexValue.IntValue < 0 || indexValue.IntValue >= baseType.Shape[i].Extent {
+				if evt1IndexOutOfBounds(indexValue, baseType.Shape[i].Extent) {
 					code := "CV4233"
 					if baseType.StorageKind == StorageNDArray {
 						code = "CV4561"
 					}
-					return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index %d is out of bounds for dimension %d extent %d", baseType.StorageKind, indexValue.IntValue, i, baseType.Shape[i].Extent), indexExpr.exprSpan())
+					return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index %s is out of bounds for dimension %d extent %d", baseType.StorageKind, indexValue.Render(), i, baseType.Shape[i].Extent), indexExpr.exprSpan())
 				}
 			}
 		}
@@ -4480,6 +4550,14 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			out, _ := evt1BuiltinType("bool", e.Span)
 			return out, nil
+		case "~":
+			if templateInfo != nil && evt1TypeDependsOnAnyParameter(valueType, templateInfo.Decl.Parameters) {
+				return evt1ValidateOpenRequiredOperator(env, templateInfo, "operator~", []Type{valueType}, e.Span)
+			}
+			if !evt1IntegralRepresentation(valueType) || valueType.Quantity != nil {
+				return Type{}, evt1Diagnostic("CV4028", "bitwise ~ requires an integer scalar representation", e.Span)
+			}
+			return valueType.valueType(), nil
 		default:
 			return Type{}, evt1Diagnostic("CV4028", "unsupported unary operator "+e.Op, e.Span)
 		}
@@ -4978,7 +5056,7 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 		return nil
 	}
 	if paramType.Kind == TypeCallback {
-		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, false)
+		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, evt1ValidationIsComptime(scope))
 		return err
 	}
 	typeParam := ""
@@ -4986,7 +5064,7 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 		typeParam = evt1TemplateParameterSet(templateInfo.Decl.Parameters)
 	}
 	if lit, ok := arg.(*ArrayLiteralExpr); ok && paramType.ArrayElem != nil {
-		validatedType, err := validateArrayLiteralExpr(env, scope, *lit, &paramType, templateInfo, false)
+		validatedType, err := validateArrayLiteralExpr(env, scope, *lit, &paramType, templateInfo, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return err
 		}
@@ -5129,7 +5207,7 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 			return evt1LValue{}, evt1Diagnostic("CV4231", "array index assignment requires an assignable storage place", expr.exprSpan())
 		}
 		if facts, ok := evt1TensorFactsForExpr(scope, e.Base); ok {
-			if _, err := validateOrdinaryTensorIndex(env, scope, e, facts, templateInfo, false); err != nil {
+			if _, err := validateOrdinaryTensorIndex(env, scope, e, facts, templateInfo, evt1ValidationIsComptime(scope)); err != nil {
 				return evt1LValue{}, err
 			}
 			path := receiver.path
@@ -5143,7 +5221,7 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 			return evt1LValue{t: evt1CanonicalType(env, facts.ElementType), mutable: mutable, wholeValue: false, readOnlyReason: reason, path: path}, nil
 		}
 		if evt1IsSpanType(receiver.t) {
-			if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
+			if _, err := validateExpr(env, scope, e, templateInfo, evt1ValidationIsComptime(scope)); err != nil {
 				return evt1LValue{}, err
 			}
 			mutable := receiver.mutable && evt1SpanMutable(receiver.t)
@@ -5162,7 +5240,7 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 		if receiver.t.StorageKind == StorageRaw || receiver.t.StorageKind == StorageSparse {
 			return evt1LValue{}, evt1Diagnostic("RAW_STORAGE_ACCESS", "raw storage elements cannot be accessed as live values", e.Span)
 		}
-		if _, err := validateExpr(env, scope, e, templateInfo, false); err != nil {
+		if _, err := validateExpr(env, scope, e, templateInfo, evt1ValidationIsComptime(scope)); err != nil {
 			return evt1LValue{}, err
 		}
 		path := receiver.path
@@ -5303,7 +5381,7 @@ func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExp
 }
 
 func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr StructConstructExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
-	resolvedType := Type{Name: expr.StructName, Kind: TypeStruct, Span: expr.Span}
+	resolvedType := evt1CanonicalType(env, Type{Name: expr.StructName, Kind: TypeStruct, Span: expr.Span})
 	if expr.StructType.Name != "" {
 		resolved, err := evt1ResolveType(env, scope, expr.StructType)
 		if err != nil {
@@ -5377,7 +5455,7 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 	if resolvedType.Kind == TypeApplied {
 		return resolvedType, nil
 	}
-	return Type{Name: structDecl.Name, Kind: TypeStruct, Span: expr.Span}, nil
+	return evt1CanonicalType(env, Type{Name: structDecl.Name, Kind: TypeStruct, Span: expr.Span}), nil
 }
 
 func evt1IsRefStructType(env *semanticEnv, t Type) bool {
@@ -6460,7 +6538,7 @@ func evt1DropFunction(env *semanticEnv, t Type) *FunctionDecl {
 			return fn
 		}
 	}
-	if application, ok := evt1GenericApplicationOf(env, t.valueType().Name); ok {
+	if application, ok := evt1GenericApplicationOf(env, t.valueType()); ok {
 		if decl, found := env.templates["Drop"]; found && len(decl.Params) == 1 && decl.Params[0].Type.isOwned() {
 			parameterType := decl.Params[0].Type.valueType()
 			if parameterType.Name == application.Name && len(application.TypeArgs) == len(decl.Parameters) {
@@ -6695,6 +6773,15 @@ func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, a
 	concreteType := arguments[0]
 	for _, req := range conceptDecl.Requirements {
 		switch r := req.(type) {
+		case *PredicateRequirement:
+			outcome, detail, at := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
+			if outcome != FactProven {
+				code := "PREDICATE_REQUIREMENT_UNSATISFIED"
+				if outcome == FactUnknown {
+					code = "PREDICATE_REQUIREMENT_UNDECIDED"
+				}
+				return evt1Diagnostic(code, fmt.Sprintf("%s requires %s: %s", strings.Join(path, " -> "), r.Predicate, detail), at)
+			}
 		case *PrerequisiteRequirement:
 			nestedArguments := evt1SubstituteArguments(evt1RequirementArguments(r), bindings)
 			if err := checkConceptApplicationSatisfaction(env, r.ConceptName, nestedArguments, path, span); err != nil {
@@ -7396,11 +7483,18 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 	for i := range t.TypeArgs {
 		t.TypeArgs[i] = evt1CanonicalType(env, t.TypeArgs[i])
 	}
+	if env != nil && len(t.TypeArgs) > 0 && !evt1TypeContainsConceptParameter(t) {
+		if _, generic := env.genericTypes[t.Name]; generic {
+			if resolved, err := evt1ResolveType(env, nil, t); err == nil {
+				return resolved
+			}
+		}
+	}
 	if evt1IsSpanType(t) {
 		t.Kind = TypeSpan
 		return t
 	}
-	if t.Kind == TypeConceptParam || len(t.TypeArgs) > 0 {
+	if t.Kind == TypeConceptParam || len(t.TypeArgs) > 0 || t.Application != nil {
 		return t
 	}
 	if env == nil {
@@ -7418,8 +7512,9 @@ func evt1CanonicalType(env *semanticEnv, t Type) Type {
 		t.Kind = TypeEnum
 		return t
 	}
-	if _, ok := env.structs[t.Name]; ok {
+	if decl, ok := env.structs[t.Name]; ok {
 		t.Kind = TypeStruct
+		t.Application = decl.Application
 		return t
 	}
 	if _, ok := env.layouts[t.Name]; ok {
@@ -7440,6 +7535,9 @@ func evt1CanInitializeStoredType(env *semanticEnv, expected Type, actual Type) b
 func evt1SemanticTypeEqual(env *semanticEnv, left Type, right Type) bool {
 	left = evt1TypeWithoutImportMarkers(evt1CanonicalType(env, left))
 	right = evt1TypeWithoutImportMarkers(evt1CanonicalType(env, right))
+	if evt1TypeHasGenericApplication(left) || evt1TypeHasGenericApplication(right) {
+		return left.Equal(right)
+	}
 	return left.Equal(right) || left.String() == right.String()
 }
 
@@ -7601,7 +7699,7 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 		}
 		bindings := evt1TemplateBindings(req.GenericParams, args)
 		for i, arg := range call.Args {
-			actual, err := validateExpr(env, scope, arg, caller, false)
+			actual, err := validateExpr(env, scope, arg, caller, evt1ValidationIsComptime(scope))
 			if err != nil {
 				return Type{}, err
 			}
@@ -7657,7 +7755,7 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 		return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong call payload count for %s: expected %d but got %d", call.Callee, len(callee.Params), len(call.Args)), call.Span)
 	}
 	for i, arg := range call.Args {
-		actual, err := validateExpr(env, scope, arg, caller, false)
+		actual, err := validateExpr(env, scope, arg, caller, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return Type{}, err
 		}
@@ -7672,7 +7770,7 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 	argTypes := make([]Type, 0, len(call.Args))
 	dependent := false
 	for _, arg := range call.Args {
-		argType, err := validateExpr(env, scope, arg, templateInfo, false)
+		argType, err := validateExpr(env, scope, arg, templateInfo, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return Type{}, err
 		}
@@ -7920,6 +8018,9 @@ func validateTemplateTypeArgument(env *semanticEnv, concreteType Type, span Span
 }
 
 func evt1TypeIdentity(t Type) string {
+	if t.Application != nil {
+		return evt1GenericCName(t.Application)[len("concept_"):]
+	}
 	if t.Quantity != nil {
 		d := t.Quantity.normalized()
 		parts := make([]string, len(d.Exponents))
@@ -8047,7 +8148,9 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 				return nil, err
 			}
 		}
-		return &VarDecl{Type: evt1SubstituteType(s.Type, typeParam, concreteType), Name: s.Name, Value: value, Span: s.Span}, nil
+		out := *s
+		out.Type, out.Value = evt1SubstituteType(s.Type, typeParam, concreteType), value
+		return &out, nil
 	case *InstanceDecl:
 		return &InstanceDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil
 	case *AssignStmt:
@@ -8142,7 +8245,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		if err != nil {
 			return nil, err
 		}
-		out := &IfStmt{Condition: condition, Then: thenBlock, Span: s.Span}
+		out := &IfStmt{Comptime: s.Comptime, Condition: condition, Then: thenBlock, Span: s.Span}
 		if s.Else != nil {
 			elseBlock, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
 			if err != nil {
@@ -8186,6 +8289,7 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 			return nil, err
 		}
 		return &ForeachStmt{
+			Comptime:     s.Comptime,
 			ItemType:     evt1SubstituteType(s.ItemType, typeParam, concreteType),
 			ItemName:     s.ItemName,
 			Source:       source,
@@ -8203,6 +8307,9 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
 	switch e := expr.(type) {
+	case *ComptimeValueExpr:
+		out := *e
+		return &out, nil
 	case *InterpretExpr:
 		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
 		if err != nil {

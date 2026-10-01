@@ -1,0 +1,24 @@
+module Closure.Structured;
+profile Core;
+
+record struct Double {
+    int marker;
+}
+using Integer = int;
+template <typename T>
+struct Buffer {
+    owned T value;
+};
+template <typename T, usize N>
+struct Fixed {
+    T<array>[N] values;
+};
+struct Cases
+{
+    Buffer<int> integer;
+    Buffer<double> floating;
+    Buffer<Double> nominal;
+    Buffer<Buffer<int>> nested;
+    Buffer<Integer> alias;
+    Fixed<int, 3> fixed;
+}

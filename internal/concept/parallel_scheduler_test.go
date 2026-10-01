@@ -27,6 +27,23 @@ func TestNativeSchedulerWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	schedulerName := ""
+	sharedSchedulerName := ""
+	for _, decl := range module.Structs {
+		if decl.Application == nil || decl.Application.Declaration.Name != "ParallelScheduler" {
+			continue
+		}
+		args := decl.Application.Arguments
+		if len(args) > 1 && args[1].Type.Name == "ParallelMachine" {
+			schedulerName = evt1StructCName(decl)
+		}
+		if len(args) > 1 && args[1].Type.Name == "SharedAgentMachine" {
+			sharedSchedulerName = evt1StructCName(decl)
+		}
+	}
+	if schedulerName == "" || sharedSchedulerName == "" {
+		t.Fatal("missing structured scheduler identities")
+	}
 	body := strings.ToLower(string(moduleOutput(t, outputs, ".generated.c")))
 	for _, forbidden := range []string{"malloc(", "calloc(", "realloc(", "current_scheduler", "schedulerplan"} {
 		if strings.Contains(body, forbidden) {
@@ -84,7 +101,7 @@ int main(void) {
   }
   return 0;
 }`
-	runFoundationNativeHarness(t, outputs, "r7e_native_workers.c", harness)
+	runFoundationNativeHarness(t, outputs, "r7e_native_workers.c", strings.ReplaceAll(harness, "concept_parallel_scheduler_parallel_configuration__parallel_machine__4__4__64_", schedulerName))
 	sharedHarness := nativeThreadShim + `#include "nativeworker.generated.h"
 typedef concept_parallel_scheduler_parallel_configuration__shared_agent_machine__8__8__64_ scheduler_t;
 typedef struct { scheduler_t* scheduler; int id; int decisions; } worker_args;
@@ -110,7 +127,7 @@ int main(void) {
   }
   return 0;
 }`
-	runFoundationNativeHarness(t, outputs, "r7e_shared_agents.c", sharedHarness)
+	runFoundationNativeHarness(t, outputs, "r7e_shared_agents.c", strings.ReplaceAll(sharedHarness, "concept_parallel_scheduler_parallel_configuration__shared_agent_machine__8__8__64_", sharedSchedulerName))
 	wakeHarness := nativeThreadShim + `#include "nativeworker.generated.h"
 typedef concept_parallel_scheduler_parallel_configuration__parallel_machine__4__4__64_ scheduler_t;
 typedef struct { scheduler_t* scheduler; int decisions; } worker_args;
@@ -143,5 +160,5 @@ int main(void) {
   }
   return 0;
 }`
-	runFoundationNativeHarness(t, outputs, "r7e_wake_races.c", wakeHarness)
+	runFoundationNativeHarness(t, outputs, "r7e_wake_races.c", strings.ReplaceAll(wakeHarness, "concept_parallel_scheduler_parallel_configuration__parallel_machine__4__4__64_", schedulerName))
 }

@@ -1,0 +1,8 @@
+module Closure.CDrop;
+profile Core;
+struct Resource { int value; }
+void Drop(owned Resource value);
+[[repr(C)]]
+template <typename T>
+record struct Pair { owned T first; owned T second; };
+static_assert(SizeOf<Pair<Resource>>() == 8, "destruction is not a C value");
