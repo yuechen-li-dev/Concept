@@ -1,5 +1,8 @@
 # R9b convergence
 
+Historical R9b checkpoint; R9b2 now closes the typed-predicate/template blockers.
+See R9B2-CONFORMANCE and R9B2-CONVERGENCE for current qualification.
+
 Outcome: **MEANINGFUL PROGRESSION — closed generic evidence values and exact
 StaticExtent facts qualified; typed predicate protocol and the remaining
 vocabulary/consumer admissions remain unresolved.**

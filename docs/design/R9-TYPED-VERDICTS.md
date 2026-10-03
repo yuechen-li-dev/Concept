@@ -1,84 +1,154 @@
-# R9 typed verdicts: evidence values before predicate admission
+# Typed semantic verdicts (R9b2)
 
-> Verdict<Evidence, Refutation> enriches Concept's existing Proven /
-> Disproven / Unknown lattice with typed explanations. It does not create a
-> second proof system.
+> Verdict<Evidence, Refutation> carries typed payloads while projecting into the
+> existing Proven / Disproven / Unknown lattice. It does not define a second
+> notion of semantic truth.
 
-The intended tagged result is Proven(E), Disproven(R), Unknown(reason), with a
-checked mapping into the existing lattice. An evidence value must not become an
-optimizer fact merely because it uses these case names.
+`Verdict<E,R>` is a compiler semantic type available to declared, project-policy,
+and innate predicates at comptime. It has exactly three logical cases:
 
-## Removed blocker
+| Case | Existing proof outcome | Selected metadata |
+| --- | --- | --- |
+| `Verdict::Proven(e)` | Proven | E evidence |
+| `Verdict::Disproven(r)` | Disproven | R refutation |
+| `Verdict::Unknown` | Unknown | No payload |
 
-Closed generic records previously failed `CV4216: comptime return type
-EvidenceResult<Box<uint8>, Failure> is not supported`. Comptime type admission
-now closes applications through the existing generic identity and checks their
-fields recursively. Record construction resolves the same structured application
-and evaluates each payload with its declared field type. This also preserves
-contextual small-integer representation inside nested typed evidence.
+Constructors obtain their closed type from a return, local, or match context.
+There is no new general generic-enum language. Unknown has no invented negative
+reason. Both payload types must be supported closed comptime values, even when
+one branch is not selected. Runtime `Result<T,E>` retains computation success/error
+semantics; Verdict is erased from runtime types, C, and runtime template instances.
 
-References, pointers, ownership, destruction authority, immovability, runtime
-extents and open concept parameters remain outside this value boundary. A
-visiting set prevents recursive aggregate admission. Existing evaluator fuel,
-call depth, loop and array limits remain unchanged. No display-name reparsing or
-runtime template-call admission is involved.
-
-The executable value prototype uses ordinary Concept types:
+## Ordinary source
 
 ```concept
-enum Truth { Proven, Disproven, Unknown }
-enum Failure { None, ContainsReference, UnknownLayout }
-template <typename E, typename R> record struct EvidenceResult
+template <typename T> record struct Box { T value; }
+enum Failure { Unsupported(typename subject), Missing }
+template <typename T> comptime T Identity(T value) { return value; }
+comptime Verdict<Box<uint8>, Failure> Judge(typename subject)
 {
-    Truth truth;
-    E evidence;
-    R refutation;
+    return match
+    {
+        when compiler.TypeName(subject) == "int" => Verdict::Proven(Identity<Box<uint8>>(Box<uint8>{7})),
+        when compiler.TypeName(subject) == "float" => Verdict::Unknown,
+        otherwise => Verdict::Disproven(Failure::Unsupported(subject)),
+    };
 }
-comptime EvidenceResult<uint8, Failure> Inspect()
+comptime string JudgeDescribe(Failure failure)
 {
-    return EvidenceResult<uint8, Failure>{Truth::Disproven, 7, Failure::ContainsReference};
+    return match (failure)
+    {
+        Failure::Unsupported(subject) => "unsupported type " + compiler.TypeName(subject),
+        Failure::Missing => "missing evidence",
+    };
 }
+concept Supported<T> { requires Judge(T); }
+int Use() { Assert.Concept<Supported>(int, "typed proof"); return 7; }
 ```
 
-This is a payload/identity prototype, **not an admitted verdict protocol**. Both
-record payload fields are populated; only a future explicit protocol can choose
-which payload is meaningful. Do not interpret a record's `truth` field as proof.
+The executable flagship is
+`language/evt1/semantic-vocabulary/valid/typed_predicate_protocol.concept`.
+Its Disproven and Unknown companions are intentional compile negatives. The
+`typed_verdict_values` specimen retains all three as successful comptime values
+and exhaustively matches them. An arbitrary record named EvidenceResult still
+fails PREDICATE_REQUIREMENT_INVALID; record field spelling never establishes truth.
 
-## Isolated next blocker
+## One evaluator and one lattice
 
-`language/evt1/semantic-vocabulary/invalid/typed_predicate_protocol.concept` passes
-the new closed-value boundary, then fails predicate admission:
+Declared and innate requirements execute ordinary comptime functions, then share
+`evt1ProjectPredicateVerdict`. Its outcome feeds the existing concept proof graph.
+The only retained value is the selected payload. A ProofNode's optional `verdict`
+metadata records predicate identity, closed E/R type identity, existing outcome,
+payload, diagnostic text and source site. It creates no separate proof evaluator.
 
-```text
-PREDICATE_REQUIREMENT_INVALID: predicate Judge must return Verdict
-(or bool in a declared concept), not EvidenceResult<int, Failure>
-```
+During compatibility, declared bool predicates and the fixed legacy
+`enum Verdict { Holds, Refuted(declaration at, string message) }` normalize through
+that same projector. Holds maps to Proven, Refuted to Disproven. Their existing
+messages/sites and unrelated proof JSON remain compatible. New rules should use
+the typed cases; remaining embedded legacy predicates are not broadly migrated.
 
-`evt1ValidatePredicateRequirement` still requires the fixed legacy Verdict enum
-shape. `evt1EvaluateDeclaredPredicate` and `evt1EvaluateInnateConcept` decode its
-Holds/Refuted cases. The latter is two-valued for valid innate results; an
-undecidable innate requirement remains a compiler defect rather than acceptance.
-Ordinary proof evaluation still preserves Unknown. Tests pin both the successful
-value boundary and the predicate rejection; no manufactured Proven result hides
-the remaining work.
+A renderer is optional: `<PredicateName>Describe(R)` must be a comptime function
+with exactly one R parameter and a string result. It runs in the predicate's same
+bounded evaluator state. Without it, the selected value supplies a compact
+refutation description. An empty or invalid renderer result cannot establish a
+proof. Assertions and lint findings include the rendered reason and compact
+payload. Severity remains manifest data. Explain adds compact evidence/refutation
+lines; it never dumps the payload AST into human output.
 
-Next qualification must define one closed typed result identity, validate its
-case/payload shape, share lattice projection across declared and innate paths,
-and retain E/R payload provenance in explain/artifacts. Closed template *function*
-calls still stop at CV4201; constructor support has not enabled them. Their
-admission must retain ordinary closure identity, comptime-only type checks and
-bounded evaluation rather than routing through runtime template evaluation.
+## Closed template functions
 
-## Transport and cost
+> Closed template function calls may execute during comptime when their type/value
+> arguments are fully closed and all operations are supported by the bounded
+> evaluator.
 
-Closed record values and generic declaration/argument identity survive semantic
-artifacts through existing Value and GenericApplication transport. Artifact-only
-imports evaluate Inspect without dependency source reparse and run a strict-C11
-consumer. A 100-run artifact byte check covers the producer. This does **not**
-transport typed proof/refutation results: none have yet been admitted as proofs.
+A comptime call may instantiate an ordinary template through the existing generic
+identity, provided its concrete parameters/result are comptime-supported and its
+body is available. Explicit `template <typename T> comptime ...` declarations also
+support `bounded(N)` recursive helpers. Their bodies/signatures are transported in
+semantic artifacts and excluded from runtime MIR/C emission. Ordinary templates
+retain their runtime eligibility; unsupported operations still fail in the evaluator.
 
-One informational Windows run: 100 ordinary-record parses 30.40ms versus 100
-closed-generic parses 51.32ms. The nested Inspect evaluation used fuel 5, depth 1,
-no loops and no arrays. These small-fixture numbers are not a large-library
-scaling promise or mutex benchmark. Innate rules and their workload are unchanged;
-the process-wide evaluator mutex is retained. No memoization was added.
+Open bodies are checked symbolically, then substituted and checked at their closed
+call. This is not open execution. Unresolved parameters or a typename-valued source
+argument used as an unresolved template type produce
+COMPTIME_TEMPLATE_CLOSURE_REQUIRED. Missing transported bodies diagnose
+COMPTIME_TEMPLATE_BODY_MISSING; unsupported result/value types diagnose
+COMPTIME_TEMPLATE_UNSUPPORTED or CV4216. Runtime/foreign calls still fail CV4210.
+CV4201 remains for unsupported expression/statement/operator categories; it is no
+longer the blanket rejection for an otherwise supported closed template call.
+
+Bounded comptime recursion may use a provisional closed signature during body
+validation, with rollback on failure. Unbounded recursive instantiation fails
+CV4217. Execution uses the caller's fuel/depth/loop state, never a fresh budget.
+Existing limits remain fuel 4096, call depth 32, loop iterations 256. Exceeding a
+recursion bound is CV4206; fuel/depth failures are CV4204/CV4211. Allocation,
+foreign IO, machine instructions, and mutable runtime globals have no new evaluator
+capability. No source reparsing, cache, or background execution was introduced.
+
+## Payload and artifact boundaries
+
+Supported payloads include resource-free records and closed generic records,
+payload enums, bounded scalar/string/array values, and opaque declaration/type
+handles. References, pointers, owned resources, Drop-bearing or immovable records,
+open parameters and runtime extents remain rejected. Selected values additionally
+obey total 512 value nodes, nesting 8, and 4096 string bytes; existing array
+construction limits remain active. Overflow is VERDICT_PAYLOAD_LIMIT.
+
+The concept-module.v2 inspectable envelope has optional `predicate_verdicts`,
+deduplicated and sorted by deterministic JSON. It records final truth, predicate,
+closed type identities and selected payload without serializing a proof tree.
+MIRSemanticProof has analogous optional verdict metadata. Semantic payloads carry
+ordinary predicate/template bodies and closed type declarations. Consumers evaluate
+those bodies with their own subjects; envelope decisions never hydrate semanticFacts.
+Stable declaration handles retain owner/name/parent/index/provenance/site, not Go
+addresses. Innate identity still hash-covers the embedded rule set, so old artifacts
+are stale after the rule migration.
+
+## Innate dogfood and authority
+
+> A predicate proving itself does not grant unrelated optimizer-authorizing facts.
+> Trusted structural/codegen facts require explicit trusted provenance.
+
+> Typed refutations are semantic data. Diagnostics may render them directly,
+> avoiding duplicate compiler-side reason switches.
+
+DroppableFieldIsOwnedHolds now returns
+`Verdict<OwnershipEvidence,OwnershipRefutation>`. Its refutation is
+`DroppableFieldMustBeOwned(declaration field)`. A Concept match in
+DroppableFieldIsOwnedHoldsDescribe renders the exact former CV4653 text, including
+`owned T value;` at the template declaration. The production legacy ownership
+predicate is retired; a test-only snapshot checks shadow agreement on reachable
+corpus fields and explicit invalid generic/plain cases.
+
+A Proven payload proves its requirement only. It never grants StaticExtent,
+NoAllocation, Disjoint or Outlives. The compiler-owned `evt1InnateFactAuthority`
+allowlist is empty in R9b2 and requires both actual embedded authority and an
+innate declaration. It is an auditable authority marker, not a new fact projector.
+A future registered rule still needs a qualified provenance verifier in the
+existing fact owner. No typed fact-producing innate rule is claimed here; the
+conditional positive fact-projection qualification remains deferred.
+
+StaticExtent's exact 1D layout-derived facts, Unknown cases and Planner shadow
+consumer remain unchanged. PlainData, FiniteDomain, ClosedWorld, StableAddress and
+Relocatable are still research entries. See R9B-RESEARCH-LEDGER and
+R9B2-CONFORMANCE for the design consequences, measurements and gates.

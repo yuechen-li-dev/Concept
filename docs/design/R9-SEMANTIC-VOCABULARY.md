@@ -98,8 +98,9 @@ semantic and independent of Go implementation objects.
 
 ## Limits of this slice
 
-PlainData and finite-domain admission, generic typed verdict predicate admission,
-typed innate refutation dogfood, backend/Vulkan vocabulary adoption, and additional
-innate rule migration remain unqualified. The ledger specifies proposed meanings
+PlainData and finite-domain admission, backend/Vulkan vocabulary adoption, and
+additional innate rule migration remain unqualified. R9b2 qualifies the comptime
+typed Verdict protocol, closed template calls and ownership refutation dogfood;
+see R9-TYPED-VERDICTS and R9B2-CONFORMANCE. The ledger specifies proposed meanings
 without granting their truth or optimizer authority. There is no second proof
 system, source scanner, SMT solver, new cache or automatic Stage-0 freeze.

@@ -1,6 +1,7 @@
 # R9b research ledger
 
-Status: **MEANINGFUL PROGRESSION**, not full milestone admission. These decisions
+Status: R9b remains **MEANINGFUL PROGRESSION** for vocabulary admissions;
+R9b2 typed predicate protocol is **SUCCESS**. These decisions
 distinguish semantic definitions from implementation/consumer qualification.
 Class A = descriptive/restrictive; B = codegen-authorizing with trusted evidence.
 Deferred entries have no new Assert/explain/artifact behavior or measured cost.
@@ -38,14 +39,33 @@ Derivation is constant-time for rank one; the measured 100-run focused suite is
 informational rather than a hard admission budget. FixedShape is retained and
 the shadow test compares the extent with the existing shape metadata.
 
-Closed typed evidence records are qualified values, not admitted semantic
-verdicts. The cost and exact predicate admission blocker are documented in
-R9-TYPED-VERDICTS. User predicate tests verify that returning true adds no
-structural extent fact for a Span. Trusted innate fact generation is deferred;
-NoAllocation/Outlives migration is intentionally absent.
+Closed typed evidence records can now be selected payloads of admitted comptime
+Verdict<E,R>. R9-TYPED-VERDICTS specifies projection and bounded transport.
+User Proven tests add no structural extent/lifetime/disjointness authority and
+cannot turn an allocating operation into NoAllocation. The innate fact authority
+allowlist remains empty; no trusted typed fact projection or NoAllocation/Outlives
+migration is admitted.
 
-Full R9b closure still requires several new high-value admissions, typed verdict
-lattice projection and innate dogfood, useful typed diagnostic/artifact transport,
-and backend/Vulkan/machine consumers and scaling evidence for whichever concepts
-are actually admitted. This ledger does not convert those open items into a
+Full R9b closure still requires additional high-value vocabulary admissions and
+backend/Vulkan/machine consumers for whichever concepts are actually admitted.
+R9b2 closes typed lattice projection, ownership-rule dogfood, bounded typed
+diagnostic/artifact transport, and the library/mutex scale qualification. This ledger does not convert those open items into a
 principled rejection merely because implementation remains unfinished.
+
+## R9b2 evidence-model revisit
+
+Admission status in the table is unchanged. Typed refutations improve precision
+without settling what a property authorizes:
+
+| Candidate | Effect of the typed protocol | Remaining semantic/consumer question |
+| --- | --- | --- |
+| PlainData | HasDrop(field), ContainsReference(field), RuntimeManaged(type) and UnknownRepresentation(type) can be distinct typed reasons; unknown layout can stay Unknown. | The target representation/geometry contract and raw transport authorization still need qualification. Ownership dogfood demonstrates declaration-bearing reasons, not a new PlainData property. |
+| FiniteDomain | A tag-only versus payload-bearing reason can distinguish enumerable complete values from finite case tags. | Which bounded domains are enumerable, and with what ordered inventory/cost? No FiniteCases synonym or new fact is installed. |
+| ClosedWorld | Evidence can identify an inventory and boundary; a typed refutation can name an open dependency. | Artifact/plugin/foreign completeness is contextual; a Proven marker does not seal a compilation graph. |
+| StableAddress | Refutation can identify a movable/unpinned field or storage contract; Unknown can retain missing lifetime evidence. | Intrinsic address invariants and contextual pinning/lifetime remain different propositions. |
+| Relocatable | Refutation can name an address-sensitive invariant or immovable member. | Bitwise relocation and live compaction still require trusted invariant/storage analysis and a real consumer. Movable remains insufficient. |
+
+No candidate is silently admitted on the strength of a payload representation.
+The preparation for trusted innate projection is an empty compiler-owned
+allowlist, guarded by embedded authority; a future fact-producing rule needs its
+own proof/provenance qualification and positive authorized-fact test.

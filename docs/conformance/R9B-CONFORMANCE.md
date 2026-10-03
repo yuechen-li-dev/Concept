@@ -1,5 +1,8 @@
 # R9b partial conformance
 
+Historical R9b checkpoint; R9b2 now closes the typed-predicate/template blockers.
+See R9B2-CONFORMANCE and R9B2-CONVERGENCE for current qualification.
+
 This report qualifies the implemented progression slice. It does not qualify
 full R9b. Baseline `2d32827cfe2afab05e6436e647aefab67b991eda`;
 compiler `concept-evt1-stage0-go`; branch `codex/r9b-semantic-vocabulary`.

@@ -88,7 +88,9 @@ innate concept DroppableFieldIsOwned<FieldDeclaration F>
 
 ### Predicates
 
-A requirement may call a `comptime` function whose result is `Verdict`:
+A requirement may call a `comptime` function returning `Verdict<E,R>`.
+The following fixed Verdict example records the legacy MVP compatibility form;
+R9b2 migrates the ownership rule to typed cases as described below:
 
 ```concept
 enum Verdict
@@ -177,11 +179,12 @@ These are general `comptime` improvements, not innate-only features:
 - An innate concept has exactly one declaration-kind parameter, a
   `[[diagnostic("CODE")]]` attribute, and requires predicates, compiler
   analyses, or other concepts (`INNATE_CONCEPT_SHAPE`). Kind-narrowed
-  parameters and `[[diagnostic]]` are innate-only for now; so are predicate
-  requirements (`PREDICATE_REQUIREMENT_SCOPE`), which declared concepts may
-  gain once IC4 gives predicates a proof-graph evaluation.
-- The compiler checks the Verdict contract: `Holds`, `Refuted(declaration at,
-  string message)` (`INNATE_VERDICT_SHAPE`).
+  parameters and `[[diagnostic]]` remain innate-only. Declared type/declaration
+  concepts admit ordinary comptime predicates under the R9a/R9b2 protocol.
+- The compiler checks the remaining legacy Verdict contract: `Holds`,
+  `Refuted(declaration at, string message)` (`INNATE_VERDICT_SHAPE`). Typed
+  Verdict<E,R> instead has the fixed Proven(E), Disproven(R), Unknown cases
+  and closed comptime payload admission described in R9-TYPED-VERDICTS.
 
 ## Semantics
 
@@ -324,8 +327,8 @@ code rather than its length:
   it; guards are lazy, so the record's fields are walked only after the
   record itself qualifies.
 
-Deferred: guards on enum-pattern arms, and a generic `Verdict<H, R>` (typed
-evidence and refutations), which needs templates at compile time.
+Deferred: guards on enum-pattern arms. R9b2 qualifies comptime-only
+`Verdict<E,R>` and closed template function evaluation; see R9-TYPED-VERDICTS.md.
 
 ### Verdict on the pilots
 
@@ -385,12 +388,31 @@ subjects.
   whose type has a Drop, owned or not, and CV4653 disappears. The MVP keeps
   CV4653 as the pilot either way, but the language should choose deliberately.
 
-## R9b evidence research boundary
+## R9b2 typed ownership verdict
 
-R9b currently qualifies closed generic comptime record values and a layout-derived
-StaticExtent shadow fact, not typed innate verdicts or innate fact grants.
-The existing fixed Verdict contract remains active. See R9-TYPED-VERDICTS.md
-for the executable PREDICATE_REQUIREMENT_INVALID boundary and
-R9-SEMANTIC-VOCABULARY.md for the restrictive/codegen trust distinction.
-NoAllocation/Outlives remain under their existing compiler authorities; ordinary
-predicate truth and innate declaration rejection do not grant optimizer facts.
+DroppableFieldIsOwnedHolds returns
+`Verdict<OwnershipEvidence, OwnershipRefutation>`. Proven carries Valid;
+Disproven carries DroppableFieldMustBeOwned(field); Unknown stays undecided.
+The ordinary Concept renderer DroppableFieldIsOwnedHoldsDescribe exhaustively
+matches that refutation and delegates the canonical wording to OwnershipProblem.
+The old production ownership predicate has been deleted. Its test-only snapshot
+agrees with the typed rule on 223 initial corpus field decisions and four
+refutations, including generic-template fixes. CV4653, the offending site and
+canonical text are preserved. Final corpus coverage is recorded in R9B2-CONFORMANCE.
+
+Declared, project-policy and innate requirements share one projection into the
+existing Proven/Disproven/Unknown graph. Typed metadata survives explain and
+artifact-only consumers. A typed Unknown in an innate rule is INNATE_UNDECIDED,
+never acceptance. The remaining legacy predicates normalize through this same
+projector; their fixed enum shape remains checked during compatibility.
+
+No new observation is needed for this field-local rule. TypeShape remains the
+exhaustive structural interface used by CValueProblem; no broad observation or
+C ABI rule migration is forced. The evaluator mutex is retained and remeasured.
+
+The compiler-only innate fact authority allowlist is empty. Predicate metadata
+never becomes a semantic fact merely through its result type or case spelling.
+NoAllocation, Outlives and Disjoint remain under their current fact owners;
+StaticExtent retains layout provenance and Planner shadow use. No typed innate
+fact grant, user-written innate authority, or runtime Verdict is admitted.
+See R9-TYPED-VERDICTS and R9B2-CONFORMANCE for the qualified protocol and evidence.
