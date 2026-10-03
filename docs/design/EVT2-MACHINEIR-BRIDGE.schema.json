@@ -2,6 +2,7 @@
   "module": "Standard.Backend.BridgeSchema",
   "magic": "CMIRAMD2",
   "version": 2,
+  "max_items": 1048576,
   "representation": "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32]",
   "records": [
     {
@@ -554,6 +555,7 @@
           "name": "Src",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineOperand"
@@ -613,6 +615,7 @@
           "name": "Facts",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "BridgeText"
@@ -682,6 +685,7 @@
           "name": "Instructions",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineInstruction"
@@ -741,6 +745,7 @@
           "name": "Facts",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "BridgeText"
@@ -752,6 +757,7 @@
           "name": "Decisions",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "BridgeText"
@@ -769,6 +775,7 @@
           "name": "Args",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineArg"
@@ -780,6 +787,7 @@
           "name": "VRegs",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineVReg"
@@ -791,6 +799,7 @@
           "name": "Slots",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineStackSlot"
@@ -802,6 +811,7 @@
           "name": "Blocks",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineBlock"
@@ -818,6 +828,7 @@
           "name": "Functions",
           "type": {
             "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
             "arguments": [
               {
                 "name": "WireMachineFunction"

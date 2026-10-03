@@ -8,7 +8,8 @@ import (
 
 const DerivedMachineBridgeSchema = "CMIRAMD2"
 const DerivedMachineBridgeVersion = 2
-const DerivedMachineBridgeSchemaHash = "811a24e57119ec1e458deaf0b1e2c3dd36ca26b522e2bd31548e8bc8d7d2d4a6"
+const DerivedMachineBridgeSchemaHash = "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593"
+const MachineBridgeMaxItems = 1048576
 
 type bridgeWireHeader struct {
 	magic      [8]byte
@@ -17,14 +18,26 @@ type bridgeWireHeader struct {
 }
 
 func (w *machineBridgeWriter) writeWireHeader(v bridgeWireHeader) error {
-	if err := func() error { _, err := w.Write(v.magic[:]); return err }(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.magic offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := func() error { _, err := w.Write(v.magic[:]); return err }(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.magic offset=%d: %w", offset, err)
+		}
+		w.traceField("WireHeader", "magic", offset)
 	}
-	if err := w.u32(int(v.version)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.version offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.u32(int(v.version)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.version offset=%d: %w", offset, err)
+		}
+		w.traceField("WireHeader", "version", offset)
 	}
-	if err := func() error { _, err := w.Write(v.schemaHash[:]); return err }(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.schemaHash offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := func() error { _, err := w.Write(v.schemaHash[:]); return err }(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireHeader.schemaHash offset=%d: %w", offset, err)
+		}
+		w.traceField("WireHeader", "schemaHash", offset)
 	}
 	return nil
 }
@@ -52,11 +65,19 @@ var bridgeTagsOpcode = []string{"", "MOV", "LOAD", "STORE", "LEA", "ADD", "SUB",
 var bridgeTagsCondition = []string{"", "E", "NE", "L", "LE", "G", "GE", "B", "BE", "A", "AE", "O", "C"}
 
 func (w *machineBridgeWriter) writeWireSpan(v Span) error {
-	if err := w.i32(int(v.Line)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireSpan.Line offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Line)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireSpan.Line offset=%d: %w", offset, err)
+		}
+		w.traceField("WireSpan", "Line", offset)
 	}
-	if err := w.i32(int(v.Column)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireSpan.Column offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Column)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireSpan.Column offset=%d: %w", offset, err)
+		}
+		w.traceField("WireSpan", "Column", offset)
 	}
 	return nil
 }
@@ -74,17 +95,33 @@ func (r machineBridgeReader) readWireSpan() (Span, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineFrame(v MachineFrame) error {
-	if err := w.i32(int(v.LocalSize)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.LocalSize offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.LocalSize)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.LocalSize offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFrame", "LocalSize", offset)
 	}
-	if err := w.i32(int(v.Alignment)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.Alignment offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Alignment)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.Alignment offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFrame", "Alignment", offset)
 	}
-	if err := w.i32(int(v.ShadowSpace)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.ShadowSpace offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.ShadowSpace)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.ShadowSpace offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFrame", "ShadowSpace", offset)
 	}
-	if err := w.bool(v.HasCalls); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.HasCalls offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.HasCalls); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFrame.HasCalls offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFrame", "HasCalls", offset)
 	}
 	return nil
 }
@@ -110,38 +147,82 @@ func (r machineBridgeReader) readWireMachineFrame() (MachineFrame, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineOperand(v MachineOperand) error {
-	if err := w.i32(int(v.ID)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.ID offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.ID)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.ID offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "ID", offset)
 	}
-	if err := w.i32(int(v.Width)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Width offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Width)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Width offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Width", offset)
 	}
-	if err := w.i32(int(v.Base)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Base offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Base)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Base offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Base", offset)
 	}
-	if err := w.i32(int(v.BaseSlot)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.BaseSlot offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.BaseSlot)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.BaseSlot offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "BaseSlot", offset)
 	}
-	if err := w.i32(int(v.Index)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Index offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Index)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Index offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Index", offset)
 	}
-	if err := w.i32(int(v.Scale)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Scale offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Scale)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Scale offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Scale", offset)
 	}
-	if err := w.i32(int(v.Disp)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Disp offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Disp)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Disp offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Disp", offset)
 	}
-	if err := w.tag(bridgeTagsOperandKind, v.Kind); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Kind offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsOperandKind, v.Kind); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Kind offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Kind", offset)
 	}
-	if err := w.str(string(v.Literal)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Literal offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Literal)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Literal offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Literal", offset)
 	}
-	if err := w.str(string(v.Region)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Region offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Region)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Region offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Region", offset)
 	}
-	if err := w.bool(v.Signed); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Signed offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.Signed); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineOperand.Signed offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineOperand", "Signed", offset)
 	}
 	return nil
 }
@@ -195,29 +276,61 @@ func (r machineBridgeReader) readWireMachineOperand() (MachineOperand, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineArg(v MachineArg) error {
-	if err := w.str(string(v.Type)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Type offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Type)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Type offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "Type", offset)
 	}
-	if err := w.i32(int(v.Index)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Index offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Index)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Index offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "Index", offset)
 	}
-	if err := w.i32(int(v.Width)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Width offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Width)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Width offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "Width", offset)
 	}
-	if err := w.bool(v.Indirect); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Indirect offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.Indirect); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Indirect offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "Indirect", offset)
 	}
-	if err := w.enum(int(v.Register), len(bridgeTagsRegister)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Register offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.enum(int(v.Register), len(bridgeTagsRegister)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.Register offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "Register", offset)
 	}
-	if err := w.i32(int(v.StackOffset)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.StackOffset offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.StackOffset)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.StackOffset offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "StackOffset", offset)
 	}
-	if err := w.bool(v.OnStack); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.OnStack offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.OnStack); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.OnStack offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "OnStack", offset)
 	}
-	if err := w.i32(int(v.VReg)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.VReg offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.VReg)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineArg.VReg offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineArg", "VReg", offset)
 	}
 	return nil
 }
@@ -267,14 +380,26 @@ func (r machineBridgeReader) readWireMachineArg() (MachineArg, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineVReg(v MachineVReg) error {
-	if err := w.i32(int(v.ID)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.ID offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.ID)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.ID offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineVReg", "ID", offset)
 	}
-	if err := w.i32(int(v.Width)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.Width offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Width)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.Width offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineVReg", "Width", offset)
 	}
-	if err := w.bool(v.Address); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.Address offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.Address); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineVReg.Address offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineVReg", "Address", offset)
 	}
 	return nil
 }
@@ -296,23 +421,47 @@ func (r machineBridgeReader) readWireMachineVReg() (MachineVReg, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineStackSlot(v MachineStackSlot) error {
-	if err := w.i32(int(v.ID)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.ID offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.ID)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.ID offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "ID", offset)
 	}
-	if err := w.i32(int(v.Size)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Size offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Size)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Size offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "Size", offset)
 	}
-	if err := w.i32(int(v.Align)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Align offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Align)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Align offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "Align", offset)
 	}
-	if err := w.bool(v.IncomingIndirect); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.IncomingIndirect offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.bool(v.IncomingIndirect); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.IncomingIndirect offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "IncomingIndirect", offset)
 	}
-	if err := w.i32(int(v.BaseVReg)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.BaseVReg offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.BaseVReg)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.BaseVReg offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "BaseVReg", offset)
 	}
-	if err := w.str(string(v.Source)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Source offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Source)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineStackSlot.Source offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineStackSlot", "Source", offset)
 	}
 	return nil
 }
@@ -346,61 +495,109 @@ func (r machineBridgeReader) readWireMachineStackSlot() (MachineStackSlot, error
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineInstruction(v MachineInstruction) error {
-	if err := w.tag(bridgeTagsOpcode, v.Op); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Op offset=%d: %w", w.Len(), err)
-	}
-	if err := w.writeWireMachineOperand(v.Dst); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Dst offset=%d: %w", w.Len(), err)
-	}
-	if err := func() error {
-		if err := w.u32(len(v.Src)); err != nil {
-			return err
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsOpcode, v.Op); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Op offset=%d: %w", offset, err)
 		}
-		for _, element := range v.Src {
-			if err := w.writeWireMachineOperand(element); err != nil {
+		w.traceField("WireMachineInstruction", "Op", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.writeWireMachineOperand(v.Dst); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Dst offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "Dst", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Src)); err != nil {
 				return err
 			}
+			for _, element := range v.Src {
+				if err := w.writeWireMachineOperand(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Src offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Src offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineInstruction", "Src", offset)
 	}
-	if err := w.i32(int(v.Width)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Width offset=%d: %w", w.Len(), err)
-	}
-	if err := w.i32(int(v.FlagsDef)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.FlagsDef offset=%d: %w", w.Len(), err)
-	}
-	if err := w.i32(int(v.FlagsUse)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.FlagsUse offset=%d: %w", w.Len(), err)
-	}
-	if err := w.i32(int(v.LIRBlock)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.LIRBlock offset=%d: %w", w.Len(), err)
-	}
-	if err := w.i32(int(v.LIRInstruction)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.LIRInstruction offset=%d: %w", w.Len(), err)
-	}
-	if err := w.tag(bridgeTagsCondition, v.Cond); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Cond offset=%d: %w", w.Len(), err)
-	}
-	if err := w.writeWireSpan(v.Source); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Source offset=%d: %w", w.Len(), err)
-	}
-	if err := w.str(string(v.Decision)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Decision offset=%d: %w", w.Len(), err)
-	}
-	if err := func() error {
-		if err := w.u32(len(v.Facts)); err != nil {
-			return err
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Width)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Width offset=%d: %w", offset, err)
 		}
-		for _, element := range v.Facts {
-			if err := w.str(string(element)); err != nil {
+		w.traceField("WireMachineInstruction", "Width", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.FlagsDef)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.FlagsDef offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "FlagsDef", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.FlagsUse)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.FlagsUse offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "FlagsUse", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.LIRBlock)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.LIRBlock offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "LIRBlock", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.LIRInstruction)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.LIRInstruction offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "LIRInstruction", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCondition, v.Cond); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Cond offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "Cond", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.writeWireSpan(v.Source); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Source offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "Source", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Decision)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Decision offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "Decision", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Facts)); err != nil {
 				return err
 			}
+			for _, element := range v.Facts {
+				if err := w.str(string(element)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Facts offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Facts offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineInstruction", "Facts", offset)
 	}
 	return nil
 }
@@ -490,23 +687,47 @@ func (r machineBridgeReader) readWireMachineInstruction() (MachineInstruction, e
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineTerminator(v MachineTerminator) error {
-	if err := w.tag(bridgeTagsOpcode, v.Op); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Op offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsOpcode, v.Op); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Op offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "Op", offset)
 	}
-	if err := w.i32(int(v.True)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.True offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.True)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.True offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "True", offset)
 	}
-	if err := w.i32(int(v.False)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.False offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.False)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.False offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "False", offset)
 	}
-	if err := w.i32(int(v.FlagsUse)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.FlagsUse offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.FlagsUse)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.FlagsUse offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "FlagsUse", offset)
 	}
-	if err := w.tag(bridgeTagsCondition, v.Cond); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Cond offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCondition, v.Cond); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Cond offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "Cond", offset)
 	}
-	if err := w.writeWireSpan(v.Source); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Source offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.writeWireSpan(v.Source); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineTerminator.Source offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineTerminator", "Source", offset)
 	}
 	return nil
 }
@@ -540,27 +761,43 @@ func (r machineBridgeReader) readWireMachineTerminator() (MachineTerminator, err
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineBlock(v MachineBlock) error {
-	if err := w.i32(int(v.ID)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.ID offset=%d: %w", w.Len(), err)
-	}
-	if err := w.i32(int(v.LIRBlock)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.LIRBlock offset=%d: %w", w.Len(), err)
-	}
-	if err := func() error {
-		if err := w.u32(len(v.Instructions)); err != nil {
-			return err
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.ID)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.ID offset=%d: %w", offset, err)
 		}
-		for _, element := range v.Instructions {
-			if err := w.writeWireMachineInstruction(element); err != nil {
+		w.traceField("WireMachineBlock", "ID", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.LIRBlock)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.LIRBlock offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineBlock", "LIRBlock", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Instructions)); err != nil {
 				return err
 			}
+			for _, element := range v.Instructions {
+				if err := w.writeWireMachineInstruction(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.Instructions offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.Instructions offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineBlock", "Instructions", offset)
 	}
-	if err := w.writeWireMachineTerminator(v.Term); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.Term offset=%d: %w", w.Len(), err)
+	{
+		offset := w.Len()
+		if err := w.writeWireMachineTerminator(v.Term); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineBlock.Term offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineBlock", "Term", offset)
 	}
 	return nil
 }
@@ -602,104 +839,156 @@ func (r machineBridgeReader) readWireMachineBlock() (MachineBlock, error) {
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error {
-	if err := w.str(string(v.Identity)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Identity offset=%d: %w", w.Len(), err)
-	}
-	if err := w.str(string(v.Name)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Name offset=%d: %w", w.Len(), err)
-	}
-	if err := w.str(string(v.Target)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Target offset=%d: %w", w.Len(), err)
-	}
-	if err := w.str(string(v.ABI)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.ABI offset=%d: %w", w.Len(), err)
-	}
-	if err := w.str(string(v.Result)); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Result offset=%d: %w", w.Len(), err)
-	}
-	if err := w.writeWireSpan(v.Source); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Source offset=%d: %w", w.Len(), err)
-	}
-	if err := func() error {
-		if err := w.u32(len(v.Facts)); err != nil {
-			return err
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Identity)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Identity offset=%d: %w", offset, err)
 		}
-		for _, element := range v.Facts {
-			if err := w.str(string(element)); err != nil {
+		w.traceField("WireMachineFunction", "Identity", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Name)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Name offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFunction", "Name", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Target)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Target offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFunction", "Target", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.ABI)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.ABI offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFunction", "ABI", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Result)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Result offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFunction", "Result", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.writeWireSpan(v.Source); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Source offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineFunction", "Source", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Facts)); err != nil {
 				return err
 			}
+			for _, element := range v.Facts {
+				if err := w.str(string(element)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Facts offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Facts offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "Facts", offset)
 	}
-	if err := func() error {
-		if err := w.u32(len(v.Decisions)); err != nil {
-			return err
-		}
-		for _, element := range v.Decisions {
-			if err := w.str(string(element)); err != nil {
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Decisions)); err != nil {
 				return err
 			}
+			for _, element := range v.Decisions {
+				if err := w.str(string(element)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Decisions offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Decisions offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "Decisions", offset)
 	}
-	if err := w.writeWireMachineFrame(v.Frame); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Frame offset=%d: %w", w.Len(), err)
-	}
-	if err := func() error {
-		if err := w.u32(len(v.Args)); err != nil {
-			return err
+	{
+		offset := w.Len()
+		if err := w.writeWireMachineFrame(v.Frame); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Frame offset=%d: %w", offset, err)
 		}
-		for _, element := range v.Args {
-			if err := w.writeWireMachineArg(element); err != nil {
+		w.traceField("WireMachineFunction", "Frame", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Args)); err != nil {
 				return err
 			}
+			for _, element := range v.Args {
+				if err := w.writeWireMachineArg(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Args offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Args offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "Args", offset)
 	}
-	if err := func() error {
-		if err := w.u32(len(v.VRegs)); err != nil {
-			return err
-		}
-		for _, element := range v.VRegs {
-			if err := w.writeWireMachineVReg(element); err != nil {
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.VRegs)); err != nil {
 				return err
 			}
+			for _, element := range v.VRegs {
+				if err := w.writeWireMachineVReg(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.VRegs offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.VRegs offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "VRegs", offset)
 	}
-	if err := func() error {
-		if err := w.u32(len(v.Slots)); err != nil {
-			return err
-		}
-		for _, element := range v.Slots {
-			if err := w.writeWireMachineStackSlot(element); err != nil {
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Slots)); err != nil {
 				return err
 			}
+			for _, element := range v.Slots {
+				if err := w.writeWireMachineStackSlot(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Slots offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Slots offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "Slots", offset)
 	}
-	if err := func() error {
-		if err := w.u32(len(v.Blocks)); err != nil {
-			return err
-		}
-		for _, element := range v.Blocks {
-			if err := w.writeWireMachineBlock(element); err != nil {
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Blocks)); err != nil {
 				return err
 			}
+			for _, element := range v.Blocks {
+				if err := w.writeWireMachineBlock(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Blocks offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineFunction.Blocks offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineFunction", "Blocks", offset)
 	}
 	return nil
 }
@@ -861,18 +1150,22 @@ func (r machineBridgeReader) readWireMachineFunction() (MachineFunction, error) 
 	return v, nil
 }
 func (w *machineBridgeWriter) writeWireMachineModule(v MachineModule) error {
-	if err := func() error {
-		if err := w.u32(len(v.Functions)); err != nil {
-			return err
-		}
-		for _, element := range v.Functions {
-			if err := w.writeWireMachineFunction(element); err != nil {
+	{
+		offset := w.Len()
+		if err := func() error {
+			if err := w.u32(len(v.Functions)); err != nil {
 				return err
 			}
+			for _, element := range v.Functions {
+				if err := w.writeWireMachineFunction(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineModule.Functions offset=%d: %w", offset, err)
 		}
-		return nil
-	}(); err != nil {
-		return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineModule.Functions offset=%d: %w", w.Len(), err)
+		w.traceField("WireMachineModule", "Functions", offset)
 	}
 	return nil
 }

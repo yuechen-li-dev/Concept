@@ -58,7 +58,7 @@ func TestR9a2BridgeShadowPayloadParity(t *testing.T) {
 	}
 }
 func bridgeShadowParity(t *testing.T, m MachineModule) {
-	old, err := EncodeMachineBridge(m)
+	old, err := encodeMachineBridgeManual(m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func bridgeShadowParity(t *testing.T, m MachineModule) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oracle, err := DecodeMachineBridge(old)
+	oracle, err := decodeMachineBridgeManual(old)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestR9a2BridgeConceptRoundTrip(t *testing.T) {
 	var harness strings.Builder
 	harness.WriteString("#include \"bridgecodec.generated.h\"\n#include <string.h>\nint main(void) {\n")
 	for name, m := range bridgeParityCorpus(t) {
-		old, err := EncodeMachineBridge(m)
+		old, err := encodeMachineBridgeManual(m)
 		if err != nil {
 			t.Fatal(err)
 		}

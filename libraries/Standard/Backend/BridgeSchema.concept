@@ -7,10 +7,12 @@ profile Core;
 static_assert(SizeOf<int>() == 4);
 comptime string BridgeMagic = "CMIRAMD2";
 comptime uint BridgeVersion = 2u;
+comptime uint BridgeMaxItems = 1048576u;
+comptime string BridgeRepresentation = "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32]";
 
 enum BackendError {
-    BridgeInvalid, BridgeVersion, BridgeSchemaMismatch, CapacityExceeded,
-    UnsupportedInstruction, RegisterExhausted, BufferFull, InvalidEncoding,
+    BridgeInvalid, BridgeVersion, CapacityExceeded,
+    UnsupportedInstruction, RegisterExhausted, BufferFull, InvalidEncoding, BridgeSchemaMismatch,
 }
 [[reflect]] enum Register {
     RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,

@@ -44,7 +44,7 @@ func TestEVT2dMachineBridgeRejectsMismatchAndCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	wrong := bytes.Clone(data)
-	wrong[7] = '2'
+	wrong[7] = '1'
 	if _, err := DecodeMachineBridge(wrong); err == nil || !strings.Contains(err.Error(), "MIR_BRIDGE_SCHEMA_MISMATCH") {
 		t.Fatalf("schema mismatch accepted: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestEVT2dConceptBackendCompilesThroughC11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module, err := Parse(sourcePath, string(source))
+	module, err := ParseWithBuiltSemanticModuleRoots(sourcePath, string(source), []string{"../../libraries"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestEVT2dConceptBackendNativeAddMax(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module, err := Parse(sourcePath, string(source))
+	module, err := ParseWithBuiltSemanticModuleRoots(sourcePath, string(source), []string{"../../libraries"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
   int a = atoi(argv[3]);
   int b = atoi(argv[4]);
   unsigned char originalVersion = bridge[7];
-  bridge[7] = '2';
+  bridge[7] = '1';
   concept_result_int_backend_error wrongVersion = concept_standard__backend__amd64_emit_function(input, ordinal, output);
   if (wrongVersion.tag == 0 || wrongVersion.payload.error.error.tag != 1) return 103;
   bridge[7] = originalVersion;
@@ -372,7 +372,7 @@ func TestEVT2dConceptEncoderModRMSIB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	module, err := Parse(sourcePath, string(source))
+	module, err := ParseWithBuiltSemanticModuleRoots(sourcePath, string(source), []string{"../../libraries"})
 	if err != nil {
 		t.Fatal(err)
 	}

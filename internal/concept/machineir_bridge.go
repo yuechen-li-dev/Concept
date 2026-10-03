@@ -8,9 +8,9 @@ import (
 	"math"
 )
 
-// MachineBridgeSchema is a deliberately small, endian-stable semantic boundary.
+// legacyMachineBridgeSchema is a deliberately small, endian-stable semantic boundary.
 // Its wire layout is specified in docs/design/EVT2-MACHINEIR-BRIDGE.md.
-const MachineBridgeSchema = "CMIRAMD1"
+const legacyMachineBridgeSchema = "CMIRAMD1"
 
 const machineBridgeMaxItems = 1 << 20
 
@@ -40,7 +40,10 @@ func (w *machineBridgeWriter) tag(values []string, value string) error {
 	return w.i32(tag)
 }
 
-type machineBridgeWriter struct{ bytes.Buffer }
+type machineBridgeWriter struct {
+	bytes.Buffer
+	trace *[]machineBridgeWireField
+}
 
 func (w *machineBridgeWriter) u32(v int) error {
 	if v < 0 || v > math.MaxUint32 {
@@ -104,12 +107,12 @@ func (w *machineBridgeWriter) operand(o MachineOperand) error {
 
 // EncodeMachineBridge accepts only verified MachineIR and never reads source or
 // the inspection printer. The output is deterministic for identical input.
-func EncodeMachineBridge(m MachineModule) ([]byte, error) {
+func encodeMachineBridgeManual(m MachineModule) ([]byte, error) {
 	if err := VerifyMachineIR(m); err != nil {
 		return nil, err
 	}
 	w := &machineBridgeWriter{}
-	w.WriteString(MachineBridgeSchema)
+	w.WriteString(legacyMachineBridgeSchema)
 	if err := w.u32(len(m.Functions)); err != nil {
 		return nil, err
 	}
@@ -256,7 +259,7 @@ func (r machineBridgeReader) count() (int, error) {
 	if err := binary.Read(r.Reader, binary.LittleEndian, &x); err != nil {
 		return 0, err
 	}
-	if x > machineBridgeMaxItems {
+	if x > MachineBridgeMaxItems {
 		return 0, fmt.Errorf("MIR_BRIDGE_COUNT %d", x)
 	}
 	return int(x), nil
@@ -332,11 +335,11 @@ func (r machineBridgeReader) operand() (MachineOperand, error) {
 
 // DecodeMachineBridge provides an independent artifact-only Go test oracle for
 // the Concept reader. A malformed or different schema is always rejected.
-func DecodeMachineBridge(data []byte) (MachineModule, error) {
-	if len(data) < len(MachineBridgeSchema) || string(data[:len(MachineBridgeSchema)]) != MachineBridgeSchema {
-		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_SCHEMA_MISMATCH: want %s", MachineBridgeSchema)
+func decodeMachineBridgeManual(data []byte) (MachineModule, error) {
+	if len(data) < len(legacyMachineBridgeSchema) || string(data[:len(legacyMachineBridgeSchema)]) != legacyMachineBridgeSchema {
+		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_SCHEMA_MISMATCH: want %s", legacyMachineBridgeSchema)
 	}
-	r := machineBridgeReader{bytes.NewReader(data[len(MachineBridgeSchema):])}
+	r := machineBridgeReader{bytes.NewReader(data[len(legacyMachineBridgeSchema):])}
 	nf, err := r.count()
 	if err != nil {
 		return MachineModule{}, err

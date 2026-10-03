@@ -23,7 +23,9 @@ Result<int, BackendError> ReadI32(ref BridgeReader reader) {
 }
 Result<int, BackendError> ReadCount(ref BridgeReader reader) {
     int count = ReadI32(ref reader) ?;
-    if (count < 0 or count > 1048576) { return Result::Error(BackendError::BridgeInvalid); }
+    if (count < 0 or count >(BridgeMaxItems as int)) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
     return Result::Ok(count);
 }
 Result<BridgeText, BackendError> ReadText(ref BridgeReader reader) {

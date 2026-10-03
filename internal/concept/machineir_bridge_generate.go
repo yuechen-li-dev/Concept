@@ -22,6 +22,7 @@ type BridgeCodecGeneration struct {
 }
 type bridgeSchemaType struct {
 	Name      string             `json:"name"`
+	Module    string             `json:"module,omitempty"`
 	Arguments []bridgeSchemaType `json:"arguments,omitempty"`
 	Element   *bridgeSchemaType  `json:"element,omitempty"`
 	Extent    int                `json:"extent,omitempty"`
@@ -45,6 +46,7 @@ type bridgeSchemaDefinition struct {
 	Module         string               `json:"module"`
 	Magic          string               `json:"magic"`
 	Version        uint64               `json:"version"`
+	MaxItems       uint64               `json:"max_items"`
 	Representation string               `json:"representation"`
 	Records        []bridgeSchemaRecord `json:"records"`
 }
@@ -53,6 +55,7 @@ func bridgeSchemaTypeOf(t Type) bridgeSchemaType {
 	out := bridgeSchemaType{Name: t.Name}
 	if t.Application != nil {
 		out.Name = t.Application.Declaration.Name
+		out.Module = t.Application.Declaration.Module
 		for _, a := range t.Application.Arguments {
 			if a.Kind == "type" {
 				out.Arguments = append(out.Arguments, bridgeSchemaTypeOf(a.Type))
@@ -86,6 +89,8 @@ func bridgeSelector(attrs []Attribute, name string) (Expr, error) {
 
 func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	var out BridgeCodecGeneration
+	var maxItems uint64
+	var representation string
 	if module.Name != "Standard.Backend.BridgeSchema" {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
 	}
@@ -99,12 +104,20 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			if v, ok := c.Value.(*IntLiteral); ok {
 				out.Version = v.Magnitude
 			}
+		case "BridgeMaxItems":
+			if v, ok := c.Value.(*IntLiteral); ok {
+				maxItems = v.Magnitude
+			}
+		case "BridgeRepresentation":
+			if v, ok := c.Value.(*StringLiteral); ok {
+				representation = v.Value
+			}
 		}
 	}
-	if len(out.Magic) != 8 || out.Version == 0 {
+	if len(out.Magic) != 8 || out.Version == 0 || maxItems == 0 || maxItems > 2147483647 || representation == "" {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_IDENTITY")
 	}
-	def := bridgeSchemaDefinition{Module: module.Name, Magic: out.Magic, Version: out.Version, Representation: "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32]"}
+	def := bridgeSchemaDefinition{Module: module.Name, Magic: out.Magic, Version: out.Version, MaxItems: maxItems, Representation: representation}
 	for _, info := range module.ReflectionResults {
 		rec := bridgeSchemaRecord{Name: info.Type.Name}
 		if !strings.HasPrefix(rec.Name, "Wire") && info.Kind != "enum" {
@@ -179,6 +192,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	}
 	var goSource bytes.Buffer
 	fmt.Fprintf(&goSource, "// Code generated from checked Standard.Backend.BridgeSchema; DO NOT EDIT.\npackage concept\nimport (\"fmt\";\"io\")\nconst DerivedMachineBridgeSchema = %q\nconst DerivedMachineBridgeVersion = %d\nconst DerivedMachineBridgeSchemaHash = %q\n", out.Magic, out.Version, out.Hash)
+	fmt.Fprintf(&goSource, "const MachineBridgeMaxItems = %d\n", maxItems)
 	var conceptSource bytes.Buffer
 	fmt.Fprintf(&conceptSource, "// Code generated from checked BridgeSchema metadata; DO NOT EDIT.\nmodule Standard.Backend.BridgeCodec;\nprofile Core;\nimport Standard.Backend.BridgeDerive;\nstring MachineBridgeSchemaHash() { return %q; }\n", out.Hash)
 	hashBytes, _ := hex.DecodeString(out.Hash)
@@ -229,7 +243,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			if e != nil {
 				return out, e
 			}
-			fmt.Fprintf(&goSource, "if err := %s; err != nil { return fmt.Errorf(\"MIR_BRIDGE_FIELD %s.%s offset=%%d: %%w\", w.Len(), err) }\n", statement, r.Name, f.Name)
+			fmt.Fprintf(&goSource, "{offset:=w.Len(); if err := %s; err != nil { return fmt.Errorf(\"MIR_BRIDGE_FIELD %s.%s offset=%%d: %%w\", offset, err) }; w.traceField(%q,%q,offset)}\n", statement, r.Name, f.Name, r.Name, f.Name)
 		}
 		fmt.Fprintln(&goSource, "return nil\n}")
 		fmt.Fprintf(&goSource, "func (r machineBridgeReader) read%s() (%s,error) {\nvar v %s\nvar err error\n", r.Name, goType, goType)

@@ -3,12 +3,12 @@ module Standard.Backend.BridgeCodec;
 profile Core;
 import Standard.Backend.BridgeDerive;
 string MachineBridgeSchemaHash() {
-    return "811a24e57119ec1e458deaf0b1e2c3dd36ca26b522e2bd31548e8bc8d7d2d4a6";
+    return "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593";
 }
 uint8[32] MachineBridgeSchemaHashBytes() {
-    uint8[32] value =[129u, 26u, 36u, 229u, 113u, 25u, 236u, 30u, 69u, 141u, 234u, 240u, 177u, 226u,
-    195u, 221u, 54u, 202u, 38u, 181u, 34u, 226u, 189u, 49u, 84u, 142u, 139u, 200u, 215u, 210u, 212u,
-    166u];
+    uint8[32] value =[153u, 209u, 49u, 149u, 221u, 153u, 104u, 246u, 217u, 128u, 112u, 117u, 230u, 172u,
+    136u, 144u, 236u, 113u, 29u, 86u, 154u, 210u, 220u, 195u, 95u, 240u, 195u, 202u, 86u, 112u, 149u,
+    147u];
     return value;
 }
 derive DeriveBridgeRead reflect<WireHeader>;

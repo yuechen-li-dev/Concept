@@ -8,6 +8,51 @@ import (
 )
 
 const machineBridgeHeaderSize = 8 + 4 + 32
+const MachineBridgeSchema = DerivedMachineBridgeSchema
+const MachineBridgeVersion = DerivedMachineBridgeVersion
+const MachineBridgeSchemaHash = DerivedMachineBridgeSchemaHash
+
+type machineBridgeWireField struct {
+	Record, Field string
+	Offset, End   int
+}
+
+func (w *machineBridgeWriter) traceField(record, field string, offset int) {
+	if w.trace != nil {
+		*w.trace = append(*w.trace, machineBridgeWireField{record, field, offset, w.Len()})
+	}
+}
+func machineBridgePayloadDifference(expected, actual []byte, fields []machineBridgeWireField) error {
+	limit := len(expected)
+	if len(actual) < limit {
+		limit = len(actual)
+	}
+	offset := 0
+	for offset < limit && expected[offset] == actual[offset] {
+		offset++
+	}
+	if offset == len(expected) && offset == len(actual) {
+		return nil
+	}
+	record, field := "bridge", "length"
+	extent := int(^uint(0) >> 1)
+	for _, f := range fields {
+		if f.Offset <= offset && offset < f.End && f.End-f.Offset < extent {
+			record, field, extent = f.Record, f.Field, f.End-f.Offset
+		}
+	}
+	want, got := "EOF", "EOF"
+	if offset < len(expected) {
+		want = fmt.Sprintf("0x%02x", expected[offset])
+	}
+	if offset < len(actual) {
+		got = fmt.Sprintf("0x%02x", actual[offset])
+	}
+	return fmt.Errorf("MIR_BRIDGE_BYTE_MISMATCH %s.%s expected_offset=%d actual_offset=%d expected=%s actual=%s", record, field, offset, offset, want, got)
+}
+
+func EncodeMachineBridge(m MachineModule) ([]byte, error)    { return EncodeMachineBridgeDerived(m) }
+func DecodeMachineBridge(data []byte) (MachineModule, error) { return DecodeMachineBridgeDerived(data) }
 
 func (r machineBridgeReader) u32() (uint32, error) {
 	var value uint32
