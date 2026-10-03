@@ -20,9 +20,10 @@ second contract author.
 | Proof graph and fact trust | Stage-0 mechanism; Concept authored claims | None | Go proof host | GO_AUTHORITATIVE | Separate decision rule from evaluator/provenance transport |
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
-| Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Add call contract, later Concept transformation parity |
-| MachineIR producer and verifier | Stage-0 | Concept backend validates projected subset | Go producer/verifier | GO_AUTHORITATIVE | Version call contract and move backend decisions, not parser internals |
-| MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 only with explicit EVT2e additions and parity |
+| Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call contract qualified; later Concept transformation parity |
+| MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 contract qualified; move outgoing ABI decisions into Concept next |
+| MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
+| Call artifact admission | Concept `BridgeValidate` on normal AMD64 path | Stage-0 verifier checks producer input | Go semantic transport/verifier; generated codec | SHARED_BY_DESIGN | Typed direct-call contract only; physical ABI, allocation and encoding remain deferred |
 | Condition-name legality in Go MachineIR verifier | Concept `BridgeSchema.Condition` | Frozen former Go table in `TestR9cConditionAuthorityShadowAgreement` | Generated Go tag table | CONCEPT_AUTHORITATIVE | Keep table generated; expand only via schema/versioned contract |
 | AMD64 block layout, liveness, intervals, allocation | Concept `Standard.Backend.AMD64` | Native/C behavior oracle | No independent Go allocator | CONCEPT_AUTHORITATIVE | Add call clobbers and save/spill policy in Concept |
 | AMD64 no-call frame and encoder | Concept `Standard.Backend.AMD64` | Frozen bytes/native execution | Stage-0 C transport compiles library | CONCEPT_AUTHORITATIVE | Add EVT2e frame/call encoding from checked contract |
@@ -38,3 +39,13 @@ not route all verification through Concept. The former Go switch is RETIRED;
 the generated table is BOOTSTRAP-ONLY transport. No new normal backend feature
 was implemented twice. Future EVT2e entries should cite a contract version,
 oracle, authority-switch test and RETIRE/BOOTSTRAP-ONLY/SHARED outcome.
+
+EVT2e2 preserves that boundary: `BridgeSchema` owns call tags and wire shape;
+generated codecs preserve the checked schema. `BridgeValidate` owns call artifact
+admission on the normal Concept backend path, including unselected functions.
+Stage-0 transports checked LIR identities and virtual values into MachineIR and
+checks producer consistency. No outgoing Win64 algorithm was added to Go.
+`TestEVT2e2ConceptArtifactOnlyCallRoundTrip` qualifies the Concept consumer;
+`TestEVT2e2CLIContractAndBoundary` qualifies normal selection and the precise
+`AMD64_UNSUPPORTED_CALL_LOWERING` boundary. PlainData assertions consume the
+Vocabulary's typed Verdict evidence; runtime decoding returns Result.

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type MachineEffects struct{ ReadsMemory, WritesMemory, SetsFlags, ReadsFlags, Terminates, MayTrap bool }
+type MachineEffects struct{ ReadsMemory, WritesMemory, SetsFlags, ReadsFlags, Terminates, MayTrap, KillsFlags bool }
 
 func (in MachineInstruction) Effects() MachineEffects {
 	e, _ := MachineOpcodeEffects(in.Op)
@@ -36,6 +36,8 @@ func MachineOpcodeEffects(op string) (MachineEffects, bool) {
 		return MachineEffects{ReadsFlags: true}, true
 	case "TRAP":
 		return MachineEffects{MayTrap: true}, true
+	case "CALL":
+		return MachineEffects{ReadsMemory: true, WritesMemory: true, MayTrap: true, KillsFlags: true}, true
 	case "JMP", "JCC", "RET":
 		return MachineEffects{Terminates: true, ReadsFlags: op == "JCC"}, true
 	}
@@ -49,9 +51,42 @@ func machineConditionValid(c string) bool {
 }
 func machineWidthValid(w int) bool { return w == 1 || w == 2 || w == 4 || w == 8 }
 func VerifyMachineIR(m MachineModule) error {
+	functions := map[string]MachineFunction{}
+	for _, f := range m.Functions {
+		if _, exists := functions[f.Identity]; exists {
+			return fmt.Errorf("MIR_DUPLICATE_FUNCTION %s", f.Identity)
+		}
+		functions[f.Identity] = f
+	}
 	for _, f := range m.Functions {
 		if e := VerifyMachineFunction(f); e != nil {
 			return fmt.Errorf("%s: %w", f.Name, e)
+		}
+		for _, block := range f.Blocks {
+			for _, in := range block.Instructions {
+				if in.Op != "CALL" {
+					continue
+				}
+				call := in.Calls[0]
+				target, ok := functions[call.Target]
+				if !ok {
+					return fmt.Errorf("MIR_CALL_TARGET %q: declaration unavailable", call.Target)
+				}
+				if !strings.HasPrefix(call.Target, target.Name+"|"+target.Name+"(") || !strings.HasSuffix(call.Target, ")") {
+					return fmt.Errorf("MIR_CALL_TARGET %q: malformed declaration identity", call.Target)
+				}
+				if len(call.Arguments) != len(target.Args) {
+					return fmt.Errorf("MIR_CALL_ARGUMENT_COUNT %s: got %d want %d", call.Target, len(call.Arguments), len(target.Args))
+				}
+				if call.Result != string(target.Result) {
+					return fmt.Errorf("MIR_CALL_RESULT_TYPE %s: got %s want %s", call.Target, call.Result, target.Result)
+				}
+				for i, arg := range call.Arguments {
+					if arg.Type != string(target.Args[i].Type) {
+						return fmt.Errorf("MIR_CALL_ARGUMENT_TYPE %s arg=%d: got %s want %s", call.Target, i, arg.Type, target.Args[i].Type)
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -145,6 +180,12 @@ func VerifyMachineFunction(f MachineFunction) error {
 			if !ok || effects.Terminates {
 				return fmt.Errorf("MIR_BAD_OPCODE %s", in.Op)
 			}
+			if in.Op != "CALL" && len(in.Calls) != 0 {
+				return fmt.Errorf("MIR_UNEXPECTED_CALL_CONTRACT %s", in.Op)
+			}
+			if effects.KillsFlags {
+				flag = -1
+			}
 			if in.Dst.Kind != "" {
 				if e := check(in.Dst); e != nil {
 					return e
@@ -175,6 +216,41 @@ func VerifyMachineFunction(f MachineFunction) error {
 				return fmt.Errorf("MIR_UNEXPECTED_FLAGS_USE")
 			}
 			switch in.Op {
+			case "CALL":
+				if len(in.Calls) != 1 || len(in.Src) != 0 || in.Cond != "" || in.LIRBlock != block.LIRBlock || in.LIRInstruction < 0 || in.Source.Line <= 0 || in.Source.Column <= 0 {
+					return fmt.Errorf("MIR_BAD_CALL_SHAPE b%d", bi)
+				}
+				call := in.Calls[0]
+				if _, err := machineBridgeTag(bridgeTagsCallKind, call.Kind); err != nil {
+					return fmt.Errorf("MIR_CALL_KIND %q: %w", call.Kind, err)
+				}
+				if _, err := machineBridgeTag(bridgeTagsCallConvention, call.Convention); err != nil {
+					return fmt.Errorf("MIR_CALL_CONVENTION %q: %w", call.Convention, err)
+				}
+				if call.Target == "" || !strings.Contains(call.Target, "|") {
+					return fmt.Errorf("MIR_CALL_TARGET %q: expected declaration identity", call.Target)
+				}
+				if _, err := machineBridgeTag(bridgeTagsCallValueType, call.Result); err != nil {
+					return fmt.Errorf("MIR_CALL_RESULT_CLASS %q: %w", call.Result, err)
+				}
+				if call.Result == "void" {
+					if in.Dst.Kind != "" || in.Width != 0 {
+						return fmt.Errorf("MIR_CALL_VOID_RESULT")
+					}
+				} else if in.Dst.Kind != "vreg" || in.Width != machineScalarWidth(LIRType(call.Result)) || in.Dst.Width != in.Width || f.VRegs[in.Dst.ID].Address {
+					return fmt.Errorf("MIR_CALL_SCALAR_RESULT")
+				}
+				for i, arg := range call.Arguments {
+					if _, err := machineBridgeTag(bridgeTagsCallValueType, arg.Type); err != nil || arg.Type == "void" {
+						return fmt.Errorf("MIR_CALL_ARGUMENT_CLASS arg=%d type=%q", i, arg.Type)
+					}
+					if arg.Value < 0 || arg.Value >= len(f.VRegs) {
+						return fmt.Errorf("MIR_CALL_ARGUMENT_VALUE arg=%d v%d", i, arg.Value)
+					}
+					if f.VRegs[arg.Value].Width != machineScalarWidth(LIRType(arg.Type)) || f.VRegs[arg.Value].Address {
+						return fmt.Errorf("MIR_CALL_ARGUMENT_TYPE arg=%d v%d type=%s", i, arg.Value, arg.Type)
+					}
+				}
 			case "MOV":
 				if len(in.Src) != 1 || in.Dst.Kind != "vreg" && in.Dst.Kind != "preg" || in.Width != in.Dst.Width || in.Src[0].Width != in.Width {
 					return fmt.Errorf("MIR_BAD_MOV")
@@ -210,7 +286,7 @@ func VerifyMachineFunction(f MachineFunction) error {
 			}
 			if in.Dst.Kind == "vreg" {
 				switch in.Op {
-				case "MOV", "LOAD", "LEA", "SETCC":
+				case "MOV", "LOAD", "LEA", "SETCC", "CALL":
 					initialDefs[in.Dst.ID]++
 				case "ADD", "SUB", "IMUL", "UMUL":
 					// The two-address operation updates its earlier MOV result.

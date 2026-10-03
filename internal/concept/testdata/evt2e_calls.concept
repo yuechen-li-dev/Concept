@@ -47,3 +47,14 @@ int FiveArgCall(int a, int b, int c, int d, int e)
 {
     return Sum5(a, b, c, d, e);
 }
+
+int Mixed(bool flag, int value)
+{
+    if (flag) { return value; }
+    return 0;
+}
+
+int MixedCall(bool flag, int value)
+{
+    return Mixed(flag, value);
+}

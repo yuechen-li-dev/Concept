@@ -35,8 +35,8 @@ func TestEVT2eDirectCallsReachVerifiedLIR(t *testing.T) {
 			t.Fatalf("call LIR differs on run %d: %v", i+2, err)
 		}
 	}
-	if _, err := LowerLirToAmd64Machine(lir); err == nil || !strings.Contains(err.Error(), "MIR_UNSUPPORTED_LIR_OP call") {
-		t.Fatalf("expected explicit MachineIR call boundary, got %v", err)
+	if _, err := LowerLirToAmd64Machine(lir); err != nil {
+		t.Fatalf("call contract did not reach MachineIR: %v", err)
 	}
 }
 

@@ -26,7 +26,7 @@ checked Concept BridgeSchema + typed reflection
         -> BridgeCodec.concept (identity, derive sites, counted-view wrappers)
     -> BridgeDerive Fields<T>/Cases<T>/FieldType/TagOf generators
         -> ordinary checked Concept FunctionDecls
-Stage-0 MachineIR -> generated Go codec -> CMIRAMD2
+Stage-0 MachineIR -> generated Go codec -> CMIRAMD3
     -> generated Concept reader -> typed wire views -> AMD64 semantic projection
 ```
 
@@ -48,7 +48,7 @@ splitting a generated nominal name.
 
 ## Coverage and representation
 
-There are 12 wire records with 73 ordered fields and four enums with 52 cases.
+There are 14 wire records with 81 ordered fields and seven enums with 65 cases.
 The normalized inspectable definition is
 `docs/design/EVT2-MACHINEIR-BRIDGE.schema.json`; it is generated, not another schema
 language or authority.
@@ -62,7 +62,9 @@ language or authority.
 | WireMachineArg | ABI type, index, width, indirectness, physical register, stack offset, stack placement, vreg |
 | WireMachineVReg | ID, width, address role |
 | WireMachineStackSlot | ID, size, alignment, incoming indirectness, base vreg, source |
-| WireMachineInstruction | Opcode, destination, sources, width, flags definition/use, LIR block/instruction, condition, span, decision, facts |
+| WireMachineCallArgument | Virtual value ID and exact scalar class |
+| WireMachineCall | Direct kind, stable target identity, convention, ordered arguments, result class |
+| WireMachineInstruction | Opcode, destination, sources, width, flags definition/use, LIR block/instruction, condition, span, decision, facts, optional call contract |
 | WireMachineTerminator | Opcode, true/false targets, flags use, condition, span |
 | WireMachineBlock | ID, LIR block, instructions, terminator |
 | WireMachineFunction | Identity, name, target, ABI, result, span, facts, decisions, frame, arguments, vregs, slots, blocks |
@@ -89,14 +91,16 @@ were added.
 
 ## Version and schema hash
 
-The live identity is `CMIRAMD2`, numeric version 2. The generated header size is
-44 bytes: magic, version, raw SHA-256. CMIRAMD1's payload is unchanged; the new
-header deliberately replaces its eight-byte identity-only prefix.
+The live identity is `CMIRAMD3`, numeric version 3. The generated header size is
+44 bytes: magic, version, raw SHA-256. EVT2e2 adds a counted call-contract field
+to instructions. A non-call instruction carries count zero; CALL carries one
+record. Existing fields and tags retain their representation. CMIRAMD2 and its
+hash are rejected; no implicit upgrade or runtime compatibility codec exists.
 
 Current hash:
 
 ```text
-99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593
+3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312
 ```
 
 SHA-256 covers deterministic normalized checked metadata: schema module, magic,
@@ -154,6 +158,16 @@ keeps the R9a caller-supplied workspace and compatibility entry points.
 NoAllocation is pinned through the real checked call graph and existing backend
 assertions, not a codec-specific fact grant.
 
+`BridgeValidate` adds direct-call semantic admission to the normal backend path:
+exact target lookup, ordered scalar classes, virtual widths and result shape,
+source/LIR provenance and single-record cardinality. `ValidatedBridgeRoundTrip`
+validates before writing caller output, then uses generated readers/writers.
+Neither decoding nor roundtrip needs the originating source. Runtime errors use
+Result; the wire-record PlainData assertions use Vocabulary's typed Verdict
+with size/alignment evidence. No PlainData assertion grants ABI equivalence.
+Selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_LOWERING` before
+allocation or encoding. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md).
+
 ## Migration and evidence
 
 The strangler sequence is complete: shadow, whole-payload agreement, native-byte
@@ -168,7 +182,9 @@ The seven corpus shapes cover 17 functions: Add/Max/Sum4/CheckedIndex/StoreIndex
 Choose/Early, finite/yield/multi-yield machines, pushdown automata, activation
 initialization and arbitrary stride-12 addressing. Tests compare every payload
 byte and semantic field, preserve complete Concept canonical wire data, and
-compare final AMD64 bytes. Optional generated field traces explain a mismatch
+compare final AMD64 bytes. EVT2e2 removes only the traced four-byte empty call
+sequence per non-call instruction when comparing to frozen legacy payloads;
+the frozen artifacts and native bytes remain untouched. Optional generated field traces explain a mismatch
 with record, field, expected/actual offset and byte values. There is no opaque
 manual byte-array debugging requirement.
 

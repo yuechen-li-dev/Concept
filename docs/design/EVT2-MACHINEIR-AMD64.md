@@ -4,7 +4,7 @@ LIR is target-independent low-level semantics. MachineIR is target-aware operati
 
 The pipeline is MIR -> SemanticFacts -> validated General Planner / LoweringPlan -> verified LIR -> `LowerLirToAmd64Machine` -> verified MachineIR. `concept machineir <file>` runs this path and prints deterministic inspection text. `concept lir` retains its separate target-independent output. Machine lowering may choose target mechanisms, but it may not erase retained safety behavior. A checked addition becomes `MOV`, `ADD`, and a flags-dependent overflow edge to `TRAP`; a retained index guard becomes `CMP` and an unsigned failure edge. Planner decision IDs and fact references remain on selected machine instructions. There is no C emission in the MachineIR command.
 
-EVT2d adds an artifact-only consumer of this verified structure. `concept machineir-bin <file>` writes the versioned typed [`CMIRAMD1` bridge](EVT2-MACHINEIR-BRIDGE.md); the Concept-authored [AMD64 backend](EVT2-CONCEPT-AMD64-BACKEND.md) decodes it, allocates registers, finalizes the frame, and emits instruction bytes. `concept amd64 <file>` runs that consumer through the existing C11 bootstrap and displays the bytes. The inspection printer is not a backend input.
+EVT2d adds an artifact-only consumer of this verified structure. `concept machineir-bin <file>` writes the versioned typed [`CMIRAMD3` bridge](EVT2-MACHINEIR-BRIDGE.md); the Concept-authored [AMD64 backend](EVT2-CONCEPT-AMD64-BACKEND.md) decodes it, allocates registers, finalizes the frame, and emits instruction bytes. `concept amd64 <file>` runs that consumer through the existing C11 bootstrap and displays the bytes. The inspection printer is not a backend input.
 
 ## Function, control flow, and operands
 

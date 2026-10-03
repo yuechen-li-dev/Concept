@@ -3,12 +3,11 @@ module Standard.Backend.BridgeCodec;
 profile Core;
 import Standard.Backend.BridgeDerive;
 string MachineBridgeSchemaHash() {
-    return "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593";
+    return "3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312";
 }
 uint8[32] MachineBridgeSchemaHashBytes() {
-    uint8[32] value =[153u, 209u, 49u, 149u, 221u, 153u, 104u, 246u, 217u, 128u, 112u, 117u, 230u, 172u,
-    136u, 144u, 236u, 113u, 29u, 86u, 154u, 210u, 220u, 195u, 95u, 240u, 195u, 202u, 86u, 112u, 149u,
-    147u];
+    uint8[32] value =[62u, 186u, 235u, 14u, 91u, 121u, 190u, 160u, 13u, 50u, 9u, 145u, 82u, 27u, 134u,
+    1u, 89u, 116u, 207u, 153u, 74u, 59u, 30u, 31u, 73u, 140u, 148u, 73u, 153u, 223u, 243u, 18u];
     return value;
 }
 derive DeriveBridgeRead reflect<WireHeader>;
@@ -20,6 +19,12 @@ derive DeriveBridgeEnumRead reflect<Opcode>;
 derive DeriveBridgeEnumWrite reflect<Opcode>;
 derive DeriveBridgeEnumRead reflect<Condition>;
 derive DeriveBridgeEnumWrite reflect<Condition>;
+derive DeriveBridgeEnumRead reflect<CallKind>;
+derive DeriveBridgeEnumWrite reflect<CallKind>;
+derive DeriveBridgeEnumRead reflect<CallConvention>;
+derive DeriveBridgeEnumWrite reflect<CallConvention>;
+derive DeriveBridgeEnumRead reflect<CallValueType>;
+derive DeriveBridgeEnumWrite reflect<CallValueType>;
 derive DeriveBridgeRead reflect<WireSpan>;
 derive DeriveBridgeWrite reflect<WireSpan>;
 derive DeriveBridgeRead reflect<WireMachineFrame>;
@@ -32,6 +37,10 @@ derive DeriveBridgeRead reflect<WireMachineVReg>;
 derive DeriveBridgeWrite reflect<WireMachineVReg>;
 derive DeriveBridgeRead reflect<WireMachineStackSlot>;
 derive DeriveBridgeWrite reflect<WireMachineStackSlot>;
+derive DeriveBridgeRead reflect<WireMachineCallArgument>;
+derive DeriveBridgeWrite reflect<WireMachineCallArgument>;
+derive DeriveBridgeRead reflect<WireMachineCall>;
+derive DeriveBridgeWrite reflect<WireMachineCall>;
 derive DeriveBridgeRead reflect<WireMachineInstruction>;
 derive DeriveBridgeWrite reflect<WireMachineInstruction>;
 derive DeriveBridgeRead reflect<WireMachineTerminator>;
@@ -56,6 +65,13 @@ Result<uint8[32], BackendError> ReadWire(ref BridgeReader reader, BridgeType<uin
     }
     return Result::Ok(values);
 }
+Result<BridgeSequence<WireMachineCallArgument>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineCallArgument>> type) {
+    return ReadBridgeSequence<WireMachineCallArgument>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineCallArgument> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineCallArgument>(ref const value, ref const source, ref writer);
+}
 Result<BridgeSequence<WireMachineOperand>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineOperand>> type) {
     return ReadBridgeSequence<WireMachineOperand>(ref reader, type);
 }
@@ -69,6 +85,13 @@ Result<BridgeSequence<BridgeText>, BackendError> ReadWire(ref BridgeReader reade
 Result<void, BackendError> WriteWire(ref const BridgeSequence<BridgeText> value, ref const BridgeReader source,
 ref BridgeWriter writer) {
     return WriteBridgeSequence<BridgeText>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineCall>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineCall>> type) {
+    return ReadBridgeSequence<WireMachineCall>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineCall> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineCall>(ref const value, ref const source, ref writer);
 }
 Result<BridgeSequence<WireMachineInstruction>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineInstruction>> type) {
     return ReadBridgeSequence<WireMachineInstruction>(ref reader, type);

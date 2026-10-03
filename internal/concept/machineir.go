@@ -241,6 +241,21 @@ type MachineInstruction struct {
 	Source         Span
 	Decision       string
 	Facts          []string
+	Calls          []MachineCall // zero for ordinary instructions, one for CALL
+}
+
+// Semantic call transport only. Value classes and enum domains originate in
+// BridgeSchema; physical locations and clobber sets are later lowering results.
+type MachineCallArgument struct {
+	Value int
+	Type  string
+}
+type MachineCall struct {
+	Kind       string
+	Target     string
+	Convention string
+	Arguments  []MachineCallArgument
+	Result     string
 }
 type MachineTerminator struct {
 	Op       string
@@ -301,6 +316,22 @@ func (m MachineModule) String() string {
 		for _, block := range f.Blocks {
 			fmt.Fprintf(&b, "b%d (lir b%d):\n", block.ID, block.LIRBlock)
 			for _, in := range block.Instructions {
+				if in.Op == "CALL" && len(in.Calls) == 1 {
+					call := in.Calls[0]
+					b.WriteString("  ")
+					if in.Dst.Kind != "" {
+						fmt.Fprintf(&b, "%s = ", in.Dst)
+					}
+					fmt.Fprintf(&b, "call @%s(", call.Target)
+					for i, arg := range call.Arguments {
+						if i != 0 {
+							b.WriteString(", ")
+						}
+						fmt.Fprintf(&b, "v%d: %s", arg.Value, arg.Type)
+					}
+					fmt.Fprintf(&b, ") -> %s cc %s ; lir b%d/i%d source %d:%d\n", call.Result, call.Convention, in.LIRBlock, in.LIRInstruction, in.Source.Line, in.Source.Column)
+					continue
+				}
 				fmt.Fprintf(&b, "  %s", in.Op)
 				if in.Dst.Kind != "" {
 					fmt.Fprintf(&b, " %s", in.Dst)

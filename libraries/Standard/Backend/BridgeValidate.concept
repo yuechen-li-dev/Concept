@@ -1,0 +1,199 @@
+module Standard.Backend.BridgeValidate;
+profile Core;
+import Standard.Backend.BridgeCodec;
+import Standard.Semantic.Vocabulary;
+
+bool SameText(ref const BridgeReader source, BridgeText a, BridgeText b)
+{
+    if (a.length != b.length) { return false; }
+    for (i in 0 .. a.length) {
+        if (source.data[a.offset + i] != source.data[b.offset + i]) { return false; }
+    }
+    return true;
+}
+
+bool ValidCallIdentity(ref const BridgeReader source, WireMachineFunction target)
+{
+    int length = target.Name.length;
+    if (length == 0 or target.Identity.length < length * 2 + 3) { return false; }
+    int offset = target.Identity.offset;
+    if (source.data[offset + length] != 124 or
+    source.data[offset + length * 2 + 1] != 40 or
+    source.data[offset + target.Identity.length - 1] != 41) { return false; }
+    for (i in 0 .. length) {
+        byte name = source.data[target.Name.offset + i];
+        if (source.data[offset + i] != name or source.data[offset + length + 1 + i] != name) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int CallValueWidth(CallValueType type)
+{
+    return match (type) {
+        CallValueType::Void => 0,
+        CallValueType::Bool => 1,
+        CallValueType::I8 => 1,
+        CallValueType::U8 => 1,
+        CallValueType::I16 => 2,
+        CallValueType::U16 => 2,
+        CallValueType::I32 => 4,
+        CallValueType::U32 => 4,
+        CallValueType::I64 => 8,
+        CallValueType::U64 => 8,
+    };
+}
+
+string CallValueName(CallValueType type)
+{
+    return match (type) {
+        CallValueType::Void => "void",
+        CallValueType::Bool => "bool",
+        CallValueType::I8 => "i8",
+        CallValueType::U8 => "u8",
+        CallValueType::I16 => "i16",
+        CallValueType::U16 => "u16",
+        CallValueType::I32 => "i32",
+        CallValueType::U32 => "u32",
+        CallValueType::I64 => "i64",
+        CallValueType::U64 => "u64",
+    };
+}
+
+Result<void, BackendError> ValidateCallValue(
+ref const BridgeReader source, WireMachineFunction owner, int id, CallValueType type)
+{
+    if (id < 0 or id >= owner.VRegs.count or type == CallValueType::Void) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeReader values = BridgeReader{source.data, owner.VRegs.offset};
+    for (i in 0 .. owner.VRegs.count) {
+        WireMachineVReg value = ReadWire(ref values, BridgeType<WireMachineVReg>{0}) ?;
+        if (i == id) {
+            if (value.ID != id or value.Width != CallValueWidth(type) or value.Address) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> ValidateCallInstruction(
+ref const BridgeReader source, WireMachineModule document, WireMachineFunction owner,
+WireMachineBlock block, WireMachineInstruction instruction)
+{
+    if (instruction.Op != Opcode::Call) {
+        if (instruction.Calls.count != 0) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+        return Result::Ok();
+    }
+    if (owner.Identity.length == 0 or instruction.Calls.count != 1 or instruction.Src.count != 0 or
+    instruction.FlagsDef != - 1 or instruction.FlagsUse != - 1 or instruction.Cond != Condition::None or
+    instruction.LIRBlock != block.LIRBlock or instruction.LIRInstruction < 0 or
+    instruction.Source.Line <= 0 or instruction.Source.Column <= 0) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeReader calls = BridgeReader{source.data, instruction.Calls.offset};
+    WireMachineCall call = ReadWire(ref calls, BridgeType<WireMachineCall>{0}) ?;
+    if (call.Kind != CallKind::Direct or call.Convention != CallConvention::Win64 or call.Target.length == 0) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    bool separator = false;
+    for (i in 0 .. call.Target.length) {
+        if (source.data[call.Target.offset + i] == 124) {
+            separator = true;
+        }
+    }
+    if (not separator) { return Result::Error(BackendError::BridgeInvalid); }
+    if (call.Result == CallValueType::Void) {
+        if (instruction.Dst.Kind != OperandKind::None or instruction.Width != 0) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+    } else {
+        if (instruction.Dst.Kind != OperandKind::Virtual or
+        instruction.Width != CallValueWidth(call.Result) or instruction.Dst.Width != instruction.Width) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+        ValidateCallValue(ref const source, owner, instruction.Dst.ID, call.Result) ?;
+    }
+    int matches = 0;
+    BridgeReader functions = BridgeReader{source.data, document.Functions.offset};
+    for (fi in 0 .. document.Functions.count) {
+        WireMachineFunction target = ReadWire(ref functions, BridgeType<WireMachineFunction>{0}) ?;
+        if (SameText(ref const source, target.Identity, call.Target)) {
+            matches += 1;
+            if (not ValidCallIdentity(ref const source, target) or target.Args.count != call.Arguments.count or
+            not TextEquals(ref const source, target.Result, CallValueName(call.Result))) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+            BridgeReader arguments = BridgeReader{source.data, call.Arguments.offset};
+            BridgeReader parameters = BridgeReader{source.data, target.Args.offset};
+            for (ai in 0 .. call.Arguments.count) {
+                WireMachineCallArgument argument = ReadWire(ref arguments, BridgeType<WireMachineCallArgument>{
+                    0
+                }) ?;
+                WireMachineArg parameter = ReadWire(ref parameters, BridgeType<WireMachineArg>{
+                    0
+                }) ?;
+                if (parameter.Index != ai or not TextEquals(ref const source, parameter.Type, CallValueName(argument.Type))) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                ValidateCallValue(ref const source, owner, argument.Value, argument.Type) ?;
+            }
+        }
+    }
+    if (matches != 1) { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok();
+}
+
+// Validate the entire artifact, including unselected functions, before the
+// backend projects any function or a roundtrip publishes output.
+Result<void, BackendError> ValidateMachineBridge(ReadOnlySpan<byte> artifact)
+{
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadBridgeIdentity(ref reader) ?;
+    WireMachineModule document = ReadWire(ref reader, BridgeType<WireMachineModule>{0}) ?;
+    if (reader.offset != Len(artifact)) { return Result::Error(BackendError::BridgeInvalid); }
+    reader.offset = document.Functions.offset;
+    for (fi in 0 .. document.Functions.count) {
+        WireMachineFunction owner = ReadWire(ref reader, BridgeType<WireMachineFunction>{0}) ?;
+        BridgeReader blocks = BridgeReader{artifact, owner.Blocks.offset};
+        for (bi in 0 .. owner.Blocks.count) {
+            WireMachineBlock block = ReadWire(ref blocks, BridgeType<WireMachineBlock>{0}) ?;
+            BridgeReader instructions = BridgeReader{artifact, block.Instructions.offset};
+            for (ii in 0 .. block.Instructions.count) {
+                WireMachineInstruction instruction = ReadWire(ref instructions, BridgeType<WireMachineInstruction>{
+                    0
+                }) ?;
+                ValidateCallInstruction(ref const reader, document, owner, block, instruction) ?;
+            }
+        }
+    }
+    return Result::Ok();
+}
+
+Result<int, BackendError> ValidatedBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output)
+{
+    ValidateMachineBridge(artifact) ?;
+    if (Len(output) < Len(artifact)) { return Result::Error(BackendError::BufferFull); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadBridgeIdentity(ref reader) ?;
+    int headerSize = reader.offset;
+    WireMachineModule document = ReadWire(ref reader, BridgeType<WireMachineModule>{0}) ?;
+    for (i in 0 .. headerSize) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, headerSize};
+    WriteWire(ref const document, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+
+void PinCallContractProof()
+{
+    Assert.Concept<NoAllocation>(ValidateMachineBridge, "call validation uses bounded artifact views");
+    Assert.Concept<NoAllocation>(ValidatedBridgeRoundTrip, "caller supplied artifact output");
+    Assert.Concept<PlainData>(WireMachineCall, "direct call is an immutable wire view");
+    Assert.Concept<PlainData>(WireMachineCallArgument, "call argument is a scalar value identity and class");
+}
