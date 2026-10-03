@@ -1,0 +1,37 @@
+module Standard.Backend.BridgeDerive;
+profile Core;
+import Standard.Backend.BridgeRead;
+
+generator <typename T> DeriveBridgeRead
+Result<T, BackendError> ReadWire(ref BridgeReader reader, BridgeType<T> type) {
+    T value = T {
+        foreach(FieldInfo field in Fields<T>()) {
+            field = ReadWire(ref reader, BridgeType<FieldType<field>>{0}) ?;
+        }
+    };
+    return Result::Ok(move value);
+}
+generator <typename T> DeriveBridgeEnumRead
+Result<T, BackendError> ReadWire(ref BridgeReader reader, BridgeType<T> type) {
+    int value = ReadI32(ref reader) ?;
+    foreach(EnumCaseInfo variant in Cases<T>()) {
+        if (BridgeTagEquals(value, TagOf<variant>())) {
+            return Result::Ok(ConstructCase<variant>());
+        }
+    }
+    return Result::Error(BackendError::BridgeInvalid);
+}
+generator <typename T> DeriveBridgeWrite
+Result<void, BackendError> WriteWire(ref const T value, ref const BridgeReader source, ref BridgeWriter writer) {
+    foreach(FieldInfo field in Fields<T>()) {
+        WriteWire(ref const value.field, ref const source, ref writer) ?;
+    }
+    return Result::Ok();
+}
+generator <typename T> DeriveBridgeEnumWrite
+Result<void, BackendError> WriteWire(ref const T value, ref const BridgeReader source, ref BridgeWriter writer) {
+    foreach(EnumCaseInfo variant in Cases<T>()) {
+        return BridgeWriteI32(ref writer, TagOf<variant>());
+    }
+    return Result::Error(BackendError::BridgeInvalid);
+}

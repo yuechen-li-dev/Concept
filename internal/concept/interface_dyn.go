@@ -210,7 +210,7 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	args := append([]Expr{self}, call.Args...)
 	if templateInfo != nil && evt1TypeDependsOnAnyParameter(receiverType, templateInfo.Decl.Parameters) {
 		synthetic := CallExpr{Callee: call.Callee, Args: args, Span: call.Span}
-		result, err := validateTemplateCallExpr(env, scope, synthetic, templateInfo)
+		result, err := validateTemplateCallExpr(env, scope, &synthetic, templateInfo)
 		if err == nil && result.Kind != TypeAsync {
 			// A required operation with an explicit receiver may use ordinary
 			// member spelling in an open generic. Normalize it to the existing

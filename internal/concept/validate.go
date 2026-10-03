@@ -4269,7 +4269,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return out, nil
 		}
 		if templateInfo != nil {
-			return validateTemplateCallExpr(env, scope, *e, templateInfo)
+			return validateTemplateCallExpr(env, scope, e, templateInfo)
 		}
 		if _, exists := env.comptimeFunctions[e.Callee]; exists && !inComptimeFn {
 			return Type{}, evt1Diagnostic("CV4210", fmt.Sprintf("comptime function %s cannot be called from runtime code", e.Callee), e.Span)
@@ -4336,6 +4336,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, err
 		}
 		e.MustUseResult = evt1HasNamedAttribute(fn.Attributes, "must_use")
+		e.resolvedSignature = evt1FunctionParamSignature(fn)
 		if spec, machine, machineErr := evt1MachineIntrinsic(fn); machine {
 			if machineErr != nil {
 				return Type{}, machineErr
@@ -7766,7 +7767,7 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 	return closeType(callee.ReturnType), nil
 }
 
-func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr, templateInfo *evt1TemplateInfo) (Type, error) {
+func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo) (Type, error) {
 	argTypes := make([]Type, 0, len(call.Args))
 	dependent := false
 	for _, arg := range call.Args {
@@ -7800,6 +7801,7 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call CallExpr,
 				return Type{}, err
 			}
 		}
+		call.resolvedSignature = evt1FunctionParamSignature(fn)
 		return evt1CanonicalType(env, fn.ReturnType), nil
 	}
 	var matches []evt1TemplateRequirement

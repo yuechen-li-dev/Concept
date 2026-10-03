@@ -448,6 +448,10 @@ func evt1ReplaceGeneratedMetadataExpr(expression *Expr, info TypeInfo, field, pl
 					*expression = &BoolLiteral{Value: len(enumCase.Payload) > 0, Span: e.Span}
 					return
 				}
+				if e.Callee == "TagOf" {
+					*expression = &IntLiteral{Magnitude: uint64(enumCase.Tag), Span: e.Span}
+					return
+				}
 				if e.Callee == "ConstructCase" {
 					constructed := &ConstructExpr{EnumName: info.Type.Name, VariantName: enumCase.Name, Span: e.Span}
 					for fieldIndex := range enumCase.Payload {

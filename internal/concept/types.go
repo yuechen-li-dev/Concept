@@ -1102,7 +1102,9 @@ func (*FieldExpr) evt1Expr()        {}
 func (e *FieldExpr) exprSpan() Span { return e.Span }
 
 type CallExpr struct {
-	Callee               string           `json:"callee"`
+	Callee string `json:"callee"`
+	// Re-derived by ordinary validation; never trusted from an artifact.
+	resolvedSignature    string           `json:"-"`
 	MustUseResult        bool             `json:"must_use_result,omitempty"`
 	InferredTemplateArgs []Type           `json:"inferred_template_args,omitempty"`
 	Receiver             Expr             `json:"receiver,omitempty"`

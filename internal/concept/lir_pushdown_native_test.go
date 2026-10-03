@@ -64,7 +64,7 @@ func runPushdownNativeTraceParity(t *testing.T, verify bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	backend, err := Parse(backendPath, string(backendSource))
+	backend, err := ParseWithBuiltSemanticModuleRoots(backendPath, string(backendSource), []string{"../../libraries"})
 	if err != nil {
 		t.Fatal(err)
 	}

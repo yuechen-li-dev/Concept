@@ -845,14 +845,23 @@ func summarizeModuleEffects(module Module, env *semanticEnv) []SemanticModuleEff
 		}
 		effect := "NoAllocation"
 		origin := string(FactOriginCompilerAnalysis)
-		for _, call := range evt1DirectCalls(*fn.Body) {
-			if evt1AtomicIntrinsicName(call) {
+		for _, call := range evt1DirectCallTargets(*fn.Body) {
+			if evt1AtomicIntrinsicName(call.Name) {
 				continue // validated C11 atomics use no allocation
 			}
-			if evt1InlineStorageInspectionName(call) && len(env.functions[call]) == 0 && env.templates[call].Name == "" {
+			if evt1InlineStorageInspectionName(call.Name) && len(env.functions[call.Name]) == 0 && env.templates[call.Name].Name == "" {
 				continue // metadata inspection or an existing storage view
 			}
-			candidates := env.functions[call]
+			candidates := env.functions[call.Name]
+			if call.Signature != "" {
+				var selected []FunctionDecl
+				for _, candidate := range candidates {
+					if evt1FunctionParamSignature(candidate) == call.Signature {
+						selected = append(selected, candidate)
+					}
+				}
+				candidates = selected
+			}
 			if len(candidates) == 0 {
 				effect = "Unknown"
 				continue

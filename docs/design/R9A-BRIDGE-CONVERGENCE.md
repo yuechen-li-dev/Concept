@@ -1,5 +1,7 @@
 # R9a bounded bridge convergence path
 
+Historical R9a evidence. The remaining MachineIR bridge item was closed by R9a2; see [R9a2 convergence](../conformance/R9A2-CONVERGENCE.md). The live bridge now derives both codecs from one checked schema.
+
 CMIRAMD1 remains the live wire format. The manual producer is
 `internal/concept/machineir_bridge.go`: scalar/tag/text primitives and
 `machineBridgeWriter.operand`, followed by EncodeMachineBridge's nested function,

@@ -1,0 +1,842 @@
+{
+  "module": "Standard.Backend.BridgeSchema",
+  "magic": "CMIRAMD2",
+  "version": 2,
+  "max_items": 1048576,
+  "representation": "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32]",
+  "records": [
+    {
+      "name": "WireHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register",
+      "cases": [
+        {
+          "name": "RAX",
+          "tag": 0
+        },
+        {
+          "name": "RBX",
+          "tag": 1
+        },
+        {
+          "name": "RCX",
+          "tag": 2
+        },
+        {
+          "name": "RDX",
+          "tag": 3
+        },
+        {
+          "name": "RSI",
+          "tag": 4
+        },
+        {
+          "name": "RDI",
+          "tag": 5
+        },
+        {
+          "name": "RBP",
+          "tag": 6
+        },
+        {
+          "name": "RSP",
+          "tag": 7
+        },
+        {
+          "name": "R8",
+          "tag": 8
+        },
+        {
+          "name": "R9",
+          "tag": 9
+        },
+        {
+          "name": "R10",
+          "tag": 10
+        },
+        {
+          "name": "R11",
+          "tag": 11
+        },
+        {
+          "name": "R12",
+          "tag": 12
+        },
+        {
+          "name": "R13",
+          "tag": 13
+        },
+        {
+          "name": "R14",
+          "tag": 14
+        },
+        {
+          "name": "R15",
+          "tag": 15
+        }
+      ]
+    },
+    {
+      "name": "OperandKind",
+      "cases": [
+        {
+          "name": "None",
+          "tag": 0,
+          "go_value": ""
+        },
+        {
+          "name": "Virtual",
+          "tag": 1,
+          "go_value": "vreg"
+        },
+        {
+          "name": "Physical",
+          "tag": 2,
+          "go_value": "preg"
+        },
+        {
+          "name": "Immediate",
+          "tag": 3,
+          "go_value": "imm"
+        },
+        {
+          "name": "Slot",
+          "tag": 4,
+          "go_value": "slot"
+        },
+        {
+          "name": "Memory",
+          "tag": 5,
+          "go_value": "mem"
+        },
+        {
+          "name": "Block",
+          "tag": 6,
+          "go_value": "block"
+        }
+      ]
+    },
+    {
+      "name": "Opcode",
+      "cases": [
+        {
+          "name": "None",
+          "tag": 0,
+          "go_value": ""
+        },
+        {
+          "name": "Mov",
+          "tag": 1,
+          "go_value": "MOV"
+        },
+        {
+          "name": "Load",
+          "tag": 2,
+          "go_value": "LOAD"
+        },
+        {
+          "name": "Store",
+          "tag": 3,
+          "go_value": "STORE"
+        },
+        {
+          "name": "Lea",
+          "tag": 4,
+          "go_value": "LEA"
+        },
+        {
+          "name": "Add",
+          "tag": 5,
+          "go_value": "ADD"
+        },
+        {
+          "name": "Sub",
+          "tag": 6,
+          "go_value": "SUB"
+        },
+        {
+          "name": "Imul",
+          "tag": 7,
+          "go_value": "IMUL"
+        },
+        {
+          "name": "Umul",
+          "tag": 8,
+          "go_value": "UMUL"
+        },
+        {
+          "name": "Cmp",
+          "tag": 9,
+          "go_value": "CMP"
+        },
+        {
+          "name": "Test",
+          "tag": 10,
+          "go_value": "TEST"
+        },
+        {
+          "name": "Setcc",
+          "tag": 11,
+          "go_value": "SETCC"
+        },
+        {
+          "name": "Trap",
+          "tag": 12,
+          "go_value": "TRAP"
+        },
+        {
+          "name": "Jmp",
+          "tag": 13,
+          "go_value": "JMP"
+        },
+        {
+          "name": "Jcc",
+          "tag": 14,
+          "go_value": "JCC"
+        },
+        {
+          "name": "Ret",
+          "tag": 15,
+          "go_value": "RET"
+        }
+      ]
+    },
+    {
+      "name": "Condition",
+      "cases": [
+        {
+          "name": "None",
+          "tag": 0,
+          "go_value": ""
+        },
+        {
+          "name": "Equal",
+          "tag": 1,
+          "go_value": "E"
+        },
+        {
+          "name": "NotEqual",
+          "tag": 2,
+          "go_value": "NE"
+        },
+        {
+          "name": "Less",
+          "tag": 3,
+          "go_value": "L"
+        },
+        {
+          "name": "LessEqual",
+          "tag": 4,
+          "go_value": "LE"
+        },
+        {
+          "name": "Greater",
+          "tag": 5,
+          "go_value": "G"
+        },
+        {
+          "name": "GreaterEqual",
+          "tag": 6,
+          "go_value": "GE"
+        },
+        {
+          "name": "Below",
+          "tag": 7,
+          "go_value": "B"
+        },
+        {
+          "name": "BelowEqual",
+          "tag": 8,
+          "go_value": "BE"
+        },
+        {
+          "name": "Above",
+          "tag": 9,
+          "go_value": "A"
+        },
+        {
+          "name": "AboveEqual",
+          "tag": 10,
+          "go_value": "AE"
+        },
+        {
+          "name": "Overflow",
+          "tag": 11,
+          "go_value": "O"
+        },
+        {
+          "name": "Carry",
+          "tag": 12,
+          "go_value": "C"
+        }
+      ]
+    },
+    {
+      "name": "WireSpan",
+      "fields": [
+        {
+          "name": "Line",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Column",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineFrame",
+      "fields": [
+        {
+          "name": "LocalSize",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Alignment",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "ShadowSpace",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "HasCalls",
+          "type": {
+            "name": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineOperand",
+      "fields": [
+        {
+          "name": "ID",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Width",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Base",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "BaseSlot",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Index",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scale",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Disp",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Kind",
+          "type": {
+            "name": "OperandKind"
+          }
+        },
+        {
+          "name": "Literal",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Region",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Signed",
+          "type": {
+            "name": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineArg",
+      "fields": [
+        {
+          "name": "Type",
+          "type": {
+            "name": "BridgeText"
+          },
+          "go_cast": "LIRType"
+        },
+        {
+          "name": "Index",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Width",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Indirect",
+          "type": {
+            "name": "bool"
+          }
+        },
+        {
+          "name": "Register",
+          "type": {
+            "name": "Register"
+          },
+          "go_cast": "MachineReg"
+        },
+        {
+          "name": "StackOffset",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "OnStack",
+          "type": {
+            "name": "bool"
+          }
+        },
+        {
+          "name": "VReg",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineVReg",
+      "fields": [
+        {
+          "name": "ID",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Width",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Address",
+          "type": {
+            "name": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineStackSlot",
+      "fields": [
+        {
+          "name": "ID",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Size",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Align",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "IncomingIndirect",
+          "type": {
+            "name": "bool"
+          }
+        },
+        {
+          "name": "BaseVReg",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "BridgeText"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineInstruction",
+      "fields": [
+        {
+          "name": "Op",
+          "type": {
+            "name": "Opcode"
+          }
+        },
+        {
+          "name": "Dst",
+          "type": {
+            "name": "WireMachineOperand"
+          }
+        },
+        {
+          "name": "Src",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineOperand"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Width",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "FlagsDef",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "FlagsUse",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "LIRBlock",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "LIRInstruction",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Cond",
+          "type": {
+            "name": "Condition"
+          }
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "WireSpan"
+          }
+        },
+        {
+          "name": "Decision",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Facts",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "BridgeText"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineTerminator",
+      "fields": [
+        {
+          "name": "Op",
+          "type": {
+            "name": "Opcode"
+          }
+        },
+        {
+          "name": "True",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "False",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "FlagsUse",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Cond",
+          "type": {
+            "name": "Condition"
+          }
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "WireSpan"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineBlock",
+      "fields": [
+        {
+          "name": "ID",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "LIRBlock",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Instructions",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineInstruction"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Term",
+          "type": {
+            "name": "WireMachineTerminator"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineFunction",
+      "fields": [
+        {
+          "name": "Identity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Name",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Target",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "ABI",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Result",
+          "type": {
+            "name": "BridgeText"
+          },
+          "go_cast": "LIRType"
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "WireSpan"
+          }
+        },
+        {
+          "name": "Facts",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "BridgeText"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Decisions",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "BridgeText"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Frame",
+          "type": {
+            "name": "WireMachineFrame"
+          }
+        },
+        {
+          "name": "Args",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineArg"
+              }
+            ]
+          }
+        },
+        {
+          "name": "VRegs",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineVReg"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Slots",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineStackSlot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Blocks",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineBlock"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireMachineModule",
+      "fields": [
+        {
+          "name": "Functions",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireMachineFunction"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
