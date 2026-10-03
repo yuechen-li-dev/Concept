@@ -42,11 +42,10 @@ func MachineOpcodeEffects(op string) (MachineEffects, bool) {
 	return MachineEffects{}, false
 }
 func machineConditionValid(c string) bool {
-	switch c {
-	case "E", "NE", "L", "LE", "G", "GE", "B", "BE", "A", "AE", "O", "C":
-		return true
-	}
-	return false
+	// The checked Concept BridgeSchema enum owns the accepted condition names.
+	// Its generated Go table is also used by the bootstrap wire codec.
+	tag, err := machineBridgeTag(bridgeTagsCondition, c)
+	return err == nil && tag != 0 // Condition::None is not a FLAGS consumer.
 }
 func machineWidthValid(w int) bool { return w == 1 || w == 2 || w == 4 || w == 8 }
 func VerifyMachineIR(m MachineModule) error {
