@@ -35,7 +35,7 @@ func TestEVT2e2CLIContractAndBoundary(t *testing.T) {
 		cmd := exec.Command("go", "run", ".", command, fixture)
 		output, err := cmd.CombinedOutput()
 		if command == "amd64" {
-			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_FRAME_LOWERING") {
+			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_ENCODING") {
 				t.Fatalf("imprecise later backend boundary: %v\n%s", err, output)
 			}
 		} else if err != nil || !strings.Contains(string(output), "call @") && !strings.Contains(string(output), "call i32 @") {
@@ -81,12 +81,17 @@ func TestEVT2e3CLIDebugPlans(t *testing.T) {
 				t.Fatal(err)
 			}
 			output, err := exec.Command("go", "run", ".", "amd64", path).CombinedOutput()
-			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_FRAME_LOWERING") {
+			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_ENCODING") {
 				t.Fatalf("boundary: %v\n%s", err, output)
 			}
 			for _, want := range tc.wants {
 				if !strings.Contains(string(output), want) {
 					t.Fatalf("missing %q:\n%s", want, output)
+				}
+			}
+			for _, want := range []string{"frame size=", "base=post-prologue-RSP", "region shadow [rsp+0 .. +32)", "prologue", "epilogue (each return)", "pre-call", "abstract-call @", "post-call"} {
+				if !strings.Contains(string(output), want) {
+					t.Fatalf("missing concrete frame/action output %q:\n%s", want, output)
 				}
 			}
 			t.Logf("%s", output)

@@ -25,11 +25,11 @@ outcome, not an unfulfilled deletion. Paths identify the audited owner.
 | MachineIR | Go `machineir*.go`; Concept backend model | Shared | Cathedral | Direct scalar call contract ready; physical calls pending | CMIRAMD3 transport | Schema/IR/native parity | Concept native path owns new backend decisions | Retain seed producer | EVT2e2; later ABI |
 | MachineIR bridge | Concept `BridgeSchema/Derive/Read/Validate`; generated Go/Concept codec | Shared | Shared bootstrap seam | CMIRAMD3 qualified | Stage-0 emits CMIRAMD3 | Exact bytes/hash/artifact-only roundtrip/23 invalid artifacts | Sole Concept schema; normal Concept call validation selected | Generated Go codec retained seed | R9a2; EVT2e2 |
 | Liveness | Concept `Backend/AMD64.concept` | Concept | Cathedral | Call argument uses and exact live-across classification qualified | MachineIR input | Native/corpus oracle; 100-run summaries | Concept clobber analysis selected normally | No Go backend counterpart to retire | EVT2e3 |
-| Register allocation | Concept `Backend/AMD64.concept` | Concept | Cathedral | Fixed call constraints, preservation and used-callee-saved summaries ready | CMIRAMD3 vregs | Assignment/native bytes and call plan fixtures | Concept call planning selected; saves/spills deferred | No Go backend counterpart | EVT2e3; realization EVT2e4 |
-| Frame layout | Go `machineir.go` ABI helpers; Concept `FinalizeFrame` | Shared | Cathedral | Call contract ready; call frame changes deferred | Incoming ABI and slots | Frame/ABI probes | Concept owns call and save frames | Retain seed ABI construction | After EVT2e2 |
-| ABI lowering | Go incoming `Win64Argument/Return`; Concept `Win64ABI` outgoing planner | Shared with distinct scopes | Cathedral | Outgoing scalar placement/clobber/move planning qualified | CMIRAMD3 calls and incoming descriptors | C11 plan oracle; native calls deferred | Concept owns outgoing policy; incoming seed remains | Retain seed input only | EVT2e3; frames/spills EVT2e4 |
-| Parallel argument moves | Concept `Win64ABI` | Concept | Cathedral | Cycles/fanout/stack stores qualified with symbolic temporaries | Allocated call sources | Independent value replay; 256 combinations; 100-run output | Concept plans normally | No Go counterpart | EVT2e3 |
-| Native encoder | Concept `Backend/AMD64.concept` | Concept | Cathedral | Existing operations ready; calls stop after planning at UnsupportedCallFrameLowering diagnostic | CMIRAMD3, C host compilation | Exact bytes and execution | Already Concept-owned | No Go encoder to retire | C1; call encoding pending EVT2e5 |
+| Register allocation | Concept `Backend/AMD64.concept` | Concept | Cathedral | Fixed call constraints, preservation and used-callee-saved summaries ready | CMIRAMD3 vregs | Assignment/native bytes and call plan fixtures | Concept call planning and concrete saves/spills selected | No Go backend counterpart | EVT2e3; realization EVT2e4 |
+| Frame layout | Concept `RealizeFrame/FinalizeFrame` | Concept | Cathedral | Unified local/spill/save/temp/outgoing geometry qualified | Incoming ABI and slots | Independent frame/action replay, 100-run plans | Concept owns final native offsets and frame actions | Retain incoming seed descriptors only | EVT2e4 |
+| ABI lowering | Go incoming `Win64Argument/Return`; Concept `Win64ABI` outgoing planner | Shared with distinct scopes | Cathedral | Outgoing scalar placement/clobber/move/frame actions qualified | CMIRAMD3 calls and incoming descriptors | C11 plan oracle; native calls deferred | Concept owns outgoing policy; incoming seed remains | Retain seed input only | EVT2e4 |
+| Parallel argument moves | Concept `Win64ABI` | Concept | Cathedral | Cycles/fanout/stack stores qualified with concrete frame temporaries | Allocated call sources | Independent value replay; 256 combinations; 100-run output | Concept plans normally | No Go counterpart | EVT2e3 |
+| Native encoder | Concept `Backend/AMD64.concept` | Concept | Cathedral | Existing operations ready; calls stop after verified frame/actions at AMD64_UNSUPPORTED_CALL_ENCODING | CMIRAMD3, C host compilation | Exact bytes and execution | Already Concept-owned | No Go encoder to retire | C1; call encoding pending EVT2e5 |
 | C backend | Go C generator | Go | Stage-0 permanent | Keep Stage-0 | External C toolchain | Strict C11/native parity | Native becomes normal after qualification | Retain portable seed/fallback | Long-term |
 | Diagnostics | Go diagnostics/proof graph; Concept `Describe` | Shared | Cathedral rules, shared bootstrap transport | Needs prerequisite | Source spans/proof IDs | Exact error/site/explain parity | Concept rule selects normal diagnostic | Retain seed renderer | Incremental |
 | Formatter | Go `format.go` | Go | Shared bootstrap seam | Needs prerequisite | Parsed source | Idempotence/golden parity | Cathedral formatter if useful | Retain seed CLI | Later tooling |
@@ -44,3 +44,11 @@ intrinsics and wrappers, not backend allocation/encoding. `BridgeDerive` and
 `BridgeRead` are Concept-owned checked bridge consumers; `BridgeSchema` is the
 single wire authority. The table deliberately distinguishes code presence
 from decision authority. See the authority ledger for live state and next step.
+
+EVT2e4: call contracts, outgoing ABI planning, final native stack geometry,
+spill/save/temp realization and prologue/epilogue/call actions are Concept
+owned. Go changes supply checked fixtures, bootstrap orchestration, independent
+test oracles and diagnostic presentation. CALL encoding, symbol fixups and
+native call execution remain pending EVT2e5. CMIRAMD3 is unchanged. Native
+stack slots have category provenance and post-prologue RSP offsets; they do not
+replace DragonGod/automata persistent MachineFrame state.

@@ -166,9 +166,9 @@ Neither decoding nor roundtrip needs the originating source. Runtime errors use
 Result; the wire-record PlainData assertions use Vocabulary's typed Verdict
 with size/alignment evidence. No PlainData assertion grants ABI equivalence.
 EVT2e3 derives transient physical ABI plans from these same semantic records.
-Selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_FRAME_LOWERING` after
-verified placement, moves and preservation analysis, before frame realization
-or encoding. The schema is unchanged. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md)
+EVT2e4 selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_ENCODING` after
+verified placement, frame storage and concrete preservation actions, before
+encoding. The schema is unchanged. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md)
 and [EVT2e3 planning](../conformance/EVT2E3-CONFORMANCE.md).
 
 ## Migration and evidence
@@ -197,3 +197,9 @@ more migration machinery; R9a2 therefore keeps the bounded binary bridge.
 No universal serialization framework, R9b work or EVT2 feature expansion is part
 of this change. Qualification, timing and freeze-readiness evidence are recorded
 in R9A2-CONFORMANCE and R9A2-CONVERGENCE.
+
+EVT2e4 derives native frame slots, offsets and explicit prologue/epilogue and
+call-site actions in Concept without wire changes. The normal backend qualifies
+concrete preservation before the encoding stop. The finalizer derives call
+presence from verified CALL instructions, rather than the legacy bootstrap
+Frame.HasCalls summary. See [frame conformance](../conformance/EVT2E4-CONFORMANCE.md).

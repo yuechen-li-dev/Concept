@@ -57,3 +57,29 @@ emission, final outgoing frame offsets, CALL bytes, fixups or native calls are
 implemented. Existing no-call bytes and EVT2x behavior remain qualified. See
 [EVT2e3 conformance](../../conformance/EVT2E3-CONFORMANCE.md) for evidence,
 timings, metadata bounds and the existing test-file lint limitation.
+
+## EVT2e4: success in frame and preservation realization
+
+Baseline `24ea223e2f372be9418c1c02de92e5df44c5128e`; compiler
+`concept-evt1-stage0-go`; CMIRAMD3 v3/hash unchanged. The Concept finalizer now
+owns one coherent native stack frame: outgoing shadow/extra arguments, locals,
+used-callee saves, per-vreg preservation spills, cycle temps and tail padding.
+RSP remains stable after one prologue subtraction. Every return binds to the
+same inverse restore/release/return actions; RAX survives that epilogue.
+
+Concrete call sites store preservation values before argument moves, realize
+stack/temp offsets, retain an abstract call target, capture RAX results and
+reload live values. Independent Concept identity/width replay and C11
+byte-stack/value replay qualify actions; the executable CallReplayProtocol
+automata checks legal pre/post ordering. DragonGod kernel scheduling/state
+was assessed; no extra kernel dependency or conflation with MachineFrame was
+needed. Typed Verdict remains semantic evidence through PlainData assertions;
+runtime frame failures retain precise Result errors.
+
+Eight real frame-bearing fixtures, 256 source combinations and explicit cycle
+plans repeat deterministically in Normal/Verify. Qualified fixture frames span
+40..136 bytes. The normal CLI prints concrete frames and actions, then stops at
+`AMD64_UNSUPPORTED_CALL_ENCODING`. CALL bytes, fixups, native call execution
+and unwind/SEH remain deferred. See
+[EVT2e4 conformance](../../conformance/EVT2E4-CONFORMANCE.md) for full evidence,
+metadata, measurements and boundary details.

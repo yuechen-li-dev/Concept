@@ -20,8 +20,8 @@ EVT2e3 derives outgoing scalar ABI plans separately in Concept `Win64ABI` from
 the unchanged CMIRAMD3 call records. It does not add physical call fields to
 MachineIR or change its inspection printer. Plans retain fixed argument and
 result constraints, symbolic stack slots/home space, FLAGS/register clobbers,
-parallel moves and live-across preservation requirements. Final call frames,
-spills, saves/restores and CALL encoding remain deferred. The existing incoming
+parallel moves and live-across preservation requirements. EVT2e4 derives concrete call frames,
+spills, saves/restores, temporary storage and actions; CALL encoding remains deferred. The existing incoming
 ABI descriptors below remain the Stage-0 compatibility seam; no new outgoing
 algorithm is added there. See [planning conformance](../conformance/EVT2E3-CONFORMANCE.md).
 

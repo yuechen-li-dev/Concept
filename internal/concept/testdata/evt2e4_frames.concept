@@ -1,0 +1,43 @@
+profile Core;
+int Zero() {
+    return 42;
+}
+int Id(int x) {
+    return x;
+}
+int Five(int a, int b, int c, int d, int e) {
+    return e;
+}
+int Eight(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return h;
+}
+void Touch(int x) { }
+int Calls0() {
+    return Zero();
+}
+int Calls5(int a, int b, int c, int d, int e) {
+    return Five(a, b, c, d, e);
+}
+int Calls8(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return Eight(a, b, c, d, e, f, g, h);
+}
+int Across(int a, int b, int c) {
+    int local = a + b;
+    return local + Id(c);
+}
+int Multi(int a, int b, int c, int d, int e, int f, int g, int h) {
+    int first = Zero();
+    int second = Five(a, b, c, d, e);
+    int third = Eight(a, b, c, d, e, f, g, h);
+    return first + second + third;
+}
+int Early(int a) {
+    if (a > 0) { return Id(a); }
+    return Zero();
+}
+int Pressure(int a, int b, int c, int d) {
+    return Id(a) + a + b + c + d;
+}
+void VoidCall(int a) {
+    Touch(a);
+}

@@ -108,6 +108,12 @@ const amd64BootstrapHost = `#include "amd64.generated.h"
 #include <stdlib.h>
 // Presentation only: every placement, move and preservation decision comes
 // from the compiled Cathedral planner.
+static void print_frame_action(concept_frame_action a) {
+  fprintf(stderr,"    %s %s -> %s slot=%d [rsp%+d] width=%d value=%d\n",
+    concept_standard__backend__amd64_frame_action_name(a.kind),
+    concept_standard__backend__amd64_abiregister_name(a.source),
+    concept_standard__backend__amd64_abiregister_name(a.destination),a.slot,a.offset,a.width,a.value);
+}
 static int print_call_plans(concept_readonly_span_byte source, int ordinal) {
   concept_backend_function function = concept_standard__backend__amd64_empty_function();
   if (concept_standard__backend__amd64_decode_function(source, ordinal, &function).tag) return 1;
@@ -117,6 +123,19 @@ static int print_call_plans(concept_readonly_span_byte source, int ordinal) {
   if (concept_standard__backend__amd64_plan_function_calls(&function, &allocation).tag) return 1;
   concept_liveness live = concept_standard__backend__amd64_empty_liveness();
   if (concept_standard__backend__amd64_compute_liveness(&function, &live).tag) return 1;
+  concept_finalized_frame frame = concept_standard__backend__amd64_empty_finalized_frame();
+  concept_result_void_frame_error qualified = concept_standard__backend__amd64_qualify_function_frame(&function,&allocation,&frame);
+  if(qualified.tag) {
+    fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_frame_error(qualified.payload.error.error));
+    return 1;
+  }
+  fprintf(stderr,"frame size=%d unaligned=%d padding=%d base=post-prologue-RSP returns=%d\n",frame.byteCount,frame.unalignedSize,frame.padding,frame.returnCount);
+  for(int r=0;r<7;++r) fprintf(stderr,"  region %s [rsp+%d .. +%d)\n",concept_standard__backend__amd64_frame_region_name(frame.regions.data[r].category),frame.regions.data[r].offset,frame.regions.data[r].offset+frame.regions.data[r].size);
+  for(int i=0;i<frame.slotCount;++i) { concept_frame_slot s=frame.slots.data[i]; fprintf(stderr,"  %s(%d) -> [rsp+%d] size=%d align=%d\n",concept_standard__backend__amd64_frame_region_name(s.category),s.identity,s.offset,s.size,s.alignment); }
+  fprintf(stderr,"  prologue\n");
+  for(int i=0;i<frame.prologueCount;++i) print_frame_action(frame.prologue.data[i]);
+  fprintf(stderr,"  epilogue (each return)\n");
+  for(int i=0;i<frame.epilogueCount;++i) print_frame_action(frame.epilogue.data[i]);
   for (int position=0; position<function.instructionCount; ++position) {
     concept_machine_instruction instruction = function.instructions.data[position];
     if (!instruction.call.target.length) continue;
@@ -139,6 +158,14 @@ static int print_call_plans(concept_readonly_span_byte source, int ordinal) {
     fprintf(stderr,"  clobbers=");
     for(int i=0;i<7;++i) fprintf(stderr,"%s%s",i?",":"",concept_standard__backend__amd64_abiregister_name(tables.callerSaved.data[i]));
     fprintf(stderr,"\n");
+    concept_call_site_actions site = concept_standard__backend__amd64_empty_call_site_actions();
+    concept_result_void_frame_error realized = concept_standard__backend__amd64_realize_allocated_call(&function,&allocation,&live,position,&frame,&site);
+    if(realized.tag) { fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_frame_error(realized.payload.error.error)); return 1; }
+    fprintf(stderr,"  pre-call\n");
+    for(int i=0;i<site.callIndex;++i) print_frame_action(site.actions.data[i]);
+    fprintf(stderr,"  abstract-call @%.*s\n",plan.target.length,(const char*)source.data+plan.target.offset);
+    fprintf(stderr,"  post-call\n");
+    for(int i=site.callIndex+1;i<site.count;++i) print_frame_action(site.actions.data[i]);
     for(int i=0;i<plan.moveCount;++i) {
       concept_argument_move m=plan.moves.data[i];
       fprintf(stderr,"  move ");
