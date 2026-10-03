@@ -1,0 +1,123 @@
+module Calls;
+profile Core;
+int Forward() {
+    return Zero();
+}
+int Zero() {
+    return 7;
+}
+int Id(int x) {
+    return x;
+}
+int Four(int a, int b, int c, int d) {
+    return a + b + c + d;
+}
+int Five(int a, int b, int c, int d, int e) {
+    return a + b + c + d + e;
+}
+int Eight(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return a + b + c + d + e + f + g + h;
+}
+void Touch(int a) { }
+bool PassBool(bool a) {
+    return a;
+}
+uint8 Pass8(uint8 a) {
+    return a;
+}
+uint16 Pass16(uint16 a) {
+    return a;
+}
+uint64 Pass64(uint64 a) {
+    return a;
+}
+int Back() {
+    return Zero();
+}
+int One(int a) {
+    return Id(a);
+}
+int Call4(int a, int b, int c, int d) {
+    return Four(a, b, c, d);
+}
+int Call5(int a, int b, int c, int d, int e) {
+    return Five(a, b, c, d, e);
+}
+int Call8(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return Eight(a, b, c, d, e, f, g, h);
+}
+void CallVoid(int a) {
+    Touch(a);
+}
+bool CallBool(bool a) {
+    return PassBool(a);
+}
+uint8 CallNarrow8(uint8 a) {
+    return Pass8(a);
+}
+uint16 CallNarrow16(uint16 a) {
+    return Pass16(a);
+}
+uint64 CallWide(uint64 a) {
+    return Pass64(a);
+}
+int Across(int a, int b, int c) {
+    int local = a + b;
+    return local + Id(c);
+}
+int Pressure(int a, int b, int c, int d) {
+    return Id(a) + a + b + c + d;
+}
+int Middle(int a, int b, int c) {
+    return Id(a) + a + b + c;
+}
+int Chain(int a, int b, int c) {
+    int local = a + b;
+    return local + Middle(a, b, c);
+}
+int Multi(int a, int b, int c, int d, int e, int f, int g, int h) {
+    int first = Zero();
+    int second = Five(a, b, c, d, e);
+    int third = Eight(a, b, c, d, e, f, g, h);
+    return first + second + third;
+}
+int Repeat(int a, int b) {
+    return Four(a, a, b, a);
+}
+int Early(int a) {
+    int value = Id(a);
+    if (value>0) { return value + Zero(); }
+    return value;
+}
+int Fact(int a) {
+    if (a <= 1) { return 1; }
+    return a * Fact(a - 1);
+}
+int FullSaved() {
+    return Eight(1, 2, 4, 8, 16, 32, 64, 128);
+}
+int Ordered(int a, int b, int c, int d) {
+    return a - b + c - d;
+}
+int Cycle2() {
+    return Ordered(11, 22, 33, 44);
+}
+int Cycle3() {
+    return Ordered(11, 22, 33, 44);
+}
+uint8 Keep8(uint8 a) {
+    Touch(0);
+    return a;
+}
+uint16 Keep16(uint16 a) {
+    Touch(0);
+    return a;
+}
+uint64 Keep64(uint64 a) {
+    Touch(0);
+    return a;
+}
+bool KeepBool(bool a) {
+    Touch(0);
+    return a;
+}

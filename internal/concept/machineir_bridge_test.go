@@ -163,7 +163,7 @@ func TestEVT2dConceptBackendNativeAddMax(t *testing.T) {
 #include <string.h>
 extern int32_t concept_core_add(int32_t a, int32_t b);
 extern int32_t concept_core_max(int32_t a, int32_t b);
-typedef struct { int32_t data[4]; } concept_array_4_int;
+/* concept_array_4_int is supplied by amd64.generated.h. */
 extern int32_t concept_core_checked_index(concept_array_4_int values, int32_t index);
 extern int32_t concept_core_store_index(concept_array_4_int values, int32_t index, int32_t value);
 extern int32_t concept_core_early(int32_t value);

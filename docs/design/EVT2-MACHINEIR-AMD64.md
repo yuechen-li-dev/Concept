@@ -16,6 +16,17 @@ Flags are explicit numbered dependencies. Arithmetic and `CMP`/`TEST` define fla
 
 ## Windows x64 ABI and frame
 
+EVT2e3 derives outgoing scalar ABI plans separately in Concept `Win64ABI` from
+the unchanged CMIRAMD3 call records. It does not add physical call fields to
+MachineIR or change its inspection printer. Plans retain fixed argument and
+result constraints, symbolic stack slots/home space, FLAGS/register clobbers,
+parallel moves and live-across preservation requirements. EVT2e4 derives concrete call frames,
+spills, saves/restores, temporary storage and actions; EVT2e5 emits direct internal
+CALL rel32 with deterministic module layout and checked fixups, then qualifies
+native Win64 execution. The existing incoming
+ABI descriptors below remain the Stage-0 compatibility seam; no new outgoing
+algorithm is added there. See [planning conformance](../conformance/EVT2E3-CONFORMANCE.md).
+
 Integer and pointer argument positions 0..3 use RCX, RDX, R8, R9; the fifth starts at entry RSP+40. Parameters are copied into virtual registers on entry. An aggregate larger than 8 bytes, including `int[4]`, is passed indirectly through a caller-owned temporary; its pointer becomes the array slot base. Integer return values move to the RAX family immediately before `RET`. The physical register model has canonical parent identities RAX through R15 with 8/16/32/64-bit aliases. A 32-bit write zeroes the upper half of its 64-bit parent; the encoder and allocator must preserve that rule. Caller-saved GPRs are RAX, RCX, RDX, R8-R11. Callee-saved GPRs are RBX, RBP, RSI, RDI, R12-R15; RSP is separately fixed stack state. These lists, the 32-byte caller shadow space, and 16-byte stack alignment at calls follow the [Microsoft x64 calling convention](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention) and [register conventions](https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions).
 
 Scalar mutable locals are abstract stack slots with size, alignment, and source name. Final RSP offsets remain unresolved. `Frame.LocalSize` records packed local storage and `Frame.Alignment` is 16; `ShadowSpace` stays zero for these call-free functions. Frame lowering will reserve the 32-byte outgoing shadow area only when calls exist. Entry RSP is 8 modulo 16 after the return address push, so a future nonleaf prologue must adjust RSP to 0 modulo 16 before a call. No prologue, epilogue, save/restore, unwind metadata, call, or final frame offset is emitted in EVT2c. Simple leaf functions may need no frame; local slots will need one when encoded.

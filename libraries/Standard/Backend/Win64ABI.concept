@@ -1,0 +1,473 @@
+module Standard.Backend.Win64ABI;
+profile Core;
+import Standard.Backend.BridgeValidate;
+import Standard.Semantic.Vocabulary;
+
+using IntegerRegisterTable = Register<array>[4];
+record struct ABIRegisterTables {
+    IntegerRegisterTable integerArguments;
+    Register[7] callerSaved;
+    Register[8] calleeSaved;
+}
+ABIRegisterTables Win64Registers() {
+    return ABIRegisterTables {
+        [Register::RCX, Register::RDX, Register::R8, Register::R9],
+        [Register::RAX, Register::RCX, Register::RDX, Register::R8, Register::R9, Register::R10, Register::R11],
+        [Register::RBX, Register::RBP, Register::RSI, Register::RDI, Register::R12, Register::R13, Register::R14,
+        Register::R15]
+    };
+}
+comptime int ShadowSpaceBytes = 32;
+comptime int StackArgumentBytes = 8;
+enum ABIError {
+    InvalidPlan, CapacityExceeded, UnsupportedClass, UnsupportedForm, UnsupportedConvention, InvalidAllocation,
+    StaleFlags
+}
+enum ABIForm {
+    Direct, Indirect, VarArgs, Tail
+}
+enum ABIClass {
+    Integer, Bool, Address, Float, Aggregate
+}
+enum MoveLocation {
+    Physical, Outgoing, Temporary
+}
+enum PreservationClass {
+    MustPreserve, SafeInCalleeSaved, OutsideClobbers
+}
+record struct ABIValue {
+    int value;
+    CallValueType type;
+    ABIClass category;
+    int width;
+}
+struct CallRequest {
+    ABIForm form;
+    CallConvention convention;
+    BridgeText target;
+    ABIValue[8] arguments;
+    int argumentCount;
+    ABIValue result;
+    bool hasResult;
+    int instruction;
+}
+record struct ArgumentPlacement {
+    int index;
+    ABIValue source;
+    Register physical;
+    bool onStack;
+    int stackSlot;
+}
+record struct ArgumentMove {
+    MoveLocation sourceKind;
+    Register source;
+    int sourceSlot;
+    MoveLocation destinationKind;
+    Register destination;
+    int destinationSlot;
+    int width;
+}
+struct CallPlan {
+    CallConvention convention;
+    BridgeText target;
+    int instruction;
+    ArgumentPlacement[8] arguments;
+    int argumentCount;
+    ABIValue result;
+    bool hasResult;
+    Register resultPhysical;
+    int shadowSpaceBytes;
+    int stackArgumentCount;
+    int stackArgumentBytes;
+    bool flagsClobbered;
+    ArgumentMove[12] moves;
+    int moveCount;
+    int temporaryCount;
+}
+record struct Preservation {
+    int value;
+    int width;
+    bool address;
+    Register physical;
+    int instruction;
+    int start;
+    int end;
+    PreservationClass classification;
+}
+ABIValue EmptyABIValue() {
+    return ABIValue{- 1, CallValueType::Void, ABIClass::Integer, 0};
+}
+ArgumentMove EmptyArgumentMove() {
+    return ArgumentMove {
+        MoveLocation::Physical, Register::RAX, - 1, MoveLocation::Physical, Register::RAX, - 1, 0
+    };
+}
+CallRequest EmptyCallRequest() {
+    return CallRequest {
+        ABIForm::Direct, CallConvention::Win64, BridgeText{0, 0},[EmptyABIValue() ...], 0, EmptyABIValue(),
+        false, - 1
+    };
+}
+CallPlan EmptyCallPlan() {
+    return CallPlan {
+        CallConvention::Win64, BridgeText{0, 0}, - 1,
+        [ArgumentPlacement{0, EmptyABIValue(), Register::RAX, false, - 1}
+        ...], 0,
+        EmptyABIValue(), false, Register::RAX, 32, 0, 0, true,
+        [EmptyArgumentMove() ...], 0, 0
+    };
+}
+bool IsCallerSaved(Register physical) {
+    for (i in 0 .. Len(Win64Registers().callerSaved)) {
+        if (Win64Registers().callerSaved[i] == physical) { return true; }
+    }
+    return false;
+}
+bool IsCalleeSaved(Register physical) {
+    for (i in 0 .. Len(Win64Registers().calleeSaved)) {
+        if (Win64Registers().calleeSaved[i] == physical) { return true; }
+    }
+    return false;
+}
+bool IsValueRegister(Register physical) {
+    return IsCallerSaved(physical) or IsCalleeSaved(physical);
+}
+int RegisterIndex(Register physical) {
+    for (i in 0 .. Len(Win64Registers().callerSaved)) {
+        if (Win64Registers().callerSaved[i] == physical) { return i; }
+    }
+    for (i in 0 .. Len(Win64Registers().calleeSaved)) {
+        if (Win64Registers().calleeSaved[i] == physical) {
+            return i + Len(Win64Registers().callerSaved);
+        }
+    }
+    return - 1;
+}
+Result<void, ABIError> ValidateABIValue(ABIValue value) {
+    if (value.category == ABIClass::Float or value.category == ABIClass::Aggregate) {
+        return Result::Error(ABIError::UnsupportedClass);
+    }
+    if (value.value < 0 or value.type == CallValueType::Void or value.width != CallValueWidth(value.type)) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    bool valid = match (value.category) {
+        ABIClass::Integer => value.type != CallValueType::Bool,
+        ABIClass::Bool => value.type == CallValueType::Bool,
+        ABIClass::Address => value.width == 8 and value.type == CallValueType::U64,
+        ABIClass::Float => false,
+        ABIClass::Aggregate => false,
+    };
+    if (not valid) { return Result::Error(ABIError::InvalidPlan); }
+    return Result::Ok();
+}
+Result<void, ABIError> PlanWin64Call(ref const CallRequest request, ref CallPlan plan) {
+    if (request.form != ABIForm::Direct) { return Result::Error(ABIError::UnsupportedForm); }
+    if (request.convention != CallConvention::Win64) {
+        return Result::Error(ABIError::UnsupportedConvention);
+    }
+    if (request.argumentCount < 0 or request.argumentCount > 8) {
+        return Result::Error(ABIError::CapacityExceeded);
+    }
+    plan = EmptyCallPlan();
+    plan.convention = request.convention;
+    plan.target = request.target;
+    plan.instruction = request.instruction;
+    plan.argumentCount = request.argumentCount;
+    for (i in 0 .. request.argumentCount) {
+        ValidateABIValue(request.arguments[i]) ?;
+        Register physical = Register::RAX;
+        bool stack = i >= Len(Win64Registers().integerArguments);
+        int slot = - 1;
+        if (stack) {
+            slot = i - Len(Win64Registers().integerArguments);
+            plan.stackArgumentCount += 1;
+        }
+        else {
+            physical = Win64Registers().integerArguments[i];
+        }
+        plan.arguments[i] = ArgumentPlacement {
+            i, request.arguments[i], physical, stack, slot
+        };
+    }
+    plan.stackArgumentBytes = plan.stackArgumentCount * StackArgumentBytes;
+    plan.shadowSpaceBytes = ShadowSpaceBytes;
+    plan.hasResult = request.hasResult;
+    if (request.hasResult) {
+        ValidateABIValue(request.result) ?;
+        plan.result = request.result;
+    }
+    else {
+        if (request.result.value != - 1 or request.result.width != 0 or request.result.type != CallValueType::Void) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> ValidateCallPlan(ref const CallPlan plan) {
+    if (plan.convention != CallConvention::Win64 or plan.argumentCount < 0 or plan.argumentCount > 8 or
+    plan.shadowSpaceBytes != ShadowSpaceBytes or not plan.flagsClobbered or plan.resultPhysical != Register::RAX) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    int stackCount = 0;
+    for (i in 0 .. plan.argumentCount) {
+        ArgumentPlacement argument = plan.arguments[i];
+        ValidateABIValue(argument.source) ?;
+        if (argument.index != i) { return Result::Error(ABIError::InvalidPlan); }
+        if (i < 4) {
+            if (argument.onStack or argument.physical != Win64Registers().integerArguments[i] or argument.stackSlot != - 1) {
+                return Result::Error(ABIError::InvalidPlan);
+            }
+        } else {
+            if (not argument.onStack or argument.stackSlot != i - 4 or argument.physical != Register::RAX) {
+                return Result::Error(ABIError::InvalidPlan);
+            }
+            stackCount += 1;
+        }
+    }
+    if (plan.stackArgumentCount != stackCount or plan.stackArgumentBytes != stackCount * StackArgumentBytes) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    if (plan.hasResult) {
+        ValidateABIValue(plan.result) ?;
+    }
+    else {
+        if (plan.result.value != - 1 or plan.result.width != 0 or plan.result.type != CallValueType::Void) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> AppendArgumentMove(ref CallPlan plan, ArgumentMove operation) {
+    if (plan.moveCount >= Len(plan.moves)) {
+        return Result::Error(ABIError::CapacityExceeded);
+    }
+    plan.moves[plan.moveCount] = operation;
+    plan.moveCount += 1;
+    return Result::Ok();
+}
+// Stack stores capture sources first. Register cycles save one full canonical
+// GPR into a symbolic temporary; no unproved scratch register is selected.
+Result<void, ABIError> PlanArgumentMoves(ref CallPlan plan, ref const Register[8] sources) {
+    ValidateCallPlan(ref const plan) ?;
+    if (Len(sources) < plan.argumentCount) {
+        return Result::Error(ABIError::InvalidAllocation);
+    }
+    plan.moveCount = 0;
+    plan.temporaryCount = 0;
+    bool[4] pending =[false ...];
+    Register[4] from =[Register::RAX ...];
+    int[4] temporary =[- 1 ...];
+    int remaining = 0;
+    for (i in 0 .. plan.argumentCount) {
+        if (not IsValueRegister(sources[i])) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        for (j in 0 .. i) {
+            if (sources[i] == sources[j] and plan.arguments[i].source.value != plan.arguments[j].source.value) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+        }
+        if (i >= 4) {
+            AppendArgumentMove(ref plan, ArgumentMove {
+                MoveLocation::Physical, sources[i], - 1, MoveLocation::Outgoing, Register::RAX, i - 4,
+                plan.arguments[i].source.width
+            }) ?;
+        } else {
+            if (sources[i] != plan.arguments[i].physical) {
+                pending[i] = true;
+                from[i] = sources[i];
+                remaining += 1;
+            }
+        }
+    }
+    for (step in 0 .. 8) {
+        if (remaining == 0) { return Result::Ok(); }
+        bool progressed = false;
+        for (i in 0 .. 4) {
+            if (pending[i] and not progressed) {
+                bool needed = false;
+                for (j in 0 .. 4) {
+                    if (pending[j] and temporary[j] == - 1 and from[j] == plan.arguments[i].physical) {
+                        needed = true;
+                    }
+                }
+                if (not needed) {
+                    MoveLocation kind = MoveLocation::Physical;
+                    if (temporary[i] >= 0) {
+                        kind = MoveLocation::Temporary;
+                    }
+                    AppendArgumentMove(ref plan, ArgumentMove {
+                        kind, from[i], temporary[i], MoveLocation::Physical, plan.arguments[i].physical,
+                        - 1, plan.arguments[i].source.width
+                    }) ?;
+                    pending[i] = false;
+                    remaining -= 1;
+                    progressed = true;
+                }
+            }
+        }
+        if (not progressed) {
+            bool saved = false;
+            for (i in 0 .. 4) {
+                if (pending[i] and not saved) {
+                    int slot = plan.temporaryCount;
+                    plan.temporaryCount += 1;
+                    Register physical = plan.arguments[i].physical;
+                    AppendArgumentMove(ref plan, ArgumentMove {
+                        MoveLocation::Physical, physical, - 1, MoveLocation::Temporary, Register::RAX,
+                        slot, 8
+                    }) ?;
+                    for (j in 0 .. 4) {
+                        if (pending[j] and temporary[j] == - 1 and from[j] == physical) {
+                            temporary[j] = slot;
+                        }
+                    }
+                    saved = true;
+                }
+            }
+        }
+    }
+    return Result::Error(ABIError::InvalidPlan);
+}
+// Independently replay symbolic source identities; missing moves, destructive
+// cycles and conflicting destinations cannot be accepted by a shape check.
+Result<void, ABIError> ValidateArgumentMoves(ref const CallPlan plan, ref const Register[8] sources) {
+    ValidateCallPlan(ref const plan) ?;
+    if (Len(sources) < plan.argumentCount or plan.moveCount < 0 or plan.moveCount > 12 or plan.temporaryCount < 0 or plan.temporaryCount > 4) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    int[16] registers =[0 ...];
+    int[16] registerWidths =[8 ...];
+    int[4] stacks =[- 1 ...];
+    int[4] temporaries =[- 1 ...];
+    int[4] widths =[0 ...];
+    bool[4] written =[false ...];
+    bool[4] registerWritten =[false ...];
+    for (i in 0 .. 16) {
+        registers[i] = i;
+    }
+    for (i in 0 .. plan.moveCount) {
+        ArgumentMove operation = plan.moves[i];
+        if (operation.width != 1 and operation.width != 2 and operation.width != 4 and operation.width != 8) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+        int token = - 1;
+        match (operation.sourceKind) {
+            MoveLocation::Physical => {
+                if (not IsValueRegister(operation.source) or operation.sourceSlot != - 1) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                token = registers[RegisterIndex(operation.source)];
+                if (registerWidths[RegisterIndex(operation.source)] < operation.width) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+            }
+            MoveLocation::Temporary => {
+                if (operation.sourceSlot < 0 or operation.sourceSlot >= plan.temporaryCount) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                token = temporaries[operation.sourceSlot];
+            }
+            MoveLocation::Outgoing => { return Result::Error(ABIError::InvalidPlan); }
+        }
+        if (token < 0) { return Result::Error(ABIError::InvalidPlan); }
+        match (operation.destinationKind) {
+            MoveLocation::Physical => {
+                bool found = false;
+                for (a in 0 .. plan.argumentCount) {
+                    if (a < 4 and plan.arguments[a].physical == operation.destination and plan.arguments[a].source.width == operation.width) {
+                        if (registerWritten[a]) {
+                            return Result::Error(ABIError::InvalidPlan);
+                        }
+                        registerWritten[a] = true;
+                        found = true;
+                    }
+                }
+                if (not found or operation.destinationSlot != - 1 or not IsValueRegister(operation.destination)) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                registers[RegisterIndex(operation.destination)] = token;
+                registerWidths[RegisterIndex(operation.destination)] = operation.width;
+            }
+            MoveLocation::Outgoing => {
+                int slot = operation.destinationSlot;
+                if (slot < 0 or slot >= plan.stackArgumentCount) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                if (written[slot]) { return Result::Error(ABIError::InvalidPlan); }
+                stacks[slot] = token;
+                widths[slot] = operation.width;
+                written[slot] = true;
+            }
+            MoveLocation::Temporary => {
+                int slot = operation.destinationSlot;
+                if (slot < 0 or slot >= plan.temporaryCount or operation.width != 8) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                if (temporaries[slot] >= 0) { return Result::Error(ABIError::InvalidPlan); }
+                temporaries[slot] = token;
+            }
+        }
+    }
+    for (i in 0 .. plan.argumentCount) {
+        if (not IsValueRegister(sources[i])) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        for (j in 0 .. i) {
+            if (sources[i] == sources[j] and plan.arguments[i].source.value != plan.arguments[j].source.value) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+        }
+        if (i < 4) {
+            if (registers[RegisterIndex(plan.arguments[i].physical)] != RegisterIndex(sources[i])) {
+                return Result::Error(ABIError::InvalidPlan);
+            }
+        } else {
+            if (stacks[i - 4] != RegisterIndex(sources[i]) or widths[i - 4] != plan.arguments[i].source.width) {
+                return Result::Error(ABIError::InvalidPlan);
+            }
+        }
+    }
+    for (i in 0 .. plan.temporaryCount) {
+        if (temporaries[i] < 0) { return Result::Error(ABIError::InvalidPlan); }
+    }
+    return Result::Ok();
+}
+
+Result<void, ABIError> ValidatePreservation(Preservation value) {
+    if (value.value < 0 or value.start >= value.instruction or value.end <= value.instruction or
+    (value.width != 1 and value.width != 2 and value.width != 4 and value.width != 8) or
+    (value.address and value.width != 8)) { return Result::Error(ABIError::InvalidPlan); }
+    bool valid = match (value.classification) {
+        PreservationClass::MustPreserve => IsCallerSaved(value.physical),
+        PreservationClass::SafeInCalleeSaved => IsCalleeSaved(value.physical),
+        PreservationClass::OutsideClobbers => false,
+    };
+    if (not valid) { return Result::Error(ABIError::InvalidPlan); }
+    return Result::Ok();
+}
+void ABIProofs() {
+
+    Assert.Concept<StaticExtent<4>>(IntegerRegisterTable, "four integer argument positions");
+    Assert.Concept<PlainData>(ABIRegisterTables, "canonical GPR policy tables");
+    Assert.Concept<PlainData>(ArgumentPlacement, "bounded scalar ABI placement");
+    Assert.Concept<PlainData>(ArgumentMove, "symbolic parallel operation metadata");
+    Assert.Concept<PlainData>(Preservation, "frame handoff requirement");
+    Assert.Concept<NoAllocation>(PlanWin64Call, "caller-owned plan");
+    Assert.Concept<NoAllocation>(PlanArgumentMoves, "bounded symbolic temporaries");
+}
+string ABIRegisterName(Register physical) {
+    return match (physical) {
+        Register::RAX => "RAX", Register::RBX => "RBX", Register::RCX => "RCX", Register::RDX => "RDX",
+        Register::RSI => "RSI", Register::RDI => "RDI", Register::RBP => "RBP", Register::RSP => "RSP",
+        Register::R8 => "R8", Register::R9 => "R9", Register::R10 => "R10", Register::R11 => "R11",
+        Register::R12 => "R12", Register::R13 => "R13", Register::R14 => "R14", Register::R15 => "R15",
+    };
+}
+string PreservationName(PreservationClass classification) {
+    return match (classification) {
+        PreservationClass::MustPreserve => "MustPreserve",
+        PreservationClass::SafeInCalleeSaved => "SafeInCalleeSaved",
+        PreservationClass::OutsideClobbers => "OutsideClobbers",
+    };
+}

@@ -21,13 +21,16 @@ second contract author.
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
 | Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call contract qualified; later Concept transformation parity |
-| MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 contract qualified; move outgoing ABI decisions into Concept next |
+| MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
-| Call artifact admission | Concept `BridgeValidate` on normal AMD64 path | Stage-0 verifier checks producer input | Go semantic transport/verifier; generated codec | SHARED_BY_DESIGN | Typed direct-call contract only; physical ABI, allocation and encoding remain deferred |
+| Call artifact admission | Concept `BridgeValidate` on normal AMD64 path | Stage-0 verifier checks producer input | Go semantic transport/verifier; generated codec | SHARED_BY_DESIGN | Typed transport through native scalar Win64 execution qualified |
 | Condition-name legality in Go MachineIR verifier | Concept `BridgeSchema.Condition` | Frozen former Go table in `TestR9cConditionAuthorityShadowAgreement` | Generated Go tag table | CONCEPT_AUTHORITATIVE | Keep table generated; expand only via schema/versioned contract |
-| AMD64 block layout, liveness, intervals, allocation | Concept `Standard.Backend.AMD64` | Native/C behavior oracle | No independent Go allocator | CONCEPT_AUTHORITATIVE | Add call clobbers and save/spill policy in Concept |
-| AMD64 no-call frame and encoder | Concept `Standard.Backend.AMD64` | Frozen bytes/native execution | Stage-0 C transport compiles library | CONCEPT_AUTHORITATIVE | Add EVT2e frame/call encoding from checked contract |
+| AMD64 block layout, liveness, intervals, allocation | Concept `Standard.Backend.AMD64` | Native/C behavior oracle | No independent Go allocator | CONCEPT_AUTHORITATIVE | Call clobbers, save/spill storage and actions qualified in Concept |
+| AMD64 native frame and module encoder | Concept `Standard.Backend.AMD64` | Frozen no-call bytes and strict C11/native call oracle | Stage-0 C transport compiles library | CONCEPT_AUTHORITATIVE | Direct internal Win64 calls, frame actions and native ABI probes qualified in EVT2e5 |
+| Internal symbol layout and CALL fixups | Concept `EmitModule/ResolveNativeCalls/ValidateNativeImage` | 100 emissions, exact bytes, range/patch rejection and Normal/Verify parity | Go/C host transports artifacts and publishes finalized bytes only | CONCEPT_AUTHORITATIVE | Declaration-order semantic identities; no Go resolver to retire |
 | Incoming Win64 argument/return selection | Stage-0 `machineir.go` | Concept backend reads descriptors | Go MachineIR builder | GO_AUTHORITATIVE | Contract-first separation; retain seed projection if needed |
+| Outgoing Win64 scalar argument/return placement and register sets | Concept `Win64ABI` checked tables and planner | Native C11 fixture oracle | Go carries unchanged CMIRAMD3 input and displays Concept plans | CONCEPT_AUTHORITATIVE | Planning and concrete frame/save/spill realization qualified |
+| Call-clobber analysis and parallel moves | Concept `AMD64` liveness and `Win64ABI` move planner | Independent move-value replay, 100-run plans and Normal/Verify agreement | Stage-0 orchestration only | CONCEPT_AUTHORITATIVE | Concrete preservation/temp storage qualified in EVT2e4 |
 | C emission | Stage-0 | Native oracle for qualified slice | Go C emitter | BOOTSTRAP_ONLY target; currently normal path | Preserve external bootstrap and portable fallback |
 | Formatter | Stage-0 | None | Go formatter | GO_AUTHORITATIVE | Migrate only if a useful Concept tool emerges |
 | Lint/project policy | Concept predicates choose bounded policy; Go applies manifest | Proof/explain parity | Go policy runner | SHARED_BY_DESIGN | Expand rules over stable observations |
@@ -49,3 +52,38 @@ checks producer consistency. No outgoing Win64 algorithm was added to Go.
 `TestEVT2e2CLIContractAndBoundary` qualifies normal selection and the precise
 `AMD64_UNSUPPORTED_CALL_LOWERING` boundary. PlainData assertions consume the
 Vocabulary's typed Verdict evidence; runtime decoding returns Result.
+
+EVT2e3 derives transient physical call plans from CMIRAMD3 without changing the
+wire schema. The Concept allocator derives fixed call constraints, extends call
+argument liveness, and admits additional callee-saved candidates only for call
+functions. Per-call preservation and used-callee-saved summaries are explicit;
+the no-call pool is unchanged. `TestEVT2e3Win64PlansMovesAndLiveness` qualifies
+tables, cycles, aliasing, stack slots and liveness in compiled Concept code.
+`TestEVT2e3CLIDebugPlans` qualifies normal CLI planning and the later
+`AMD64_UNSUPPORTED_CALL_FRAME_LOWERING` stop. No new Go ABI decision exists.
+
+EVT2e4 extends the existing Concept finalizer into one native stack geometry.
+Spill allocation, used-callee save storage, full-GPR temporary storage, maximum
+outgoing home/argument area, offsets and inverse prologue/epilogue actions are
+CONCEPT_AUTHORITATIVE. No production Go counterpart was introduced. The normal
+emit path qualifies concrete actions with independent identity/width replay
+before the `AMD64_UNSUPPORTED_CALL_ENCODING` stop. An executable input-driven
+automata protocol checks pre/post-call action ordering. DragonGod kernel frames
+remain persistent source-language execution state, distinct from native stack
+storage; Standard retains its current dependency direction.
+`TestEVT2e4FrameRealization` adds strict C11 value/byte-stack replay, all 256
+source combinations, real call-bearing fixtures and 100-run frame/action output.
+See [EVT2e4 conformance](../conformance/EVT2E4-CONFORMANCE.md).
+
+EVT2e5 selects Concept module emission on the normal `concept amd64` path.
+Concept owns E8 rel32, successor-relative range admission, declaration-order
+symbols, forward/backward patch resolution and final image verification. Its
+frame/action encoder realizes prologues, epilogues, spills, saves, temporaries,
+outgoing stores and RAX handoff. No duplicate Go algorithm was introduced:
+Go changes are BOOTSTRAP_ONLY orchestration and test/diagnostic presentation.
+`TestEVT2e5CLIContractAndEmission` qualifies selection;
+`TestEVT2e5NativeInternalCalls` qualifies strict C11 parity, native ABI sentinels,
+cycles, alignment and 100-run bytes. CMIRAMD3 is unchanged. EVT2e is complete
+for direct internal integer/bool Win64 calls through eight arguments; pointer
+source calls and the deferred ABI/linkage/unwind features remain unqualified.
+See [EVT2e5 conformance](../conformance/EVT2E5-CONFORMANCE.md).

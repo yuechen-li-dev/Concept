@@ -89,7 +89,12 @@ own Concept-side reading/derivation. `Standard.Machine.AMD64` contains typed
 hardware wrappers and is not the compiler backend. The R9c condition helper
 uses this seam without changing its bytes, hash, or wire version.
 
-CMIRAMD2 is stable for the present no-call corpus, not sufficient as-is for
+The following is the historical R9c handoff. EVT2e5 now qualifies CMIRAMD3
+direct internal scalar Win64 calls through Concept module emission; see the
+[current authority ledger](CATHEDRAL-AUTHORITY-LEDGER.md) and
+[EVT2e5 conformance](../conformance/EVT2E5-CONFORMANCE.md).
+
+At R9c, CMIRAMD2 was stable for the no-call corpus, not sufficient as-is for
 EVT2e. `BridgeSchema.Opcode` has no CALL; `WireMachineFrame` has only local
 size, alignment, shadow space and HasCalls; the function has incoming arguments
 but no per-call outgoing argument/return locations, call clobbers, callee-save

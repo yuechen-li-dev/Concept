@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64;
 profile Core;
 import Standard.Backend.BridgeValidate;
+import Standard.Backend.Win64ABI;
 import Standard.Semantic.Vocabulary;
 record struct MachineOperand
 {
@@ -15,6 +16,19 @@ record struct MachineOperand
     BridgeText literal;
     BridgeText region;
     bool signedValue;
+}
+struct ProjectedCall
+{
+    BridgeText target;
+    int argumentCount;
+    int[8] values;
+    CallValueType[8] types;
+    CallValueType result;
+}
+ProjectedCall EmptyProjectedCall() {
+    return ProjectedCall {
+        BridgeText{0, 0}, 0,[- 1 ...],[CallValueType::Void ...], CallValueType::Void
+    };
 }
 record struct MachineInstruction
 {
@@ -31,6 +45,7 @@ record struct MachineInstruction
     int lirInstruction;
     int sourceLine;
     int sourceColumn;
+    ProjectedCall call;
 }
 record struct MachineBlock
 {
@@ -102,7 +117,7 @@ MachineInstruction EmptyInstruction()
 {
     return MachineInstruction {
         Opcode::None, EmptyOperand(), EmptyOperand(),
-        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0
+        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0, EmptyProjectedCall()
     };
 }
 BackendFunction EmptyFunction()
@@ -172,7 +187,7 @@ MachineOperand ProjectWireOperand(WireMachineOperand value) {
 }
 // This is a semantic projection. Wire order belongs exclusively to ReadWire.
 Result<void, BackendError> ProjectWireFunction(
-ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function, bool forEncoding) {
+ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function) {
     if (not TextEquals(ref const source, wire.Target, "amd64-windows") or
     not TextEquals(ref const source, wire.ABI, "win64")) {
         return Result::Error(BackendError::BridgeInvalid);
@@ -238,8 +253,26 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
             WireMachineInstruction value = ReadWire(ref instructions, BridgeType<WireMachineInstruction>{
                 0
             }) ?;
-            if (value.Op == Opcode::Call and forEncoding) {
-                return Result::Error(BackendError::UnsupportedCallLowering);
+            ProjectedCall call = EmptyProjectedCall();
+            if (value.Op == Opcode::Call) {
+                BridgeReader calls = BridgeReader{source.data, value.Calls.offset};
+                WireMachineCall wireCall = ReadWire(ref calls, BridgeType<WireMachineCall>{0}) ?;
+                if (wireCall.Arguments.count > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                call.target = wireCall.Target;
+                call.argumentCount = wireCall.Arguments.count;
+                call.result = wireCall.Result;
+                BridgeReader arguments = BridgeReader {
+                    source.data, wireCall.Arguments.offset
+                };
+                for (ai in 0 .. call.argumentCount) {
+                    WireMachineCallArgument argument = ReadWire(ref arguments, BridgeType<WireMachineCallArgument>{
+                        0
+                    }) ?;
+                    call.values[ai] = argument.Value;
+                    call.types[ai] = argument.Type;
+                }
             }
             if (value.Src.count > 2) { return Result::Error(BackendError::BridgeInvalid); }
             MachineOperand destination = ProjectWireOperand(value.Dst);
@@ -266,7 +299,7 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
             function.instructions[function.instructionCount] = MachineInstruction {
                 value.Op, destination, source0, source1, value.Src.count,
                 value.Width, value.FlagsDef, value.FlagsUse, value.Cond,
-                value.LIRBlock, value.LIRInstruction, value.Source.Line, value.Source.Column
+                value.LIRBlock, value.LIRInstruction, value.Source.Line, value.Source.Column, call
             };
             function.instructionCount += 1;
         }
@@ -292,7 +325,7 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
     for (i in 0 .. document.Functions.count) {
         WireMachineFunction wire = ReadWire(ref reader, BridgeType<WireMachineFunction>{0}) ?;
         function = EmptyFunction();
-        ProjectWireFunction(ref const reader, wire, ref function, i == ordinal) ?;
+        ProjectWireFunction(ref const reader, wire, ref function) ?;
         if (i == ordinal) {
             selected = function;
         }
@@ -303,7 +336,7 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
 string DescribeBackendError(BackendError error)
 {
     if (error == BackendError::UnsupportedCallLowering) {
-        return "AMD64_UNSUPPORTED_CALL_LOWERING: call ABI lowering is not implemented";
+        return "AMD64_CALL_REQUIRES_MODULE_IMAGE: direct calls require complete internal symbol layout";
     }
     return "AMD64_BACKEND_ERROR";
 }
@@ -313,6 +346,12 @@ struct Allocation
     int[512] end;
     Register[512] physical;
     bool[512] assigned;
+    bool[15] usedCalleeSaved;
+    int callCount;
+    int shadowSpaceBytes;
+    int stackArgumentBytes;
+    int temporaryCount;
+    int preservationCount;
 }
 // A bounds/overflow check splits one LIR block into several MachineIR blocks.
 // Keep those continuations adjacent before computing linear intervals. Appended
@@ -381,7 +420,9 @@ Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
 }
 Allocation EmptyAllocation()
 {
-    return Allocation{[2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...]};
+    return Allocation {
+        [2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...],[false ...], 0, 0, 0, 0, 0
+    };
 }
 void TouchInterval(ref Allocation allocation, int id, int position)
 {
@@ -467,6 +508,18 @@ ref const BackendFunction function, ref Liveness liveness)
         for (ii in 0 .. block.instructionCount)
         {
             MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.op == Opcode::Call) {
+                if (instruction.call.argumentCount < 0 or instruction.call.argumentCount > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    int id = instruction.call.values[ai];
+                    if (id < 0 or id >= function.virtualRegCount) {
+                        return Result::Error(BackendError::BridgeInvalid);
+                    }
+                    MarkUse(ref liveness, bi, instruction.call.values[ai]);
+                }
+            }
             if (instruction.sourceCount > 0)
             {
                 MarkOperandUse(ref liveness, bi, instruction.source0);
@@ -561,6 +614,11 @@ ref const BackendFunction function, ref Allocation allocation)
             int position = block.firstInstruction + ii;
             MachineInstruction instruction = function.instructions[position];
             TouchOperand(ref allocation, instruction.destination, position);
+            if (instruction.op == Opcode::Call) {
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    TouchInterval(ref allocation, instruction.call.values[ai], position);
+                }
+            }
             if (instruction.sourceCount > 0)
             {
                 TouchOperand(ref allocation, instruction.source0, position);
@@ -587,7 +645,30 @@ Register PoolRegister(int ordinal)
 Result<void, BackendError> AllocateRegisters(
 ref const BackendFunction function, ref Allocation allocation)
 {
+    return AllocateRegistersWithPolicy(ref const function, ref allocation, false);
+}
+Result<void, BackendError> AllocateRegistersWithPolicy(
+ref const BackendFunction function, ref Allocation allocation, bool allowCalleeSaved)
+{
     ComputeIntervals(ref const function, ref allocation) ?;
+    // Fixed call uses/defs are derived before assignments. General assignments
+    // remain the qualified pool; call-point moves and preservation are explicit.
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            CallRequest request = RequestForCall(function.instructions[position], position);
+            Result<void, ABIError> checked = PlanWin64Call(ref const request, ref plan);
+            match (checked) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            allocation.callCount += 1;
+            allocation.shadowSpaceBytes = plan.shadowSpaceBytes;
+            if (plan.stackArgumentBytes > allocation.stackArgumentBytes) {
+                allocation.stackArgumentBytes = plan.stackArgumentBytes;
+            }
+        }
+    }
     for (position in 0 .. function.instructionCount)
     {
         for (id in 0 .. function.virtualRegCount)
@@ -596,9 +677,19 @@ ref const BackendFunction function, ref Allocation allocation)
             {
                 bool found = false;
                 Register choice = Register::R10;
-                for (candidate in 0 .. 5)
+                int candidateCount = 5;
+                if (allocation.callCount > 0 or allowCalleeSaved) {
+                    candidateCount += Len(Win64Registers().calleeSaved);
+                }
+                for (candidate in 0 .. candidateCount)
                 {
-                    Register physical = PoolRegister(candidate);
+                    Register physical = Register::RAX;
+                    if (candidate < 5) {
+                        physical = PoolRegister(candidate);
+                    }
+                    else {
+                        physical = Win64Registers().calleeSaved[candidate - 5];
+                    }
                     bool busy = false;
                     for (other in 0 .. function.virtualRegCount)
                     {
@@ -618,6 +709,216 @@ ref const BackendFunction function, ref Allocation allocation)
                 if (not found) { return Result::Error(BackendError::RegisterExhausted); }
                 allocation.physical[id] = choice;
                 allocation.assigned[id] = true;
+                if (IsCalleeSaved(choice)) {
+                    allocation.usedCalleeSaved[RegisterIndex(choice)] = true;
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+CallRequest RequestForCall(MachineInstruction instruction, int position) {
+    CallRequest request = EmptyCallRequest();
+    request.target = instruction.call.target;
+    request.instruction = position;
+    request.argumentCount = instruction.call.argumentCount;
+    for (i in 0 .. request.argumentCount) {
+        CallValueType type = instruction.call.types[i];
+        ABIClass category = ABIClass::Integer;
+        if (type == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        request.arguments[i] = ABIValue {
+            instruction.call.values[i], type, category, CallValueWidth(type)
+        };
+    }
+    request.hasResult = instruction.call.result != CallValueType::Void;
+    if (request.hasResult) {
+        ABIClass category = ABIClass::Integer;
+        if (instruction.call.result == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        request.result = ABIValue {
+            instruction.destination.id, instruction.call.result, category, instruction.width
+        };
+    }
+    return request;
+}
+void SetLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] |(1 <<(id % 31));
+}
+void ClearLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] &((1 <<(id % 31)) ^ 2147483647);
+}
+void AddLiveOperand(ref LivenessBits bits, MachineOperand operand) {
+    if (operand.kind == OperandKind::Virtual) {
+        SetLive(ref bits, operand.id);
+    }
+    if (operand.kind == OperandKind::Memory) {
+        if (operand.base >= 0) {
+            SetLive(ref bits, operand.base);
+        }
+        if (operand.index >= 0) {
+            SetLive(ref bits, operand.index);
+        }
+    }
+}
+Result<LivenessBits, ABIError> LiveAcrossCall(
+ref const BackendFunction function, ref const Liveness liveness, int position) {
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    if (function.instructions[position].op != Opcode::Call) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        if (position >= block.firstInstruction and position < block.firstInstruction + block.instructionCount) {
+            LivenessBits live = liveness.liveOut[bi];
+            for (back in 0 .. block.instructionCount) {
+                int at = block.firstInstruction + block.instructionCount - 1 - back;
+                MachineInstruction instruction = function.instructions[at];
+                // The call result is born after the call: never preserve it.
+                if (at == position) {
+                    if (instruction.destination.kind == OperandKind::Virtual) {
+                        ClearLive(ref live, instruction.destination.id);
+                    }
+                    return Result::Ok(live);
+                }
+                if (instruction.destination.kind == OperandKind::Virtual) {
+                    ClearLive(ref live, instruction.destination.id);
+                }
+                if (instruction.sourceCount > 0) {
+                    AddLiveOperand(ref live, instruction.source0);
+                }
+                if (instruction.sourceCount > 1) {
+                    AddLiveOperand(ref live, instruction.source1);
+                }
+                if (instruction.op == Opcode::Call) {
+                    for (ai in 0 .. instruction.call.argumentCount) {
+                        SetLive(ref live, instruction.call.values[ai]);
+                    }
+                }
+                if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or instruction.op == Opcode::Imul or instruction.op == Opcode::Umul or instruction.op == Opcode::Store) {
+                    AddLiveOperand(ref live, instruction.destination);
+                }
+            }
+        }
+    }
+    return Result::Error(ABIError::InvalidPlan);
+}
+Result<void, ABIError> ValidateCallFlags(ref const BackendFunction function) {
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        int flags = - 1;
+        for (ii in 0 .. block.instructionCount) {
+            MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.flagsUse >= 0 and instruction.flagsUse != flags) {
+                return Result::Error(ABIError::StaleFlags);
+            }
+            if (instruction.op == Opcode::Call) {
+                flags = - 1;
+            }
+            else {
+                if (instruction.flagsDef >= 0) {
+                    flags = instruction.flagsDef;
+                }
+            }
+        }
+        if (block.flagsUse >= 0 and block.flagsUse != flags) {
+            return Result::Error(ABIError::StaleFlags);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> PlanAllocatedCall(
+ref const BackendFunction function, ref const Allocation allocation, ref const Liveness liveness,
+int position, ref CallPlan plan, Span<Preservation> preservation, ref int count) {
+    ValidateCallFlags(ref const function) ?;
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    MachineInstruction instruction = function.instructions[position];
+    if (instruction.op != Opcode::Call) { return Result::Error(ABIError::InvalidPlan); }
+    CallRequest request = RequestForCall(instruction, position);
+    PlanWin64Call(ref const request, ref plan) ?;
+    Register[8] sources =[Register::RAX ...];
+    for (i in 0 .. plan.argumentCount) {
+        int id = plan.arguments[i].source.value;
+        if (id < 0 or id >= function.virtualRegCount) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        if (not allocation.assigned[id]) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        sources[i] = allocation.physical[id];
+    }
+    PlanArgumentMoves(ref plan, ref const sources) ?;
+    ValidateArgumentMoves(ref const plan, ref const sources) ?;
+    LivenessBits across = LiveAcrossCall(ref const function, ref const liveness, position) ?;
+    count = 0;
+    for (id in 0 .. function.virtualRegCount) {
+        if ((across.words[id / 31] &(1 <<(id % 31))) != 0) {
+            if (not allocation.assigned[id] or not IsValueRegister(allocation.physical[id])) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+            if (count >= Len(preservation)) {
+                return Result::Error(ABIError::CapacityExceeded);
+            }
+            PreservationClass classification = PreservationClass::OutsideClobbers;
+            if (IsCallerSaved(allocation.physical[id])) {
+                classification = PreservationClass::MustPreserve;
+            }
+            else {
+                if (IsCalleeSaved(allocation.physical[id])) {
+                    classification = PreservationClass::SafeInCalleeSaved;
+                }
+            }
+            preservation[count] = Preservation {
+                id, function.virtualRegs[id].width, function.virtualRegs[id].address,
+                allocation.physical[id], position, allocation.start[id], allocation.end[id], classification
+            };
+            ValidatePreservation(preservation[count]) ?;
+            count += 1;
+        }
+    }
+    return Result::Ok();
+}
+// Only one bounded per-call plan and one caller-owned preservation buffer are
+// resident. Summary maxima feed later shared outgoing/frame storage.
+Result<void, BackendError> PlanFunctionCalls(ref const BackendFunction function, ref Allocation allocation) {
+    Liveness liveness = EmptyLiveness();
+    ComputeLiveness(ref const function, ref liveness) ?;
+    Preservation[512] storage =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers
+    }
+    ...];
+    allocation.temporaryCount = 0;
+    allocation.preservationCount = 0;
+    for (i in 0 .. Len(allocation.usedCalleeSaved)) {
+        allocation.usedCalleeSaved[i] = false;
+    }
+    for (id in 0 .. function.virtualRegCount) {
+        if (allocation.assigned[id] and IsCalleeSaved(allocation.physical[id])) {
+            allocation.usedCalleeSaved[RegisterIndex(allocation.physical[id])] = true;
+        }
+    }
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            int count = 0;
+            match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+            ref plan, Span(storage), ref count)) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (plan.temporaryCount > allocation.temporaryCount) {
+                allocation.temporaryCount = plan.temporaryCount;
+            }
+            for (i in 0 .. count) {
+                if (storage[i].classification == PreservationClass::MustPreserve) {
+                    allocation.preservationCount += 1;
+                }
             }
         }
     }
@@ -643,41 +944,1130 @@ struct EncodingWorkspace
     Span<int> blockOffsets;
     Span<BranchFixup> fixups;
     int fixupCount;
+    Span<CallFixup> calls;
+    int callCount;
+    int functionOrdinal;
+    bool allowCalls;
+}
+enum CallFixupKind {
+    Rel32Call
+}
+record struct CallFixup {
+    CallFixupKind kind;
+    int sourceOrdinal;
+    BridgeText source;
+    BridgeText target;
+    int callOffset;
+    int patchOffset;
+    int displacement;
+    bool resolved;
+}
+record struct NativeSymbol {
+    BridgeText identity;
+    BridgeText name;
+    int ordinal;
+    int offset;
+    int size;
+    int calls;
+}
+enum NativeError {
+    CapacityExceeded, InvalidInput, DuplicateSymbol, UnresolvedSymbol, Rel32OutOfRange, MalformedPatch,
+    UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired
+}
+struct NativeImage {
+    NativeSymbol[128] symbols;
+    int symbolCount;
+    CallFixup[512] fixups;
+    int fixupCount;
+    int byteCount;
+    bool finalized;
+}
+CallFixup EmptyCallFixup() {
+    return CallFixup {
+        CallFixupKind::Rel32Call, - 1, BridgeText{0, 0}, BridgeText{0, 0}, - 1, - 1, 0, false
+    };
+}
+NativeImage EmptyNativeImage() {
+    return NativeImage {
+        [NativeSymbol {
+            BridgeText{0, 0}, BridgeText{0, 0}, - 1, 0, 0, 0
+        }
+        ...], 0,[EmptyCallFixup() ...], 0, 0, false
+    };
+}
+string DescribeNativeError(NativeError error) {
+    return match (error) {
+        NativeError::CapacityExceeded => "AMD64_NATIVE_CAPACITY_EXCEEDED",
+        NativeError::InvalidInput => "AMD64_NATIVE_INVALID_INPUT",
+        NativeError::DuplicateSymbol => "AMD64_DUPLICATE_SYMBOL",
+        NativeError::UnresolvedSymbol => "AMD64_UNRESOLVED_SYMBOL",
+        NativeError::Rel32OutOfRange => "AMD64_REL32_OUT_OF_RANGE",
+        NativeError::MalformedPatch => "AMD64_MALFORMED_CALL_PATCH",
+        NativeError::UnresolvedFixup => "AMD64_UNRESOLVED_CALL_FIXUP",
+        NativeError::UnsupportedEncoding => "AMD64_UNSUPPORTED_ENCODING_OR_MEMORY_OPERAND",
+        NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
+        NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
+    };
+}
+Result<int, NativeError> CallDisplacement(uint64 target, uint64 call) {
+    uint64 limit = 18446744073709551610;
+    if (call > limit) { return Result::Error(NativeError::Rel32OutOfRange); }
+    uint64 after = call + 5;
+    if (target >= after) {
+        uint64 magnitude = target - after;
+        if (magnitude > 2147483647) { return Result::Error(NativeError::Rel32OutOfRange); }
+        return Result::Ok(magnitude as int);
+    }
+    uint64 magnitude = after - target;
+    if (magnitude > 2147483648) { return Result::Error(NativeError::Rel32OutOfRange); }
+    if (magnitude == 2147483648) { return Result::Ok(- 2147483648); }
+    return Result::Ok(-(magnitude as int));
+}
+Result<void, BackendError> WriteCallPlaceholder(ref ByteWriter writer, ref EncodingWorkspace workspace,
+BridgeText source, BridgeText target) {
+    if (not workspace.allowCalls) {
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
+    if (workspace.callCount >= Len(workspace.calls)) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    int site = writer.offset;
+    WriteByte(ref writer, 232) ?;
+    WriteI32LE(ref writer, 0) ?;
+    workspace.calls[workspace.callCount] = CallFixup {
+        CallFixupKind::Rel32Call, workspace.functionOrdinal, source, target, site, site + 1, 0, false
+    };
+    workspace.callCount += 1;
+    return Result::Ok();
+}
+// Fixed RSP addressing, independent of logical local slot IDs. This realizes
+// only admitted frame actions and incoming stack descriptors.
+Result<void, BackendError> WriteRSPReg(ref ByteWriter writer, bool load, Register physical, int offset,
+int width) {
+    if (offset < 0 or not ScalarStorageWidth(width)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    int code = RegisterEncoding(physical);
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, code, 4) ?;
+    }
+    int opcode = 137;
+    if (load) {
+        opcode = 139;
+    }
+    if (width == 1) {
+        opcode -= 1;
+    }
+    WriteByte(ref writer, opcode) ?;
+    if (offset <= 127) {
+        WriteByte(ref writer, 64 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteByte(ref writer, offset) ?;
+    }
+    else {
+        WriteByte(ref writer, 128 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteI32LE(ref writer, offset) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> EmitFrameAction(ref ByteWriter writer, FrameAction action) {
+    return match (action.kind) {
+        FrameActionKind::Allocate => WriteStackAdjustment(ref writer, true, action.offset),
+        FrameActionKind::Release => WriteStackAdjustment(ref writer, false, action.offset),
+        FrameActionKind::Save => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Restore => WriteRSPReg(ref writer, true, action.destination, action.offset,
+        action.width),
+        FrameActionKind::Store => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Load => WriteRSPReg(ref writer, true, action.destination, action.offset, action.width),
+        FrameActionKind::Copy => EmitFrameCopy(ref writer, action),
+        FrameActionKind::AbstractCall => Result::Error(BackendError::UnsupportedCallLowering),
+        FrameActionKind::Return => WriteByte(ref writer, 195),
+    };
+}
+Result<void, BackendError> EmitFrameCopy(ref ByteWriter writer, FrameAction action) {
+    int opcode = 137;
+    if (action.width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, action.destination, action.source, action.width);
+}
+// Native stack storage is distinct from persistent automata MachineFrame state.
+enum FrameError {
+    CapacityExceeded, InvalidAlignment, UnsupportedWidth, Overlap, InvalidOffset, UnresolvedSpill, UnresolvedTemporary,
+    InvalidSaveRestore, InvalidActions, InvalidInput
+}
+enum FrameRegionKind {
+    OutgoingShadow, OutgoingArguments, LocalSlots, SavedRegisters, SpillSlots, MoveTemps, AlignmentPadding
+}
+enum FrameActionKind {
+    Allocate, Save, Restore, Store, Load, Copy, AbstractCall, Release, Return
+}
+enum CallReplayInput {
+    Store, Load, Copy, Call
+}
+// The executable protocol rejects stores after the abstract clobber and a
+// second call. Register/slot semantics remain the replay checker's authority.
+automata CallReplayProtocol with input CallReplayInput {
+    machine Main {
+        state PreCall {
+            on CallReplayInput::Store => PreCall;
+            on CallReplayInput::Load => PreCall;
+            on CallReplayInput::Copy => PreCall;
+            on CallReplayInput::Call => PostCall;
+        }
+        state PostCall {
+            on CallReplayInput::Load => PostCall;
+            on CallReplayInput::Copy => PostCall;
+        }
+    }
+}
+record struct FrameSlot {
+    FrameRegionKind category;
+    int identity;
+    int offset;
+    int size;
+    int alignment;
+}
+record struct FrameRegion {
+    FrameRegionKind category;
+    int offset;
+    int size;
+}
+record struct FrameAction {
+    FrameActionKind kind;
+    Register source;
+    Register destination;
+    int slot;
+    int offset;
+    int width;
+    int value;
+}
+struct CallSiteActions {
+    CallPlan abi;
+    FrameAction[32] actions;
+    int count;
+    int callIndex;
+}
+FrameAction EmptyFrameAction() {
+    return FrameAction {
+        FrameActionKind::Copy, Register::RAX, Register::RAX, - 1, - 1, 0, - 1
+    };
+}
+CallSiteActions EmptyCallSiteActions() {
+    return CallSiteActions{EmptyCallPlan(),[EmptyFrameAction() ...], 0, - 1};
 }
 struct FinalizedFrame
 {
     int byteCount;
     int[64] slotOffsets;
+    int unalignedSize;
+    int padding;
+    FrameSlot[512] slots;
+    int slotCount;
+    FrameRegion[7] regions;
+    int[512] spillSlots;
+    int[15] saveSlots;
+    int[4] tempSlots;
+    int[4] outgoingSlots;
+    FrameAction[10] prologue;
+    int prologueCount;
+    FrameAction[10] epilogue;
+    int epilogueCount;
+    int returnCount;
+    int[128] returnBlocks;
+}
+FinalizedFrame EmptyFinalizedFrame() {
+    return FinalizedFrame {
+        0,[- 1 ...], 0, 0,[FrameSlot{FrameRegionKind::LocalSlots, - 1, 0, 0, 1}
+        ...], 0,
+        [FrameRegion{FrameRegionKind::OutgoingShadow, 0, 0}
+        ...],[- 1 ...],[- 1 ...],[- 1 ...],[- 1 ...],
+        [EmptyFrameAction() ...], 0,[EmptyFrameAction() ...], 0, 0,[- 1 ...]
+    };
+}
+string DescribeFrameError(FrameError error) {
+    return match (error) {
+        FrameError::CapacityExceeded => "AMD64_FRAME_CAPACITY_EXCEEDED",
+        FrameError::InvalidAlignment => "AMD64_FRAME_INVALID_ALIGNMENT",
+        FrameError::UnsupportedWidth => "AMD64_FRAME_UNSUPPORTED_WIDTH",
+        FrameError::Overlap => "AMD64_FRAME_OVERLAP",
+        FrameError::InvalidOffset => "AMD64_FRAME_INVALID_OFFSET",
+        FrameError::UnresolvedSpill => "AMD64_FRAME_UNRESOLVED_SPILL",
+        FrameError::UnresolvedTemporary => "AMD64_FRAME_UNRESOLVED_TEMPORARY",
+        FrameError::InvalidSaveRestore => "AMD64_FRAME_INVALID_SAVE_RESTORE",
+        FrameError::InvalidActions => "AMD64_FRAME_INVALID_ACTIONS",
+        FrameError::InvalidInput => "AMD64_FRAME_INVALID_INPUT",
+    };
+}
+string FrameRegionName(FrameRegionKind category) {
+    return match (category) {
+        FrameRegionKind::OutgoingShadow => "shadow",
+        FrameRegionKind::OutgoingArguments => "outgoing",
+        FrameRegionKind::LocalSlots => "local",
+        FrameRegionKind::SavedRegisters => "save",
+        FrameRegionKind::SpillSlots => "spill",
+        FrameRegionKind::MoveTemps => "temp",
+        FrameRegionKind::AlignmentPadding => "padding",
+    };
+}
+string FrameActionName(FrameActionKind kind) {
+    return match (kind) {
+        FrameActionKind::Allocate => "allocate",
+        FrameActionKind::Save => "save",
+        FrameActionKind::Restore => "restore",
+        FrameActionKind::Store => "store",
+        FrameActionKind::Load => "load",
+        FrameActionKind::Copy => "copy",
+        FrameActionKind::AbstractCall => "abstract-call",
+        FrameActionKind::Release => "release",
+        FrameActionKind::Return => "return",
+    };
+}
+bool FrameAlignmentValid(int alignment) {
+    return alignment == 1 or alignment == 2 or alignment == 4 or alignment == 8 or alignment == 16;
+}
+int FrameRegionIndex(FrameRegionKind category) {
+    return match (category) {
+        FrameRegionKind::OutgoingShadow => 0,
+        FrameRegionKind::OutgoingArguments => 1,
+        FrameRegionKind::LocalSlots => 2,
+        FrameRegionKind::SavedRegisters => 3,
+        FrameRegionKind::SpillSlots => 4,
+        FrameRegionKind::MoveTemps => 5,
+        FrameRegionKind::AlignmentPadding => 6,
+    };
+}
+bool ScalarStorageWidth(int width) {
+    return width == 1 or width == 2 or width == 4 or width == 8;
+}
+// Check before adding; no wrapped arithmetic participates in frame layout.
+Result<int, FrameError> AddFrameBytes(int offset, int count) {
+    if (offset < 0 or count < 0 or offset > 65528 or count > 65528 - offset) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    return Result::Ok(offset + count);
+}
+Result<int, FrameError> AlignFrameBytes(int offset, int alignment) {
+    if (not FrameAlignmentValid(alignment)) {
+        return Result::Error(FrameError::InvalidAlignment);
+    }
+    return AddFrameBytes(offset,(alignment - offset % alignment) % alignment);
+}
+Result<int, FrameError> AppendFrameSlot(ref FinalizedFrame frame, FrameRegionKind category, int identity,
+int size, int alignment, ref int used) {
+    if (frame.slotCount < 0 or frame.slotCount >= Len(frame.slots)) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    if (size <= 0) { return Result::Error(FrameError::UnsupportedWidth); }
+    int offset = AlignFrameBytes(used, alignment) ?;
+    used = AddFrameBytes(offset, size) ?;
+    int index = frame.slotCount;
+    frame.slots[index] = FrameSlot{category, identity, offset, size, alignment};
+    frame.slotCount += 1;
+    return Result::Ok(index);
+}
+FrameAction SlotAction(FrameActionKind kind, Register physical, int slot, ref const FinalizedFrame frame,
+int width, int value) {
+    return FrameAction {
+        kind, physical, physical, slot, frame.slots[slot].offset, width, value
+    };
+}
+// One finalizer owns locals and all derived call storage. RSP stays fixed after
+// allocation; outgoing area is the maximum across calls, spills are per vreg.
+Result<void, FrameError> RealizeFrame(ref const BackendFunction function, ref const Allocation allocation,
+ref const Liveness liveness, ref FinalizedFrame frame) {
+    frame = EmptyFinalizedFrame();
+    if (function.frameAlignment != 16) { return Result::Error(FrameError::InvalidAlignment); }
+    if (function.slotCount < 0 or function.slotCount > 64 or function.virtualRegCount < 0 or function.virtualRegCount > 512) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    bool[512] spills =[false ...];
+    bool[15] saves =[false ...];
+    int calls = 0;
+    int stackCount = 0;
+    int temps = 0;
+    Preservation[512] records =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers
+    }
+    ...];
+    for (id in 0 .. function.virtualRegCount) {
+        if (allocation.assigned[id] and(not ScalarStorageWidth(function.virtualRegs[id].width) or(function.virtualRegs[id].address and function.virtualRegs[id].width != 8))) {
+            return Result::Error(FrameError::UnsupportedWidth);
+        }
+        if (allocation.assigned[id] and IsCalleeSaved(allocation.physical[id])) {
+            saves[RegisterIndex(allocation.physical[id])] = true;
+        }
+    }
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            int count = 0;
+            match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+            ref plan, Span(records), ref count)) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+            }
+            calls += 1;
+            if (plan.stackArgumentCount > stackCount) {
+                stackCount = plan.stackArgumentCount;
+            }
+            if (plan.temporaryCount > temps) {
+                temps = plan.temporaryCount;
+            }
+            for (i in 0 .. count) {
+                if (records[i].classification == PreservationClass::MustPreserve) {
+                    spills[records[i].value] = true;
+                }
+            }
+        }
+    }
+    // CMIRAMD3 transports logical local storage, not derived outgoing geometry.
+    // Legacy Frame.HasCalls remains false in current checked producers. The
+    // decoded CALL instructions, not that bootstrap summary, own this fact.
+    if (allocation.callCount != calls or(calls == 0 and function.frameShadowSpace != 0)) {
+        return Result::Error(FrameError::InvalidInput);
+    }
+    int used = 0;
+    int shadow = 0;
+    if (calls > 0) {
+        shadow = ShadowSpaceBytes;
+    }
+    frame.regions[0] = FrameRegion{FrameRegionKind::OutgoingShadow, 0, shadow};
+    used = shadow;
+    for (i in 0 .. stackCount) {
+        frame.outgoingSlots[i] = AppendFrameSlot(ref frame, FrameRegionKind::OutgoingArguments, i, 8,
+        8, ref used) ?;
+    }
+    frame.regions[1] = FrameRegion{FrameRegionKind::OutgoingArguments, shadow, used - shadow};
+    int begin = used;
+    int localUsed = 0;
+    for (i in 0 .. function.slotCount) {
+        MachineSlot slot = function.slots[i];
+        if (not slot.incomingIndirect) {
+            if (slot.size <= 0) { return Result::Error(FrameError::UnsupportedWidth); }
+            localUsed = AlignFrameBytes(localUsed, slot.alignment) ?;
+            localUsed = AddFrameBytes(localUsed, slot.size) ?;
+            int index = AppendFrameSlot(ref frame, FrameRegionKind::LocalSlots, i, slot.size, slot.alignment,
+            ref used) ?;
+            frame.slotOffsets[i] = frame.slots[index].offset;
+        }
+    }
+    if (localUsed != function.frameLocalSize) {
+        return Result::Error(FrameError::InvalidInput);
+    }
+    frame.regions[2] = FrameRegion{FrameRegionKind::LocalSlots, begin, used - begin};
+    begin = used;
+    ABIRegisterTables tables = Win64Registers();
+    for (i in 0 .. 8) {
+        Register physical = tables.calleeSaved[i];
+        int id = RegisterIndex(physical);
+        if (saves[id]) {
+            frame.saveSlots[id] = AppendFrameSlot(ref frame, FrameRegionKind::SavedRegisters, id, 8,
+            8, ref used) ?;
+        }
+    }
+    frame.regions[3] = FrameRegion{FrameRegionKind::SavedRegisters, begin, used - begin};
+    begin = used;
+    for (id in 0 .. function.virtualRegCount) {
+        if (spills[id]) {
+            int width = function.virtualRegs[id].width;
+            if (not ScalarStorageWidth(width) or(function.virtualRegs[id].address and width != 8)) {
+                return Result::Error(FrameError::UnsupportedWidth);
+            }
+            frame.spillSlots[id] = AppendFrameSlot(ref frame, FrameRegionKind::SpillSlots, id, width,
+            width, ref used) ?;
+        }
+    }
+    frame.regions[4] = FrameRegion{FrameRegionKind::SpillSlots, begin, used - begin};
+    begin = used;
+    for (i in 0 .. temps) {
+        frame.tempSlots[i] = AppendFrameSlot(ref frame, FrameRegionKind::MoveTemps, i, 8, 8, ref used) ?;
+    }
+    frame.regions[5] = FrameRegion{FrameRegionKind::MoveTemps, begin, used - begin};
+    frame.unalignedSize = used;
+    if (used > 0 or calls > 0) {
+        frame.byteCount = AddFrameBytes(used,(8 - used % 16 + 16) % 16) ?;
+    }
+    frame.padding = frame.byteCount - used;
+    frame.regions[6] = FrameRegion{FrameRegionKind::AlignmentPadding, used, frame.padding};
+    if (frame.byteCount > 0) {
+        frame.prologue[frame.prologueCount] = FrameAction {
+            FrameActionKind::Allocate, Register::RSP, Register::RSP, - 1, frame.byteCount, 0, - 1
+        };
+        frame.prologueCount += 1;
+    }
+    for (i in 0 .. 8) {
+        Register physical = tables.calleeSaved[i];
+        int slot = frame.saveSlots[RegisterIndex(physical)];
+        if (slot >= 0) {
+            frame.prologue[frame.prologueCount] = SlotAction(FrameActionKind::Save, physical, slot, ref const frame,
+            8, - 1);
+            frame.prologueCount += 1;
+        }
+    }
+    for (i in 0 .. 8) {
+        Register physical = tables.calleeSaved[7 - i];
+        int slot = frame.saveSlots[RegisterIndex(physical)];
+        if (slot >= 0) {
+            frame.epilogue[frame.epilogueCount] = SlotAction(FrameActionKind::Restore, physical, slot,
+            ref const frame, 8, - 1);
+            frame.epilogueCount += 1;
+        }
+    }
+    if (frame.byteCount > 0) {
+        frame.epilogue[frame.epilogueCount] = FrameAction {
+            FrameActionKind::Release, Register::RSP, Register::RSP, - 1, frame.byteCount, 0, - 1
+        };
+        frame.epilogueCount += 1;
+    }
+    frame.epilogue[frame.epilogueCount] = FrameAction {
+        FrameActionKind::Return, Register::RAX, Register::RAX, - 1, - 1, 0, - 1
+    };
+    frame.epilogueCount += 1;
+    for (b in 0 .. function.blockCount) {
+        if (function.blocks[b].terminator == Opcode::Ret) {
+            frame.returnBlocks[frame.returnCount] = b;
+            frame.returnCount += 1;
+        }
+    }
+    return ValidateFrame(ref const frame, calls > 0);
+}
+Result<void, FrameError> ValidateFrame(ref const FinalizedFrame frame, bool calls) {
+    if (frame.slotCount < 0 or frame.slotCount > 512 or frame.byteCount < 0 or frame.byteCount > 65528) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    if ((frame.byteCount > 0 or calls) and frame.byteCount % 16 != 8) {
+        return Result::Error(FrameError::InvalidAlignment);
+    }
+    if (frame.unalignedSize < 0 or frame.padding < 0 or frame.padding > 15 or frame.byteCount - frame.padding != frame.unalignedSize) {
+        return Result::Error(FrameError::InvalidOffset);
+    }
+    int end = 0;
+    for (r in 0 .. 7) {
+        FrameRegion region = frame.regions[r];
+        if (FrameRegionIndex(region.category) != r or region.offset != end or region.size < 0 or region.size > frame.byteCount - end) {
+            return Result::Error(FrameError::Overlap);
+        }
+        end += region.size;
+    }
+    int shadow = 0;
+    if (calls) {
+        shadow = 32;
+    }
+    if (end != frame.byteCount or frame.regions[0].size != shadow or frame.regions[6].size != frame.padding) {
+        return Result::Error(FrameError::InvalidOffset);
+    }
+    for (i in 0 .. frame.slotCount) {
+        FrameSlot slot = frame.slots[i];
+        int category = FrameRegionIndex(slot.category);
+        if (not FrameAlignmentValid(slot.alignment) or slot.offset % slot.alignment != 0) {
+            return Result::Error(FrameError::InvalidAlignment);
+        }
+        if (slot.size <= 0 or category <= 0 or category >= 6) {
+            return Result::Error(FrameError::UnsupportedWidth);
+        }
+        FrameRegion region = frame.regions[category];
+        if (slot.offset < region.offset or slot.size > region.size or slot.offset - region.offset > region.size - slot.size) {
+            return Result::Error(FrameError::InvalidOffset);
+        }
+        for (j in 0 .. i) {
+            FrameSlot other = frame.slots[j];
+            if (other.category == slot.category and other.identity == slot.identity) {
+                return Result::Error(FrameError::Overlap);
+            }
+            if (other.offset < slot.offset + slot.size and slot.offset < other.offset + other.size) {
+                return Result::Error(FrameError::Overlap);
+            }
+        }
+        int mapped = - 1;
+        match (slot.category) {
+            FrameRegionKind::OutgoingArguments => {
+                if (slot.identity < 0 or slot.identity >= 4 or slot.size != 8 or slot.alignment != 8 or slot.offset != 32 + slot.identity * 8) {
+                    return Result::Error(FrameError::InvalidOffset);
+                }
+                mapped = frame.outgoingSlots[slot.identity];
+            }
+            FrameRegionKind::LocalSlots => {
+                if (slot.identity < 0 or slot.identity >= 64 or frame.slotOffsets[slot.identity] != slot.offset) {
+                    return Result::Error(FrameError::InvalidOffset);
+                }
+                mapped = i;
+            }
+            FrameRegionKind::SavedRegisters => {
+                if (slot.identity < 7 or slot.identity >= 15 or slot.size != 8 or slot.alignment != 8) {
+                    return Result::Error(FrameError::InvalidSaveRestore);
+                }
+                mapped = frame.saveSlots[slot.identity];
+            }
+            FrameRegionKind::SpillSlots => {
+                if (slot.identity < 0 or slot.identity >= 512 or not ScalarStorageWidth(slot.size) or slot.alignment != slot.size) {
+                    return Result::Error(FrameError::UnsupportedWidth);
+                }
+                mapped = frame.spillSlots[slot.identity];
+            }
+            FrameRegionKind::MoveTemps => {
+                if (slot.identity < 0 or slot.identity >= 4 or slot.size != 8 or slot.alignment != 8) {
+                    return Result::Error(FrameError::UnresolvedTemporary);
+                }
+                mapped = frame.tempSlots[slot.identity];
+            }
+            FrameRegionKind::OutgoingShadow => {
+                return Result::Error(FrameError::InvalidOffset);
+            }
+            FrameRegionKind::AlignmentPadding => {
+                return Result::Error(FrameError::InvalidOffset);
+            }
+        }
+        if (mapped != i) { return Result::Error(FrameError::InvalidOffset); }
+    }
+    return ValidateFrameEnds(ref const frame);
+}
+// Qualify coverage against function facts independently of geometry layout.
+// Every listed return routes through the same inverse action sequence.
+Result<void, FrameError> ValidateFunctionFrame(ref const BackendFunction function, ref const Allocation allocation,
+ref const Liveness liveness, ref const FinalizedFrame frame) {
+    ValidateFrame(ref const frame, allocation.callCount > 0) ?;
+    bool[512] required =[false ...];
+    bool[15] saved =[false ...];
+    for (r in 0 .. 7) {
+        if (frame.saveSlots[r] != - 1) {
+            return Result::Error(FrameError::InvalidSaveRestore);
+        }
+    }
+    for (id in 0 .. function.virtualRegCount) {
+        if (allocation.assigned[id] and IsCalleeSaved(allocation.physical[id])) {
+            saved[RegisterIndex(allocation.physical[id])] = true;
+        }
+    }
+    for (r in 7 .. 15) {
+        if ((frame.saveSlots[r] >= 0) != saved[r]) {
+            return Result::Error(FrameError::InvalidSaveRestore);
+        }
+    }
+    int temps = 0;
+    int outgoing = 0;
+    Preservation[512] records =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers
+    }
+    ...];
+    for (p in 0 .. function.instructionCount) {
+        if (function.instructions[p].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            int count = 0;
+            match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, p,
+            ref plan, Span(records), ref count)) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+            }
+            if (plan.temporaryCount > temps) {
+                temps = plan.temporaryCount;
+            }
+            if (plan.stackArgumentCount > outgoing) {
+                outgoing = plan.stackArgumentCount;
+            }
+            for (i in 0 .. count) {
+                if (records[i].classification == PreservationClass::MustPreserve) {
+                    int id = records[i].value;
+                    required[id] = true;
+                    int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::SpillSlots, id) ?;
+                    if (frame.slots[slot].size != records[i].width) {
+                        return Result::Error(FrameError::UnsupportedWidth);
+                    }
+                }
+            }
+        }
+    }
+    for (id in 0 .. 512) {
+        if ((frame.spillSlots[id] >= 0) != required[id]) {
+            return Result::Error(FrameError::UnresolvedSpill);
+        }
+    }
+    for (i in 0 .. 4) {
+        if ((frame.tempSlots[i] >= 0) !=(i < temps)) {
+            return Result::Error(FrameError::UnresolvedTemporary);
+        }
+        if ((frame.outgoingSlots[i] >= 0) !=(i < outgoing)) {
+            return Result::Error(FrameError::InvalidOffset);
+        }
+    }
+    if (frame.regions[1].size != outgoing * 8) {
+        return Result::Error(FrameError::InvalidOffset);
+    }
+    int returns = 0;
+    for (b in 0 .. function.blockCount) {
+        if (function.blocks[b].terminator == Opcode::Ret) {
+            if (returns >= frame.returnCount or frame.returnBlocks[returns] != b) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            returns += 1;
+        }
+    }
+    if (returns != frame.returnCount) {
+        return Result::Error(FrameError::InvalidSaveRestore);
+    }
+    for (i in 0 .. function.slotCount) {
+        MachineSlot slot = function.slots[i];
+        if (slot.incomingIndirect) {
+            if (frame.slotOffsets[i] != - 1) {
+                return Result::Error(FrameError::InvalidOffset);
+            }
+        }
+        else {
+            bool found = false;
+            for (s in 0 .. frame.slotCount) {
+                FrameSlot concrete = frame.slots[s];
+                if (concrete.category == FrameRegionKind::LocalSlots and concrete.identity == i and concrete.size == slot.size and concrete.alignment == slot.alignment) {
+                    found = true;
+                }
+            }
+            if (not found) { return Result::Error(FrameError::InvalidOffset); }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, FrameError> ValidateFrameEnds(ref const FinalizedFrame frame) {
+    if (frame.prologueCount < 0 or frame.prologueCount > 9 or frame.epilogueCount < 1 or frame.epilogueCount > 10) {
+        return Result::Error(FrameError::InvalidSaveRestore);
+    }
+    int p = 0;
+    int e = 0;
+    if (frame.byteCount > 0) {
+        FrameAction action = frame.prologue[p];
+        if (action.kind != FrameActionKind::Allocate or action.offset != frame.byteCount or action.source != Register::RSP or action.destination != Register::RSP or action.slot != - 1 or action.width != 0) {
+            return Result::Error(FrameError::InvalidSaveRestore);
+        }
+        p += 1;
+    }
+    ABIRegisterTables tables = Win64Registers();
+    for (i in 0 .. 8) {
+        Register physical = tables.calleeSaved[i];
+        int slot = frame.saveSlots[RegisterIndex(physical)];
+        if (slot >= 0) {
+            if (slot >= frame.slotCount or p >= frame.prologueCount) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            FrameSlot saved = frame.slots[slot];
+            if (saved.category != FrameRegionKind::SavedRegisters or saved.identity != RegisterIndex(physical)) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            FrameAction action = frame.prologue[p];
+            if (action.kind != FrameActionKind::Save or action.source != physical or action.destination != physical or action.slot != slot or action.width != 8 or action.offset != saved.offset) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            p += 1;
+        }
+    }
+    for (i in 0 .. 8) {
+        Register physical = tables.calleeSaved[7 - i];
+        int slot = frame.saveSlots[RegisterIndex(physical)];
+        if (slot >= 0) {
+            if (e >= frame.epilogueCount) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            FrameAction action = frame.epilogue[e];
+            if (action.kind != FrameActionKind::Restore or action.source != physical or action.destination != physical or action.slot != slot or action.width != 8 or action.offset != frame.slots[slot].offset) {
+                return Result::Error(FrameError::InvalidSaveRestore);
+            }
+            e += 1;
+        }
+    }
+    if (frame.byteCount > 0) {
+        if (e >= frame.epilogueCount) {
+            return Result::Error(FrameError::InvalidSaveRestore);
+        }
+        FrameAction action = frame.epilogue[e];
+        if (action.kind != FrameActionKind::Release or action.offset != frame.byteCount or action.source != Register::RSP or action.destination != Register::RSP or action.slot != - 1 or action.width != 0) {
+            return Result::Error(FrameError::InvalidSaveRestore);
+        }
+        e += 1;
+    }
+    if (p != frame.prologueCount or e + 1 != frame.epilogueCount or frame.epilogue[e].kind != FrameActionKind::Return or frame.epilogue[e].source != Register::RAX or frame.epilogue[e].destination != Register::RAX) {
+        return Result::Error(FrameError::InvalidSaveRestore);
+    }
+    return Result::Ok();
+}
+Result<void, FrameError> AppendCallAction(ref CallSiteActions site, FrameAction action) {
+    if (site.count < 0 or site.count >= Len(site.actions)) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    site.actions[site.count] = action;
+    site.count += 1;
+    return Result::Ok();
+}
+Result<int, FrameError> ResolveFrameSlot(ref const FinalizedFrame frame, FrameRegionKind category, int identity) {
+    int slot = - 1;
+    match (category) {
+        FrameRegionKind::SpillSlots => {
+            if (identity >= 0 and identity < 512) {
+                slot = frame.spillSlots[identity];
+            }
+        }
+        FrameRegionKind::SavedRegisters => {
+            if (identity >= 7 and identity < 15) {
+                slot = frame.saveSlots[identity];
+            }
+        }
+        FrameRegionKind::MoveTemps => {
+            if (identity >= 0 and identity < 4) {
+                slot = frame.tempSlots[identity];
+            }
+        }
+        FrameRegionKind::OutgoingArguments => {
+            if (identity >= 0 and identity < 4) {
+                slot = frame.outgoingSlots[identity];
+            }
+        }
+        FrameRegionKind::LocalSlots => { }
+        FrameRegionKind::OutgoingShadow => { }
+        FrameRegionKind::AlignmentPadding => { }
+    }
+    if (slot < 0 or slot >= frame.slotCount) {
+        if (category == FrameRegionKind::SpillSlots) {
+            return Result::Error(FrameError::UnresolvedSpill);
+        }
+        if (category == FrameRegionKind::MoveTemps) {
+            return Result::Error(FrameError::UnresolvedTemporary);
+        }
+        return Result::Error(FrameError::InvalidOffset);
+    }
+    if (frame.slots[slot].category != category or frame.slots[slot].identity != identity) {
+        return Result::Error(FrameError::InvalidOffset);
+    }
+    return Result::Ok(slot);
+}
+Result<void, FrameError> LowerCallActions(ref const CallPlan plan, Span<Preservation> records, int count,
+ref const Allocation allocation, ref const FinalizedFrame frame, ref CallSiteActions site) {
+    match (ValidateCallPlan(ref const plan)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+    }
+    if (plan.moveCount < 0 or plan.moveCount > 12 or plan.temporaryCount < 0 or plan.temporaryCount > 4) {
+        return Result::Error(FrameError::InvalidActions);
+    }
+    site = EmptyCallSiteActions();
+    site.abi = plan;
+    if (count < 0 or count > Len(records)) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
+    for (i in 0 .. count) {
+        Preservation record = records[i];
+        if (record.classification == PreservationClass::MustPreserve) {
+            int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::SpillSlots, record.value) ?;
+            AppendCallAction(ref site, SlotAction(FrameActionKind::Store, record.physical, slot, ref const frame,
+            record.width, record.value)) ?;
+        }
+    }
+    for (i in 0 .. plan.moveCount) {
+        ArgumentMove operation = plan.moves[i];
+        match (operation.destinationKind) {
+            MoveLocation::Physical => {
+                match (operation.sourceKind) {
+                    MoveLocation::Physical => {
+                        AppendCallAction(ref site, FrameAction {
+                            FrameActionKind::Copy, operation.source, operation.destination, - 1, - 1,
+                            operation.width, - 1
+                        }) ?;
+                    }
+                    MoveLocation::Temporary => {
+                        int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::MoveTemps, operation.sourceSlot) ?;
+                        AppendCallAction(ref site, SlotAction(FrameActionKind::Load, operation.destination,
+                        slot, ref const frame, operation.width, - 1)) ?;
+                    }
+                    MoveLocation::Outgoing => {
+                        return Result::Error(FrameError::InvalidActions);
+                    }
+                }
+            }
+            MoveLocation::Outgoing => {
+                int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::OutgoingArguments, operation.destinationSlot) ?;
+                AppendCallAction(ref site, SlotAction(FrameActionKind::Store, operation.source, slot,
+                ref const frame, operation.width, - 1)) ?;
+            }
+            MoveLocation::Temporary => {
+                int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::MoveTemps, operation.destinationSlot) ?;
+                AppendCallAction(ref site, SlotAction(FrameActionKind::Store, operation.source, slot,
+                ref const frame, operation.width, - 1)) ?;
+            }
+        }
+    }
+    site.callIndex = site.count;
+    AppendCallAction(ref site, FrameAction {
+        FrameActionKind::AbstractCall, Register::RAX, Register::RAX, - 1, - 1, 0, - 1
+    }) ?;
+    // Capture result first: RAX might then be reloaded with a preserved value.
+    if (plan.hasResult) {
+        int id = plan.result.value;
+        if (id < 0 or id >= 512 or not allocation.assigned[id]) {
+            return Result::Error(FrameError::InvalidInput);
+        }
+        AppendCallAction(ref site, FrameAction {
+            FrameActionKind::Copy, Register::RAX, allocation.physical[id], - 1, - 1, plan.result.width,
+            id
+        }) ?;
+    }
+    for (i in 0 .. count) {
+        Preservation record = records[i];
+        if (record.classification == PreservationClass::MustPreserve) {
+            int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::SpillSlots, record.value) ?;
+            AppendCallAction(ref site, SlotAction(FrameActionKind::Load, record.physical, slot, ref const frame,
+            record.width, record.value)) ?;
+        }
+    }
+    return Result::Ok();
+}
+// Independent identity and available-width replay of the concrete sequence.
+Result<void, FrameError> ReplayCallActions(ref const CallSiteActions site, Span<Preservation> records,
+int count, ref const Allocation allocation, ref const FinalizedFrame frame) {
+    match (ValidateCallPlan(ref const site.abi)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+    }
+    ValidateFrame(ref const frame, true) ?;
+    if (count < 0 or count > Len(records) or site.count < 1 or site.count > 32 or site.callIndex < 0 or site.callIndex >= site.count) {
+        return Result::Error(FrameError::InvalidActions);
+    }
+    for (r in 0 .. count) {
+        if (records[r].value < 0 or records[r].value >= 512 or not IsValueRegister(records[r].physical)) {
+            return Result::Error(FrameError::InvalidInput);
+        }
+        match (ValidatePreservation(records[r])) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+        }
+    }
+    int[15] registers =[0 ...];
+    int[15] widths =[8 ...];
+    int[512] tokens =[- 1 ...];
+    int[512] storedWidths =[0 ...];
+    bool[512] spilled =[false ...];
+    bool[512] reloaded =[false ...];
+    bool called = false;
+    for (i in 0 .. 15) {
+        registers[i] = i;
+    }
+    instance CallReplayProtocol protocol();
+    for (i in 0 .. site.count) {
+        FrameAction action = site.actions[i];
+        CallReplayInput input = CallReplayInput::Copy;
+        match (action.kind) {
+            FrameActionKind::Store => {
+                input = CallReplayInput::Store;
+            }
+            FrameActionKind::Load => {
+                input = CallReplayInput::Load;
+            }
+            FrameActionKind::Copy => {
+                input = CallReplayInput::Copy;
+            }
+            FrameActionKind::AbstractCall => {
+                input = CallReplayInput::Call;
+            }
+            FrameActionKind::Allocate => { return Result::Error(FrameError::InvalidActions); }
+            FrameActionKind::Save => { return Result::Error(FrameError::InvalidActions); }
+            FrameActionKind::Restore => { return Result::Error(FrameError::InvalidActions); }
+            FrameActionKind::Release => { return Result::Error(FrameError::InvalidActions); }
+            FrameActionKind::Return => { return Result::Error(FrameError::InvalidActions); }
+        }
+        if (Step(protocol, Main, input) != StepOutcome::Transitioned) {
+            return Result::Error(FrameError::InvalidActions);
+        }
+        if (action.kind == FrameActionKind::AbstractCall) {
+            if (called or i != site.callIndex) {
+                return Result::Error(FrameError::InvalidActions);
+            }
+            for (a in 0 .. site.abi.argumentCount) {
+                ArgumentPlacement argument = site.abi.arguments[a];
+                int id = argument.source.value;
+                if (id < 0 or id >= 512 or not allocation.assigned[id]) {
+                    return Result::Error(FrameError::InvalidInput);
+                }
+                int token = - 1;
+                int available = 0;
+                if (argument.onStack) {
+                    int slot = ResolveFrameSlot(ref const frame, FrameRegionKind::OutgoingArguments,
+                    argument.stackSlot) ?;
+                    token = tokens[slot];
+                    available = storedWidths[slot];
+                }
+                else {
+                    int index = RegisterIndex(argument.physical);
+                    token = registers[index];
+                    available = widths[index];
+                }
+                if (token != RegisterIndex(allocation.physical[id]) or available < argument.source.width) {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+            }
+            for (r in 0 .. count) {
+                if (records[r].classification == PreservationClass::MustPreserve and not spilled[records[r].value]) {
+                    return Result::Error(FrameError::UnresolvedSpill);
+                }
+            }
+            ABIRegisterTables tables = Win64Registers();
+            for (r in 0 .. 7) {
+                int index = RegisterIndex(tables.callerSaved[r]);
+                registers[index] = - 1;
+                widths[index] = 0;
+            }
+            if (site.abi.hasResult) {
+                registers[RegisterIndex(Register::RAX)] = 1000;
+                widths[RegisterIndex(Register::RAX)] = site.abi.result.width;
+            }
+            called = true;
+        } else {
+            if (not ScalarStorageWidth(action.width) or not IsValueRegister(action.source) or not IsValueRegister(action.destination)) {
+                return Result::Error(FrameError::UnsupportedWidth);
+            }
+            int source = RegisterIndex(action.source);
+            int destination = RegisterIndex(action.destination);
+            match (action.kind) {
+                FrameActionKind::Copy => {
+                    if (action.slot != - 1 or action.offset != - 1 or registers[source] < 0 or widths[source] < action.width) {
+                        return Result::Error(FrameError::InvalidActions);
+                    }
+                    registers[destination] = registers[source];
+                    widths[destination] = action.width;
+                }
+                FrameActionKind::Store => {
+                    int slot = action.slot;
+                    if (called or slot < 0 or slot >= frame.slotCount or action.offset != frame.slots[slot].offset or action.width > frame.slots[slot].size or registers[source] < 0 or widths[source] < action.width or tokens[slot] >= 0) {
+                        return Result::Error(FrameError::InvalidActions);
+                    }
+                    FrameRegionKind category = frame.slots[slot].category;
+                    if (category != FrameRegionKind::SpillSlots and category != FrameRegionKind::MoveTemps and category != FrameRegionKind::OutgoingArguments) {
+                        return Result::Error(FrameError::InvalidActions);
+                    }
+                    if (category == FrameRegionKind::SpillSlots) {
+                        int id = frame.slots[slot].identity;
+                        if (action.value != id or action.width != frame.slots[slot].size) {
+                            return Result::Error(FrameError::UnresolvedSpill);
+                        }
+                        spilled[id] = true;
+                    }
+                    tokens[slot] = registers[source];
+                    storedWidths[slot] = action.width;
+                }
+                FrameActionKind::Load => {
+                    int slot = action.slot;
+                    if (slot < 0 or slot >= frame.slotCount or action.offset != frame.slots[slot].offset or tokens[slot] < 0 or storedWidths[slot] < action.width) {
+                        return Result::Error(FrameError::InvalidActions);
+                    }
+                    FrameRegionKind category = frame.slots[slot].category;
+                    if (called) {
+                        if (category != FrameRegionKind::SpillSlots or action.value != frame.slots[slot].identity) {
+                            return Result::Error(FrameError::UnresolvedSpill);
+                        }
+                        if (reloaded[action.value]) {
+                            return Result::Error(FrameError::UnresolvedSpill);
+                        }
+                        reloaded[action.value] = true;
+                    }
+                    else {
+                        if (category != FrameRegionKind::MoveTemps) {
+                            return Result::Error(FrameError::InvalidActions);
+                        }
+                    }
+                    registers[destination] = tokens[slot];
+                    widths[destination] = action.width;
+                }
+                FrameActionKind::Allocate => {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+                FrameActionKind::Save => { return Result::Error(FrameError::InvalidActions); }
+                FrameActionKind::Restore => {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+                FrameActionKind::AbstractCall => {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+                FrameActionKind::Release => {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+                FrameActionKind::Return => {
+                    return Result::Error(FrameError::InvalidActions);
+                }
+            }
+        }
+    }
+    if (not called) { return Result::Error(FrameError::InvalidActions); }
+    for (r in 0 .. count) {
+        Preservation record = records[r];
+        int index = RegisterIndex(record.physical);
+        if (registers[index] != index or widths[index] < record.width) {
+            return Result::Error(FrameError::UnresolvedSpill);
+        }
+        if (record.classification == PreservationClass::MustPreserve and not reloaded[record.value]) {
+            return Result::Error(FrameError::UnresolvedSpill);
+        }
+    }
+    if (site.abi.hasResult) {
+        int index = RegisterIndex(allocation.physical[site.abi.result.value]);
+        if (registers[index] != 1000 or widths[index] < site.abi.result.width) {
+            return Result::Error(FrameError::InvalidActions);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, FrameError> RealizeAllocatedCall(ref const BackendFunction function, ref const Allocation allocation,
+ref const Liveness liveness, int position, ref const FinalizedFrame frame, ref CallSiteActions site) {
+    CallPlan plan = EmptyCallPlan();
+    Preservation[512] records =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers
+    }
+    ...];
+    int count = 0;
+    match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+    ref plan, Span(records), ref count)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+    }
+    LowerCallActions(ref const plan, Span(records), count, ref const allocation, ref const frame, ref site) ?;
+    return ReplayCallActions(ref const site, Span(records), count, ref const allocation, ref const frame);
+}
+Result<void, FrameError> QualifyFunctionFrame(ref const BackendFunction function, ref const Allocation allocation,
+ref FinalizedFrame frame) {
+    Liveness liveness = EmptyLiveness();
+    match (ComputeLiveness(ref const function, ref liveness)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
+    }
+    RealizeFrame(ref const function, ref const allocation, ref const liveness, ref frame) ?;
+    ValidateFunctionFrame(ref const function, ref const allocation, ref const liveness, ref const frame) ?;
+    CallSiteActions site = EmptyCallSiteActions();
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            RealizeAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+            ref const frame, ref site) ?;
+        }
+    }
+    return Result::Ok();
+}
+void FrameFacts() {
+    Assert.Concept<PlainData>(FrameSlot, "native stack slot provenance");
+    Assert.Concept<PlainData>(FrameRegion, "explicit native stack region");
+    Assert.Concept<PlainData>(FrameAction, "concrete scalar call-site action");
+    Assert.Concept<NoAllocation>(RealizeFrame, "bounded function storage");
+    Assert.Concept<NoAllocation>(LowerCallActions, "bounded explicit action sequence");
+    Assert.Concept<NoAllocation>(ReplayCallActions, "independent bounded identity replay");
 }
 Result<FinalizedFrame, BackendError> FinalizeFrame(ref const BackendFunction function)
 {
     if (function.hasCalls or function.frameShadowSpace != 0 or
     function.frameAlignment != 16)
     { return Result::Error(BackendError::UnsupportedInstruction); }
-    FinalizedFrame frame = FinalizedFrame{0,[- 1 ...]};
-    int used = 0;
-    for (i in 0 .. function.slotCount)
-    {
-        MachineSlot slot = function.slots[i];
-        if (slot.incomingIndirect) {
-            frame.slotOffsets[i] = - 1;
-        }
-        else
-        {
-            if (slot.size <= 0 or slot.alignment <= 0 or slot.alignment > 16)
-            { return Result::Error(BackendError::BridgeInvalid); }
-            int padding =(slot.alignment - used % slot.alignment) % slot.alignment;
-            used = used + padding;
-            frame.slotOffsets[i] = used;
-            used = used + slot.size;
-        }
-    }
-    if (used != function.frameLocalSize)
-    { return Result::Error(BackendError::BridgeInvalid); }
-    if (used > 0)
-    {
-        int aligned =((used + 7) / 16) * 16 + 8;
-        frame.byteCount = aligned;
+    FinalizedFrame frame = EmptyFinalizedFrame();
+    Allocation allocation = EmptyAllocation();
+    Liveness liveness = EmptyLiveness();
+    match (RealizeFrame(ref const function, ref const allocation, ref const liveness, ref frame)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
     }
     return Result::Ok(move frame);
 }
@@ -799,11 +2189,19 @@ ref ByteWriter writer, bool wide, int regCode, int rmCode)
 Result<void, BackendError> WriteRegReg(
 ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
 {
-    if (width != 1 and width != 4 and width != 8)
+    if (width != 1 and width != 2 and width != 4 and width != 8)
     { return Result::Error(BackendError::UnsupportedInstruction); }
     int rmCode = RegisterEncoding(rm);
     int regCode = RegisterEncoding(reg);
-    WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    if (width == 1 and regCode < 8 and rmCode < 8 and(regCode >= 4 or rmCode >= 4)) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    }
     WriteByte(ref writer, opcode) ?;
     WriteByte(ref writer, 192 +(regCode % 8) * 8 + rmCode % 8) ?;
     return Result::Ok();
@@ -850,7 +2248,7 @@ int opcode, Register reg, MachineOperand memory, int width)
     if (base >= 8) {
         rex = rex + 1;
     }
-    if (rex != 64) {
+    if (rex != 64 or(width == 1 and regCode >= 4 and regCode < 8)) {
         WriteByte(ref writer, rex) ?;
     }
     WriteByte(ref writer, opcode) ?;
@@ -997,7 +2395,12 @@ ref ByteWriter writer, Register destination, int value, int width)
     if (width != 1 and width != 4)
     { return Result::Error(BackendError::UnsupportedInstruction); }
     int code = RegisterEncoding(destination);
-    WriteRex(ref writer, false, 0, code) ?;
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, false, 0, code) ?;
+    }
     if (width == 1)
     {
         if (value < - 128 or value > 255)
@@ -1114,6 +2517,14 @@ MachineInstruction instruction)
     if (instruction.op == Opcode::Mov)
     {
         Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        if (instruction.source0.kind == OperandKind::Memory and instruction.source0.base == - 1 and
+        TextEquals(ref const reader, instruction.source0.region, "incoming-arg")) {
+            if (instruction.source0.displacement < 40 or instruction.source0.displacement > 64 or frame.byteCount > 65528) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            return WriteRSPReg(ref writer, true, destination, frame.byteCount + instruction.source0.displacement,
+            instruction.width);
+        }
         if (instruction.source0.kind == OperandKind::Immediate)
         {
             int value = ParseI32Literal(ref const reader, instruction.source0.literal) ?;
@@ -1177,7 +2588,12 @@ MachineInstruction instruction)
         int condition = ConditionEncoding(instruction.condition);
         if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
         int code = RegisterEncoding(destination);
-        WriteRex(ref writer, false, 0, code) ?;
+        if (code >= 4 and code < 8) {
+            WriteByte(ref writer, 64) ?;
+        }
+        else {
+            WriteRex(ref writer, false, 0, code) ?;
+        }
         WriteByte(ref writer, 15) ?;
         WriteByte(ref writer, 144 + condition) ?;
         WriteByte(ref writer, 192 + code % 8) ?;
@@ -1186,11 +2602,10 @@ MachineInstruction instruction)
     return Result::Error(BackendError::UnsupportedInstruction);
 }
 // Callers must discard output on Error; the published count is transactional.
-Result<int, BackendError> EncodeFunctionWithWorkspace(
-ref const BridgeReader reader, ref const BackendFunction function,
-ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan)
+Result<void, BackendError> EncodeFunctionIntoWriter(
+ref ByteWriter writer, ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, ref EncodingWorkspace plan)
 {
-    ByteWriter writer = ByteWriter{output, 0};
     if (function.blockCount < 0 or function.blockCount > Len(plan.blockOffsets))
     { return Result::Error(BackendError::CapacityExceeded); }
     int requiredFixups = 0;
@@ -1206,15 +2621,44 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
     if (requiredFixups > Len(plan.fixups))
     { return Result::Error(BackendError::CapacityExceeded); }
     plan.fixupCount = 0;
-    WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
+    Liveness live = EmptyLiveness();
+    if (plan.allowCalls) {
+        ComputeLiveness(ref const function, ref live) ?;
+        for (a in 0 .. frame.prologueCount) {
+            EmitFrameAction(ref writer, frame.prologue[a]) ?;
+        }
+    } else {
+        WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
+    }
     for (bi in 0 .. function.blockCount)
     {
         MachineBlock block = function.blocks[bi];
         plan.blockOffsets[bi] = writer.offset;
         for (ii in 0 .. block.instructionCount)
         {
-            EmitInstruction(ref writer, ref const reader, ref const allocation,
-            ref const frame, function.instructions[block.firstInstruction + ii]) ?;
+            int position = block.firstInstruction + ii;
+            MachineInstruction instruction = function.instructions[position];
+            if (instruction.op == Opcode::Call) {
+                CallSiteActions site = EmptyCallSiteActions();
+                match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+                position, ref const frame, ref site)) {
+                    Result::Ok() => { }
+                    Result::Error(error) => {
+                        return Result::Error(BackendError::InvalidEncoding);
+                    }
+                }
+                for (a in 0 .. site.count) {
+                    if (a == site.callIndex) {
+                        WriteCallPlaceholder(ref writer, ref plan, function.identity, site.abi.target) ?;
+                    }
+                    else {
+                        EmitFrameAction(ref writer, site.actions[a]) ?;
+                    }
+                }
+            } else {
+                EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
+                instruction) ?;
+            }
         }
         match (block.terminator)
         {
@@ -1232,8 +2676,15 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
                 AddWorkspaceFixup(ref writer, ref plan, block.falseBlock) ?;
             }
             Opcode::Ret => {
-                WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
-                WriteByte(ref writer, 195) ?;
+                if (plan.allowCalls) {
+                    for (a in 0 .. frame.epilogueCount) {
+                        EmitFrameAction(ref writer, frame.epilogue[a]) ?;
+                    }
+                }
+                else {
+                    WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
+                    WriteByte(ref writer, 195) ?;
+                }
             }
             Opcode::Trap => { }
             Opcode::None => { return Result::Error(BackendError::UnsupportedInstruction); }
@@ -1259,6 +2710,13 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
         int displacement = plan.blockOffsets[fixup.targetBlock] -(fixup.patchOffset + 4);
         PatchI32LE(ref writer, fixup.patchOffset, displacement) ?;
     }
+    return Result::Ok();
+}
+Result<int, BackendError> EncodeFunctionWithWorkspace(ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan) {
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
+    ref const frame, ref plan) ?;
     return Result::Ok(writer.offset);
 }
 // Compatibility entry point retains the original bounded inline scratch budget.
@@ -1267,8 +2725,9 @@ ref const BridgeReader reader, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
 {
     EncodingPlan storage = EmptyEncodingPlan();
+    CallFixup[1] unused =[EmptyCallFixup() ...];
     EncodingWorkspace workspace = EncodingWorkspace {
-        Span(storage.blockOffsets), Span(storage.fixups), 0
+        Span(storage.blockOffsets), Span(storage.fixups), 0, Span(unused), 0, 0, false
     };
     return EncodeFunctionWithWorkspace(ref const reader, ref const function,
     ref const allocation, ref const frame, output, ref workspace);
@@ -1282,9 +2741,21 @@ Span<int> blockOffsets, Span<BranchFixup> fixups)
     LayoutLoweredBlocks(ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
+    if (allocation.callCount > 0) {
+        PlanFunctionCalls(ref const function, ref allocation) ?;
+        FinalizedFrame concrete = EmptyFinalizedFrame();
+        match (QualifyFunctionFrame(ref const function, ref const allocation, ref concrete)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
-    EncodingWorkspace workspace = EncodingWorkspace{blockOffsets, fixups, 0};
+    CallFixup[1] unused =[EmptyCallFixup() ...];
+    EncodingWorkspace workspace = EncodingWorkspace {
+        blockOffsets, fixups, 0, Span(unused), 0, 0, false
+    };
     return EncodeFunctionWithWorkspace(ref const reader, ref const function,
     ref const allocation, ref const frame, output, ref workspace);
 }
@@ -1296,6 +2767,15 @@ ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
     LayoutLoweredBlocks(ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
+    if (allocation.callCount > 0) {
+        PlanFunctionCalls(ref const function, ref allocation) ?;
+        FinalizedFrame concrete = EmptyFinalizedFrame();
+        match (QualifyFunctionFrame(ref const function, ref const allocation, ref concrete)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
     return EncodeFunction(ref const reader, ref const function, ref const allocation,
@@ -1306,10 +2786,258 @@ void BackendFacts()
     Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
     Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
     Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
+    Assert.Concept<NoAllocation>(PlanAllocatedCall, "caller supplied preservation records");
+    Assert.Concept<NoAllocation>(PlanFunctionCalls, "one bounded call plan at a time");
     Assert.Concept<NoAllocation>(EncodeFunctionWithWorkspace, "caller-supplied encoding scratch");
     Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
     Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
+}
+Result<int, NativeError> FindNativeSymbol(ref const BridgeReader reader, ref const NativeImage image,
+BridgeText identity) {
+    if (image.symbolCount < 0 or image.symbolCount > 128) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int found = - 1;
+    if (identity.offset < 0 or identity.length <= 0 or identity.offset > Len(reader.data) or identity.length > Len(reader.data) - identity.offset) {
+        return Result::Error(NativeError::UnresolvedSymbol);
+    }
+    for (i in 0 .. image.symbolCount) {
+        BridgeText candidate = image.symbols[i].identity;
+        if (candidate.offset < 0 or candidate.length <= 0 or candidate.offset > Len(reader.data) or candidate.length > Len(reader.data) - candidate.offset) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        if (SameText(ref const reader, image.symbols[i].identity, identity)) {
+            if (found >= 0) { return Result::Error(NativeError::DuplicateSymbol); }
+            found = i;
+        }
+    }
+    if (found < 0) { return Result::Error(NativeError::UnresolvedSymbol); }
+    return Result::Ok(found);
+}
+Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFixup fixup, Span<byte> bytes) {
+    if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 5) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    if (fixup.kind != CallFixupKind::Rel32Call or fixup.sourceOrdinal < 0 or fixup.sourceOrdinal >= image.symbolCount or
+    fixup.callOffset < 0 or fixup.callOffset > image.byteCount - 5 or fixup.patchOffset != fixup.callOffset + 1 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    NativeSymbol source = image.symbols[fixup.sourceOrdinal];
+    if (source.offset < 0 or source.size < 5 or source.offset > image.byteCount or source.size > image.byteCount - source.offset) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or bytes[fixup.callOffset] as int != 232) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    return Result::Ok();
+}
+// Validate all patch sites and targets before touching bytes. Both forward and
+// backward calls use this single pass after declaration-order body emission.
+Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref NativeImage image, Span<byte> bytes) {
+    if (image.finalized or image.symbolCount < 0 or image.symbolCount > 128 or image.fixupCount < 0 or image.fixupCount > 512 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int end = 0;
+    for (i in 0 .. image.symbolCount) {
+        NativeSymbol symbol = image.symbols[i];
+        if (symbol.ordinal != i or symbol.offset != end or symbol.size <= 0 or symbol.size > image.byteCount - end or symbol.calls < 0 or symbol.calls > 512) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        FindNativeSymbol(ref const reader, ref const image, symbol.identity) ?;
+        end += symbol.size;
+    }
+    if (end != image.byteCount) { return Result::Error(NativeError::InvalidInput); }
+    int[128] counts =[0 ...];
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        counts[fixup.sourceOrdinal] += 1;
+        int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
+        if (fixup.resolved or source != fixup.sourceOrdinal) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        if (i > 0) {
+            if (fixup.callOffset < image.fixups[i - 1].callOffset + 5) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        for (b in 0 .. 4) {
+            if (bytes[fixup.patchOffset + b] != 0) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+    }
+    ByteWriter writer = ByteWriter{bytes, image.byteCount};
+    for (i in 0 .. image.symbolCount) {
+        if (counts[i] != image.symbols[i].calls) {
+            return Result::Error(NativeError::UnresolvedFixup);
+        }
+    }
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        int delta = CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+        match (PatchI32LE(ref writer, fixup.patchOffset, delta)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::MalformedPatch); }
+        }
+        image.fixups[i] = CallFixup {
+            fixup.kind, fixup.sourceOrdinal, fixup.source, fixup.target, fixup.callOffset, fixup.patchOffset,
+            delta, true
+        };
+    }
+    image.finalized = true;
+    return ValidateNativeImage(ref const reader, ref const image, bytes);
+}
+Result<void, NativeError> ValidateNativeImage(ref const BridgeReader reader, ref const NativeImage image,
+Span<byte> bytes) {
+    if (not image.finalized or image.fixupCount < 0 or image.fixupCount > 512) {
+        return Result::Error(NativeError::UnresolvedFixup);
+    }
+    if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int end = 0;
+    for (i in 0 .. image.symbolCount) {
+        NativeSymbol symbol = image.symbols[i];
+        if (symbol.ordinal != i or symbol.offset != end or symbol.size <= 0 or symbol.size > image.byteCount - end or symbol.calls < 0 or symbol.calls > 512) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        FindNativeSymbol(ref const reader, ref const image, symbol.identity) ?;
+        end += symbol.size;
+    }
+    if (end != image.byteCount) { return Result::Error(NativeError::InvalidInput); }
+    int[128] counts =[0 ...];
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        if (not fixup.resolved) { return Result::Error(NativeError::UnresolvedFixup); }
+        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
+        if (source != fixup.sourceOrdinal) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        if (i > 0) {
+            if (fixup.callOffset < image.fixups[i - 1].callOffset + 5) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        counts[fixup.sourceOrdinal] += 1;
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        int delta = CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+        if (delta != fixup.displacement) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        int remaining = delta;
+        for (b in 0 .. 4) {
+            int digit = remaining % 256;
+            if (digit < 0) {
+                digit += 256;
+            }
+            if (bytes[fixup.patchOffset + b] as int != digit) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+            remaining =(remaining - digit) / 256;
+        }
+    }
+    for (i in 0 .. image.symbolCount) {
+        if (counts[i] != image.symbols[i].calls) {
+            return Result::Error(NativeError::UnresolvedFixup);
+        }
+    }
+    return Result::Ok();
+}
+// Output is scratch until Ok and finalized. Bootstrap callers must never
+// publish an image after Error; all code/branch/call patches precede RX.
+Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    image = EmptyNativeImage();
+    match (ValidateMachineBridge(artifact)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadBridgeIdentity(ref reader)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    WireMachineModule document = ReadNativeModule(ref reader) ?;
+    if (document.Functions.count > 128) {
+        return Result::Error(NativeError::CapacityExceeded);
+    }
+    reader.offset = document.Functions.offset;
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
+    for (ordinal in 0 .. document.Functions.count) {
+        WireMachineFunction wire = ReadNativeFunction(ref reader) ?;
+        BackendFunction function = EmptyFunction();
+        match (ProjectWireFunction(ref const reader, wire, ref function)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        match (LayoutLoweredBlocks(ref function)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        Allocation allocation = EmptyAllocation();
+        match (AllocateRegistersWithPolicy(ref const function, ref allocation, true)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::CapacityExceeded); }
+        }
+        FinalizedFrame frame = EmptyFinalizedFrame();
+        match (QualifyFunctionFrame(ref const function, ref const allocation, ref frame)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::FrameFailure); }
+        }
+        // Large physical adjustments require guard-page probing, not a naked
+        // subtraction. Keep that separate production capability explicit.
+        if (frame.byteCount >= 4096) {
+            return Result::Error(NativeError::StackProbeRequired);
+        }
+        workspace.functionOrdinal = ordinal;
+        int begin = writer.offset;
+        // One writer coordinate system for body, branch and call offsets.
+        match (EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
+        ref const frame, ref workspace)) {
+            Result::Ok() => { }
+            Result::Error(error) => {
+                if (error == BackendError::BufferFull or error == BackendError::CapacityExceeded) {
+                    return Result::Error(NativeError::CapacityExceeded);
+                }
+                return Result::Error(NativeError::UnsupportedEncoding);
+            }
+        }
+        image.symbols[ordinal] = NativeSymbol {
+            function.identity, function.name, ordinal, begin, writer.offset - begin, allocation.callCount
+        };
+        image.symbolCount += 1;
+    }
+    image.fixupCount = workspace.callCount;
+    image.byteCount = writer.offset;
+    ResolveNativeCalls(ref const reader, ref image, output) ?;
+    return Result::Ok(image.byteCount);
+}
+Result<WireMachineModule, NativeError> ReadNativeModule(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<WireMachineModule>{0})) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput),
+    };
+}
+Result<WireMachineFunction, NativeError> ReadNativeFunction(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<WireMachineFunction>{0})) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput),
+    };
+}
+void NativeFacts() {
+    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
+    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
+    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
+    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
 }
 
 // This pins self-contained in-memory records, independently of the explicit
