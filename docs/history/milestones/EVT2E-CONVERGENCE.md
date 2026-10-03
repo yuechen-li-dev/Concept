@@ -28,6 +28,32 @@ No Win64 placement, shadow space, call frame, save/spill, CALL bytes or native
 call execution was added. See [EVT2e2 conformance](../../conformance/EVT2E2-CONFORMANCE.md)
 for complete transport, regression and qualification evidence.
 
-## Qualification of this handoff
+## EVT2e1 qualification (historical)
 
 `go test ./... -count=1` passed after the LIR code change (`internal/concept` 381.348s); `go vet ./...`, focused `-race` call tests, the semantic corpus manifest test, and the existing EVT2/EVT2x focused native tests passed. Standard passed 42/42, DragonGod 23/23, and Golden 130/130 in both Normal and Verify modes. The fixture passed `concept check`, `concept format --check`, and `concept lint`. The new call LIR repeated identically in 100 runs. No new native call bytes, Win64 ABI probe, call frame size, spill count, or call performance measurement exists yet.
+
+## EVT2e3: success in ABI and clobber planning
+
+Baseline `ea8f57cba65847e8466233f74d538c11d207b4dc`; compiler
+`concept-evt1-stage0-go`. CMIRAMD3 v3 and its schema hash are unchanged.
+Concept `Win64ABI` owns checked register tables, scalar argument/return
+placement, home space and symbolic stack arguments. Concept liveness includes
+all call argument uses and independently walks backward from CFG live-out to
+classify values live across each call. Fixed argument uses/result defs,
+preservation records, used-callee-saved registers and cycle temporaries are
+inspectable derived state.
+
+Parallel moves capture stack arguments first, resolve safe register moves in
+stable order, and break cycles with symbolic full-GPR temporaries. Qualification
+includes two/three-way cycles, all 256 four-register source combinations,
+repeated sources, narrow/wide classes, and six arguments. Nine real source call
+fixtures repeat 100 times, and Normal/Verify canonical output agrees exactly.
+The motivating local value is identified as `MustPreserve` across the call;
+callee-saved placement records a later save requirement.
+
+`concept amd64` prints a verified call plan and then stops at
+`AMD64_UNSUPPORTED_CALL_FRAME_LOWERING`. No preservation storage, save/restore
+emission, final outgoing frame offsets, CALL bytes, fixups or native calls are
+implemented. Existing no-call bytes and EVT2x behavior remain qualified. See
+[EVT2e3 conformance](../../conformance/EVT2E3-CONFORMANCE.md) for evidence,
+timings, metadata bounds and the existing test-file lint limitation.

@@ -1,0 +1,48 @@
+profile Core;
+int Zero() {
+    return 42;
+}
+int Id(int x) {
+    return x;
+}
+int Four(int a, int b, int c, int d) {
+    return a;
+}
+int Five(int a, int b, int c, int d, int e) {
+    return e;
+}
+int Six(int a, int b, int c, int d, int e, int f) {
+    return f;
+}
+void Touch(int x) { }
+bool IdentityBool(bool x) {
+    return x;
+}
+int Calls0() {
+    return Zero();
+}
+int Calls1(int a) {
+    return Id(a);
+}
+int Calls4(int a, int b, int c, int d) {
+    return Four(a, b, c, d);
+}
+int Calls5(int a, int b, int c, int d, int e) {
+    return Five(a, b, c, d, e);
+}
+int Calls6(int a, int b, int c, int d, int e, int f) {
+    return Six(a, b, c, d, e, f);
+}
+void CallsVoid(int a) {
+    Touch(a);
+}
+bool CallsBool(bool a) {
+    return IdentityBool(a);
+}
+int Repeated(int a, int b) {
+    return Four(a, a, b, a);
+}
+int Across(int a, int b, int c) {
+    int local = a + b;
+    return local + Id(c);
+}

@@ -106,6 +106,60 @@ func findAMD64BackendSource() (string, error) {
 const amd64BootstrapHost = `#include "amd64.generated.h"
 #include <stdio.h>
 #include <stdlib.h>
+// Presentation only: every placement, move and preservation decision comes
+// from the compiled Cathedral planner.
+static int print_call_plans(concept_readonly_span_byte source, int ordinal) {
+  concept_backend_function function = concept_standard__backend__amd64_empty_function();
+  if (concept_standard__backend__amd64_decode_function(source, ordinal, &function).tag) return 1;
+  if (concept_standard__backend__amd64_layout_lowered_blocks(&function).tag) return 1;
+  concept_allocation allocation = concept_standard__backend__amd64_empty_allocation();
+  if (concept_standard__backend__amd64_allocate_registers(&function, &allocation).tag) return 1;
+  if (concept_standard__backend__amd64_plan_function_calls(&function, &allocation).tag) return 1;
+  concept_liveness live = concept_standard__backend__amd64_empty_liveness();
+  if (concept_standard__backend__amd64_compute_liveness(&function, &live).tag) return 1;
+  for (int position=0; position<function.instructionCount; ++position) {
+    concept_machine_instruction instruction = function.instructions.data[position];
+    if (!instruction.call.target.length) continue;
+    concept_call_plan plan = concept_standard__backend__amd64_empty_call_plan();
+    concept_preservation storage[512]; int count=0;
+    concept_span_preservation records = {storage,512};
+    if (concept_standard__backend__amd64_plan_allocated_call(&function,&allocation,&live,position,&plan,records,&count).tag) return 1;
+    fprintf(stderr,"call @%.*s ; instruction %d source %d:%d lir b%d/i%d\n",
+      plan.target.length,(const char*)source.data+plan.target.offset,position,instruction.sourceLine,instruction.sourceColumn,instruction.lirBlock,instruction.lirInstruction);
+    for (int i=0;i<plan.argumentCount;++i) {
+      concept_argument_placement a=plan.arguments.data[i];
+      fprintf(stderr,"  arg%d v%d:%s width=%d -> ",i,a.source.value,concept_standard__backend__amd64_call_value_name(a.source.type),a.source.width);
+      if(a.onStack) fprintf(stderr,"stack[%d]\n",a.stackSlot);
+      else fprintf(stderr,"%s\n",concept_standard__backend__amd64_abiregister_name(a.physical));
+    }
+    if(plan.hasResult) fprintf(stderr,"  return RAX -> v%d width=%d\n",plan.result.value,plan.result.width);
+    else fprintf(stderr,"  return void\n");
+    fprintf(stderr,"  shadow=%d stack-bytes=%d flags-clobbered=%d temps=%d\n",plan.shadowSpaceBytes,plan.stackArgumentBytes,plan.flagsClobbered,plan.temporaryCount);
+    concept_abiregister_tables tables=concept_standard__backend__amd64_win64registers();
+    fprintf(stderr,"  clobbers=");
+    for(int i=0;i<7;++i) fprintf(stderr,"%s%s",i?",":"",concept_standard__backend__amd64_abiregister_name(tables.callerSaved.data[i]));
+    fprintf(stderr,"\n");
+    for(int i=0;i<plan.moveCount;++i) {
+      concept_argument_move m=plan.moves.data[i];
+      fprintf(stderr,"  move ");
+      if(m.sourceKind.tag==0) fprintf(stderr,"%s",concept_standard__backend__amd64_abiregister_name(m.source));
+      else fprintf(stderr,"temp[%d]",m.sourceSlot);
+      fprintf(stderr," -> ");
+      if(m.destinationKind.tag==0) fprintf(stderr,"%s",concept_standard__backend__amd64_abiregister_name(m.destination));
+      else fprintf(stderr,"%s[%d]",m.destinationKind.tag==1?"stack":"temp",m.destinationSlot);
+      fprintf(stderr," width=%d\n",m.width);
+    }
+    for(int i=0;i<count;++i) fprintf(stderr,"  live v%d width=%d %s %s range=%d..%d\n",storage[i].value,storage[i].width,
+      concept_standard__backend__amd64_abiregister_name(storage[i].physical),concept_standard__backend__amd64_preservation_name(storage[i].classification),storage[i].start,storage[i].end);
+    fprintf(stderr,"  used-callee-saved=");
+    for(int i=0;i<8;++i) {
+      concept_register r=tables.calleeSaved.data[i];
+      if(allocation.usedCalleeSaved.data[concept_standard__backend__amd64_register_index(r)]) fprintf(stderr,"%s ",concept_standard__backend__amd64_abiregister_name(r));
+    }
+    fprintf(stderr,"\n");
+  }
+  return 0;
+}
 int main(int argc, char** argv) {
   if (argc != 3) return 2;
   FILE* file = fopen(argv[1], "rb");
@@ -120,11 +174,13 @@ int main(int argc, char** argv) {
   concept_readonly_span_byte source = {input, (size_t)size};
   concept_span_byte target = {output, sizeof output};
   concept_result_int_backend_error result = concept_standard__backend__amd64_emit_function(source, atoi(argv[2]), target);
-  free(input);
   if (result.tag != 0) {
+    if (print_call_plans(source, atoi(argv[2]))) fprintf(stderr,"AMD64_CALL_PLAN_DIAGNOSTIC_FAILED\n");
     fprintf(stderr, "%s (tag=%u)\n", concept_standard__backend__amd64_describe_backend_error(result.payload.error.error), result.payload.error.error.tag);
+    free(input);
     return 7;
   }
+  free(input);
   if (fwrite(output, 1, (size_t)result.payload.ok.value, stdout) != (size_t)result.payload.ok.value) return 8;
   return 0;
 }

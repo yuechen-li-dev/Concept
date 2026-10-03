@@ -22,6 +22,23 @@ The Concept reader uses typed `Register`, `OperandKind`, `Opcode`, and `Conditio
 
 ## Encoding
 
+### EVT2e3 call planning boundary
+
+CMIRAMD3 calls are projected into bounded scalar call metadata. Concept
+`Win64ABI` owns argument/return tables, 32-byte home space, outgoing symbolic
+slots, clobber sets and parallel argument moves. The existing liveness and
+allocator recognize call uses, derive fixed call-point constraints and expose
+preservation/used-callee-saved summaries. Call functions may plan additional
+callee-saved candidates; the no-call pool and emitted bytes are unchanged.
+
+Cycles use symbolic full-GPR temporary slots; final stack stores, saves/spills
+and result copies are not emitted. Normal EmitFunction entry points qualify
+all plans and stop at `AMD64_UNSUPPORTED_CALL_FRAME_LOWERING` before finalizing
+a call frame or writing bytes. The CLI renders those plans through its C11
+bootstrap host. The underlying UnsupportedCallLowering bridge tag is unchanged.
+See [EVT2e3 conformance](../conformance/EVT2E3-CONFORMANCE.md) for exact fixtures,
+ownership, output, metadata bounds and qualification limits.
+
 The bounded Concept `ByteWriter` writes bytes and little-endian `i32` values, then patches `rel32` branches after deterministic block layout. Errors return `Result`; callers discard the buffer when encoding fails. The encoder handles MOV, LOAD, STORE, LEA, ADD, SUB, IMUL, CMP, TEST, SETCC, JMP, Jcc, RET, stack adjustment, and UD2. It emits only the forms used by the qualified integer fixture; unsupported widths, operands, pseudo-operations (including UMUL), calls, and spill needs return explicit errors. Signed and unsigned condition codes have distinct encodings. Checked overflow uses JO to a UD2 block. Bounds checks use unsigned JAE, which also rejects negative signed indexes after a 32-bit compare.
 
 Register encoding has one typed mapping. REX selection accounts for operand width and extended ModRM/SIB register fields. Memory forms use base plus optional index times 1, 2, 4, or 8 plus displacement. RSP/R12 force SIB; RBP/R13 with zero displacement force a zero `disp8`; larger displacement uses `disp32`. The direct C11-hosted encoder test pins simple MOV/ADD/CMP bytes and an addressing matrix for low, extended, RSP/R12, RBP/R13, indexed, all scales, and `disp32` cases. Add and Max end-to-end tests pin their whole-function bytes.

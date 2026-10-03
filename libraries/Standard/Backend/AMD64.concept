@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64;
 profile Core;
 import Standard.Backend.BridgeValidate;
+import Standard.Backend.Win64ABI;
 import Standard.Semantic.Vocabulary;
 record struct MachineOperand
 {
@@ -15,6 +16,19 @@ record struct MachineOperand
     BridgeText literal;
     BridgeText region;
     bool signedValue;
+}
+struct ProjectedCall
+{
+    BridgeText target;
+    int argumentCount;
+    int[8] values;
+    CallValueType[8] types;
+    CallValueType result;
+}
+ProjectedCall EmptyProjectedCall() {
+    return ProjectedCall {
+        BridgeText{0, 0}, 0,[- 1 ...],[CallValueType::Void ...], CallValueType::Void
+    };
 }
 record struct MachineInstruction
 {
@@ -31,6 +45,7 @@ record struct MachineInstruction
     int lirInstruction;
     int sourceLine;
     int sourceColumn;
+    ProjectedCall call;
 }
 record struct MachineBlock
 {
@@ -102,7 +117,7 @@ MachineInstruction EmptyInstruction()
 {
     return MachineInstruction {
         Opcode::None, EmptyOperand(), EmptyOperand(),
-        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0
+        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0, EmptyProjectedCall()
     };
 }
 BackendFunction EmptyFunction()
@@ -172,7 +187,7 @@ MachineOperand ProjectWireOperand(WireMachineOperand value) {
 }
 // This is a semantic projection. Wire order belongs exclusively to ReadWire.
 Result<void, BackendError> ProjectWireFunction(
-ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function, bool forEncoding) {
+ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function) {
     if (not TextEquals(ref const source, wire.Target, "amd64-windows") or
     not TextEquals(ref const source, wire.ABI, "win64")) {
         return Result::Error(BackendError::BridgeInvalid);
@@ -238,8 +253,26 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
             WireMachineInstruction value = ReadWire(ref instructions, BridgeType<WireMachineInstruction>{
                 0
             }) ?;
-            if (value.Op == Opcode::Call and forEncoding) {
-                return Result::Error(BackendError::UnsupportedCallLowering);
+            ProjectedCall call = EmptyProjectedCall();
+            if (value.Op == Opcode::Call) {
+                BridgeReader calls = BridgeReader{source.data, value.Calls.offset};
+                WireMachineCall wireCall = ReadWire(ref calls, BridgeType<WireMachineCall>{0}) ?;
+                if (wireCall.Arguments.count > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                call.target = wireCall.Target;
+                call.argumentCount = wireCall.Arguments.count;
+                call.result = wireCall.Result;
+                BridgeReader arguments = BridgeReader {
+                    source.data, wireCall.Arguments.offset
+                };
+                for (ai in 0 .. call.argumentCount) {
+                    WireMachineCallArgument argument = ReadWire(ref arguments, BridgeType<WireMachineCallArgument>{
+                        0
+                    }) ?;
+                    call.values[ai] = argument.Value;
+                    call.types[ai] = argument.Type;
+                }
             }
             if (value.Src.count > 2) { return Result::Error(BackendError::BridgeInvalid); }
             MachineOperand destination = ProjectWireOperand(value.Dst);
@@ -266,7 +299,7 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
             function.instructions[function.instructionCount] = MachineInstruction {
                 value.Op, destination, source0, source1, value.Src.count,
                 value.Width, value.FlagsDef, value.FlagsUse, value.Cond,
-                value.LIRBlock, value.LIRInstruction, value.Source.Line, value.Source.Column
+                value.LIRBlock, value.LIRInstruction, value.Source.Line, value.Source.Column, call
             };
             function.instructionCount += 1;
         }
@@ -292,7 +325,7 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
     for (i in 0 .. document.Functions.count) {
         WireMachineFunction wire = ReadWire(ref reader, BridgeType<WireMachineFunction>{0}) ?;
         function = EmptyFunction();
-        ProjectWireFunction(ref const reader, wire, ref function, i == ordinal) ?;
+        ProjectWireFunction(ref const reader, wire, ref function) ?;
         if (i == ordinal) {
             selected = function;
         }
@@ -303,7 +336,7 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
 string DescribeBackendError(BackendError error)
 {
     if (error == BackendError::UnsupportedCallLowering) {
-        return "AMD64_UNSUPPORTED_CALL_LOWERING: call ABI lowering is not implemented";
+        return "AMD64_UNSUPPORTED_CALL_FRAME_LOWERING: verified call plan requires preservation storage and call frame realization";
     }
     return "AMD64_BACKEND_ERROR";
 }
@@ -313,6 +346,12 @@ struct Allocation
     int[512] end;
     Register[512] physical;
     bool[512] assigned;
+    bool[15] usedCalleeSaved;
+    int callCount;
+    int shadowSpaceBytes;
+    int stackArgumentBytes;
+    int temporaryCount;
+    int preservationCount;
 }
 // A bounds/overflow check splits one LIR block into several MachineIR blocks.
 // Keep those continuations adjacent before computing linear intervals. Appended
@@ -381,7 +420,9 @@ Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
 }
 Allocation EmptyAllocation()
 {
-    return Allocation{[2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...]};
+    return Allocation {
+        [2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...],[false ...], 0, 0, 0, 0, 0
+    };
 }
 void TouchInterval(ref Allocation allocation, int id, int position)
 {
@@ -467,6 +508,18 @@ ref const BackendFunction function, ref Liveness liveness)
         for (ii in 0 .. block.instructionCount)
         {
             MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.op == Opcode::Call) {
+                if (instruction.call.argumentCount < 0 or instruction.call.argumentCount > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    int id = instruction.call.values[ai];
+                    if (id < 0 or id >= function.virtualRegCount) {
+                        return Result::Error(BackendError::BridgeInvalid);
+                    }
+                    MarkUse(ref liveness, bi, instruction.call.values[ai]);
+                }
+            }
             if (instruction.sourceCount > 0)
             {
                 MarkOperandUse(ref liveness, bi, instruction.source0);
@@ -561,6 +614,11 @@ ref const BackendFunction function, ref Allocation allocation)
             int position = block.firstInstruction + ii;
             MachineInstruction instruction = function.instructions[position];
             TouchOperand(ref allocation, instruction.destination, position);
+            if (instruction.op == Opcode::Call) {
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    TouchInterval(ref allocation, instruction.call.values[ai], position);
+                }
+            }
             if (instruction.sourceCount > 0)
             {
                 TouchOperand(ref allocation, instruction.source0, position);
@@ -588,6 +646,24 @@ Result<void, BackendError> AllocateRegisters(
 ref const BackendFunction function, ref Allocation allocation)
 {
     ComputeIntervals(ref const function, ref allocation) ?;
+    // Fixed call uses/defs are derived before assignments. General assignments
+    // remain the qualified pool; call-point moves and preservation are explicit.
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            CallRequest request = RequestForCall(function.instructions[position], position);
+            Result<void, ABIError> checked = PlanWin64Call(ref const request, ref plan);
+            match (checked) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            allocation.callCount += 1;
+            allocation.shadowSpaceBytes = plan.shadowSpaceBytes;
+            if (plan.stackArgumentBytes > allocation.stackArgumentBytes) {
+                allocation.stackArgumentBytes = plan.stackArgumentBytes;
+            }
+        }
+    }
     for (position in 0 .. function.instructionCount)
     {
         for (id in 0 .. function.virtualRegCount)
@@ -596,9 +672,19 @@ ref const BackendFunction function, ref Allocation allocation)
             {
                 bool found = false;
                 Register choice = Register::R10;
-                for (candidate in 0 .. 5)
+                int candidateCount = 5;
+                if (allocation.callCount > 0) {
+                    candidateCount += Len(Win64Registers().calleeSaved);
+                }
+                for (candidate in 0 .. candidateCount)
                 {
-                    Register physical = PoolRegister(candidate);
+                    Register physical = Register::RAX;
+                    if (candidate < 5) {
+                        physical = PoolRegister(candidate);
+                    }
+                    else {
+                        physical = Win64Registers().calleeSaved[candidate - 5];
+                    }
                     bool busy = false;
                     for (other in 0 .. function.virtualRegCount)
                     {
@@ -618,6 +704,216 @@ ref const BackendFunction function, ref Allocation allocation)
                 if (not found) { return Result::Error(BackendError::RegisterExhausted); }
                 allocation.physical[id] = choice;
                 allocation.assigned[id] = true;
+                if (IsCalleeSaved(choice)) {
+                    allocation.usedCalleeSaved[RegisterIndex(choice)] = true;
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+CallRequest RequestForCall(MachineInstruction instruction, int position) {
+    CallRequest request = EmptyCallRequest();
+    request.target = instruction.call.target;
+    request.instruction = position;
+    request.argumentCount = instruction.call.argumentCount;
+    for (i in 0 .. request.argumentCount) {
+        CallValueType type = instruction.call.types[i];
+        ABIClass category = ABIClass::Integer;
+        if (type == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        request.arguments[i] = ABIValue {
+            instruction.call.values[i], type, category, CallValueWidth(type)
+        };
+    }
+    request.hasResult = instruction.call.result != CallValueType::Void;
+    if (request.hasResult) {
+        ABIClass category = ABIClass::Integer;
+        if (instruction.call.result == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        request.result = ABIValue {
+            instruction.destination.id, instruction.call.result, category, instruction.width
+        };
+    }
+    return request;
+}
+void SetLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] |(1 <<(id % 31));
+}
+void ClearLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] &((1 <<(id % 31)) ^ 2147483647);
+}
+void AddLiveOperand(ref LivenessBits bits, MachineOperand operand) {
+    if (operand.kind == OperandKind::Virtual) {
+        SetLive(ref bits, operand.id);
+    }
+    if (operand.kind == OperandKind::Memory) {
+        if (operand.base >= 0) {
+            SetLive(ref bits, operand.base);
+        }
+        if (operand.index >= 0) {
+            SetLive(ref bits, operand.index);
+        }
+    }
+}
+Result<LivenessBits, ABIError> LiveAcrossCall(
+ref const BackendFunction function, ref const Liveness liveness, int position) {
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    if (function.instructions[position].op != Opcode::Call) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        if (position >= block.firstInstruction and position < block.firstInstruction + block.instructionCount) {
+            LivenessBits live = liveness.liveOut[bi];
+            for (back in 0 .. block.instructionCount) {
+                int at = block.firstInstruction + block.instructionCount - 1 - back;
+                MachineInstruction instruction = function.instructions[at];
+                // The call result is born after the call: never preserve it.
+                if (at == position) {
+                    if (instruction.destination.kind == OperandKind::Virtual) {
+                        ClearLive(ref live, instruction.destination.id);
+                    }
+                    return Result::Ok(live);
+                }
+                if (instruction.destination.kind == OperandKind::Virtual) {
+                    ClearLive(ref live, instruction.destination.id);
+                }
+                if (instruction.sourceCount > 0) {
+                    AddLiveOperand(ref live, instruction.source0);
+                }
+                if (instruction.sourceCount > 1) {
+                    AddLiveOperand(ref live, instruction.source1);
+                }
+                if (instruction.op == Opcode::Call) {
+                    for (ai in 0 .. instruction.call.argumentCount) {
+                        SetLive(ref live, instruction.call.values[ai]);
+                    }
+                }
+                if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or instruction.op == Opcode::Imul or instruction.op == Opcode::Umul or instruction.op == Opcode::Store) {
+                    AddLiveOperand(ref live, instruction.destination);
+                }
+            }
+        }
+    }
+    return Result::Error(ABIError::InvalidPlan);
+}
+Result<void, ABIError> ValidateCallFlags(ref const BackendFunction function) {
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        int flags = - 1;
+        for (ii in 0 .. block.instructionCount) {
+            MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.flagsUse >= 0 and instruction.flagsUse != flags) {
+                return Result::Error(ABIError::StaleFlags);
+            }
+            if (instruction.op == Opcode::Call) {
+                flags = - 1;
+            }
+            else {
+                if (instruction.flagsDef >= 0) {
+                    flags = instruction.flagsDef;
+                }
+            }
+        }
+        if (block.flagsUse >= 0 and block.flagsUse != flags) {
+            return Result::Error(ABIError::StaleFlags);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> PlanAllocatedCall(
+ref const BackendFunction function, ref const Allocation allocation, ref const Liveness liveness,
+int position, ref CallPlan plan, Span<Preservation> preservation, ref int count) {
+    ValidateCallFlags(ref const function) ?;
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    MachineInstruction instruction = function.instructions[position];
+    if (instruction.op != Opcode::Call) { return Result::Error(ABIError::InvalidPlan); }
+    CallRequest request = RequestForCall(instruction, position);
+    PlanWin64Call(ref const request, ref plan) ?;
+    Register[8] sources =[Register::RAX ...];
+    for (i in 0 .. plan.argumentCount) {
+        int id = plan.arguments[i].source.value;
+        if (id < 0 or id >= function.virtualRegCount) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        if (not allocation.assigned[id]) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        sources[i] = allocation.physical[id];
+    }
+    PlanArgumentMoves(ref plan, ref const sources) ?;
+    ValidateArgumentMoves(ref const plan, ref const sources) ?;
+    LivenessBits across = LiveAcrossCall(ref const function, ref const liveness, position) ?;
+    count = 0;
+    for (id in 0 .. function.virtualRegCount) {
+        if ((across.words[id / 31] &(1 <<(id % 31))) != 0) {
+            if (not allocation.assigned[id] or not IsValueRegister(allocation.physical[id])) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+            if (count >= Len(preservation)) {
+                return Result::Error(ABIError::CapacityExceeded);
+            }
+            PreservationClass classification = PreservationClass::OutsideClobbers;
+            if (IsCallerSaved(allocation.physical[id])) {
+                classification = PreservationClass::MustPreserve;
+            }
+            else {
+                if (IsCalleeSaved(allocation.physical[id])) {
+                    classification = PreservationClass::SafeInCalleeSaved;
+                }
+            }
+            preservation[count] = Preservation {
+                id, function.virtualRegs[id].width, function.virtualRegs[id].address,
+                allocation.physical[id], position, allocation.start[id], allocation.end[id], classification
+            };
+            ValidatePreservation(preservation[count]) ?;
+            count += 1;
+        }
+    }
+    return Result::Ok();
+}
+// Only one bounded per-call plan and one caller-owned preservation buffer are
+// resident. Summary maxima feed later shared outgoing/frame storage.
+Result<void, BackendError> PlanFunctionCalls(ref const BackendFunction function, ref Allocation allocation) {
+    Liveness liveness = EmptyLiveness();
+    ComputeLiveness(ref const function, ref liveness) ?;
+    Preservation[512] storage =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers
+    }
+    ...];
+    allocation.temporaryCount = 0;
+    allocation.preservationCount = 0;
+    for (i in 0 .. Len(allocation.usedCalleeSaved)) {
+        allocation.usedCalleeSaved[i] = false;
+    }
+    for (id in 0 .. function.virtualRegCount) {
+        if (allocation.assigned[id] and IsCalleeSaved(allocation.physical[id])) {
+            allocation.usedCalleeSaved[RegisterIndex(allocation.physical[id])] = true;
+        }
+    }
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            int count = 0;
+            match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+            ref plan, Span(storage), ref count)) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (plan.temporaryCount > allocation.temporaryCount) {
+                allocation.temporaryCount = plan.temporaryCount;
+            }
+            for (i in 0 .. count) {
+                if (storage[i].classification == PreservationClass::MustPreserve) {
+                    allocation.preservationCount += 1;
+                }
             }
         }
     }
@@ -1282,6 +1578,10 @@ Span<int> blockOffsets, Span<BranchFixup> fixups)
     LayoutLoweredBlocks(ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
+    if (allocation.callCount > 0) {
+        PlanFunctionCalls(ref const function, ref allocation) ?;
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
     EncodingWorkspace workspace = EncodingWorkspace{blockOffsets, fixups, 0};
@@ -1296,6 +1596,10 @@ ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output)
     LayoutLoweredBlocks(ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
+    if (allocation.callCount > 0) {
+        PlanFunctionCalls(ref const function, ref allocation) ?;
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
     return EncodeFunction(ref const reader, ref const function, ref const allocation,
@@ -1306,6 +1610,8 @@ void BackendFacts()
     Assert.Concept<NoAllocation>(LayoutLoweredBlocks, "fixed block and instruction storage");
     Assert.Concept<NoAllocation>(WriteByte, "bounded caller-supplied output");
     Assert.Concept<NoAllocation>(AllocateRegisters, "fixed interval and liveness storage");
+    Assert.Concept<NoAllocation>(PlanAllocatedCall, "caller supplied preservation records");
+    Assert.Concept<NoAllocation>(PlanFunctionCalls, "one bounded call plan at a time");
     Assert.Concept<NoAllocation>(EncodeFunctionWithWorkspace, "caller-supplied encoding scratch");
     Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");

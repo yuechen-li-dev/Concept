@@ -35,7 +35,7 @@ func TestEVT2e2CLIContractAndBoundary(t *testing.T) {
 		cmd := exec.Command("go", "run", ".", command, fixture)
 		output, err := cmd.CombinedOutput()
 		if command == "amd64" {
-			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_LOWERING") {
+			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_FRAME_LOWERING") {
 				t.Fatalf("imprecise later backend boundary: %v\n%s", err, output)
 			}
 		} else if err != nil || !strings.Contains(string(output), "call @") && !strings.Contains(string(output), "call i32 @") {
@@ -61,5 +61,35 @@ func TestEVT2e2CLIContractAndBoundary(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "WireMachineCall") {
 		t.Fatalf("generated call declarations CLI: %v\n%s", err, output)
+	}
+}
+
+func TestEVT2e3CLIDebugPlans(t *testing.T) {
+	cases := []struct {
+		name, source string
+		wants        []string
+	}{
+		{"zero", "int Target(){return 7;} int Caller(){return Target();}", []string{"call @Target|Target()", "shadow=32 stack-bytes=0", "return RAX ->"}},
+		{"four", "int Target(int a,int b,int c,int d){return a;} int Caller(int a,int b,int c,int d){return Target(a,b,c,d);}", []string{"arg0 v0:i32 width=4 -> RCX", "arg3 v3:i32 width=4 -> R9", "stack-bytes=0"}},
+		{"five", "int Caller(int a,int b,int c,int d,int e){return Target(a,b,c,d,e);} int Target(int a,int b,int c,int d,int e){return e;}", []string{"arg4 v4:i32 width=4 -> stack[0]", "stack-bytes=8", "move R9 -> stack[0]"}},
+		{"live", "int Target(int a){return a;} int Caller(int a,int b,int c){int local=a+b;return local+Target(c);}", []string{"live v", "MustPreserve", "range="}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), tc.name+".concept")
+			if err := os.WriteFile(path, []byte("profile Core;\n"+tc.source), 0644); err != nil {
+				t.Fatal(err)
+			}
+			output, err := exec.Command("go", "run", ".", "amd64", path).CombinedOutput()
+			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_FRAME_LOWERING") {
+				t.Fatalf("boundary: %v\n%s", err, output)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(string(output), want) {
+					t.Fatalf("missing %q:\n%s", want, output)
+				}
+			}
+			t.Logf("%s", output)
+		})
 	}
 }

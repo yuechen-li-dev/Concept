@@ -165,8 +165,11 @@ validates before writing caller output, then uses generated readers/writers.
 Neither decoding nor roundtrip needs the originating source. Runtime errors use
 Result; the wire-record PlainData assertions use Vocabulary's typed Verdict
 with size/alignment evidence. No PlainData assertion grants ABI equivalence.
-Selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_LOWERING` before
-allocation or encoding. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md).
+EVT2e3 derives transient physical ABI plans from these same semantic records.
+Selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_FRAME_LOWERING` after
+verified placement, moves and preservation analysis, before frame realization
+or encoding. The schema is unchanged. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md)
+and [EVT2e3 planning](../conformance/EVT2E3-CONFORMANCE.md).
 
 ## Migration and evidence
 
