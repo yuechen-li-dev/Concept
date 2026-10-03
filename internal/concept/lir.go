@@ -360,6 +360,9 @@ func VerifyLIR(m LIRModule) error {
 					if in.Result < 0 || len(in.Args) != 0 || in.Literal == "" {
 						return fmt.Errorf("LIR_BAD_CONST b%d", b.ID)
 					}
+					if lirFloating(in.Type) && !lirFloatLiteralValid(in.Type, in.Literal) {
+						return fmt.Errorf("LIR_BAD_FLOAT_CONST b%d", b.ID)
+					}
 				case "machine_result":
 					if (f.Machine == nil || f.Machine.Role != "step") && (f.Activation == nil || f.Activation.Role != "step") || in.Result < 0 || in.Type != "machine_step_result" || len(in.Args) != 0 || (in.Literal != "Active" && in.Literal != "Yielded" && in.Literal != "Completed") {
 						return fmt.Errorf("LIR_BAD_MACHINE_RESULT b%d", b.ID)
@@ -392,8 +395,16 @@ func VerifyLIR(m LIRModule) error {
 					if in.Result < 0 || len(in.Args) != 2 || argType(0) != in.Type || argType(1) != in.Type || !lirInteger(in.Type) {
 						return fmt.Errorf("LIR_BAD_ARITHMETIC b%d", b.ID)
 					}
+				case "fadd", "fsub", "fmul", "fdiv":
+					if in.Result < 0 || len(in.Args) != 2 || argType(0) != in.Type || argType(1) != in.Type || !lirFloating(in.Type) {
+						return fmt.Errorf("LIR_BAD_FLOAT_ARITHMETIC b%d", b.ID)
+					}
+				case "fneg":
+					if in.Result < 0 || len(in.Args) != 1 || argType(0) != in.Type || !lirFloating(in.Type) {
+						return fmt.Errorf("LIR_BAD_FLOAT_NEGATION b%d", b.ID)
+					}
 				case "eq", "ne", "lt", "le", "gt", "ge":
-					if in.Result < 0 || len(in.Args) != 2 || argType(0) != argType(1) || (!lirInteger(argType(0)) && argType(0) != "bool") || in.Type != "bool" {
+					if in.Result < 0 || len(in.Args) != 2 || argType(0) != argType(1) || (!lirInteger(argType(0)) && !lirFloating(argType(0)) && argType(0) != "bool") || in.Type != "bool" {
 						return fmt.Errorf("LIR_BAD_COMPARE b%d", b.ID)
 					}
 				case "check_index":
@@ -591,16 +602,35 @@ func lirInteger(t LIRType) bool {
 	return false
 }
 
-func lirCallScalar(t LIRType) bool { return t == "bool" || lirInteger(t) }
+func lirFloating(t LIRType) bool   { return t == "float32" || t == "float64" }
+func lirCallScalar(t LIRType) bool { return t == "bool" || lirInteger(t) || lirFloating(t) }
+
+// Fixed-width, lowercase hexadecimal IEEE bits include signed zero and every
+// NaN payload. Decimal strings are not a floating LIR constant representation.
+func lirFloatLiteralValid(t LIRType, literal string) bool {
+	digits := 8
+	if t == "float64" {
+		digits = 16
+	}
+	if len(literal) != digits+2 || !strings.HasPrefix(literal, "0x") {
+		return false
+	}
+	for _, c := range literal[2:] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
 func lirWidth(t LIRType) int {
 	switch t {
 	case "i8", "u8":
 		return 1
 	case "i16", "u16":
 		return 2
-	case "i32", "u32", "machine_step_result":
+	case "i32", "u32", "float32", "machine_step_result":
 		return 4
-	case "i64", "u64":
+	case "i64", "u64", "float64":
 		return 8
 	}
 	return 0

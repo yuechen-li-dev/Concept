@@ -2,6 +2,7 @@ package concept
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 )
@@ -123,6 +124,16 @@ func lirType(t Type) (LIRType, error) {
 			return "", e
 		}
 		return LIRType(fmt.Sprintf("[%d]%s", t.ArrayLength, el)), nil
+	}
+	if info, ok := evt1FloatRepresentationInfo(t); ok {
+		switch info.Representation {
+		case FloatBinary32:
+			return "float32", nil
+		case FloatBinary64:
+			return "float64", nil
+		default:
+			return "", fmt.Errorf("EVT2_UNSUPPORTED_FLOAT_REPRESENTATION %s", info.Representation)
+		}
 	}
 	switch t.Name {
 	case "void":
@@ -466,6 +477,38 @@ func (b *lirBuilder) foreach(s *ForeachStmt) error {
 
 func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	switch e := expr.(type) {
+	case *ParenExpr:
+		return b.expr(e.Value)
+	case *InterpretExpr:
+		v, source, err := b.expr(e.Value)
+		if err != nil {
+			return 0, "", err
+		}
+		target, err := lirType(e.Target)
+		if err != nil || source != target || !lirFloating(target) {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_INTERPRET %s", e.Target.String())
+		}
+		// Semantic validation has already proved the interpretation. Quantity
+		// meaning changes, but its identical representation needs no LIR op.
+		return v, target, nil
+	case *FloatLiteral:
+		t, err := lirType(e.ResolvedType)
+		if err != nil {
+			return 0, "", err
+		}
+		if !lirFloating(t) {
+			return 0, "", fmt.Errorf("EVT2_FLOAT_LITERAL_TYPE %s", t)
+		}
+		return b.constant(t, lirFloatLiteral(t, e.Value), e.Span), t, nil
+	case *UnaryExpr:
+		v, t, err := b.expr(e.Value)
+		if err != nil {
+			return 0, "", err
+		}
+		if e.Op != "-" || !lirFloating(t) {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_UNARY %s", e.Op)
+		}
+		return b.emit(LIRInstruction{Op: "fneg", Result: 0, Type: t, Args: []int{v}, Slot: -1, Source: e.Span}), t, nil
 	case *CallExpr:
 		if e.Intrinsic != "" || e.Member || e.Receiver != nil || e.CallableInvoke || e.DynDispatch || e.resolvedSignature == "" {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL %s at %d:%d", e.Callee, e.Span.Line, e.Span.Column)
@@ -544,6 +587,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		return b.constant("bool", lit, e.Span), "bool", nil
 	case *BinaryExpr:
+		if e.UnitScaleDenominator != 0 && e.UnitScaleNumerator != e.UnitScaleDenominator {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_QUANTITY_SCALE %d/%d at %d:%d", e.UnitScaleNumerator, e.UnitScaleDenominator, e.Span.Line, e.Span.Column)
+		}
 		left, lt, err := b.expr(e.Left)
 		if err != nil {
 			return 0, "", err
@@ -556,6 +602,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			return 0, "", fmt.Errorf("EVT2_BINARY_TYPE_MISMATCH")
 		}
 		op := map[string]string{"+": "checked_add", "-": "checked_sub", "*": "checked_mul", "==": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}[e.Op]
+		if lirFloating(lt) {
+			op = map[string]string{"+": "fadd", "-": "fsub", "*": "fmul", "/": "fdiv", "==": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}[e.Op]
+		}
 		if op == "" {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_BINARY %s", e.Op)
 		}
@@ -583,6 +632,16 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	default:
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	}
+}
+
+// Literal bits project the existing checked semantic value exactly once to its
+// declared representation. No decimal printer or native instruction selection
+// participates in this target-independent input contract.
+func lirFloatLiteral(t LIRType, value float64) string {
+	if t == "float32" {
+		return fmt.Sprintf("0x%08x", math.Float32bits(float32(value)))
+	}
+	return fmt.Sprintf("0x%016x", math.Float64bits(value))
 }
 
 func (b *lirBuilder) indexAddress(e *IndexExpr) (int, LIRType, error) {

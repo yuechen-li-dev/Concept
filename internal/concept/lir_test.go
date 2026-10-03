@@ -96,12 +96,12 @@ func TestEVT2VerifierRejectsMalformedLIR(t *testing.T) {
 }
 
 func TestEVT2UnsupportedFeatureFailsExplicitly(t *testing.T) {
-	module, err := Parse("float.concept", "profile Core; float F(float x) { return x; }")
+	module, err := Parse("half.concept", "profile Core; half F(half x) { return x; }")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = GenerateLIR(module)
-	if err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_TYPE") {
+	if err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_FLOAT_REPRESENTATION binary16") {
 		t.Fatalf("wanted explicit unsupported type, got %v", err)
 	}
 }

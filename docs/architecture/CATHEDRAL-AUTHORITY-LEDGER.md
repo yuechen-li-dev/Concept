@@ -8,7 +8,8 @@ States: `GO_AUTHORITATIVE` means Stage-0 makes the normal decision;
 `CONCEPT_AUTHORITATIVE` means Concept decides the normal path;
 `BOOTSTRAP_ONLY` means Go remains for the independent seed, without evolving
 normal semantics; `SHARED_BY_DESIGN` means the responsibilities are distinct
-and named. A generated Go projection of a Concept contract does not make Go a
+and named; `NOT_YET_QUALIFIED` means the required native implementation does
+not yet exist. A generated Go projection of a Concept contract does not make Go a
 second contract author.
 
 | Subsystem / decision | Authority owner | Shadow implementation | Bootstrap implementation | Status | Next transition |
@@ -20,7 +21,8 @@ second contract author.
 | Proof graph and fact trust | Stage-0 mechanism; Concept authored claims | None | Go proof host | GO_AUTHORITATIVE | Separate decision rule from evaluator/provenance transport |
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
-| Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call contract qualified; later Concept transformation parity |
+| Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call and EVT2f width-specific floating input contracts qualified; later Concept transformation parity |
+| Scalar floating/XMM native backend | Pending Cathedral implementation | Strict C11 source oracle only | Stage-0 produces checked floating LIR; rejects it before CMIRAMD3 projection | NOT_YET_QUALIFIED | CMIRAMD4 must add exact scalar/register classes; allocation, SSE selection, ABI, spills and encoding remain Concept responsibilities |
 | MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
 | Call artifact admission | Concept `BridgeValidate` on normal AMD64 path | Stage-0 verifier checks producer input | Go semantic transport/verifier; generated codec | SHARED_BY_DESIGN | Typed transport through native scalar Win64 execution qualified |

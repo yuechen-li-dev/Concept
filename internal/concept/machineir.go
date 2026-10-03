@@ -170,6 +170,11 @@ func machineABIWidth(t LIRType) (int, bool, error) {
 	return 0, false, fmt.Errorf("MIR_UNSUPPORTED_ABI_TYPE %s", t)
 }
 func machineScalarWidth(t LIRType) int {
+	// CMIRAMD3 has only integer/bool/address scalar classes. A width alone
+	// cannot authorize a floating value to use its GPR ABI or opcodes.
+	if lirFloating(t) {
+		return 0
+	}
 	if strings.HasPrefix(string(t), "ptr<") && strings.HasSuffix(string(t), ">") {
 		return 8
 	}

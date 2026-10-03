@@ -11,6 +11,37 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	// Admission precedes incoming ABI selection and every GPR projection. The
+	// next backend contract must version exact scalar/XMM classes in Concept's
+	// sole bridge schema; never reinterpret CMIRAMD3's integer width vocabulary.
+	for _, f := range lir.Functions {
+		requireClass := func(t LIRType) error {
+			if strings.Contains(string(t), "float32") || strings.Contains(string(t), "float64") {
+				return fmt.Errorf("MIR_FLOAT_REQUIRES_CMIRAMD4 %s: %s requires explicit scalar and XMM register classes", f.Name, t)
+			}
+			return nil
+		}
+		if err := requireClass(f.Result); err != nil {
+			return MachineModule{}, err
+		}
+		for _, p := range f.Params {
+			if err := requireClass(p.Type); err != nil {
+				return MachineModule{}, err
+			}
+		}
+		for _, s := range f.Slots {
+			if err := requireClass(s.Type); err != nil {
+				return MachineModule{}, err
+			}
+		}
+		for _, b := range f.Blocks {
+			for _, in := range b.Instructions {
+				if err := requireClass(in.Type); err != nil {
+					return MachineModule{}, err
+				}
+			}
+		}
+	}
 	out := MachineModule{}
 	for _, lf := range lir.Functions {
 		b := machineBuilder{lir: lf, values: map[int]MachineOperand{}, types: map[int]LIRType{}, regions: map[int]string{}, frameOffsets: map[int]int{}, flags: map[int]machineCondition{}}
