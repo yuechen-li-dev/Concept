@@ -245,6 +245,33 @@ func TestEVT2cVerifierRejectsMalformed(t *testing.T) {
 		t.Fatal("out-of-range immediate accepted")
 	}
 }
+// The literal set is the frozen pre-R9c Go verifier decision. The production
+// decision now comes from the checked Concept bridge enum's generated table.
+func TestR9cConditionAuthorityShadowAgreement(t *testing.T) {
+	legacy := map[string]bool{
+		"E": true, "NE": true, "L": true, "LE": true,
+		"G": true, "GE": true, "B": true, "BE": true,
+		"A": true, "AE": true, "O": true, "C": true,
+	}
+	if len(bridgeTagsCondition) != len(legacy)+1 || bridgeTagsCondition[0] != "" {
+		t.Fatalf("Concept schema condition table changed: %v", bridgeTagsCondition)
+	}
+	for _, condition := range bridgeTagsCondition {
+		if got := machineConditionValid(condition); got != legacy[condition] {
+			t.Fatalf("condition %q: schema=%t legacy=%t", condition, got, legacy[condition])
+		}
+	}
+	for condition := range legacy {
+		if !machineConditionValid(condition) {
+			t.Fatalf("legacy condition %q missing from schema", condition)
+		}
+	}
+	for _, invalid := range []string{"", "XYZ", "e", "None", "O|C"} {
+		if machineConditionValid(invalid) {
+			t.Fatalf("invalid condition %q accepted", invalid)
+		}
+	}
+}
 func TestEVT2cDeterminism100(t *testing.T) {
 	module := evt2Fixture(t)
 	first, e := GenerateMachineIR(module)

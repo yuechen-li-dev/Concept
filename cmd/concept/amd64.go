@@ -23,7 +23,10 @@ func printConceptAMD64(machine concept.MachineModule, artifact []byte) error {
 	if err != nil {
 		return err
 	}
-	module, err := concept.Parse(backendPath, string(source))
+	// The backend is an ordinary Concept library with imports. Build those
+	// dependencies from the checkout's library root before generating C.
+	libraryRoot := filepath.Dir(filepath.Dir(filepath.Dir(backendPath)))
+	module, err := concept.ParseWithBuiltSemanticModuleRoots(backendPath, string(source), []string{libraryRoot})
 	if err != nil {
 		return err
 	}

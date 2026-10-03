@@ -1,5 +1,27 @@
 # Stage-0 freeze readiness
 
+## R9c transition decision
+
+R9c establishes the Cathedral/Stage-0 ownership plan in
+`docs/architecture/CATHEDRAL.md`, its migration matrix and authority ledger.
+Stage-0 remains the durable Go -> C -> external-toolchain seed. New native
+backend features, starting with EVT2e, are Concept-first; a Stage-0 exception
+requires a bootstrap reason and a Cathedral replacement condition. The
+MachineIR condition vocabulary is now authored by the checked Concept bridge
+enum and projected to the production Go verifier through its generated table.
+This removes one hand-maintained Go rule without freezing the compiler.
+
+Freeze remains **NOT READY / NOT EXECUTED**. CMIRAMD2 is qualified for the
+present no-call native slice, but lacks CALL and per-call ABI/clobber/frame
+contract data. LIR likewise lacks calls and helper-call representation. A
+future freeze decision requires a versioned current MachineIR bridge, stable
+semantic artifact and observation contracts, sufficient closed generic and
+comptime support for Cathedral, Cathedral authority over active native work,
+reliable fresh-checkout bootstrap, and no major Stage-0-only semantic feature
+blocking Cathedral. R9c demonstrates none of the still-future full self-host
+or rebuild criteria. See `STAGE0-BOOTSTRAP-CONTRACT.md` and
+`EVT2E-CATHEDRAL-HANDOFF.md` for the boundaries.
+
 The MachineIR bridge duplication item is **CLOSED** by R9a2. R9a closure is
 complete and ready for the separate R9b research phase. Stage-0 has not been
 frozen automatically. R9b2 typed predicates and R9b3 deferred-vocabulary
