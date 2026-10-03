@@ -648,17 +648,27 @@ func evt1ProjectNoAllocation(env *semanticEnv, graph *ProofGraph, root string, f
 	}
 	visiting[visitKey] = true
 	defer delete(visiting, visitKey)
-	calls := evt1DirectCalls(*fn.Body)
+	calls := evt1DirectCallTargets(*fn.Body)
 	outcome := FactProven
 	fnNode := graph.addNode(ProofSubgoal, fn.Name, "local operation body", "", FactOriginCompilerAnalysis, fn.Span)
 	graph.addEdge(root, fnNode, ProofRequires)
-	for _, name := range calls {
+	for _, call := range calls {
+		name := call.Name
 		if evt1AtomicIntrinsicName(name) {
 			id := graph.addNode(ProofKnownFact, name+" NoAllocation", "compiler-known C11 atomic intrinsic", FactProven, FactOriginCompilerAnalysis, fn.Span)
 			graph.addEdge(fnNode, id, ProofDerivedFrom)
 			continue
 		}
 		candidates := env.functions[name]
+		if call.Signature != "" {
+			var selected []FunctionDecl
+			for _, candidate := range candidates {
+				if evt1FunctionParamSignature(candidate) == call.Signature {
+					selected = append(selected, candidate)
+				}
+			}
+			candidates = selected
+		}
 		// These compiler-defined operations only inspect inline metadata or
 		// return an existing storage view; none obtains storage.
 		if len(candidates) == 0 && env.templates[name].Name == "" && evt1InlineStorageInspectionName(name) {
@@ -857,8 +867,22 @@ func evt1DirectTemplateInstances(env *semanticEnv, block Block) []*evt1TemplateI
 	return instances
 }
 
+type evt1DirectCallTarget struct{ Name, Signature string }
+
 func evt1DirectCalls(block Block) []string {
 	seen := map[string]bool{}
+	for _, call := range evt1DirectCallTargets(block) {
+		seen[call.Name] = true
+	}
+	var names []string
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+func evt1DirectCallTargets(block Block) []evt1DirectCallTarget {
+	seen := map[string]evt1DirectCallTarget{}
 	var visitExpr func(Expr)
 	visitExpr = func(expr Expr) {
 		switch e := expr.(type) {
@@ -869,7 +893,7 @@ func evt1DirectCalls(block Block) []string {
 		case *CallExpr:
 			_, machine := machineIntrinsics[e.Intrinsic]
 			if !e.Member && (e.Intrinsic == "" || machine) {
-				seen[e.Callee] = true
+				seen[e.Callee+"\x00"+e.resolvedSignature] = evt1DirectCallTarget{e.Callee, e.resolvedSignature}
 			}
 			for _, arg := range e.Args {
 				visitExpr(arg)
@@ -947,11 +971,16 @@ func evt1DirectCalls(block Block) []string {
 		}
 	}
 	visitBlock(block)
-	names := make([]string, 0, len(seen))
-	for name := range seen {
-		names = append(names, name)
+	names := make([]evt1DirectCallTarget, 0, len(seen))
+	for _, target := range seen {
+		names = append(names, target)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		if names[i].Name != names[j].Name {
+			return names[i].Name < names[j].Name
+		}
+		return names[i].Signature < names[j].Signature
+	})
 	return names
 }
 
