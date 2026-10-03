@@ -1,0 +1,32 @@
+module Policy.Demo;
+profile Core;
+record struct LintPolicy {
+    string concept;
+    string severity;
+    string kind;
+    string subject;
+}
+enum Evidence {
+    Valid
+}
+enum Reason {
+    Rename(declaration subject)
+}
+comptime Verdict<Evidence, Reason> Naming(declaration subject) {
+    return match {
+        when compiler.Name(subject) == "Good" => Verdict::Proven(Evidence::Valid), otherwise => Verdict::Disproven(Reason::Rename(subject)),
+    };
+}
+comptime string NamingDescribe(Reason reason) {
+    return match (reason) {
+        Reason::Rename(subject) => "rename " + compiler.Name(subject),
+    };
+}
+concept ProjectNaming<declaration D> {
+    requires Naming(D);
+}
+comptime LintPolicy Rule = LintPolicy{"ProjectNaming", "warning", "FunctionDeclaration", "Good"};
+void Good() { }
+void Verify() {
+    Assert.Concept<ProjectNaming>(Good, "typed policy predicate");
+}

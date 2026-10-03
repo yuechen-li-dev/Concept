@@ -1,0 +1,21 @@
+profile Core;
+enum Verdict {
+    Holds, Refuted(declaration at, string message)
+}
+comptime Verdict Legacy(declaration subject) {
+    return Verdict::Holds;
+}
+comptime bool OldBool(typename subject) {
+    return true;
+}
+concept OldDeclaration<declaration D> {
+    requires Legacy(D);
+}
+concept OldType<T> {
+    requires OldBool(T);
+}
+void Good() { }
+void Verify() {
+    Assert.Concept<OldDeclaration>(Good, "legacy normalization");
+    Assert.Concept<OldType>(int, "bool compatibility");
+}

@@ -1,0 +1,7 @@
+profile Core;
+using Array4 = int<array>[4];
+int Main()
+{
+    Assert.Concept<StaticExtent<3>>(Array4, "mismatched extent must be disproven");
+    return 0;
+}

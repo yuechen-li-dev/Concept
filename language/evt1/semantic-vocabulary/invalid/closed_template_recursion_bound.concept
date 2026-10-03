@@ -1,0 +1,12 @@
+module Research.Template;
+profile Core;
+template <typename T> comptime int Sum(int n) bounded(2) {
+    return match {
+        when n == 0 => 0, otherwise => n + Sum<T>(n - 1),
+    };
+}
+comptime int answer = Sum<int>(4);
+static_assert(answer == 10, "bounded closed helper");
+int Use() {
+    return answer;
+}

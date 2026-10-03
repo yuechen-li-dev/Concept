@@ -1,0 +1,7 @@
+profile Core;
+template <typename T> struct Box {
+    ref T value;
+}
+comptime Box<int> Inspect() {
+    return Box<int>{0};
+}

@@ -1176,7 +1176,7 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 				valueFacts: evt1ParameterSemanticValueFacts(env, param.Name, resolvedParam, parameterProvenance),
 			})
 		}
-		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], false); err != nil {
+		if err := validateBlock(env, scope, resolvedReturn, *templateDecl.Body, env.templateInfos[templateDecl.Name], templateDecl.Comptime); err != nil {
 			return nil, err
 		}
 		templateFn := FunctionDecl{Name: templateDecl.Name, Async: templateDecl.Async, ReturnType: templateDecl.ReturnType, Params: templateDecl.Params, Body: templateDecl.Body, Span: templateDecl.Span}
@@ -2720,10 +2720,13 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 		match.ExpectedType = expected
 		return validateMatchExpr(env, scope, *match, templateInfo, inComptimeFn)
 	}
+	if construct, ok := expr.(*ConstructExpr); ok && evt1IsTypedVerdict(expected) {
+		return evt1ValidateVerdictConstruct(env, scope, construct, expected, templateInfo, inComptimeFn)
+	}
 	if construct, ok := expr.(*ConstructExpr); ok && evt1IsFailureType(expected) {
 		return validateFailureConstructExpr(env, scope, construct, expected, templateInfo, inComptimeFn)
 	}
-	if conditional, ok := expr.(*IfExpr); ok && evt1IsFailureType(expected) {
+	if conditional, ok := expr.(*IfExpr); ok && (evt1IsFailureType(expected) || evt1IsTypedVerdict(expected)) {
 		conditionType, err := validateExpr(env, scope, conditional.Condition, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
@@ -3566,6 +3569,20 @@ func validateKnownType(env *semanticEnv, t Type, span Span, conceptParam string,
 		return evt1Diagnostic("CV4148", fmt.Sprintf("unknown concept parameter %s", t.Name), span)
 	}
 	if len(t.TypeArgs) > 0 {
+		if t.Name == "Verdict" {
+			if len(t.TypeArgs) != 2 {
+				return evt1Diagnostic("VERDICT_TYPE_INVALID", "Verdict requires Evidence and Refutation type arguments", span)
+			}
+			for _, arg := range t.TypeArgs {
+				if err := validateKnownType(env, arg, span, conceptParam, false); err != nil {
+					return err
+				}
+				if !evt1TypeContainsConceptParameter(arg) && !evt1IsComptimeType(env, arg) {
+					return evt1Diagnostic("VERDICT_PAYLOAD_INVALID", "Verdict payload must be a closed resource-free comptime value: "+arg.String(), span)
+				}
+			}
+			return nil
+		}
 		if t.Name == "Async" {
 			if len(t.TypeArgs) != 1 {
 				return evt1Diagnostic("ASYNC_RETURN_TYPE_INVALID", "Async requires exactly one eventual value type", span)
@@ -4390,8 +4407,13 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if result, handled, storageErr := evt1ValidateStorageTemplateCall(env, scope, e, templateInfo, inComptimeFn); handled {
 			return result, storageErr
 		}
-		if inComptimeFn {
-			return Type{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
+		if inComptimeFn && templateInfo == nil {
+			for _, arg := range evt1TemplateCallArgs(e) {
+				binding, subject := scope.lookup(arg.Name)
+				if evt1TypeContainsConceptParameter(arg) || subject && binding.t.Name == evt1TypenameTypeName {
+					return Type{}, evt1Diagnostic("COMPTIME_TEMPLATE_CLOSURE_REQUIRED", "comptime calls require a closed template instantiation", e.Span)
+				}
+			}
 		}
 		if templateInfo != nil {
 			return evt1ValidateOpenNestedTemplateCall(env, scope, e, templateInfo)
@@ -4404,7 +4426,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong constructor or call payload count for %s: expected %d but got %d", e.Callee, len(instance.Function.Params), len(e.Args)), e.Span)
 		}
 		for i, arg := range e.Args {
-			argType, err := validateExpr(env, scope, arg, nil, false)
+			argType, err := validateExprAgainstExpected(env, scope, arg, instance.Function.Params[i].Type, nil, inComptimeFn)
 			if err != nil {
 				return Type{}, err
 			}
@@ -4416,6 +4438,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			return Type{}, err
 		}
 		instance.InvocationSpans = append(instance.InvocationSpans, e.Span)
+		if instance.Function.Comptime && !inComptimeFn {
+			return Type{}, evt1Diagnostic("COMPTIME_TEMPLATE_RUNTIME", "comptime template must be evaluated in a comptime context", e.Span)
+		}
 		e.MustUseResult = evt1HasNamedAttribute(instance.Function.Attributes, "must_use")
 		if instance.Function.Async {
 			return evt1AsyncType(evt1CanonicalType(env, instance.Function.ReturnType), instance.GeneratedSymbol, e.Span), nil
@@ -6160,6 +6185,9 @@ func validateMatchSubject(env *semanticEnv, scope *evt1Scope, subject Expr, temp
 	if decl, ok := evt1FailureEnumDecl(subjectType); ok {
 		return subjectType, decl, nil
 	}
+	if evt1IsTypedVerdict(subjectType) {
+		return subjectType, evt1VerdictEnum(subjectType), nil
+	}
 	if evt1IntegralRepresentation(subjectType) && subjectType.Quantity == nil {
 		return subjectType, EnumDecl{}, nil
 	}
@@ -6440,6 +6468,9 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 }
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
+	if evt1IsTypedVerdict(t) {
+		return evt1IsComptimeType(env, t)
+	}
 	if t.Kind == TypeCallable {
 		return t.CallableCopyable
 	}
@@ -6775,7 +6806,7 @@ func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, a
 	for _, req := range conceptDecl.Requirements {
 		switch r := req.(type) {
 		case *PredicateRequirement:
-			outcome, detail, at := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
+			outcome, detail, at, _ := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
 			if outcome != FactProven {
 				code := "PREDICATE_REQUIREMENT_UNSATISFIED"
 				if outcome == FactUnknown {
@@ -7046,9 +7077,15 @@ func init() {
 			return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: string(factKind) + " requires an operation subject"}}
 		}}
 	}
-	for _, kind := range []SemanticFactKind{FactAligned, FactRank} {
+	for _, kind := range []SemanticFactKind{FactAligned, FactRank, FactStaticExtent} {
 		factKind := kind
 		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, ParameterArity: 1, ValidateParameters: func(parameters []int, span Span) error {
+			if factKind == FactStaticExtent {
+				if len(parameters) != 1 || parameters[0] < 0 || parameters[0] > evt1StorageMaxFixedExtent {
+					return evt1Diagnostic("CV4643", "StaticExtent requires an integer extent from 0 through 1048576", span)
+				}
+				return nil
+			}
 			if len(parameters) != 1 || parameters[0] <= 0 {
 				return evt1Diagnostic("CV4643", string(factKind)+" requires a positive integer parameter", span)
 			}
@@ -7715,6 +7752,9 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 	if !ok {
 		return Type{}, evt1Diagnostic("CV4178", fmt.Sprintf("unknown template %s", call.Callee), call.Span)
 	}
+	if callee.Comptime && !caller.Decl.Comptime {
+		return Type{}, evt1Diagnostic("COMPTIME_TEMPLATE_RUNTIME", "comptime template must be evaluated in a comptime context", call.Span)
+	}
 	params := callee.Parameters
 	if len(params) == 0 {
 		params = []GenericParameter{{Name: callee.TypeParam, Kind: "type"}}
@@ -7896,6 +7936,9 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 		return instance, nil
 	}
 	if env.templateInstantiating[key] || env.templateDepth >= 128 {
+		if templateDecl.Comptime && env.templateInstantiating[key] {
+			return nil, evt1Diagnostic("CV4217", "recursive comptime template requires bounded(N)", span)
+		}
 		return nil, evt1Diagnostic("GENERIC_INSTANTIATION_RECURSIVE", fmt.Sprintf("recursive or excessive generic instantiation of %s", templateName), span)
 	}
 	env.templateInstantiating[key] = true
@@ -7976,7 +8019,27 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 			return nil, err
 		}
 	}
-	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, false); err != nil {
+	if instFn.Comptime {
+		if !evt1IsComptimeType(env, instFn.ReturnType) {
+			return nil, evt1Diagnostic("CV4216", "closed comptime template return type is not supported", span)
+		}
+		for _, param := range instFn.Params {
+			if !evt1IsComptimeType(env, param.Type) {
+				return nil, evt1Diagnostic("CV4216", "closed comptime template parameter type is not supported", span)
+			}
+		}
+	}
+	// Only explicitly bounded comptime cycles can refer to a provisional
+	// closed signature. It is rolled back if validation fails.
+	if instFn.Comptime && instFn.RecursionBound > 0 {
+		env.templateInstances[key] = &evt1TemplateInstance{Key: key, TemplateName: templateName, Function: instFn}
+		defer func() {
+			if instance := env.templateInstances[key]; instance != nil && instance.GeneratedSymbol == "" {
+				delete(env.templateInstances, key)
+			}
+		}()
+	}
+	if err := validateBlock(env, scope, instFn.ReturnType, *instFn.Body, nil, instFn.Comptime); err != nil {
 		return nil, err
 	}
 	if err := evt1ValidateAsyncShape(instFn); err != nil {
@@ -8104,11 +8167,13 @@ func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters [
 	}
 	returnType = evt1SubstituteGenericValueExtents(returnType, parameters, concreteArgs)
 	fn := FunctionDecl{
-		Async:      templateDecl.Async,
-		Name:       templateDecl.Name,
-		ReturnType: returnType,
-		Span:       templateDecl.Span,
-		Body:       &body,
+		Comptime:       templateDecl.Comptime,
+		RecursionBound: templateDecl.RecursionBound,
+		Async:          templateDecl.Async,
+		Name:           templateDecl.Name,
+		ReturnType:     returnType,
+		Span:           templateDecl.Span,
+		Body:           &body,
 	}
 	for _, param := range templateDecl.Params {
 		paramType := param.Type

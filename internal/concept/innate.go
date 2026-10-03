@@ -34,6 +34,19 @@ type evt1InnateSet struct {
 	env    *semanticEnv
 }
 
+// Authority is an explicit compiler-owned allowlist, never inferred from
+// a verdict, rule spelling, diagnostic attribute, or artifact metadata.
+// R9b2 registers no fact-generating innate rules. Adding one requires its
+// own provenance verifier and qualified projection in the fact owner.
+var evt1InnateFactAuthority = map[string][]SemanticFactKind{}
+
+func evt1TrustedPredicateFactKinds(env *semanticEnv, decl ConceptDecl) []SemanticFactKind {
+	if !env.innateAuthority || !decl.Innate {
+		return nil
+	}
+	return append([]SemanticFactKind(nil), evt1InnateFactAuthority[decl.Name]...)
+}
+
 var (
 	evt1InnateOnce   sync.Once
 	evt1InnateLoaded evt1InnateSet
@@ -189,10 +202,21 @@ func evt1ValidatePredicateRequirement(env *semanticEnv, decl ConceptDecl, r *Pre
 	if !ok {
 		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("%s is not a comptime function", r.Predicate), r.Span)
 	}
-	if fn.ReturnType.Name != "Verdict" && (decl.Innate || fn.ReturnType.Name != "bool") || len(fn.ReturnType.TypeArgs) != 0 || fn.ReturnType.ArrayElem != nil || fn.ReturnType.isBorrowLike() || fn.ReturnType.isOwned() {
-		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s must return Verdict (or bool in a declared concept), not %s", r.Predicate, fn.ReturnType.String()), r.Span)
+	typed := evt1IsTypedVerdict(fn.ReturnType)
+	if !typed && (fn.ReturnType.Name != "Verdict" && (decl.Innate || fn.ReturnType.Name != "bool") || len(fn.ReturnType.TypeArgs) != 0 || fn.ReturnType.ArrayElem != nil || fn.ReturnType.isBorrowLike() || fn.ReturnType.isOwned()) {
+		return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", fmt.Sprintf("predicate %s must return Verdict<E,R> or legacy Verdict (or bool in a declared concept), not %s", r.Predicate, fn.ReturnType.String()), r.Span)
 	}
-	if fn.ReturnType.Name == "Verdict" && !decl.Innate {
+	if typed {
+		if !evt1IsComptimeType(predicates, fn.ReturnType) {
+			return evt1Diagnostic("VERDICT_PAYLOAD_INVALID", "predicate payloads must be closed comptime values", r.Span)
+		}
+		if describe, ok := predicates.comptimeFunctions[r.Predicate+"Describe"]; ok {
+			if describe.ReturnType.Name != "string" || len(describe.Params) != 1 || !evt1SemanticTypeEqual(predicates, describe.Params[0].Type, fn.ReturnType.TypeArgs[1]) {
+				return evt1Diagnostic("VERDICT_DESCRIBE_INVALID", "predicate Describe must take its refutation type and return string", r.Span)
+			}
+		}
+	}
+	if fn.ReturnType.Name == "Verdict" && !typed && !decl.Innate {
 		if err := evt1ValidateVerdictShape(predicates); err != nil {
 			return evt1Diagnostic("PREDICATE_REQUIREMENT_INVALID", "predicate "+r.Predicate+" requires enum Verdict { Holds, Refuted(declaration at, string message) }; "+err.Error(), r.Span)
 		}

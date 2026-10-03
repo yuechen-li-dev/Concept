@@ -24,6 +24,7 @@ const (
 	FactRuntimeShape        SemanticFactKind = "RuntimeShape"
 	FactRank                SemanticFactKind = "Rank"
 	FactShape               SemanticFactKind = "Shape"
+	FactStaticExtent        SemanticFactKind = "StaticExtent"
 	FactNoAllocation        SemanticFactKind = "NoAllocation"
 	FactHardwareRead        SemanticFactKind = "HardwareRead"
 	FactHardwareWrite       SemanticFactKind = "HardwareWrite"
@@ -164,6 +165,18 @@ func evt1TypeFact(env *semanticEnv, kind SemanticFactKind, t Type, parameters []
 	}
 	result := semanticFactResult{Outcome: FactUnknown, Origin: origin}
 	switch kind {
+	case FactStaticExtent:
+		result.Origin = FactOriginLayout
+		result.Evidence.Detail = "StaticExtent requires an exact one-dimensional fixed array; capacities and runtime views do not prove live extent"
+		if len(parameters) == 1 && parameters[0] >= 0 && isStorage && evt1StorageRank(t) == 1 && !evt1StorageHasRuntimeShape(t) && t.StorageKind != StorageRaw && t.StorageKind != StorageSparse {
+			extent := evt1StorageElementCount(t)
+			result.Evidence.Extent = extent
+			result.Evidence.Detail = fmt.Sprintf("fixed array has exactly %d elements", extent)
+			result.Outcome = FactDisproven
+			if extent == parameters[0] {
+				result.Outcome = FactProven
+			}
+		}
 	case FactContiguous, FactBounded:
 		if isStorage || isSpan || isTensor {
 			result.Outcome = FactProven
@@ -380,6 +393,7 @@ func evt1QualifyMIRFacts(mir *MIR) {
 		for _, kind := range []SemanticFactKind{FactContiguous, FactBounded, FactFixedShape, FactShape, FactNoAllocation} {
 			evt1AppendFact(&mir.SemanticFacts, kind, []SemanticFactSubject{subject}, nil, FactOriginType, evidence, storage.Type.Span)
 		}
+		evt1AppendStaticExtent(&mir.SemanticFacts, subject, storage.Shape, storage.Type.StorageKind, storage.Type.Span)
 		evt1AppendFact(&mir.SemanticFacts, FactRank, []SemanticFactSubject{subject}, []int{storage.Rank}, FactOriginType, evidence, storage.Type.Span)
 		evt1AppendFact(&mir.SemanticFacts, FactAligned, []SemanticFactSubject{subject}, []int{evt1InlineStorageAlignment}, FactOriginType, evidence, storage.Type.Span)
 	}
@@ -482,6 +496,11 @@ func evt1QualifyMIRFacts(mir *MIR) {
 				}
 				evt1AppendFact(&mir.SemanticFacts, shapeKind, []SemanticFactSubject{subject}, nil, evt1FactOriginForOperation(operation), evidence, operation.SourceSpan)
 				evt1AppendFact(&mir.SemanticFacts, FactShape, []SemanticFactSubject{subject}, nil, evt1FactOriginForOperation(operation), evidence, operation.SourceSpan)
+				// Only actual inline storage carries exact live extent. A view's
+				// capacity or backing shape cannot qualify its runtime length.
+				if operation.Kind == "tensor_inline_storage" {
+					evt1AppendStaticExtent(&mir.SemanticFacts, subject, operation.TargetShape, StorageArray, operation.SourceSpan)
+				}
 			}
 			if operation.Kind == "tensor_inline_storage" {
 				inline = append(inline, subject)
@@ -529,6 +548,14 @@ func evt1QualifyMIRFacts(mir *MIR) {
 		}
 	}
 	sort.SliceStable(mir.SemanticFacts, func(i, j int) bool { return mir.SemanticFacts[i].ID < mir.SemanticFacts[j].ID })
+}
+
+func evt1AppendStaticExtent(facts *[]MIRSemanticFact, subject SemanticFactSubject, shape []StorageDimension, kind StorageKind, span Span) {
+	if len(shape) != 1 || shape[0].Runtime || shape[0].Extent < 0 || kind == StorageRaw || kind == StorageSparse {
+		return
+	}
+	extent := shape[0].Extent
+	evt1AppendFact(facts, FactStaticExtent, []SemanticFactSubject{subject}, []int{extent}, FactOriginLayout, SemanticFactEvidence{Extent: extent, Shape: append([]StorageDimension{}, shape...), Detail: "exact one-dimensional inline array extent"}, span)
 }
 
 // evt1ProjectPersistentFactSubjects gives generated storage a stable semantic

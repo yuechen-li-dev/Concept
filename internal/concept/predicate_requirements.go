@@ -17,47 +17,37 @@ func evt1PredicateEnvironment(env *semanticEnv, decl ConceptDecl) *semanticEnv {
 	return env
 }
 
-func evt1EvaluateDeclaredPredicate(env *semanticEnv, decl ConceptDecl, requirement *PredicateRequirement, types map[string]Type, declarations map[string]DeclarationSubject) (SemanticFactCertainty, string, Span) {
+func evt1EvaluateDeclaredPredicate(env *semanticEnv, decl ConceptDecl, requirement *PredicateRequirement, types map[string]Type, declarations map[string]DeclarationSubject) (SemanticFactCertainty, string, Span, *PredicateVerdict) {
 	predicates := evt1PredicateEnvironment(env, decl)
 	fn, ok := predicates.comptimeFunctions[requirement.Predicate]
 	if !ok {
-		return FactUnknown, "comptime predicate is unavailable", requirement.Span
+		return FactUnknown, "comptime predicate is unavailable", requirement.Span, nil
 	}
 	args := make([]Value, len(requirement.Subjects))
 	for i, subject := range requirement.Subjects {
 		if fn.Params[i].Type.Name == evt1TypenameTypeName {
 			t, ok := types[subject.Name]
 			if !ok {
-				return FactUnknown, "type argument " + subject.Name + " is unbound", subject.Span
+				return FactUnknown, "type argument " + subject.Name + " is unbound", subject.Span, nil
 			}
 			args[i] = evt1TypenameValue(evt1CanonicalType(env, t))
 		} else {
 			declaration, ok := declarations[subject.Name]
 			if !ok {
-				return FactUnknown, "declaration argument " + subject.Name + " is unbound", subject.Span
+				return FactUnknown, "declaration argument " + subject.Name + " is unbound", subject.Span, nil
 			}
 			args[i] = evt1DeclarationValue(evt1SubjectDeclarationRef(env, declaration))
 		}
 	}
-	value, err := evt1InvokeComptimeFunctionOn(predicates, env, requirement.Predicate, args, requirement.Span)
+	result, err := evt1InvokePredicateOnMeasured(predicates, env, requirement.Predicate, args, requirement.Span, nil)
 	if err != nil {
-		return FactUnknown, fmt.Sprintf("%s could not decide: %v", requirement.Predicate, err), requirement.Span
+		return FactUnknown, fmt.Sprintf("%s could not decide: %v", requirement.Predicate, err), requirement.Span, nil
 	}
-	if value.Kind == ValueBool {
-		if value.BoolValue {
-			return FactProven, requirement.Predicate + " returned true", requirement.Span
-		}
-		return FactDisproven, requirement.Predicate + " returned false", requirement.Span
+	var metadata *PredicateVerdict
+	if evt1IsTypedVerdict(result.Type) {
+		metadata = &result
 	}
-	if value.Kind == ValueEnum && value.EnumName == "Verdict" {
-		if value.Variant == "Holds" {
-			return FactProven, requirement.Predicate + " returned Verdict::Holds", requirement.Span
-		}
-		if value.Variant == "Refuted" && len(value.Payload) == 2 && value.Payload[0].Declaration != nil && value.Payload[1].Kind == ValueString && value.Payload[1].StringValue != "" {
-			return FactDisproven, value.Payload[1].StringValue, value.Payload[0].Declaration.Site
-		}
-	}
-	return FactUnknown, requirement.Predicate + " returned an invalid or empty proof result", requirement.Span
+	return result.Outcome, result.Message, result.At, metadata
 }
 
 func evt1SubjectDeclarationRef(env *semanticEnv, subject DeclarationSubject) evt1DeclarationRef {

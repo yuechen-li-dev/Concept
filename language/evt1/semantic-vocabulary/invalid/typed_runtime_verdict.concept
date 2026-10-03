@@ -1,0 +1,7 @@
+profile Core;
+enum E {
+    Valid
+}
+int Bad(Verdict<E, int> verdict) {
+    return 0;
+}

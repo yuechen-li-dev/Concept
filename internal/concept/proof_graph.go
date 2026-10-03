@@ -41,6 +41,7 @@ type ProofSubjectDescription struct {
 }
 
 type ProofNode struct {
+	Verdict    *PredicateVerdict     `json:"verdict,omitempty"`
 	ID         string                `json:"id"`
 	Kind       ProofNodeKind         `json:"kind"`
 	Label      string                `json:"label"`
@@ -192,6 +193,14 @@ func renderProofNode(b *strings.Builder, node ProofNode, nodes map[string]ProofN
 	fmt.Fprintf(b, "%s%s%s\n", pad, node.Label, status)
 	if node.Detail != "" {
 		fmt.Fprintf(b, "%s  %s\n", pad, node.Detail)
+	}
+	if node.Verdict != nil {
+		if node.Verdict.Evidence != nil {
+			fmt.Fprintf(b, "%s  evidence: %s\n", pad, evt1CompactVerdictValue(*node.Verdict.Evidence))
+		}
+		if node.Verdict.Refutation != nil {
+			fmt.Fprintf(b, "%s  refutation: %s\n", pad, evt1CompactVerdictValue(*node.Verdict.Refutation))
+		}
 	}
 	if verbose && node.Origin != "" {
 		fmt.Fprintf(b, "%s  origin=%s source=%d:%d\n", pad, node.Origin, node.SourceSpan.Line, node.SourceSpan.Column)

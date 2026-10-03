@@ -443,6 +443,36 @@
   "schema": "concept-evt1-source-map.v1",
   "semantic_facts": [
     {
+      "id": "fact-0d13cfe678c97c00",
+      "kind": "StaticExtent",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        2
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromLayout",
+      "evidence": {
+        "extent": 2,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "exact one-dimensional inline array extent"
+      },
+      "source_span": {
+        "line": 17,
+        "column": 5
+      }
+    },
+    {
       "id": "fact-1ca00342ce929e35",
       "kind": "NoAllocation",
       "subjects": [

@@ -109,6 +109,11 @@ func evt1ValidateConceptAssertion(env *semanticEnv, scope *evt1Scope, call *Call
 		proof.Origin = result.Origin
 		proof.Evidence = &result.Evidence
 	}
+	for _, node := range graph.Nodes {
+		if node.Verdict != nil {
+			proof.Verdicts = append(proof.Verdicts, *node.Verdict)
+		}
+	}
 	env.semanticProofs = append(env.semanticProofs, proof)
 	env.proofGraphs = append(env.proofGraphs, graph)
 	if graph.Outcome != FactProven {
@@ -116,7 +121,13 @@ func evt1ValidateConceptAssertion(env *semanticEnv, scope *evt1Scope, call *Call
 		if graph.Outcome == FactUnknown {
 			code = "CONCEPT_ASSERT_UNKNOWN"
 		}
-		return Type{}, Diagnostic{Code: code, Message: fmt.Sprintf("%s %s: %s", strings.ToUpper(string(graph.Outcome)), graph.Goal, reason.Value), Span: call.Span, Proof: &graph}
+		message := fmt.Sprintf("%s %s: %s", strings.ToUpper(string(graph.Outcome)), graph.Goal, reason.Value)
+		for _, node := range graph.Nodes {
+			if node.Verdict != nil && node.Outcome != FactProven {
+				message += "; " + evt1VerdictDiagnosticDetail(*node.Verdict)
+			}
+		}
+		return Type{}, Diagnostic{Code: code, Message: message, Span: call.Span, Proof: &graph}
 	}
 	return void, nil
 }
@@ -1008,11 +1019,12 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 		label := "requirement"
 		requirementOutcome := FactProven
 		detail := ""
+		var verdict *PredicateVerdict
 		requirementOrigin := FactOriginDeclared
 		switch requirement := raw.(type) {
 		case *PredicateRequirement:
 			label = "predicate " + requirement.Predicate
-			requirementOutcome, detail, _ = evt1EvaluateDeclaredPredicate(env, decl, requirement, bindings, declarationBindings)
+			requirementOutcome, detail, _, verdict = evt1EvaluateDeclaredPredicate(env, decl, requirement, bindings, declarationBindings)
 			// Requirement truth is declared provenance, never a compiler fact.
 			requirementOrigin = FactOriginDeclared
 		case *PrerequisiteRequirement:
@@ -1120,6 +1132,7 @@ func evt1ProjectNamedConceptApplication(env *semanticEnv, graph *ProofGraph, par
 			kind, edge = ProofMissingFact, ProofBlockedBy
 		}
 		node := graph.addNode(kind, label, detail, requirementOutcome, requirementOrigin, raw.requirementSpan())
+		graph.Nodes[len(graph.Nodes)-1].Verdict = verdict
 		graph.addEdge(parent, node, edge)
 		if requirementOutcome == FactDisproven {
 			outcome = FactDisproven

@@ -1,0 +1,10 @@
+module Research.StaticExtent;
+profile Core;
+
+using Array4 = int<array>[4];
+
+int Read(ref const Array4 values)
+{
+    Assert.Concept<StaticExtent<4>>(Array4, "the array type has exactly four elements");
+    return values[1];
+}

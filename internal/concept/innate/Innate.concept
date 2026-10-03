@@ -1,6 +1,5 @@
 module Innate;
 profile Core;
-
 // The compiler's innate concepts: rules every Concept program satisfies,
 // written in Concept and applied by the compiler to every declaration of
 // their kind. No program can omit, weaken, or redefine them.
@@ -8,18 +7,15 @@ profile Core;
 // This module ships inside the compiler. Its source hash is the innate
 // identity recorded in every semantic module artifact.
 // See docs/design/EVT2-INNATE-CONCEPTS.md.
-
-// The result of an innate predicate. Refuted names the declaration the
+// Legacy predicate compatibility. Refuted names the declaration the
 // diagnostic points at, and a message that says what is wrong and how to fix
-// it. The compiler relies on this exact shape.
+// it. Remaining legacy predicates retain this fixed compatibility shape.
 enum Verdict
 {
     Holds,
     Refuted(declaration at, string message),
 }
-
 // ---- Ownership -------------------------------------------------------------
-
 // Structural Drop releases a value's `owned` fields. A field whose type has a
 // Drop but is not declared `owned` would hold destruction authority it never
 // exercises, so its resource would leak. In a generic instance the fix belongs
@@ -29,8 +25,29 @@ innate concept DroppableFieldIsOwned<FieldDeclaration F>
 {
     requires DroppableFieldIsOwnedHolds(F);
 }
-
-comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
+enum OwnershipEvidence {
+    Valid
+}
+enum OwnershipRefutation {
+    DroppableFieldMustBeOwned(declaration field)
+}
+comptime Verdict<OwnershipEvidence, OwnershipRefutation> DroppableFieldIsOwnedHolds(declaration field)
+{
+    typename held = compiler.TypeOf(field);
+    return match
+    {
+        when compiler.Owned(field) or compiler.IsBorrowLike(held) or not compiler.HasDrop(held) => Verdict::Proven(OwnershipEvidence::Valid),
+        otherwise => Verdict::Disproven(OwnershipRefutation::DroppableFieldMustBeOwned(field)),
+    };
+}
+comptime string DroppableFieldIsOwnedHoldsDescribe(OwnershipRefutation refutation)
+{
+    return match (refutation)
+    {
+        OwnershipRefutation::DroppableFieldMustBeOwned(field) => OwnershipProblem(field),
+    };
+}
+comptime string OwnershipProblem(declaration field)
 {
     typename held = compiler.TypeOf(field);
     string heldName = compiler.TypeName(held);
@@ -38,12 +55,10 @@ comptime Verdict DroppableFieldIsOwnedHolds(declaration field)
     string problem = "field " + compiler.QualifiedName(field) + " holds " + heldName + ", which has a Drop; ";
     return match
     {
-        when compiler.Owned(field) or compiler.IsBorrowLike(held) or not compiler.HasDrop(held) => Verdict::Holds,
-        when template != "" => Verdict::Refuted(field, problem + "declare it `owned " + compiler.DeclaredTypeName(field) + " " + compiler.Name(field) + ";` in " + template),
-        otherwise => Verdict::Refuted(field, problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`"),
+        when template != "" => problem + "declare it `owned " + compiler.DeclaredTypeName(field) + " " + compiler.Name(field) + ";` in " + template,
+        otherwise => problem + "declare it `owned " + heldName + " " + compiler.Name(field) + ";`",
     };
 }
-
 // A movable aggregate cannot copy an immovable value through one of its
 // fields. Raw and sparse storage carry their own initialization authority;
 // references carry a borrow rather than the value.
@@ -52,7 +67,6 @@ innate concept MovableFieldDoesNotEmbedImmovable<FieldDeclaration F>
 {
     requires MovableFieldDoesNotEmbedImmovableHolds(F);
 }
-
 comptime Verdict MovableFieldDoesNotEmbedImmovableHolds(declaration field)
 {
     declaration parent = compiler.Parent(field);
@@ -63,9 +77,7 @@ comptime Verdict MovableFieldDoesNotEmbedImmovableHolds(declaration field)
         otherwise => Verdict::Refuted(field, "struct " + compiler.Name(parent) + " cannot embed immovable field " + compiler.TypeName(held)),
     };
 }
-
 // ---- C ABI -----------------------------------------------------------------
-
 // A [[repr(C)]] struct is a C value: a nonempty record whose fields are C
 // scalars, handles, fixed arrays of C values, or other repr(C) records, with
 // no destruction authority. The message names the path to the first field
@@ -75,7 +87,6 @@ innate concept CReprIsPlainData<TypeDeclaration T>
 {
     requires CReprIsPlainDataHolds(T);
 }
-
 comptime Verdict CReprIsPlainDataHolds(declaration aggregate)
 {
     typename self = compiler.TypeOf(aggregate);
@@ -87,7 +98,6 @@ comptime Verdict CReprIsPlainDataHolds(declaration aggregate)
         otherwise => Verdict::Refuted(aggregate, compiler.Name(aggregate) + ": " + problem),
     };
 }
-
 // Why value is not a C value, or "" when it is. Every TypeShape is decided
 // here; a new shape stops this from compiling until someone decides it.
 comptime string CValueProblem(typename value) bounded(32)
@@ -115,7 +125,6 @@ comptime string CValueProblem(typename value) bounded(32)
         TypeShape::Other(spelling) => "type is not a supported C scalar or aggregate",
     };
 }
-
 // A struct is a C value when it is a nonempty [[repr(C)]] record of C values
 // without destruction authority. Arms are tried in order, so the fields are
 // walked only once the record itself qualifies.
@@ -130,22 +139,18 @@ comptime string CRecordProblem(declaration record, typename value) bounded(32)
         otherwise => "",
     };
 }
-
 // The first field that is not a C value, with its path.
 comptime string CFieldsProblem(declaration record) bounded(32)
 {
-    for (i in 0..compiler.FieldCount(record))
+    for (i in 0 .. compiler.FieldCount(record))
     {
         declaration field = compiler.Field(record, i);
         string problem = CValueProblem(compiler.TypeOf(field));
         if (problem != "")
-        {
-            return "field " + compiler.Name(field) + ": " + problem;
-        }
+        { return "field " + compiler.Name(field) + ": " + problem; }
     }
     return "";
 }
-
 // The scalars with a fixed C representation. bool, half, and string are not.
 comptime bool IsCScalar(string name)
 {

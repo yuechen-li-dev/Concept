@@ -1,0 +1,13 @@
+profile Core;
+enum E {
+    Valid
+}
+enum R {
+    Invalid
+}
+comptime Verdict<E, R> Judge(typename subject) {
+    return Judge(subject);
+}
+concept C<T> {
+    requires Judge(T);
+}

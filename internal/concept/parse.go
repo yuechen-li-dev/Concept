@@ -1476,7 +1476,11 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		p.next()
 		async = true
 	}
-	fn, err := p.parseFunctionDecl(params[0].Name, false)
+	comptime := false
+	if p.peekLexeme() == "comptime" {
+		comptime = true
+	}
+	fn, err := p.parseFunctionDecl(params[0].Name, comptime)
 	if err != nil {
 		return TemplateDecl{}, err
 	}
@@ -1484,16 +1488,18 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		return TemplateDecl{}, evt1Diagnostic("CV4167", "template declarations require a function body", fn.Span)
 	}
 	return TemplateDecl{
-		Async:         async,
-		Name:          fn.Name,
-		Parameters:    params,
-		TypeParam:     params[0].Name,
-		TypeParamSpan: params[0].Span,
-		Constraint:    constraint,
-		ReturnType:    fn.ReturnType,
-		Params:        fn.Params,
-		Body:          fn.Body,
-		Span:          start.Span,
+		Comptime:       comptime,
+		RecursionBound: fn.RecursionBound,
+		Async:          async,
+		Name:           fn.Name,
+		Parameters:     params,
+		TypeParam:      params[0].Name,
+		TypeParamSpan:  params[0].Span,
+		Constraint:     constraint,
+		ReturnType:     fn.ReturnType,
+		Params:         fn.Params,
+		Body:           fn.Body,
+		Span:           start.Span,
 	}, nil
 }
 

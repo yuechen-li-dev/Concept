@@ -761,6 +761,13 @@ func planTensor(index int, tensor MIRTensorOperation, facts SemanticFactSet) Ten
 	allContiguous, allBounded, allFixed, allAllocation, allCopy, allTransfer, allAligned := FactProven, FactProven, FactProven, FactProven, FactProven, FactProven, FactProven
 	var ids []string
 	for _, region := range regions {
+		// StaticExtent is a structural shadow of the existing fixed-shape
+		// derivation. Record it for inspection; it grants no new SIMD strategy.
+		for _, fact := range facts.FactsFor(region) {
+			if fact.Kind == FactStaticExtent && fact.Outcome == FactProven && fact.Origin == FactOriginLayout {
+				ids = append(ids, fact.ID)
+			}
+		}
 		for _, pair := range []struct {
 			kind   SemanticFactKind
 			result *SemanticFactCertainty

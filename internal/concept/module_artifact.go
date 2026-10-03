@@ -96,6 +96,7 @@ type SemanticModuleArtifact struct {
 	ValueFactSummaries       []SemanticFunctionFactSummary         `json:"value_fact_summaries,omitempty"`
 	Interpretations          []SemanticInterpretationSite          `json:"interpretations,omitempty"`
 	SharedAccessFacts        []MIRSemanticFact                     `json:"shared_access_facts,omitempty"`
+	PredicateVerdicts        []PredicateVerdict                    `json:"predicate_verdicts,omitempty"`
 	AccessSummaries          []MIRAccessEntry                      `json:"access_summaries,omitempty"`
 	ForeignContracts         []ForeignContractDecl                 `json:"foreign_contracts,omitempty"`
 	NativeABI                *NativeABIReport                      `json:"native_abi,omitempty"`
@@ -287,6 +288,28 @@ func compileSemanticModule(path, source string, artifacts map[string][]byte, ide
 	}
 	for _, dependency := range loaded {
 		artifact.Dependencies = append(artifact.Dependencies, SemanticModuleDependency{ModuleIdentity: dependency.ModuleIdentity, ContentSHA256: dependency.ContentSHA256})
+	}
+	// Inspectable decisions are metadata only. Loading this envelope never
+	// inserts them into semanticFacts; consumers evaluate transported bodies.
+	verdicts := map[string]PredicateVerdict{}
+	for _, graph := range env.proofGraphs {
+		for _, node := range graph.Nodes {
+			if node.Verdict != nil {
+				encoded, err := json.Marshal(node.Verdict)
+				if err != nil {
+					return nil, err
+				}
+				verdicts[string(encoded)] = *node.Verdict
+			}
+		}
+	}
+	keys := make([]string, 0, len(verdicts))
+	for key := range verdicts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		artifact.PredicateVerdicts = append(artifact.PredicateVerdicts, verdicts[key])
 	}
 	sort.Slice(artifact.Dependencies, func(i, j int) bool {
 		return artifact.Dependencies[i].ModuleIdentity < artifact.Dependencies[j].ModuleIdentity

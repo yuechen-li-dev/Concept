@@ -1,0 +1,33 @@
+module Research.Protocol;
+profile Core;
+template <typename T> record struct Box {
+    T value;
+}
+enum Failure {
+    Unsupported(typename subject), Missing
+}
+template <typename T> comptime T Identity(T value) {
+    return value;
+}
+comptime Verdict<Box<uint8>, Failure> Judge(typename subject) {
+    return match {
+        when compiler.TypeName(subject) == "int" => Verdict::Proven(Identity<Box<uint8>>(Box<uint8>{
+            7
+        })),
+        when compiler.TypeName(subject) == "float" => Verdict::Unknown,
+        otherwise => Verdict::Disproven(Failure::Unsupported(subject)),
+    };
+}
+comptime string JudgeDescribe(Failure failure) {
+    return match (failure) {
+        Failure::Unsupported(subject) => "unsupported type " + compiler.TypeName(subject),
+        Failure::Missing => "missing evidence",
+    };
+}
+concept Supported<T> {
+    requires Judge(T);
+}
+int Use() {
+    Assert.Concept<Supported>(string, "typed proof");
+    return 7;
+}

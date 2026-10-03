@@ -1,0 +1,20 @@
+profile Core;
+enum Truth {
+    Proven, Disproven, Unknown
+}
+enum Failure {
+    None, ContainsReference
+}
+template <typename E, typename R> record struct EvidenceResult
+{
+    Truth truth;
+    E evidence;
+    R refutation;
+}
+comptime EvidenceResult<int, Failure> Judge(typename subject)
+{
+    return EvidenceResult<int, Failure>{Truth::Proven, 1, Failure::None};
+}
+concept TypedEvidence<T> {
+    requires Judge(T);
+}

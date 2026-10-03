@@ -1,0 +1,23 @@
+profile Core;
+enum E {
+    Valid
+}
+enum R {
+    Invalid
+}
+comptime Verdict<E, R> Claim(declaration subject) {
+    return Verdict::Proven(E::Valid);
+}
+concept ClaimedNoAllocation<declaration D> {
+    requires Claim(D);
+}
+extern "C" byte * Acquire(usize size);
+requires compiler.Allocates(Acquire);
+int Allocating(usize size) {
+    byte * storage = Acquire(size);
+    return 1;
+}
+void Verify() {
+    Assert.Concept<ClaimedNoAllocation>(Allocating, "claimed");
+    Assert.Concept<NoAllocation>(Allocating, "actual authority");
+}
