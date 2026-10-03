@@ -8,15 +8,6 @@ import (
 )
 
 func TestEVT2e3Win64PlansMovesAndLiveness(t *testing.T) {
-	path := "../../libraries/Standard/Backend/AMD64.concept"
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	module, err := ParseWithBuiltSemanticModuleRoots(path, string(source), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	fixture := "testdata/evt2e3_calls.concept"
 	input, err := os.ReadFile(fixture)
 	if err != nil {
@@ -49,16 +40,11 @@ func TestEVT2e3Win64PlansMovesAndLiveness(t *testing.T) {
 	harness := strings.Replace(win64CallPlanHarness, "/* ARTIFACT */", data.String(), 1)
 	var normalPlans string
 	for _, verify := range []bool{false, true} {
-		policy := ConservativeCompilationPolicy()
 		mode := "Normal"
 		if verify {
-			policy = VerifyCompilationPolicy()
 			mode = "Verify"
 		}
-		outputs, err := GenerateForTargetWithPolicy(module, source, GenericC11Target(), policy)
-		if err != nil {
-			t.Fatal(err)
-		}
+		outputs := backendTestOutputs(t, verify)
 		t.Run(mode, func(t *testing.T) {
 			output := runFoundationNativeHarnessOutput(t, outputs, "win64_plans.c", harness, "-pedantic-errors")
 			var plans []string

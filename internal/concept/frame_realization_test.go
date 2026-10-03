@@ -8,15 +8,6 @@ import (
 )
 
 func TestEVT2e4FrameRealization(t *testing.T) {
-	path := "../../libraries/Standard/Backend/AMD64.concept"
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	module, err := ParseWithBuiltSemanticModuleRoots(path, string(source), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	fixture := "testdata/evt2e4_frames.concept"
 	input, err := os.ReadFile(fixture)
 	if err != nil {
@@ -47,15 +38,10 @@ func TestEVT2e4FrameRealization(t *testing.T) {
 	var normal string
 	for _, verify := range []bool{false, true} {
 		mode := "Normal"
-		policy := ConservativeCompilationPolicy()
 		if verify {
 			mode = "Verify"
-			policy = VerifyCompilationPolicy()
 		}
-		outputs, err := GenerateForTargetWithPolicy(module, source, GenericC11Target(), policy)
-		if err != nil {
-			t.Fatal(err)
-		}
+		outputs := backendTestOutputs(t, verify)
 		t.Run(mode, func(t *testing.T) {
 			output := runFoundationNativeHarnessOutput(t, outputs, "frames.c", harness, "-pedantic-errors")
 			var observations []string

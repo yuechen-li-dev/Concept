@@ -59,7 +59,9 @@ void Check() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, err := RunTests(manifest, TestRunOptions{Verify: true, NativeLinker: "clang++", NativeLinkInputs: []string{object}, ResultsDir: filepath.Join(dir, ".test-results")})
+	session := newTestBuildSession()
+	defer session.close()
+	run, err := runTests(manifest, TestRunOptions{Verify: true, NativeLinker: "clang++", NativeLinkInputs: []string{object}, ResultsDir: filepath.Join(dir, ".test-results")}, session)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +73,7 @@ void Check() {
 		t.Fatalf("foreign violation lost source provenance: %+v", result)
 	}
 	for repetition := 2; repetition <= 100; repetition++ {
-		repeated, err := RunTests(manifest, TestRunOptions{Verify: true, NativeLinker: "clang++", NativeLinkInputs: []string{object}, ResultsDir: filepath.Join(dir, ".test-results")})
+		repeated, err := runTests(manifest, TestRunOptions{Verify: true, NativeLinker: "clang++", NativeLinkInputs: []string{object}, ResultsDir: filepath.Join(dir, ".test-results")}, session)
 		if err != nil || len(repeated.Results) != 1 || !reflect.DeepEqual(result.Verifications, repeated.Results[0].Verifications) {
 			t.Fatalf("foreign verification report changed on run %d: %v %+v", repetition, err, repeated.Results)
 		}

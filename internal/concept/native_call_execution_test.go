@@ -12,15 +12,6 @@ func TestEVT2e5NativeInternalCalls(t *testing.T) {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("Win64 executable-memory ABI qualification requires Windows AMD64")
 	}
-	path := "../../libraries/Standard/Backend/AMD64.concept"
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend, err := ParseWithBuiltSemanticModuleRoots(path, string(source), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	fixture := "testdata/evt2e5_calls.concept"
 	input, err := os.ReadFile(fixture)
 	if err != nil {
@@ -56,10 +47,7 @@ func TestEVT2e5NativeInternalCalls(t *testing.T) {
 			policy = VerifyCompilationPolicy()
 			mode = "Verify"
 		}
-		outputs, err := GenerateForTargetWithPolicy(backend, source, GenericC11Target(), policy)
-		if err != nil {
-			t.Fatal(err)
-		}
+		outputs := backendTestOutputs(t, verify)
 		oracle, err := GenerateForTargetWithPolicy(checked, input, GenericC11Target(), policy)
 		if err != nil {
 			t.Fatal(err)

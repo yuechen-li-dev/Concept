@@ -15,19 +15,7 @@ func TestEVT2x3FiniteNativeStepAndEVT2x5DynamicAddressing(t *testing.T) {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("native executable-memory test requires Windows AMD64")
 	}
-	backendPath := filepath.Join("..", "..", "libraries", "Standard", "Backend", "AMD64.concept")
-	backendSource, err := os.ReadFile(backendPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend, err := ParseWithBuiltSemanticModuleRoots(backendPath, string(backendSource), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(backend, backendSource)
-	if err != nil {
-		t.Fatal(err)
-	}
+	outputs := backendTestOutputs(t, false)
 	dir := t.TempDir()
 	if err := Write(dir, outputs); err != nil {
 		t.Fatal(err)
@@ -145,7 +133,10 @@ int main(int argc, char** argv) {
 		t.Skip("no C11 compiler")
 	}
 	executable := filepath.Join(dir, "machine-native.exe")
-	cmd := nativeCommand(t, compiler, "-std=c11", "-I", dir, filepath.Join(dir, "amd64.generated.c"), harnessPath, "-o", executable)
+	objects := nativeFixtureObjects(t, outputs, compiler)
+	args := append([]string{"-std=c11", "-I", dir}, objects...)
+	args = append(args, harnessPath, "-o", executable)
+	cmd := nativeCommand(t, compiler, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("native build: %v\n%s", err, out)
 	}

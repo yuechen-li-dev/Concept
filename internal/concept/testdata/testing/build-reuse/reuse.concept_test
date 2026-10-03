@@ -1,0 +1,28 @@
+profile Core;
+extern "C" int Count();
+
+[[fact]]
+void First()
+{
+    Assert.Equal(Count(), 1, "each fact starts a fresh process");
+}
+
+[[fact]]
+void Second()
+{
+    Assert.Equal(Count(), 1, "the next fact has independent native storage");
+}
+
+[[theory]]
+[[artifact("rows.json")]]
+void Row(int value)
+{
+    Assert.Equal(Count(), 1, "each theory row starts a fresh process");
+    Assert.True(value > 0, "bound values reach the harness");
+}
+
+[[prophecy]]
+void ExpectedFailure()
+{
+    assert(false, "shared compilation preserves abnormal termination");
+}

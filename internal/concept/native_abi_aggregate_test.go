@@ -2,6 +2,7 @@ package concept
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -10,9 +11,9 @@ import (
 	"testing"
 )
 
-func TestNativeABIEvidenceDeterministic100(t *testing.T) {
+func TestNativeABIEvidenceAndEncodingDeterminism(t *testing.T) {
 	if testing.Short() {
-		t.Skip("100 native compiler probes skipped in short mode")
+		t.Skip("native ABI integration skipped in short mode")
 	}
 	if _, err := exec.LookPath("clang++"); err != nil {
 		t.Skip("clang++ unavailable")
@@ -35,7 +36,7 @@ func TestNativeABIEvidenceDeterministic100(t *testing.T) {
 	}
 	var first []byte
 	narrowNativeDeterminismPath(t)
-	for run := 0; run < determinismRuns(); run++ {
+	for run := 0; run < integrationDeterminismRuns(); run++ {
 		if err := CheckNativeABI(project); err != nil {
 			t.Fatal(err)
 		}
@@ -47,6 +48,17 @@ func TestNativeABIEvidenceDeterministic100(t *testing.T) {
 			first = body
 		} else if !bytes.Equal(first, body) {
 			t.Fatalf("native ABI evidence changed on run %d", run+1)
+		}
+	}
+	baselineProbe := nativeABIProbeSource(project.ABI[0])
+	for run := 0; run < determinismRuns(); run++ {
+		var report NativeABIReport
+		if err := json.Unmarshal(first, &report); err != nil {
+			t.Fatal(err)
+		}
+		body, err := json.MarshalIndent(report, "", "  ")
+		if err != nil || !bytes.Equal(first, append(body, '\n')) || nativeABIProbeSource(project.ABI[0]) != baselineProbe {
+			t.Fatalf("ABI report or probe encoding changed on run %d: %v", run+1, err)
 		}
 	}
 }

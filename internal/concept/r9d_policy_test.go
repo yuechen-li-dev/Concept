@@ -118,15 +118,6 @@ int CallDecode(int x) { return Decode(x); }
 	for i, fn := range machine.Functions {
 		fmt.Fprintf(&data, "#define ORD_%s %d\n", fn.Name, i)
 	}
-	backendPath := "../../libraries/Standard/Backend/AMD64.concept"
-	backendSource, err := os.ReadFile(backendPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend, err := ParseWithBuiltSemanticModuleRoots(backendPath, string(backendSource), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	harness := `#include "amd64.generated.h"
 #include "oracle.c"
 #include <windows.h>
@@ -155,10 +146,7 @@ int main(void) {
 	harness = strings.Replace(harness, "/* ARTIFACT */", data.String(), 1)
 	var normal string
 	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
-		outputs, err := GenerateForTargetWithPolicy(backend, backendSource, GenericC11Target(), policy)
-		if err != nil {
-			t.Fatal(err)
-		}
+		outputs := backendTestOutputs(t, policy.Verify)
 		oracle, err := GenerateForTargetWithPolicy(checked, []byte(source), GenericC11Target(), policy)
 		if err != nil {
 			t.Fatal(err)
@@ -242,13 +230,8 @@ int F(int x) {
 	}
 }
 
-func TestR9dElseIfFormattingAndExecution(t *testing.T) {
-	const source = `module R9d.Runtime; profile Core;
-int Decode(int x) { if (x == 1) { return 10; } else if (x == 2) { return 20; } else if (x == 3) { return 30; } else { return 40; } }
-int Expression(int x) { return if (x == 1) 10 else if (x == 2) 20 else 40; }
-int Nested(int x) { if (x > 0) { if (x == 1) { return 1; } else if (x == 2) { return 2; } } else if (x == -1) { return 3; } return 4; }
-int Match(int x) { return match (x) { 1 => 10, 2 => 20, 3 => 30, _ => 40 }; }
-`
+func TestR9dElseIfFormatting(t *testing.T) {
+	source := runtimeTestSource(t, "runtime.concept_test")
 	for _, style := range []string{"same-line", "allman"} {
 		opts := DefaultFormatOptions()
 		opts.BraceStyle = style
@@ -280,6 +263,7 @@ int Match(int x) { return match (x) { 1 => 10, 2 => 20, 3 => 30, _ => 40 }; }
 	if err != nil || again != formatted {
 		t.Fatalf("comment drift: %v", err)
 	}
+
 	module, err := Parse("runtime.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -289,15 +273,7 @@ int Match(int x) { return match (x) { 1 => 10, 2 => 20, 3 => 30, _ => 40 }; }
 		t.Fatal(err)
 	}
 	assertR8cStrictC11(t, outputs, "runtime.generated.c")
-	runFoundationNativeHarness(t, outputs, "r9d_harness.c", `#include "runtime.generated.h"
-int main(void) {
-  for (int x = 0; x < 5; ++x) {
-    if (concept_r9d__runtime_decode(x) != concept_r9d__runtime_match(x)) return 1;
-  }
-  if (concept_r9d__runtime_expression(1) != 10 || concept_r9d__runtime_expression(2) != 20 || concept_r9d__runtime_expression(9) != 40) return 2;
-  if (concept_r9d__runtime_nested(-1) != 3 || concept_r9d__runtime_nested(2) != 2) return 3;
-  return 0;
-}`)
+
 }
 
 func TestR9dDogfoodProject(t *testing.T) {

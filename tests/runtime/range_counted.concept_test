@@ -1,0 +1,27 @@
+profile Core;
+
+int Sum(Range<int> values)
+{
+    Assert.Concept<Bounded>(values, "finite range has a bound");
+    int result = 0;
+    for (value in values) { result += value; }
+    return result;
+}
+
+int Main()
+{
+    Range<int> plain = 0..10;
+    int result = Sum(plain);
+    for (i in 0..10 step 2) { result += i; }
+    for (i in 10..0 descend 2) { result += i; }
+    for (i in 3..3) { result += 1000; }
+    int top = 2147483647;
+    for (i in 2147483646..top) { result += i - 2147483646; }
+    return result;
+}
+
+[[fact]]
+void RuntimeBehavior()
+{
+    Assert.Equal(Main(), 95, "range_counted preserves its runtime result");
+}
