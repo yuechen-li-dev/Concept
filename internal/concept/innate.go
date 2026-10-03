@@ -215,6 +215,18 @@ func evt1ValidatePredicateRequirement(env *semanticEnv, decl ConceptDecl, r *Pre
 				return evt1Diagnostic("VERDICT_DESCRIBE_INVALID", "predicate Describe must take its refutation type and return string", r.Span)
 			}
 		}
+		if describe, ok := predicates.comptimeFunctions[r.Predicate+"UnknownDescribe"]; ok {
+			text, _ := evt1BuiltinType("string", describe.Span)
+			valid := evt1SemanticTypeEqual(predicates, describe.ReturnType, text) && len(describe.Params) == len(fn.Params)
+			if valid {
+				for i, parameter := range describe.Params {
+					valid = valid && evt1SemanticTypeEqual(predicates, parameter.Type, fn.Params[i].Type)
+				}
+			}
+			if !valid {
+				return evt1Diagnostic("VERDICT_UNKNOWN_DESCRIBE_INVALID", "predicate UnknownDescribe must take the predicate's subjects and return string", r.Span)
+			}
+		}
 	}
 	if fn.ReturnType.Name == "Verdict" && !typed && !decl.Innate {
 		if err := evt1ValidateVerdictShape(predicates); err != nil {

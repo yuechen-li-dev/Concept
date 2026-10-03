@@ -356,6 +356,15 @@ var evt1Observations = map[string]evt1Observation{
 	"Declaration":      {[]string{"typename"}, "declaration"},
 	"HasDrop":          {[]string{"typename"}, "bool"},
 	"NeedsDrop":        {[]string{"typename"}, "bool"},
+	// Geometry and enum observations project existing checked metadata. They
+	// grant no copy, relocation, exhaustive-match, or optimizer authority.
+	"HasFixedGeometry":        {[]string{"typename"}, "bool"},
+	"RepresentationSize":      {[]string{"typename"}, "usize<byte>"},
+	"RepresentationAlignment": {[]string{"typename"}, "usize<byte>"},
+	"CaseCount":               {[]string{"declaration"}, "int"},
+	"CaseName":                {[]string{"declaration", "int"}, "string"},
+	"CaseTag":                 {[]string{"declaration", "int"}, "int"},
+	"CasePayloadCount":        {[]string{"declaration", "int"}, "int"},
 }
 
 func evt1IsObservationCall(e *CallExpr) bool {
@@ -402,6 +411,9 @@ func validateObservationCall(env *semanticEnv, scope *evt1Scope, e *CallExpr, te
 	e.Intrinsic = "observation"
 	if observation.result == evt1TypeShapeName {
 		return Type{Name: evt1TypeShapeName, Kind: TypeEnum, Span: e.Span}, nil
+	}
+	if observation.result == "usize<byte>" {
+		return evt1ByteQuantityType(e.Span), nil
 	}
 	result, _ := evt1BuiltinType(observation.result, e.Span)
 	return result, nil
@@ -517,6 +529,27 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 				return fail(ref.qualifiedName() + " is not a struct, class, or record declaration")
 			}
 			return integer(len(structDecl.Fields))
+		case "CaseCount", "CaseName", "CaseTag", "CasePayloadCount":
+			decl, ok := env.enums[ref.Name]
+			if !ok || ref.Kind != TypeDeclaration {
+				return fail(ref.qualifiedName() + " is not an enum declaration")
+			}
+			if e.Callee == "CaseCount" {
+				return integer(len(decl.Variants))
+			}
+			index := args[1].IntValue
+			if index < 0 || index >= len(decl.Variants) {
+				return fail(fmt.Sprintf("%s has no case %d", ref.Name, index))
+			}
+			variant := decl.Variants[index]
+			switch e.Callee {
+			case "CaseName":
+				return text(variant.Name)
+			case "CaseTag":
+				return integer(variant.Tag)
+			default:
+				return integer(len(variant.Payload))
+			}
 		case "Field":
 			if !isStruct {
 				return fail(ref.qualifiedName() + " is not a struct, class, or record declaration")
@@ -640,6 +673,18 @@ func evt1EvalObservation(state *evt1ComptimeState, scope *evt1EvalScope, e *Call
 		return boolean(evt1DropFunction(env, value) != nil)
 	case "NeedsDrop":
 		return boolean(evt1StorageElementHasDrop(env, value))
+	case "HasFixedGeometry", "RepresentationSize", "RepresentationAlignment":
+		size, alignment, err := evt1TypeGeometry(env, t)
+		if e.Callee == "HasFixedGeometry" {
+			return boolean(err == nil)
+		}
+		if err != nil {
+			return fail("no fixed representation geometry for " + t.String())
+		}
+		if e.Callee == "RepresentationSize" {
+			return Value{Kind: ValueInt, Type: evt1ByteQuantityType(e.Span), UintValue: uint64(size), WideUint: true}, nil
+		}
+		return Value{Kind: ValueInt, Type: evt1ByteQuantityType(e.Span), UintValue: uint64(alignment), WideUint: true}, nil
 	}
 	return fail("unhandled type observation")
 }

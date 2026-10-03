@@ -416,3 +416,27 @@ NoAllocation, Outlives and Disjoint remain under their current fact owners;
 StaticExtent retains layout provenance and Planner shadow use. No typed innate
 fact grant, user-written innate authority, or runtime Verdict is admitted.
 See R9-TYPED-VERDICTS and R9B2-CONFORMANCE for the qualified protocol and evidence.
+
+
+## R9b3 ordinary vocabulary and observation boundary
+
+PlainData is an ordinary Standard.Semantic.Vocabulary concept, not a new innate
+rule. Compiler-owned geometry and ordered enum-case projections expose checked
+semantic observations; the Concept predicate owns representation judgments and
+refutation wording. HasFixedGeometry and byte-valued RepresentationSize/Alignment
+share the existing layout owner, with bounded per-query scratch and overflow
+checks. CaseCount/Name/Tag/PayloadCount preserve declaration order and validate
+indices. No observation produces PlainData, Relocatable, FiniteDomain or
+ClosedWorld facts by itself.
+
+The optional typed UnknownDescribe convention shares the predicate evaluator,
+fuel/depth limits and 4096-byte description cap. Unknown still has no refutation
+payload; a mandatory innate Unknown remains INNATE_UNDECIDED. Declared Vulkan
+requirements reuse typed diagnostics. The ownership agreement harness and legacy
+normalization stay intact; no innate rule is replaced in R9b3.
+
+The trusted-fact allowlist remains empty. User-authored typed Proven claims and
+artifact metadata cannot forge compiler facts or embedded innate authority.
+Mutex qualification is remeasured in R9B3-CONFORMANCE; geometry scratch is local
+to a query and adds no shared cache or lock. StaticExtent, NoAllocation, Outlives,
+Contiguous and Disjoint retain their current owners. No EVT2 stage is resumed.

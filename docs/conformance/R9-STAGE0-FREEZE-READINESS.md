@@ -2,7 +2,8 @@
 
 The MachineIR bridge duplication item is **CLOSED** by R9a2. R9a closure is
 complete and ready for the separate R9b research phase. Stage-0 has not been
-frozen automatically. R9b vocabulary remains partial; R9b2 typed predicates are qualified;
+frozen automatically. R9b2 typed predicates and R9b3 deferred-vocabulary
+qualification are complete within their documented admission/deferral scopes;
 frontend self-hosting has not begun.
 
 | Closure criterion | Status |
@@ -32,7 +33,7 @@ are documented rather than treated as silently accepted features.
 See R9A2-CONVERGENCE and R9A2-CONFORMANCE for commits and evidence; R9A documents
 retain the historical milestone result with the bridge closeout noted.
 
-## R9b impact: partial progression
+## Historical R9b impact: partial progression
 
 | Addition or research item | Surface / freeze impact |
 | --- | --- |
@@ -48,7 +49,7 @@ retain the historical milestone result with the bridge closeout noted.
 R9B-CONVERGENCE and R9B-RESEARCH-LEDGER distinguish qualified changes from open
 research. R9b is not complete and Stage-0 is not frozen.
 
-## R9b2 impact
+## Historical R9b2 impact
 
 The semantic/frontend surface now includes contextual Verdict constructors,
 comptime template declarations with bounded recursion, optional proof/artifact
@@ -59,3 +60,24 @@ and scale evidence. Remaining R9b work concerns the deferred vocabulary meanings
 and actual consuming paths in the research ledger, plus future authorized innate
 fact projection if pursued. Stage-0 is not automatically frozen; EVT2 and frontend
 self-hosting are not resumed by this milestone.
+
+
+## R9b3 qualification closeout
+
+R9b3 closes the deferred-vocabulary audit: PlainData is admitted with typed
+representation evidence/refutations, real Vulkan and backend consumers, bounded
+observations, artifact-only transport and deterministic explain. Relocatable,
+intrinsic address versus contextual pinning, finite cases versus complete values,
+and closed-world boundary meanings have precise scoped/deferral decisions in
+R9B-RESEARCH-LEDGER. They are not implicitly accepted frontend features.
+
+The future frontend must preserve the geometry/case observations, ordinary
+closed structural predicate execution, optional typed UnknownDescribe convention,
+source-library imports in native companion checking, and empty authority registry.
+There is no new syntax, wire format, trusted fact grant, optimizer, native AMD64
+capability or machine runtime behavior. Existing exact-1D StaticExtent and scoped
+Contiguous/Disjoint remain unchanged. R9B3-CONFORMANCE records the current gates.
+
+This milestone completes its admission/deferral objective; it does not freeze
+Stage-0 automatically, begin frontend self-hosting or resume EVT2. Frozen legacy
+Zig is unchanged and both legacy suites are skipped under the current policy.

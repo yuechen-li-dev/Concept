@@ -60,7 +60,18 @@ func generateSemanticCorpusFile(path string) (Outputs, error) {
 	if err != nil {
 		return nil, err
 	}
-	module, err := Parse(filepath.ToSlash(path), string(source))
+	var module Module
+	syntax, err := parseSyntaxModule(filepath.ToSlash(path), string(source))
+	if err != nil {
+		return nil, err
+	}
+	// Core research specimens use the ordinary artifact import path. Vulkan
+	// profile domain imports retain their existing profile-owned parsing path.
+	if syntax.Profile == "Core" && len(syntax.Imports) != 0 {
+		module, err = ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(source), []string{"../../libraries", "testdata/r9b3"})
+	} else {
+		module, err = Parse(filepath.ToSlash(path), string(source))
+	}
 	if err != nil {
 		return nil, err
 	}

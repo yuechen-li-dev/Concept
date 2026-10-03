@@ -710,7 +710,7 @@ func CheckNativeABI(project NativeProject) error {
 		if err != nil {
 			return err
 		}
-		module, err := Parse(filepath.ToSlash(path), string(body))
+		module, err := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), evt1TestModuleRoots(project.Root, filepath.Dir(path)))
 		if err != nil {
 			return err
 		}
@@ -726,7 +726,7 @@ func CheckNativeABI(project NativeProject) error {
 		if err != nil {
 			return err
 		}
-		module, err := Parse(filepath.ToSlash(path), string(body))
+		module, err := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), evt1TestModuleRoots(project.Root, filepath.Dir(path)))
 		if err != nil {
 			return err
 		}

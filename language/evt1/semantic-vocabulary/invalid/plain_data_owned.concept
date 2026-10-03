@@ -1,0 +1,22 @@
+module Research.PlainOwned;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+class Resource
+{
+    public:
+    int id;
+}
+void Drop(owned Resource resource)
+{
+}
+record struct Owner
+{
+    owned Resource resource;
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(Owner, "fixed fields do not erase ownership");
+    return 0;
+}

@@ -1,4 +1,4 @@
-# Typed semantic verdicts (R9b2)
+# Typed semantic verdicts (R9b2, R9b3)
 
 > Verdict<Evidence, Refutation> carries typed payloads while projecting into the
 > existing Proven / Disproven / Unknown lattice. It does not define a second
@@ -148,7 +148,41 @@ A future registered rule still needs a qualified provenance verifier in the
 existing fact owner. No typed fact-producing innate rule is claimed here; the
 conditional positive fact-projection qualification remains deferred.
 
-StaticExtent's exact 1D layout-derived facts, Unknown cases and Planner shadow
-consumer remain unchanged. PlainData, FiniteDomain, ClosedWorld, StableAddress and
-Relocatable are still research entries. See R9B-RESEARCH-LEDGER and
+At R9b2 closeout, StaticExtent's exact 1D layout-derived facts, Unknown cases and
+Planner shadow remained unchanged, while PlainData, FiniteDomain, ClosedWorld,
+StableAddress and Relocatable remained research entries. R9b3 supersedes their
+admission decisions as described below. See R9B-RESEARCH-LEDGER and
 R9B2-CONFORMANCE for the design consequences, measurements and gates.
+
+
+## R9b3 semantic descriptions and imported requirements
+
+Optional <PredicateName>UnknownDescribe has the same subject parameter types as
+the typed predicate and returns comptime string. It executes only for Unknown
+in the same evaluator state/fuel budget as the predicate. Signature failures are
+VERDICT_UNKNOWN_DESCRIBE_INVALID; empty/invalid descriptions remain diagnosed.
+All rendered descriptions are capped at 4096 bytes, including literal returned
+strings (VERDICT_DESCRIPTION_LIMIT). Unknown has no selected payload and remains
+undecided; explaining missing evidence cannot turn it into Disproven.
+
+PlainDataHoldsUnknownDescribe names opaque missing summaries, partial storage's
+live-element protocol, runtime extent, payload-sum geometry and zero-size physical
+representation. Nested unsupported structure gets a conservative incomplete-proof
+description. The renderer is ordinary Concept code, not a Go reason table.
+
+Ordinary template-body comptime calls now use the existing comptime argument and
+call path. Known lexical generic templates are available in predicate-constrained
+bodies, while explicit operation requirements keep precedence. Enum and foreign
+handle assertion subjects resolve as types while retaining declaration metadata.
+Native companion checking/artifact building resolves source-library semantic
+imports through the same checked module roots/artifact owner. Qualified topology
+is a companion importing ordinary source libraries; arbitrary mixed dependency
+cycles/imports are not a new admission.
+
+Vulkan requirement failure diagnostics include the selected typed FieldProblem
+or Unknown description via the same projector used by Assert/explain. Artifacts
+carry helper bodies and checked types; consumer re-evaluation uses no source
+fallback. PlainData evidence is size/alignment, refutation names the type/field,
+and no result acquires FactAuthority. Existing legacy normalization and typed
+innate ownership projection are unchanged. Research Verdicts never seal an
+activation inventory or prove bitwise relocation merely by their E/R spelling.

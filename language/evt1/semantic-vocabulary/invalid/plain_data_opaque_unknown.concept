@@ -1,0 +1,11 @@
+module Research.PlainOpaque;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+extern "C" handle ForeignOpaque;
+
+int Read()
+{
+    Assert.Concept<PlainData>(ForeignOpaque, "opaque handle lacks a semantic representation summary");
+    return 0;
+}

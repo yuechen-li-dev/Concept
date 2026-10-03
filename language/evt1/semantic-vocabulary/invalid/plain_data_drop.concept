@@ -1,0 +1,18 @@
+module Research.PlainDrop;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+class Resource
+{
+    public:
+    int id;
+}
+void Drop(owned Resource resource)
+{
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(Resource, "Drop prevents raw semantic copying");
+    return 0;
+}

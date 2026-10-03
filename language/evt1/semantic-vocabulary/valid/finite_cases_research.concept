@@ -1,0 +1,22 @@
+module Research.FiniteProbe;
+profile Core;
+import Research.Finite;
+
+enum Message
+{
+    Empty,
+    Text(string value),
+}
+enum Tag
+{
+    Start,
+    Finish,
+}
+
+int Read()
+{
+    Assert.Concept<FiniteCases>(Message, "research: payloads do not enlarge the case inventory");
+    Assert.Concept<FiniteDomain>(Tag, "research: payload-free enum values");
+    Assert.Concept<FiniteDomain>(bool, "research: two boolean values");
+    return 0;
+}

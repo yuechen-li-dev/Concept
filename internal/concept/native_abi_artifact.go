@@ -175,6 +175,27 @@ func BuildNativeCompanionArtifacts(project NativeProject) (map[string][]byte, Na
 		units[module.Name] = sourceUnit{path, string(body), module.Imports}
 	}
 	artifacts := map[string][]byte{}
+	// Companions may import ordinary semantic libraries. Resolve those through
+	// the same checked module builder used by source consumers, while keeping
+	// native ABI evidence restricted to the explicitly measured companions.
+	var libraryImports []string
+	for _, unit := range units {
+		for _, dependency := range unit.imports {
+			if _, companion := units[dependency]; !companion {
+				libraryImports = append(libraryImports, dependency)
+			}
+		}
+	}
+	if len(libraryImports) != 0 {
+		sort.Strings(libraryImports)
+		libraries, err := BuildSemanticModuleArtifactsFromSources(evt1TestModuleRoots(project.Root, project.Root), libraryImports)
+		if err != nil {
+			return nil, NativeABIIdentity{}, err
+		}
+		for name, artifact := range libraries {
+			artifacts[name] = artifact
+		}
+	}
 	active := map[string]bool{}
 	var build func(string) error
 	build = func(name string) error {

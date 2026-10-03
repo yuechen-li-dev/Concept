@@ -1,0 +1,14 @@
+module Research.PlainReference;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+ref struct Borrowed
+{
+    ref int target;
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(Borrowed, "reference lifetime is semantic");
+    return 0;
+}

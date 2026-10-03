@@ -1,0 +1,15 @@
+module Research.PlainRecord;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+record struct Header
+{
+    uint32 count;
+    double scale;
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(Header, "self-contained fixed record");
+    return 0;
+}

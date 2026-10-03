@@ -1,0 +1,25 @@
+module Research.Closure;
+profile Core;
+
+// A pair can refute identity coverage; matching pairs cannot establish that
+// a boundary is closed. This research probe never manufactures closure.
+record struct InventoryEvidence
+{
+    string boundary;
+    string inventoryHash;
+    int memberCount;
+}
+enum InventoryRefutation
+{
+    IdentityDoesNotCoverBoundary(string identity, string firstBoundary, string secondBoundary)
+}
+comptime Verdict<InventoryEvidence, InventoryRefutation> InventoryIdentityPair(string firstIdentity,
+string firstBoundary, string secondIdentity, string secondBoundary)
+{
+    if (firstIdentity == secondIdentity and firstBoundary != secondBoundary)
+    {
+        return Verdict::Disproven(InventoryRefutation::IdentityDoesNotCoverBoundary(firstIdentity, firstBoundary,
+        secondBoundary));
+    }
+    return Verdict::Unknown;
+}
