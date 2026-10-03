@@ -32,6 +32,10 @@ type LIRInstruction struct {
 	Result      int // -1 for no result
 	Type        LIRType
 	Args        []int
+	Callee      string // direct source function name, for readable artifacts
+	CallTarget  string // validated declaration identity, including parameter signature
+	CallABI     string // source call convention; currently win64
+	ArgTypes    []LIRType
 	Slot        int // -1 unless this is a slot or array operation
 	Literal     string
 	Extent      int
@@ -185,11 +189,17 @@ func (m LIRModule) String() string {
 					fmt.Fprintf(&out, "v%d = ", in.Result)
 				}
 				fmt.Fprintf(&out, "%s %s", in.Op, in.Type)
+				if in.Op == "call" {
+					fmt.Fprintf(&out, " @%s [%s] cc %s", in.Callee, in.CallTarget, in.CallABI)
+				}
 				if in.Slot >= 0 {
 					fmt.Fprintf(&out, " s%d", in.Slot)
 				}
 				for _, arg := range in.Args {
 					fmt.Fprintf(&out, " v%d", arg)
+				}
+				if in.Op == "call" {
+					fmt.Fprintf(&out, " args=%v", in.ArgTypes)
 				}
 				if in.Literal != "" {
 					fmt.Fprintf(&out, " %s", in.Literal)
@@ -241,6 +251,13 @@ func VerifyLIR(m LIRModule) error {
 			return fmt.Errorf("LIR_BAD_FACT_ID %s", fact.ID)
 		}
 		facts[fact.ID] = true
+	}
+	functions := map[string]LIRFunction{}
+	for _, f := range m.Functions {
+		if f.Identity == "" || functions[f.Identity].Identity != "" {
+			return fmt.Errorf("LIR_DUPLICATE_FUNCTION %s", f.Identity)
+		}
+		functions[f.Identity] = f
 	}
 	for _, f := range m.Functions {
 		if err := verifyLIRMachineFunction(f); err != nil {
@@ -322,6 +339,23 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "call":
+					target, ok := functions[in.CallTarget]
+					if !ok || target.Name != in.Callee || in.CallABI != "win64" || in.Slot != -1 || len(in.Args) != len(target.Params) || len(in.ArgTypes) != len(in.Args) || in.Type != target.Result {
+						return fmt.Errorf("LIR_BAD_CALL b%d", b.ID)
+					}
+					if in.Type == "void" {
+						if in.Result >= 0 {
+							return fmt.Errorf("LIR_BAD_CALL_RESULT b%d", b.ID)
+						}
+					} else if in.Result < 0 || !lirCallScalar(in.Type) {
+						return fmt.Errorf("LIR_BAD_CALL_RESULT b%d", b.ID)
+					}
+					for i, arg := range in.Args {
+						if !lirCallScalar(in.ArgTypes[i]) || in.ArgTypes[i] != known[arg] || in.ArgTypes[i] != target.Params[i].Type {
+							return fmt.Errorf("LIR_BAD_CALL_ARGUMENT b%d arg=%d", b.ID, i)
+						}
+					}
 				case "const":
 					if in.Result < 0 || len(in.Args) != 0 || in.Literal == "" {
 						return fmt.Errorf("LIR_BAD_CONST b%d", b.ID)
@@ -556,6 +590,8 @@ func lirInteger(t LIRType) bool {
 	}
 	return false
 }
+
+func lirCallScalar(t LIRType) bool { return t == "bool" || lirInteger(t) }
 func lirWidth(t LIRType) int {
 	switch t {
 	case "i8", "u8":

@@ -1,0 +1,49 @@
+profile Core;
+
+int FortyTwo()
+{
+    return 42;
+}
+
+int ZeroArgCall()
+{
+    return FortyTwo();
+}
+
+bool IdentityBool(bool value)
+{
+    return value;
+}
+
+bool BoolCall(bool value)
+{
+    return IdentityBool(value);
+}
+
+int Add(int a, int b)
+{
+    return a + b;
+}
+
+void Touch(int x)
+{
+    return;
+}
+
+int Sum5(int a, int b, int c, int d, int e)
+{
+    return a + b + c + d + e;
+}
+
+int AddThenCall(int a, int b, int c)
+{
+    int local = a + b;
+    Touch(c);
+    int result = Add(local, c);
+    return result;
+}
+
+int FiveArgCall(int a, int b, int c, int d, int e)
+{
+    return Sum5(a, b, c, d, e);
+}
