@@ -384,3 +384,13 @@ subjects.
   still compiles). The alternative is that structural Drop releases every field
   whose type has a Drop, owned or not, and CV4653 disappears. The MVP keeps
   CV4653 as the pilot either way, but the language should choose deliberately.
+
+## R9b evidence research boundary
+
+R9b currently qualifies closed generic comptime record values and a layout-derived
+StaticExtent shadow fact, not typed innate verdicts or innate fact grants.
+The existing fixed Verdict contract remains active. See R9-TYPED-VERDICTS.md
+for the executable PREDICATE_REQUIREMENT_INVALID boundary and
+R9-SEMANTIC-VOCABULARY.md for the restrictive/codegen trust distinction.
+NoAllocation/Outlives remain under their existing compiler authorities; ordinary
+predicate truth and innate declaration rejection do not grant optimizer facts.
