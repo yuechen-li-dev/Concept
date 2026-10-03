@@ -13,6 +13,13 @@ loaded from semantic artifacts. Generated functions use `GeneratedOrigin`;
 foreign functions use the existing `ExternABI` declaration. These categories
 are never inferred from spelling or path.
 
+R9d adds a checked function-body observation through the same declaration
+subject and proof path. `PreferMatchOverElseIfLadder` may require
+`compiler.NoMatchShapedElseIfLadder(F)` in `manifest.concept`, normally with
+warning severity. See [Else-if and match](ELSE-IF-AND-MATCH.md) for the supported
+discriminants, conservative exclusions, source anchoring, and explain behavior.
+Else-if remains ordinary legal syntax; this policy does not change semantics.
+
 > Project policy is ordinary Concept over semantic program subjects, not a
 > separate lint language. Policy may require truth. Policy cannot create truth.
 

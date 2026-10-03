@@ -1,0 +1,10 @@
+module R9d.categorical_ladder;
+profile Core;
+enum Kind {
+    A, B, C
+}
+int Decode(Kind kind) {
+    if (kind == Kind::A) { return 10; } else if (kind == Kind::B) { return 20; } else if (kind == Kind::C) {
+        return 30;
+    } else { return 0; }
+}

@@ -1176,6 +1176,8 @@ func evt1ProjectDeclarationAnalysis(env *semanticEnv, graph *ProofGraph, parent,
 			}
 		}
 		return FactUnknown, "bound operation has no available effect summary"
+	case "NoMatchShapedElseIfLadder":
+		return projectControlFlowAnalysis(env, graph, parent, declaration)
 	case "CanonicalName", "PascalCase", "CamelCase", "SnakeCase":
 		style := analysis
 		if style == "CanonicalName" {
@@ -1202,7 +1204,7 @@ func evt1ProjectDeclarationAnalysis(env *semanticEnv, graph *ProofGraph, parent,
 
 func evt1IsDeclarationAnalysis(analysis string) bool {
 	switch analysis {
-	case "Name", "DeclarationKind", "Authored", "Generated", "Foreign", "NoAllocation", "CanonicalName", "PascalCase", "CamelCase", "SnakeCase",
+	case "Name", "DeclarationKind", "Authored", "Generated", "Foreign", "NoAllocation", "NoMatchShapedElseIfLadder", "CanonicalName", "PascalCase", "CamelCase", "SnakeCase",
 		string(TypeDeclaration), string(FunctionDeclaration), string(MethodDeclaration),
 		string(FieldDeclaration), string(LocalDeclaration), string(ParameterDeclaration),
 		string(ConceptDeclaration), string(InterfaceDeclaration), string(MachineDeclaration):

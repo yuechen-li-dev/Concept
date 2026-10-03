@@ -3683,9 +3683,6 @@ func (p *parser) parseIfExpr() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if evt1IsDirectIfExpr(elseExpr) {
-		return nil, evt1Diagnostic("CV4185", "else-if ladders are not supported; use match for multi-branch selection", elseExpr.exprSpan())
-	}
 	return &IfExpr{Condition: condition, Then: thenExpr, Else: elseExpr, Span: start}, nil
 }
 
@@ -3723,17 +3720,6 @@ func (p *parser) parseWithExpr() (Expr, error) {
 		return nil, err
 	}
 	return expr, nil
-}
-
-func evt1IsDirectIfExpr(expr Expr) bool {
-	switch e := expr.(type) {
-	case *IfExpr:
-		return true
-	case *ParenExpr:
-		return evt1IsDirectIfExpr(e.Value)
-	default:
-		return false
-	}
 }
 
 func (p *parser) parseLogicalOr() (Expr, error) {
@@ -4029,6 +4015,17 @@ func (p *parser) parseIfStmt() (Statement, error) {
 	stmt := &IfStmt{Condition: condition, Then: thenBlock, Span: start.Span}
 	if p.peekLexeme() == "else" {
 		p.next()
+		if p.peekLexeme() == "if" {
+			nested, err := p.parseIfStmt()
+			if err != nil {
+				return nil, err
+			}
+			// Preserve the ordinary nested control-flow representation. The
+			// synthetic block shares the child's site; an authored else block
+			// retains its brace site and is not an else-if continuation.
+			stmt.Else = &Block{Statements: []Statement{nested}, Span: nested.statementSpan()}
+			return stmt, nil
+		}
 		elseBlock, err := p.parseBlock()
 		if err != nil {
 			return nil, err

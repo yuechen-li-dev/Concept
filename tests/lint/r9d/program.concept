@@ -1,0 +1,67 @@
+module R9d.Dogfood;
+profile Core;
+enum Kind
+{
+    A, B, C
+}
+int Decode(Kind kind)
+{
+    if (kind == Kind::A)
+    {
+        return 10;
+    }
+    else if (kind == Kind::B)
+    {
+        return 20;
+    }
+    else if (kind == Kind::C)
+    {
+        return 30;
+    }
+    else
+    {
+        return 0;
+    }
+}
+int Opcode(int opcode)
+{
+    if (opcode == 1)
+    {
+        return 10;
+    }
+    else if (opcode == 2)
+    {
+        return 20;
+    }
+    else if (opcode == 3)
+    {
+        return 30;
+    }
+    else
+    {
+        return 0;
+    }
+}
+int Validate(int count, int capacity, bool unsafeMode)
+{
+    if (count == 0)
+    {
+        return 1;
+    }
+    else if (capacity < count)
+    {
+        return 2;
+    }
+    else if (unsafeMode)
+    {
+        return 3;
+    }
+    return 0;
+}
+int Exhaustive(Kind kind)
+{
+    return match (kind)
+    {
+        Kind::A => 10, Kind::B => 20, Kind::C => 30
+    };
+}
