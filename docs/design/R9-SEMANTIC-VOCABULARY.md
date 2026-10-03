@@ -1,6 +1,8 @@
 # R9 semantic vocabulary research
 
-This is a partial R9b qualification, not R9b closure. Baseline:
+Current: R9b3 qualification is complete; PlainData is admitted as an ordinary
+restrictive concept. Other admissions are precisely scoped/deferred in
+R9B-RESEARCH-LEDGER. The original R9b design below is historical. Its baseline:
 `2d32827cfe2afab05e6436e647aefab67b991eda` (current main after R9a2).
 Compiler: `concept-evt1-stage0-go`. The live bridge remains CMIRAMD2.
 See the research ledger for candidate admission and the convergence report for
@@ -96,7 +98,7 @@ queries until each caller is migrated and qualified; no abrupt deletion or
 claim of completed migration. New observations must be deterministic, bounded,
 semantic and independent of Go implementation objects.
 
-## Limits of this slice
+## Historical limits of the R9b/R9b2 slice
 
 PlainData and finite-domain admission, backend/Vulkan vocabulary adoption, and
 additional innate rule migration remain unqualified. R9b2 qualifies the comptime
@@ -104,3 +106,56 @@ typed Verdict protocol, closed template calls and ownership refutation dogfood;
 see R9-TYPED-VERDICTS and R9B2-CONFORMANCE. The ledger specifies proposed meanings
 without granting their truth or optimizer authority. There is no second proof
 system, source scanner, SMT solver, new cache or automatic Stage-0 freeze.
+
+
+## R9b3: bounded semantic representation
+
+Standard.Semantic.Vocabulary owns PlainData<T>. Its ordinary Concept predicate
+first traverses checked representation structure and then obtains positive size
+and alignment from the existing layout owner. PlainDataEvidence is two byte
+quantities, not a proof tree. Records recurse through checked fields and fixed
+arrays through their element type once; scalar and payload-free enum geometry
+is accepted. Drop, ownership, references, managed storage and immovability carry
+explicit typed refutations. Opaque foreign handles, partial/runtime storage,
+payload sums, non-record aggregates, zero-size fields/values and unavailable
+geometry remain Unknown. No reference or runtime object graph is traversed.
+
+PlainData describes self-contained semantic representation, not merely fixed
+byte layout. Fixed layout alone is insufficient when ownership, references,
+Drop, or hidden runtime state remain meaningful. It is not CAbiValue,
+Relocatable, Serializable, Zeroable or arbitrary-byte validity. CAbiValue and
+Vulkan AsBytes retain their existing authority. The supported 64-bit geometry
+model does not promise a portable wire encoding or canonical padding.
+
+The new checked projections are HasFixedGeometry(typename),
+RepresentationSize/RepresentationAlignment(typename) returning usize<byte>, and
+CaseCount/CaseName/CaseTag/CasePayloadCount on enum declarations. They return
+semantic observations, not PlainData/finite/closure facts. The same bounded
+comptime evaluator owns every predicate and renderer. Geometry uses the existing
+layout authority with per-query scratch memoization, checked arithmetic, depth
+32 and 4096 graph accesses; this prevents overflow/cyclic/exponential observation
+queries. PlainData's closed structural helper is bounded(16), sharing the usual
+4096 fuel/depth 32 limits. Unknown never acquires a refutation payload.
+
+Real consumers: Vulkan host Upload/Download require PlainData; AMD64 asserts it
+for WireHeader, WireMachineFrame and WireMachineOperand in the ordinary checked
+module. Assertions erase before runtime. Copy and wire codecs retain their
+existing semantics. No old semantic authority is replaced; the new restriction
+is additive. Positive evidence agrees with the existing geometry owner and C11
+Header sizeof/alignment. The old compiler accepts opaque-handle Upload; the new
+requirement explains the missing self-contained representation summary.
+
+Relocatable remains deferred without a real compaction consumer or trusted
+post-relocation invariants. Intrinsic RequiresStableAddress and contextual Pinned
+remain separate; the immovable research observation proves only its exact
+restriction. FiniteCases research covers enum tags, FiniteDomain only bool and
+payload-free enums; complete payload values stay Unknown. Existing typed match
+and codec inventories retain authority. ClosedWorld is contextual: equal real
+activation topology IDs in two modules do not seal a compilation boundary.
+Existing module-local activation layout remains unchanged. No globally closed
+interface, new planner, runtime semantics or optimizer fact is installed.
+
+The trusted-fact registry is still empty. User Proven results cannot forge any
+real concept identity or grant a MIR fact. StaticExtent's exact 1D scope and
+canonical Contiguous/Disjoint derivations remain unchanged. See R9B3-CONFORMANCE
+and R9B-RESEARCH-LEDGER for all typed contracts, consumers and limits.
