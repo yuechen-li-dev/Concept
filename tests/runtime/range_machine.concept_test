@@ -1,0 +1,24 @@
+profile Core;
+automata Counter with state { int total; }
+{
+    machine MainMachine
+    {
+        state Start
+        {
+            for (i in 1..5) { state.total += i; }
+            complete;
+        }
+    }
+}
+int Main()
+{
+    instance Counter counter(0);
+    Step(counter, MainMachine);
+    return counter.state.total;
+}
+
+[[fact]]
+void RuntimeBehavior()
+{
+    Assert.Equal(Main(), 10, "range_machine preserves its runtime result");
+}

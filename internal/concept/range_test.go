@@ -7,28 +7,8 @@ import (
 	"testing"
 )
 
-func TestRangeValueAndCountedLoopNativeC11(t *testing.T) {
-	source := `profile Core;
-
-int Sum(Range<int> values)
-{
-    Assert.Concept<Bounded>(values, "finite range has a bound");
-    int result = 0;
-    for (value in values) { result += value; }
-    return result;
-}
-
-int Main()
-{
-    Range<int> plain = 0..10;
-    int result = Sum(plain);
-    for (i in 0..10 step 2) { result += i; }
-    for (i in 10..0 descend 2) { result += i; }
-    for (i in 3..3) { result += 1000; }
-    int top = 2147483647;
-    for (i in 2147483646..top) { result += i - 2147483646; }
-    return result;
-}`
+func TestRangeCountedLoopCodeGeneration(t *testing.T) {
+	source := runtimeTestSource(t, "range_counted.concept_test")
 	module, err := Parse("range_counted.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +17,6 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "range_counted_harness.c", "#include \"range_counted.generated.h\"\nint main(void) { return concept_range_counted_main() == 95 ? 0 : 1; }\n")
 	generated := string(outputs["range_counted.generated.c"])
 	if strings.Contains(generated, "malloc(") || strings.Contains(generated, "MoveNext(") || !strings.Contains(generated, "inline counted iterator") {
 		t.Fatal("static range did not lower to an inline counted loop")
@@ -55,65 +34,6 @@ func TestRangeInvalid(t *testing.T) {
 			t.Fatalf("accepted invalid range: %s", source)
 		}
 	}
-}
-
-func TestRangeAsyncNativeC11(t *testing.T) {
-	source := `profile Core;
-async int Child(int value) { return value; }
-async int Sum()
-{
-    int total = 0;
-    for (i in 6..0 descend 2) {
-        int observed = await Child(i);
-        total += observed;
-    }
-    return total;
-}
-int Main()
-{
-    Async<int> work = Sum();
-    while (not Complete(work)) bounded(16) { Step(work); }
-    return Result(work);
-}`
-	module, err := Parse("range_async.concept", source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(module, []byte(source))
-	if err != nil {
-		t.Fatal(err)
-	}
-	runFoundationNativeHarness(t, outputs, "range_async_harness.c", "#include \"range_async.generated.h\"\nint main(void) { return concept_range_async_main() == 12 ? 0 : 1; }\n")
-}
-
-func TestRangeMachineNativeC11(t *testing.T) {
-	source := `profile Core;
-automata Counter with state { int total; }
-{
-    machine MainMachine
-    {
-        state Start
-        {
-            for (i in 1..5) { state.total += i; }
-            complete;
-        }
-    }
-}
-int Main()
-{
-    instance Counter counter(0);
-    Step(counter, MainMachine);
-    return counter.state.total;
-}`
-	module, err := Parse("range_machine.concept", source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(module, []byte(source))
-	if err != nil {
-		t.Fatal(err)
-	}
-	runFoundationNativeHarness(t, outputs, "range_machine_harness.c", "#include \"range_machine.generated.h\"\nint main(void) { return concept_range_machine_main() == 10 ? 0 : 1; }\n")
 }
 
 func TestRangeMIRComparisonAndDeterminism(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -49,14 +50,16 @@ func TestStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected, _ := MarshalPackageGraph(first)
-	for run := 1; run < determinismRuns(); run++ {
-		again, err := BuildPackage(root, output, "DragonGod")
+	artifacts := packageOutputBytes(t, output)
+	for run := 1; run < integrationDeterminismRuns(); run++ {
+		againOutput := t.TempDir()
+		again, err := BuildPackage(root, againOutput, "DragonGod")
 		if err != nil {
 			t.Fatalf("run %d: %v", run, err)
 		}
 		body, _ := MarshalPackageGraph(again)
-		if !bytes.Equal(body, expected) {
-			t.Fatalf("package graph changed on run %d", run)
+		if !bytes.Equal(body, expected) || !reflect.DeepEqual(artifacts, packageOutputBytes(t, againOutput)) {
+			t.Fatalf("package graph or emitted artifacts changed on run %d", run)
 		}
 	}
 	if len(first.Packages) != 2 || first.Packages[0].Name != "Standard" || first.Packages[1].Name != "DragonGod" {
@@ -66,6 +69,30 @@ func TestStandardAndDragonGodPackagesBuildDeterministically(t *testing.T) {
 		first.Packages[1].Version != (PackageVersion{0, 0, 1}) || first.Packages[1].Kind != "Library" ||
 		len(first.Packages[1].Dependencies) != 1 || first.Packages[1].Dependencies[0] != "Standard" {
 		t.Fatalf("package graph did not preserve manifest metadata: %#v", first.Packages)
+	}
+}
+
+func TestPackageDependencyArtifactsDeterministic100(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("testdata", "package-determinism")
+	output := t.TempDir()
+	var expected map[string]string
+	var graphBytes []byte
+	for run := 0; run < determinismRuns(); run++ {
+		graph, err := BuildPackage(root, output, "Consumer")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := MarshalPackageGraph(graph)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := packageOutputBytes(t, output)
+		if run == 0 {
+			expected, graphBytes = files, body
+		} else if !bytes.Equal(body, graphBytes) || !reflect.DeepEqual(files, expected) {
+			t.Fatalf("dependency graph or artifacts changed on build %d", run+1)
+		}
 	}
 }
 

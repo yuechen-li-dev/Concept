@@ -207,9 +207,18 @@ func runFoundationNativeHarnessOutput(t *testing.T, outputs Outputs, harnessName
 	if generatedC == "" {
 		t.Fatal("generated C output missing")
 	}
+
 	executable := filepath.Join(dir, "evt1-r1-native.exe")
 	args := append([]string{"-std=c11", "-Wall", "-Wextra"}, extraArgs...)
-	args = append(args, "-I", dir, generatedC, harnessPath, "-o", executable)
+	args = append(args, "-I", dir)
+	if outputs["amd64.generated.c"] != nil {
+		args = append(args, nativeFixtureObjects(t, outputs, compiler, extraArgs...)...)
+	} else {
+		// A unique small specimen is cheaper to compile and link in one command.
+		args = append(args, generatedC)
+	}
+
+	args = append(args, harnessPath, "-o", executable)
 	build := nativeCommand(t, compiler, withHostLinkArgs(args...)...)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("native C11 compile failed: %v\n%s", err, out)

@@ -1,0 +1,1 @@
+module Consumer.Manifest; profile Core; import Base.Metadata; comptime PackageManifest Manifest = PackageManifest{"Consumer", "CODEX", Version{0, 0, 1}, PackageKind::Library, [Dependency{"Base"}], 1};

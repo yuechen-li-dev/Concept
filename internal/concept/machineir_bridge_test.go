@@ -106,19 +106,7 @@ func TestEVT2dConceptBackendNativeAddMax(t *testing.T) {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("native executable-memory test requires Windows AMD64")
 	}
-	sourcePath := filepath.Join("..", "..", "libraries", "Standard", "Backend", "AMD64.concept")
-	source, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	module, err := ParseWithBuiltSemanticModuleRoots(sourcePath, string(source), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(module, source)
-	if err != nil {
-		t.Fatal(err)
-	}
+	outputs := backendTestOutputs(t, false)
 	dir := t.TempDir()
 	if err := Write(dir, outputs); err != nil {
 		t.Fatal(err)
@@ -138,15 +126,6 @@ func TestEVT2dConceptBackendNativeAddMax(t *testing.T) {
 	}
 	if err := Write(dir, oracleOutputs); err != nil {
 		t.Fatal(err)
-	}
-	var cfile string
-	for name := range outputs {
-		if strings.HasSuffix(name, ".generated.c") {
-			cfile = filepath.Join(dir, name)
-		}
-	}
-	if cfile == "" {
-		t.Fatal("missing backend C")
 	}
 	oracleC := filepath.Join(dir, "core.generated.c")
 	bridge, err := EncodeMachineBridge(machineFixture(t))
@@ -329,7 +308,10 @@ int main(int argc, char** argv) {
 		t.Skip("no C11 compiler")
 	}
 	executable := filepath.Join(dir, "backend-native.exe")
-	cmd := nativeCommand(t, compiler, "-std=c11", "-Wall", "-Wextra", "-I", dir, cfile, oracleC, harnessPath, "-o", executable)
+	objects := nativeFixtureObjects(t, outputs, compiler)
+	args := append([]string{"-std=c11", "-Wall", "-Wextra", "-I", dir}, objects...)
+	args = append(args, oracleC, harnessPath, "-o", executable)
+	cmd := nativeCommand(t, compiler, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("native backend build: %v\n%s", err, out)
 	}
@@ -367,19 +349,7 @@ int main(int argc, char** argv) {
 }
 
 func TestEVT2dConceptEncoderModRMSIB(t *testing.T) {
-	sourcePath := filepath.Join("..", "..", "libraries", "Standard", "Backend", "AMD64.concept")
-	source, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	module, err := ParseWithBuiltSemanticModuleRoots(sourcePath, string(source), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	outputs, err := Generate(module, source)
-	if err != nil {
-		t.Fatal(err)
-	}
+	outputs := backendTestOutputs(t, false)
 	dir := t.TempDir()
 	if err := Write(dir, outputs); err != nil {
 		t.Fatal(err)
@@ -472,7 +442,10 @@ int main(void) {
 		t.Skip("no C11 compiler")
 	}
 	executable := filepath.Join(dir, "encoding-test.exe")
-	cmd := nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", "-I", dir, filepath.Join(dir, "amd64.generated.c"), harnessPath, "-o", executable)
+	objects := nativeFixtureObjects(t, outputs, compiler, "-pedantic-errors")
+	args := append([]string{"-std=c11", "-pedantic-errors", "-I", dir}, objects...)
+	args = append(args, harnessPath, "-o", executable)
+	cmd := nativeCommand(t, compiler, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("encoder harness build: %v\n%s", err, out)
 	}

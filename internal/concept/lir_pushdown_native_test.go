@@ -59,23 +59,11 @@ func runPushdownNativeTraceParity(t *testing.T, verify bool) {
 			t.Fatalf("CMIR run %d: %v", i, err)
 		}
 	}
-	backendPath := filepath.Join("..", "..", "libraries", "Standard", "Backend", "AMD64.concept")
-	backendSource, err := os.ReadFile(backendPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backend, err := ParseWithBuiltSemanticModuleRoots(backendPath, string(backendSource), []string{"../../libraries"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	policy := ConservativeCompilationPolicy()
 	if verify {
 		policy = VerifyCompilationPolicy()
 	}
-	outputs, err := GenerateForTargetWithPolicy(backend, backendSource, GenericC11Target(), policy)
-	if err != nil {
-		t.Fatal(err)
-	}
+	outputs := backendTestOutputs(t, verify)
 	oracleSource := append(append([]byte(nil), source...), []byte("\nint Main() { instance Worker a(0); Step(a, Parent); return 0; }\n")...)
 	oracleModule, err := Parse("pushdown.concept", string(oracleSource))
 	if err != nil {
@@ -176,7 +164,10 @@ func runPushdownNativeTraceParity(t *testing.T, verify bool) {
 		t.Fatal("native qualification needs a C compiler")
 	}
 	executable := filepath.Join(dir, "pushdown-native.exe")
-	if out, err := nativeCommand(t, compiler, "-std=c11", "-I", dir, filepath.Join(dir, "amd64.generated.c"), harness, "-o", executable).CombinedOutput(); err != nil {
+	objects := nativeFixtureObjects(t, outputs, compiler)
+	args := append([]string{"-std=c11", "-I", dir}, objects...)
+	args = append(args, harness, "-o", executable)
+	if out, err := nativeCommand(t, compiler, args...).CombinedOutput(); err != nil {
 		t.Fatalf("native build: %v\n%s", err, out)
 	}
 	if out, err := nativeCommand(t, executable, artifact, "trace").CombinedOutput(); err != nil {

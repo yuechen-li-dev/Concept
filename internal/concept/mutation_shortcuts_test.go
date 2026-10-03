@@ -5,39 +5,8 @@ import (
 	"testing"
 )
 
-func TestMutationShortcutsNativeC11(t *testing.T) {
-	source := `profile Core;
-
-int Next(ref int calls)
-{
-    calls = calls + 1;
-    return 0;
-}
-
-int Main()
-{
-    int n = 10;
-    n++;
-    ++n;
-    n--;
-    --n;
-    n += 5;
-    n -= 3;
-    n *= 2;
-    n /= 3;
-    n %= 3;
-    n &= 3;
-    n |= 4;
-    n ^= 7;
-    n <<= 2;
-    n >>= 1;
-    int euclidean = -5;
-    euclidean %= 3;
-    int calls = 0;
-    int<array>[1] values = [4];
-    values[Next(ref calls)] += n;
-    return n * 10 + values[0] + calls + euclidean * 100;
-}`
+func TestMutationShortcutsIndexCodeGeneration(t *testing.T) {
+	source := runtimeTestSource(t, "mutation_shortcuts.concept_test")
 	module, err := Parse("mutation_shortcuts.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +15,6 @@ int Main()
 	if err != nil {
 		t.Fatal(err)
 	}
-	runFoundationNativeHarness(t, outputs, "mutation_shortcuts_harness.c", "#include \"mutation_shortcuts.generated.h\"\nint main(void) { return concept_mutation_shortcuts_main() == 127 ? 0 : 1; }\n")
 	generated := string(outputs["mutation_shortcuts.generated.c"])
 	if strings.Count(generated, "concept_mutation_shortcuts_next(&(calls))") != 1 {
 		t.Fatal("compound indexed place did not evaluate its index exactly once")

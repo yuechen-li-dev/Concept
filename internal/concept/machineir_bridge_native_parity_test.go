@@ -62,7 +62,10 @@ func bridgeNativeEmitter(t *testing.T, source []byte) string {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, "bytes.exe")
-	if out, err := nativeCommand(t, compiler, withHostLinkArgs("-std=c11", "-pedantic-errors", "-I", dir, filepath.Join(dir, "amd64.generated.c"), harness, "-o", exe)...).CombinedOutput(); err != nil {
+	objects := nativeFixtureObjects(t, outputs, compiler, "-pedantic-errors")
+	args := append([]string{"-std=c11", "-pedantic-errors", "-I", dir}, objects...)
+	args = append(args, harness, "-o", exe)
+	if out, err := nativeCommand(t, compiler, withHostLinkArgs(args...)...).CombinedOutput(); err != nil {
 		t.Fatalf("native codec parity build: %v\n%s", err, out)
 	}
 	return exe

@@ -1,0 +1,23 @@
+profile Core;
+async int Child(int value) { return value; }
+async int Sum()
+{
+    int total = 0;
+    for (i in 6..0 descend 2) {
+        int observed = await Child(i);
+        total += observed;
+    }
+    return total;
+}
+int Main()
+{
+    Async<int> work = Sum();
+    while (not Complete(work)) bounded(16) { Step(work); }
+    return Result(work);
+}
+
+[[fact]]
+void RuntimeBehavior()
+{
+    Assert.Equal(Main(), 12, "range_async preserves its runtime result");
+}

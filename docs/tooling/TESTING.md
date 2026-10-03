@@ -79,6 +79,77 @@ runner writes `.test-results/manifest.json` using
 Any failed fact/theory, unfulfilled prophecy, timeout, compile error, or
 unexpected abnormal exit makes `concept test` return nonzero.
 
+Each run generates a checked source module once per compilation mode and
+compiles its generated C and optional machine helper once. Facts and theory
+rows link their own entry harnesses against those objects; identical theory
+rows reuse the same executable. Every execution, including benchmark samples
+and prophecies, still starts a separate child process. Normal and Verify have
+separate builds. Reuse ends when the run returns, and temporary build files
+are removed. There is no persistent cache or source-path cache: discovery
+snapshots include the checked imported artifacts, and changed native link
+inputs select a different build. Vulkan currently shares generation only;
+runtime selection, kernel binding checks and native compilation remain per
+test.
+
+## Go suite setup and determinism
+
+`go test ./...` retains the compiler, diagnostic, generated-code, artifact,
+formatter and independent C/native differential oracles. Pure runtime checks
+for mutation shortcuts, counted/async/machine ranges and else-if behavior live
+in `tests/runtime/*.concept_test` and run in both Normal and Verify. Go output
+checks read those same files rather than maintaining embedded copies.
+
+The fixed AMD64 backend fixture is generated once per mode for runtime tests.
+Its object files are shared within the Go test process using the compiler,
+flags and emitted source/supporting bytes as the key. Each test keeps its own
+harness, oracle and execution. Generation determinism tests still generate
+independently. Unique small specimens use a single compile/link invocation
+because separate object compilation would add overhead.
+
+Small compiler/artifact determinism tests retain 100 repetitions (10 with
+`-short`). The complete Standard/DragonGod integration instead performs two
+independent cold builds and compares every emitted artifact as well as the
+package graph. A small dependency package fixture exercises the actual package
+builder 100 times. ABI integration measures the native toolchain twice and
+retains 100 independent report/probe encodings. The foreign verification
+provenance test still executes its failure in 100 separate processes, using
+one compiled fixture.
+
+To request the original 100 cold package builds and native ABI probes:
+
+```powershell
+$env:CONCEPT_TEST_STRESS = "1"
+go test ./internal/concept -run '^(TestStandardAndDragonGodPackagesBuildDeterministically|TestNativeABIEvidenceAndEncodingDeterminism)$' -count=1
+Remove-Item Env:CONCEPT_TEST_STRESS
+```
+
+This stress lane intentionally costs more than the default integration checks;
+100 report encodings are not a claim of 100 independent native probes.
+
+### Measured optimization round (2026-10-03, Windows AMD64)
+
+Both runs used `-count=1`. The baseline compiler-package run collected a CPU
+profile; the final run exercised all Go packages together. These are local
+wall times, with parallel-test contention and profiling overhead, rather than
+portable performance thresholds.
+
+| Check | Before | After |
+| --- | ---: | ---: |
+| Compiler package | 497.55 s | 331.34 s |
+| Golden facts, Normal + Verify | 75.32 s | 51.26 s |
+| Foreign verification, 100 executions | 27.85 s | 5.89 s |
+| Full Standard/DragonGod package integration | 101.21 s (100 builds) | 6.22 s (2 builds, all artifact bytes) |
+| Native ABI integration | 24.77 s (100 probes) | 0.50 s (2 probes, 100 encodings) |
+
+The full final `go test ./... -count=1` run took 334.50 s wall time and passed.
+The small package builder's 100-build gate took 5.02 s. Golden test identities
+and Normal/Verify execution coverage were preserved. CPU profiling and test
+event logs are local artifacts under `artifacts/test-optimization-*`.
+
+Further substantial savings need work on the remaining real native trace
+execution and large artifact determinism paths; they have not been replaced
+with cached results in this round.
+
 ## Compile-time semantic assertions
 
 `Assert.Concept<Goal>(subjects..., "reason")` is available in `.concept` and

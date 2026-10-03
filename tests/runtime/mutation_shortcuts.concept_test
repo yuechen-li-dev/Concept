@@ -1,0 +1,38 @@
+profile Core;
+
+int Next(ref int calls)
+{
+    calls = calls + 1;
+    return 0;
+}
+
+int Main()
+{
+    int n = 10;
+    n++;
+    ++n;
+    n--;
+    --n;
+    n += 5;
+    n -= 3;
+    n *= 2;
+    n /= 3;
+    n %= 3;
+    n &= 3;
+    n |= 4;
+    n ^= 7;
+    n <<= 2;
+    n >>= 1;
+    int euclidean = -5;
+    euclidean %= 3;
+    int calls = 0;
+    int<array>[1] values = [4];
+    values[Next(ref calls)] += n;
+    return n * 10 + values[0] + calls + euclidean * 100;
+}
+
+[[fact]]
+void RuntimeBehavior()
+{
+    Assert.Equal(Main(), 127, "mutation_shortcuts preserves its runtime result");
+}
