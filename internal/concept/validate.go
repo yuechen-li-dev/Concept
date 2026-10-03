@@ -7046,9 +7046,15 @@ func init() {
 			return semanticFactResult{Outcome: FactUnknown, Origin: FactOriginCompilerAnalysis, Evidence: SemanticFactEvidence{Detail: string(factKind) + " requires an operation subject"}}
 		}}
 	}
-	for _, kind := range []SemanticFactKind{FactAligned, FactRank} {
+	for _, kind := range []SemanticFactKind{FactAligned, FactRank, FactStaticExtent} {
 		factKind := kind
 		evt1SemanticAnalysisRegistry[string(kind)] = evt1SemanticAnalysis{TypeArity: 1, ParameterArity: 1, ValidateParameters: func(parameters []int, span Span) error {
+			if factKind == FactStaticExtent {
+				if len(parameters) != 1 || parameters[0] < 0 || parameters[0] > evt1StorageMaxFixedExtent {
+					return evt1Diagnostic("CV4643", "StaticExtent requires an integer extent from 0 through 1048576", span)
+				}
+				return nil
+			}
 			if len(parameters) != 1 || parameters[0] <= 0 {
 				return evt1Diagnostic("CV4643", string(factKind)+" requires a positive integer parameter", span)
 			}

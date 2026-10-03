@@ -113,18 +113,39 @@ func (s *evt1ComptimeState) spend(span Span, cost int) error {
 }
 
 func evt1IsComptimeType(env *semanticEnv, t Type) bool {
-	if t.PointerTo != nil || t.isBorrowLike() || t.isOwned() || len(t.TypeArgs) > 0 {
+	return evt1IsComptimeTypeVisiting(env, t, map[string]bool{})
+}
+
+func evt1IsComptimeTypeVisiting(env *semanticEnv, t Type, visiting map[string]bool) bool {
+	if t.PointerTo != nil || t.isBorrowLike() || t.isOwned() || evt1TypeContainsConceptParameter(t) {
 		return false
 	}
+	// Close through the ordinary structured generic identity. Do not recover
+	// arguments by parsing the display name or admit open template machinery.
+	if len(t.TypeArgs) > 0 {
+		resolved, err := evt1ResolveType(env, nil, t)
+		if err != nil || resolved.Application == nil {
+			return false
+		}
+		t = resolved
+	}
 	if t.ArrayElem != nil {
-		return evt1IsComptimeType(env, *t.ArrayElem)
+		return !evt1StorageHasRuntimeShape(t) && evt1IsComptimeTypeVisiting(env, *t.ArrayElem, visiting)
 	}
 	if _, ok := evt1BuiltinType(t.Name, t.Span); ok {
 		return evt1IntegralRepresentation(t) || t.Name == "bool" || t.Name == "string" || t.Name == "float" || t.Name == "double" || evt1IsSubjectTypeName(t.Name)
 	}
+	if visiting[t.Name] {
+		return false
+	}
+	visiting[t.Name] = true
+	defer delete(visiting, t.Name)
 	if structDecl, ok := env.structs[t.Name]; ok {
+		if structDecl.Immovable || evt1StorageElementHasDrop(env, t) {
+			return false
+		}
 		for _, field := range structDecl.Fields {
-			if !evt1IsComptimeType(env, field.Type) {
+			if !evt1IsComptimeTypeVisiting(env, field.Type, visiting) {
 				return false
 			}
 		}
@@ -133,7 +154,7 @@ func evt1IsComptimeType(env *semanticEnv, t Type) bool {
 	if enumDecl, ok := env.enums[t.Name]; ok {
 		for _, variant := range enumDecl.Variants {
 			for _, field := range variant.Payload {
-				if !evt1IsComptimeType(env, field.Type) {
+				if !evt1IsComptimeTypeVisiting(env, field.Type, visiting) {
 					return false
 				}
 			}
@@ -389,23 +410,41 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return base.Elements[offset], nil
 	case *StructConstructExpr:
-		structDecl := state.env.structs[e.StructName]
+		constructedType := Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}
+		if e.StructType.Name != "" {
+			constructedType = e.StructType
+		}
+		resolved, err := evt1ResolveType(state.env, nil, constructedType)
+		if err != nil {
+			return Value{}, err
+		}
+		structDecl, ok := state.env.structs[resolved.Name]
+		if !ok || !evt1IsComptimeType(state.env, resolved) {
+			return Value{}, evt1Diagnostic("CV4216", "comptime construction requires a closed value aggregate", e.Span)
+		}
 		fields := map[string]Value{}
 		for i, arg := range e.Args {
-			value, err := evt1EvalExpr(state, scope, arg)
-			if err != nil {
-				return Value{}, err
-			}
 			name := structDecl.Fields[i].Name
 			if len(e.ArgNames) != 0 {
 				name = e.ArgNames[i]
+			}
+			fieldType := structDecl.Fields[i].Type
+			for _, field := range structDecl.Fields {
+				if field.Name == name {
+					fieldType = field.Type
+					break
+				}
+			}
+			value, err := evt1EvalExprTyped(state, scope, arg, &fieldType)
+			if err != nil {
+				return Value{}, err
 			}
 			fields[name] = value
 		}
 		return Value{
 			Kind:       ValueStruct,
-			Type:       evt1CanonicalType(state.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span}),
-			StructName: e.StructName,
+			Type:       evt1CanonicalType(state.env, resolved),
+			StructName: resolved.Name,
 			Fields:     fields,
 		}, nil
 	case *WithExpr:

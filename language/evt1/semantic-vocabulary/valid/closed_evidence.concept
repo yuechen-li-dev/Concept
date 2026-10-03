@@ -1,0 +1,29 @@
+module Research.ClosedEvidence;
+profile Core;
+
+enum Truth {
+    Proven, Disproven, Unknown
+}
+enum Failure {
+    None, ContainsReference, UnknownLayout
+}
+
+template <typename E, typename R> record struct EvidenceResult
+{
+    Truth truth;
+    E evidence;
+    R refutation;
+}
+
+comptime EvidenceResult<uint8, Failure> Inspect()
+{
+    return EvidenceResult<uint8, Failure>{Truth::Disproven, 7, Failure::ContainsReference};
+}
+
+comptime EvidenceResult<uint8, Failure> Result = Inspect();
+static_assert(Result.evidence == 7, "closed evidence payload");
+static_assert(Result.refutation == Failure::ContainsReference, "typed refutation payload");
+
+int Main() {
+    return 7;
+}

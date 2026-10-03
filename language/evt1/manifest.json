@@ -2,13 +2,14 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 426,
-    "static_invalid": 337,
+    "valid": 428,
+    "static_invalid": 342,
     "runtime_negative": 15,
     "compatibility": 5,
     "expected_divergence": 4
   },
   "subsystems": [
+    { "subsystem": "Semantic vocabulary research", "path": "semantic-vocabulary", "valid": 2, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R9b progression"] },
     { "subsystem": "Foundation", "path": "foundation", "valid": 5, "static_invalid": 16, "runtime_negative": [], "historical_milestones": ["R1"] },
     { "subsystem": "Values", "path": "values", "valid": 13, "static_invalid": 19, "runtime_negative": [], "historical_milestones": ["R2"] },
     { "subsystem": "Ownership", "path": "ownership", "valid": 18, "static_invalid": 17, "runtime_negative": [], "historical_milestones": ["R3", "R7fR"] },

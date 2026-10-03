@@ -1,0 +1,7 @@
+profile Core;
+using Partial = int<raw>[4];
+int Main()
+{
+    Assert.Concept<StaticExtent<4>>(Partial, "capacity does not prove live extent");
+    return 0;
+}

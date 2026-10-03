@@ -11,11 +11,11 @@
     },
     {
       "path": "comptime_tables.mir.json",
-      "sha256": "e39aca0377f56db5c9638b69be3f78a9a33fd49af2b23ff138117ef37f6e3f15"
+      "sha256": "cb6a692d96d1f70ccada5fbb17f0943c7b5c2efb800825b3147ebfd7c1515be0"
     },
     {
       "path": "comptime_tables.map.json",
-      "sha256": "ee24f4452193e467a90c938cf90fe6b6ae5f4c258620a18de7f727b48cb65ce5"
+      "sha256": "b8d20bca047e0a77d57de0f5ec259d8322431acec25f9730e25f235f4c417c7b"
     }
   ],
   "options": {

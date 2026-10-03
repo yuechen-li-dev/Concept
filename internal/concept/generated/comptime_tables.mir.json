@@ -2165,6 +2165,36 @@
       }
     },
     {
+      "id": "fact-8fec5f4092e9d665",
+      "kind": "StaticExtent",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        2
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromLayout",
+      "evidence": {
+        "extent": 2,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "exact one-dimensional inline array extent"
+      },
+      "source_span": {
+        "line": 19,
+        "column": 5
+      }
+    },
+    {
       "id": "fact-92e1e014aab8026b",
       "kind": "Bounded",
       "subjects": [
