@@ -1,24 +1,32 @@
 # Stage-0 freeze readiness
 
-Stage-0 is not frozen. A1's frontend self-hosting blocker is removed: closed generic
-identity survives artifacts structurally without nominal-name reparsing. Explicit
-ownership remains. Modifier/attribute and context holes are repaired; generic repr(C)
-records are checked after closure.
+The MachineIR bridge duplication item is **CLOSED** by R9a2. R9a closure is
+complete and ready for the separate R9b research phase. Stage-0 has not been
+frozen automatically; R9b and frontend self-hosting have not begun.
 
-Runtime-function static selection and bounded expansion now work in the C11 path.
-Ordinary predicate requirements now narrow concept satisfaction using declared proof provenance, including project
-policy and artifact-only Assert.Concept. CV4138 has completed innate migration;
-large-library measurements support keeping the current limits and mutex.
-The bridge now has a concrete bounded derivation path and current round-trip/native
-qualification, but its Go producer/Concept consumer still duplicate field order.
-The isolated next closure item is a build-time Go codec emitter from checked Concept
-reflection, followed by old-versus-derived wire comparison and schema-hash identity.
-Backend encoding has a real caller-supplied scratch path with explicit exhaustion;
-the liveness capacity mismatch is already absent at EVT2x6. Other backend phases
-remain bounded. Neither frontend self-hosting nor R9b is begun.
+| Closure criterion | Status |
+| --- | --- |
+| Closed generic semantic identity survives artifacts structurally | CLOSED in R9a; explicit ownership retained |
+| Validation contexts and modifier/attribute admission | CLOSED within the qualified R9a boundary |
+| Numeric/indexing/generic repr(C) closure | CLOSED in R9a; field defaults remain explicitly unadmitted |
+| Runtime static control | CLOSED in the bounded evaluator/C11 path; comptime auto primary, var compatibility retained |
+| Ordinary declared predicates and root project policy | CLOSED in R9a with declared proof provenance |
+| CV4138 innate migration and library scale evidence | CLOSED in R9a; limits/mutex retained |
+| Single-source MachineIR bridge | CLOSED in R9a2: checked Concept schema, generated Go/Concept codecs, version/hash, live shadow parity, switch and manual retirement |
+| Caller-supplied backend encoding workspace | CLOSED for the R9a MVP; other backend phases remain bounded |
+| Regression qualification | PASS: full Go, vet, race, corpus, native EVT2/EVT2x, Standard/DragonGod/Golden/GPU-free Vulkan Normal and Verify |
+| Frozen legacy Zig | Unchanged; baseline tests passed, further suites run only when its compiler/build/test paths change per updated user policy |
 
-The final qualification gates pass, including Standard/DragonGod/Golden/Vulkan in
-Normal and Verify, full Go, vet, both Zig suites, native paths and the race lane.
-This remains MEANINGFUL PROGRESSION until the D1 derived codec and its hash/version
-and shadow differential gates replace the manual bridge order. See R9A-CONVERGENCE
-for exact commits and R9A-CONFORMANCE for evidence and intentionally deferred scope.
+The live bridge is CMIRAMD2 / numeric version 2, with semantic SHA-256
+`99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593`.
+Both codecs derive from Standard.Backend.BridgeSchema; no independent manual
+field-order authority or legacy fallback remains. Complete canonical roundtrip,
+artifact-only identity, malformed-input Result behavior and 100-run determinism
+are qualified, including byte-identical native outputs.
+
+This readiness statement preserves the existing research boundaries: no full
+frontend self-hosting, generic Verdict or fact-granting trust claim; no broad
+Vulkan/hardware release claim; no unbounded AMD64 backend. These deferred scopes
+are documented rather than treated as silently accepted features.
+See R9A2-CONVERGENCE and R9A2-CONFORMANCE for commits and evidence; R9A documents
+retain the historical milestone result with the bridge closeout noted.

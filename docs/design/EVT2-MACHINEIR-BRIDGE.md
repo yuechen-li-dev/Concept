@@ -1,41 +1,180 @@
-# EVT2d MachineIR bridge
+# EVT2 MachineIR bridge: one checked schema
 
-The bridge is a typed, deterministic binary artifact between verified Go Stage-0 MachineIR and the Concept AMD64 backend. `concept machineir-bin <file> > out.cmir` writes it. The backend never parses `concept machineir` inspection text and does not read Concept source. The schema identity is the eight ASCII bytes `CMIRAMD1`; any other identity is `BridgeVersion` in Concept and `MIR_BRIDGE_SCHEMA_MISMATCH` in Go. A layout change requires a new identity.
+> The MachineIR bridge has one checked semantic schema. Producer and consumer
+> codecs are derived from that schema; field order and representation are not
+> maintained manually in Go and Concept independently.
 
-All integers are little endian. Counts and byte lengths are `u32`; other numeric fields and enum tags are `i32`. Strings are UTF-8 byte lengths followed by bytes, without a terminator. Booleans are `i32` zero or one. The Go encoder first runs `VerifyMachineIR`; the Go decoder rejects unknown tags, truncation, trailing bytes, and invalid MachineIR. The Concept reader checks bounds and tags, keeps identity/provenance string slices as byte offsets, and builds typed enum and operand values. No Go struct memory layout or `gob` representation crosses the boundary.
+> Stage-0 Go produces MachineIR using a generated bridge codec. The
+> Concept-written AMD64 backend consumes it using a generated Concept codec.
+> Both are generated from the same schema authority.
 
-The document order is:
+## Authority and staging
 
-1. Magic, function count.
-2. Per function: identity, name, target, ABI, result type, source line/column, fact strings, decision strings, frame local size/alignment/shadow space/has calls.
-3. Arguments: count, then type string and index/width/indirect/physical register/stack offset/on stack/virtual register.
-4. Virtual registers: count, then ID/width/address role.
-5. Slots: count, then ID/size/alignment/incoming indirect/base virtual register/source name.
-6. Blocks: count, then ID/LIR block ID/instruction count.
-7. Instructions: opcode tag, destination operand, source count and operands, width/flags definition/flags use/LIR block/LIR instruction, condition tag, source line/column, Planner decision string, fact strings.
-8. Terminator: opcode tag, true/false block IDs, flags use, condition tag, source line/column.
+`libraries/Standard/Backend/BridgeSchema.concept` is the authority. It contains
+ordinary checked records, payload-free enums, typed wire selectors, and checked
+magic/version/count-limit/representation constants. Explicit reflection requests
+produce TypeInfo/FieldInfo/EnumCaseInfo through the existing semantic analyzer.
+The generator consumes those objects, including R9a structured generic
+applications; it never reconstructs field types or enum identity from printer text.
 
-Each operand is seven `i32` fields (`ID`, `width`, `base`, `base slot`, `index`, `scale`, `displacement`), then a kind tag, literal string, region string, and signed boolean. This retains physical constraints, memory geometry, ABI locations, branch targets, flags, stack metadata, and useful provenance. Irrelevant Go implementation pointers and printer layout are absent.
+The bounded staging is:
 
-| Tag | Operand kind | Opcode | Condition |
-| --- | --- | --- | --- |
-| 0 | None | None | None |
-| 1 | Virtual | MOV | E |
-| 2 | Physical | LOAD | NE |
-| 3 | Immediate | STORE | L |
-| 4 | Slot | LEA | LE |
-| 5 | Memory | ADD | G |
-| 6 | Block | SUB | GE |
-| 7 |  | IMUL | B |
-| 8 |  | UMUL | BE |
-| 9 |  | CMP | A |
-| 10 |  | TEST | AE |
-| 11 |  | SETCC | O |
-| 12 |  | TRAP | C |
-| 13 |  | JMP |  |
-| 14 |  | JCC |  |
-| 15 |  | RET |  |
+```text
+checked Concept BridgeSchema + typed reflection
+    -> cmd/machinebridgegen (build-time only)
+        -> machineir_bridge_codec_generated.go
+        -> BridgeCodec.concept (identity, derive sites, counted-view wrappers)
+    -> BridgeDerive Fields<T>/Cases<T>/FieldType/TagOf generators
+        -> ordinary checked Concept FunctionDecls
+Stage-0 MachineIR -> generated Go codec -> CMIRAMD2
+    -> generated Concept reader -> typed wire views -> AMD64 semantic projection
+```
 
-Physical register tags are the existing MachineIR order: RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP, R8 through R15. The Concept reader converts wire integers to enums with literal `match` arms and an explicit error arm. This makes the schema tags the only numeric boundary; backend logic uses typed operations.
+`BridgeDerive.concept` supplies ordinary record and enum read/write generators.
+Generated declarations carry GeneratedByReflection provenance and appear through
+`concept generated`; `concept explain --generated <identity>` uses the existing
+explain machinery. Imported artifacts retain the schema, structured applications,
+generator bodies, generated declarations, constants and provenance. Artifact-only
+schema regeneration and decoder derivation require no dependency source.
 
-The Go round-trip test runs the full seven-function MachineIR through this format and re-encodes byte-identically, including fields not used by the current encoder. It also checks the same input 100 times, plus wrong-version, truncation, and trailing-byte rejection. The Concept reader consumes the complete artifact before selecting a function and rejects trailing bytes. Its native harness checks wrong-version, trailing-byte, and short output-buffer errors before encoding a valid artifact.
+The emitter is specific to this bridge. Its supported byte primitives are fixed
+integers, exact booleans, text, fixed header byte arrays, typed enums, records and
+counted sequences. It rejects unsupported wire types and unreflected schema
+records/enums. `bridge_value` binds semantic MachineIR string tags to checked enum
+cases; `bridge_go_type` supplies typed Go conversions for LIRType and MachineReg.
+The `Wire` prefix maps checked declaration identifiers to existing Go semantic
+record identifiers; generic applications are handled structurally, never by
+splitting a generated nominal name.
+
+## Coverage and representation
+
+There are 12 wire records with 73 ordered fields and four enums with 52 cases.
+The normalized inspectable definition is
+`docs/design/EVT2-MACHINEIR-BRIDGE.schema.json`; it is generated, not another schema
+language or authority.
+
+| Checked record | Transported information |
+| --- | --- |
+| WireHeader | Eight magic bytes, u32 version, 32 SHA-256 bytes |
+| WireSpan | Source line and column |
+| WireMachineFrame | Local size, alignment, shadow space, calls |
+| WireMachineOperand | ID, width, base, base-slot, index, scale, displacement, kind, literal, region, signedness |
+| WireMachineArg | ABI type, index, width, indirectness, physical register, stack offset, stack placement, vreg |
+| WireMachineVReg | ID, width, address role |
+| WireMachineStackSlot | ID, size, alignment, incoming indirectness, base vreg, source |
+| WireMachineInstruction | Opcode, destination, sources, width, flags definition/use, LIR block/instruction, condition, span, decision, facts |
+| WireMachineTerminator | Opcode, true/false targets, flags use, condition, span |
+| WireMachineBlock | ID, LIR block, instructions, terminator |
+| WireMachineFunction | Identity, name, target, ABI, result, span, facts, decisions, frame, arguments, vregs, slots, blocks |
+| WireMachineModule | Functions |
+
+All scalar wire values are explicitly little endian. EVT1's canonical `int` is
+signed 32-bit (pinned by SizeOf), `uint` is unsigned 32-bit, and `uint8` is eight
+bits; formatting canonicalizes the uint32 alias to uint. Booleans and enum tags
+occupy four bytes. Text is a u32 UTF-8 byte length followed by bytes. A sequence
+is a u32 count followed by recursively encoded elements. Count/text limits come
+from the checked BridgeMaxItems constant (1,048,576). Neither Go struct layout
+nor C padding crosses the boundary. repr(C) would add an irrelevant host ABI;
+this is a compact byte protocol.
+
+BridgeText's offset/length and BridgeSequence<T>'s offset/count are bounded input
+views, not fields transported as host structs. BridgeType<T> is an overload
+witness, not runtime reflection. Their view layout is internal to the consumer.
+The current MachineIR has only general-purpose scalar register views; register
+width, address role and all physical constraints are transported. No extra
+register-class field existed in CMIRAMD1. Canonical closed LIR ABI descriptors
+are preserved as text; no Concept nominal/generic semantic identity is recovered
+from those descriptors. No untransported Go pointers or inspection-printer data
+were added.
+
+## Version and schema hash
+
+The live identity is `CMIRAMD2`, numeric version 2. The generated header size is
+44 bytes: magic, version, raw SHA-256. CMIRAMD1's payload is unchanged; the new
+header deliberately replaces its eight-byte identity-only prefix.
+
+Current hash:
+
+```text
+99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593
+```
+
+SHA-256 covers deterministic normalized checked metadata: schema module, magic,
+version, representation contract, count limit, source-ordered record fields and
+structural type arguments, fixed array extents, enum names/tags/string bindings,
+and typed Go conversions. Spans, paths, timestamps, trivia, declaration printer
+output and generated code are excluded. Header hash contents are derived output,
+so there is no self-hashing cycle. Wire changes require a deliberate version
+migration; a checked fixture field mutation changes the hash and both generated
+sides, and a stale producer is rejected by the mutated native Concept consumer.
+
+## Generation and inspection
+
+From the repository root:
+
+```powershell
+go run ./cmd/machinebridgegen .
+go run ./cmd/concept package build Standard
+$env:CONCEPT_MODULE_ROOTS = "$PWD/artifacts/Standard/modules"
+go run ./cmd/concept generated libraries/Standard/Backend/BridgeCodec.concept
+# Select an origin.identity from generated output:
+go run ./cmd/concept explain libraries/Standard/Backend/BridgeCodec.concept --generated <identity> --json
+```
+
+Go output is gofmt-normalized; Concept derive-site output uses the canonical
+formatter. Checked generated-file regressions fail on stale outputs. The emitter
+is a development/bootstrap tool, not part of runtime EncodeMachineBridge. Changing
+the schema regenerates both sides from the checked declarations. Concept readers
+are materialized as AST declarations by the existing generation phase, and
+artifact-only imports consume that AST directly.
+
+## Decode, bounds and errors
+
+Generic audited byte IO remains handwritten in BridgeRead and machineir_bridge.go.
+Record field order and enum tables are generated. The production Go invocation
+and typed AMD64 projection contain no alternate manual wire decoder or fallback.
+Header identity is checked before the function payload. Go distinguishes
+MIR_BRIDGE_SCHEMA_MISMATCH, MIR_BRIDGE_VERSION_MISMATCH and
+MIR_BRIDGE_SCHEMA_HASH_MISMATCH. Concept returns BridgeVersion for magic/version,
+BridgeSchemaMismatch for hash, and BridgeInvalid for ordinary malformed input.
+Truncation, invalid enum/bool/register tags, negative/oversized counts, impossible
+text lengths, trailing bytes and invalid block/vreg references are rejected.
+Virtual-register bounds are established before indexed width observation, so an
+invalid reference returns Result rather than triggering a bounds panic.
+
+The generated Concept reader validates all elements, including unselected
+functions. Typed views retain every transported fact, decision and provenance
+field. AMD64 projects only fields needed by the current backend; it does not
+re-encode or discard the canonical wire model. Native canonical decode/re-encode
+proves complete byte preservation, including fields the old projection skipped.
+Views borrow input bytes; there is no hidden heap, runtime serializer or new
+arena ownership. Backend capacities remain arguments 8, vregs 512, slots 64,
+blocks 128 and instructions 512. CapacityExceeded remains explicit. Encoding
+keeps the R9a caller-supplied workspace and compatibility entry points.
+NoAllocation is pinned through the real checked call graph and existing backend
+assertions, not a codec-specific fact grant.
+
+## Migration and evidence
+
+The strangler sequence is complete: shadow, whole-payload agreement, native-byte
+agreement, production switch, deletion. Commits 86f6a5c and a588dc2 retain the
+reviewable shadow/switch history; 7cb01b0 removes manual Go record/sequence
+encoding and decoding. ReadOperand/ReadFunction field decoding and manual Concept
+tag tables are gone. The old Go and Concept implementations do not ship as test
+fallbacks. Frozen `.cmir1` and `.amd64` outputs in testdata/machinebridge were
+captured from the exact baseline after live differential qualification.
+
+The seven corpus shapes cover 17 functions: Add/Max/Sum4/CheckedIndex/StoreIndex/
+Choose/Early, finite/yield/multi-yield machines, pushdown automata, activation
+initialization and arbitrary stride-12 addressing. Tests compare every payload
+byte and semantic field, preserve complete Concept canonical wire data, and
+compare final AMD64 bytes. Optional generated field traces explain a mismatch
+with record, field, expected/actual offset and byte values. There is no opaque
+manual byte-array debugging requirement.
+
+Octagon's existing checked reflection/generation seam was reused. Switching the
+transport to Octagon would break established compact-byte parity and require
+more migration machinery; R9a2 therefore keeps the bounded binary bridge.
+No universal serialization framework, R9b work or EVT2 feature expansion is part
+of this change. Qualification, timing and freeze-readiness evidence are recorded
+in R9A2-CONFORMANCE and R9A2-CONVERGENCE.

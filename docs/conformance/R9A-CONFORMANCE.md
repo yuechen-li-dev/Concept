@@ -1,5 +1,7 @@
 # R9a conformance
 
+Historical R9a evidence. The remaining MachineIR bridge item was closed by R9a2; see [R9a2 convergence](R9A2-CONVERGENCE.md). The live bridge now derives both codecs from one checked schema.
+
 Baseline: 9004990cd2019dcef6aa1fe91c7ee07ecc0e75a7, clean merged main.
 Compiler: concept-evt1-stage0-go; Go 1.27.0 Windows/AMD64; Zig 0.16.0.
 Baseline innate identity: innate-32c77687e1e9673d; normalized SHA256

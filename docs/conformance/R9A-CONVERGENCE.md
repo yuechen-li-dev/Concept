@@ -1,5 +1,7 @@
 # R9a convergence and issue ledger
 
+Historical R9a evidence. The remaining MachineIR bridge item was closed by R9a2; see [R9a2 convergence](R9A2-CONVERGENCE.md). The live bridge now derives both codecs from one checked schema.
+
 Result: MEANINGFUL PROGRESSION. Stage-0 is not frozen. Structured identity,
 context/admission fixes, numeric closure, runtime static expansion, declared
 predicates, one completed innate migration and an encoding workspace MVP work in
