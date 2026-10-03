@@ -1,6 +1,6 @@
 module Vulkan;
 profile Core;
-
+import Standard.Semantic.Vocabulary;
 // Vulkan 1.4 compute in ordinary Concept.
 //
 // What the library decides for you:
@@ -20,7 +20,6 @@ profile Core;
 // `concept vulkan-bind` also take the access declarations from the SPIR-V.
 //
 // The C boundary is native/concept_vulkan.h.
-
 extern "C" handle VkInstance;
 extern "C" handle VkPhysicalDevice;
 extern "C" handle VkDevice;
@@ -36,9 +35,7 @@ extern "C" handle VkPipelineLayout;
 extern "C" handle VkPipeline;
 extern "C" handle VkPipelineCache;
 extern "C" handle VkQueryPool;
-
 // ---- Errors -------------------------------------------------------------
-
 // The failing VkResult codes (negative in C).
 enum VulkanError
 {
@@ -56,36 +53,32 @@ enum VulkanError
     FragmentedPool,
     Unknown(int code),
 }
-
 // Non-negative codes are success or status; only failures become errors.
 Result<void, VulkanError> Check(int code)
 {
     if (code >= 0) { return Result::Ok(); }
     return Result::Error(ErrorFromCode(code));
 }
-
 VulkanError ErrorFromCode(int code)
 {
     return match (code)
     {
-        -1 => VulkanError::OutOfHostMemory,
-        -2 => VulkanError::OutOfDeviceMemory,
-        -3 => VulkanError::InitializationFailed,
-        -4 => VulkanError::DeviceLost,
-        -5 => VulkanError::MemoryMapFailed,
-        -6 => VulkanError::LayerNotPresent,
-        -7 => VulkanError::ExtensionNotPresent,
-        -8 => VulkanError::FeatureNotPresent,
-        -9 => VulkanError::IncompatibleDriver,
-        -10 => VulkanError::TooManyObjects,
-        -11 => VulkanError::FormatNotSupported,
-        -12 => VulkanError::FragmentedPool,
+        - 1 => VulkanError::OutOfHostMemory,
+        - 2 => VulkanError::OutOfDeviceMemory,
+        - 3 => VulkanError::InitializationFailed,
+        - 4 => VulkanError::DeviceLost,
+        - 5 => VulkanError::MemoryMapFailed,
+        - 6 => VulkanError::LayerNotPresent,
+        - 7 => VulkanError::ExtensionNotPresent,
+        - 8 => VulkanError::FeatureNotPresent,
+        - 9 => VulkanError::IncompatibleDriver,
+        - 10 => VulkanError::TooManyObjects,
+        - 11 => VulkanError::FormatNotSupported,
+        - 12 => VulkanError::FragmentedPool,
         _ => VulkanError::Unknown(code),
     };
 }
-
 // ---- The C boundary (native/concept_vulkan.h) ---------------------------
-
 [[repr(C)]]
 record struct ContextCreation
 {
@@ -98,7 +91,6 @@ record struct ContextCreation
     VkCommandPool commands;
     VkPipelineCache cache;
 };
-
 [[repr(C)]]
 record struct DeviceFacts
 {
@@ -111,7 +103,6 @@ record struct DeviceFacts
     uint64 maxStorageBufferRange;
     byte<array>[256] name;
 };
-
 [[repr(C)]]
 record struct BufferCreation
 {
@@ -120,14 +111,12 @@ record struct BufferCreation
     VkBuffer buffer;
     VkDeviceMemory memory;
 };
-
 [[repr(C)]]
 record struct BindingSlot
 {
     uint32 binding;
     uint32 kind;
 };
-
 [[repr(C)]]
 record struct PipelineCreation
 {
@@ -138,7 +127,6 @@ record struct PipelineCreation
     VkPipelineLayout layout;
     VkPipeline pipeline;
 };
-
 [[repr(C)]]
 record struct RecordingBegin
 {
@@ -147,7 +135,6 @@ record struct RecordingBegin
     VkCommandBuffer commands;
     VkQueryPool queries;
 };
-
 [[repr(C)]]
 record struct DescriptorWrite
 {
@@ -157,7 +144,6 @@ record struct DescriptorWrite
     uint32 binding;
     uint32 kind;
 };
-
 [[repr(C)]]
 record struct SubmissionRecord
 {
@@ -165,7 +151,6 @@ record struct SubmissionRecord
     uint32 reserved;
     VkFence fence;
 };
-
 [[repr(C)]]
 record struct Elapsed
 {
@@ -173,30 +158,36 @@ record struct Elapsed
     uint32 reserved;
     double nanoseconds;
 };
-
 extern "C" ContextCreation ConceptVkCreateContext();
-extern "C" void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool commands, VkPipelineCache cache);
+extern "C" void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool commands,
+VkPipelineCache cache);
 extern "C" DeviceFacts ConceptVkDeviceFacts(VkPhysicalDevice physical);
-extern "C" BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, uint64 bytes, uint32 placement);
+extern "C" BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, uint64 bytes,
+uint32 placement);
 extern "C" void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory);
 extern "C" int ConceptVkWriteBytes(VkDevice device, VkDeviceMemory memory, uint64 offset, ReadOnlySpan<byte> bytes);
 extern "C" int ConceptVkReadBytes(VkDevice device, VkDeviceMemory memory, uint64 offset, Span<byte> destination);
-extern "C" PipelineCreation ConceptVkCreatePipeline(VkDevice device, VkPipelineCache cache, string kernel, string entry, ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes);
-extern "C" void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline);
+extern "C" PipelineCreation ConceptVkCreatePipeline(VkDevice device, VkPipelineCache cache, string kernel,
+string entry, ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes);
+extern "C" void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout,
+VkPipelineLayout layout, VkPipeline pipeline);
 extern "C" RecordingBegin ConceptVkBeginRecording(VkDevice device, VkCommandPool commands, uint32 timestamps);
-extern "C" void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuffer recording, VkQueryPool queries);
-extern "C" void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32 sourceStages, uint32 sourceWrites, uint32 destinationStages);
-extern "C" void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ReadOnlySpan<DescriptorWrite> writes, ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z);
+extern "C" void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuffer recording,
+VkQueryPool queries);
+extern "C" void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32 sourceStages, uint32 sourceWrites,
+uint32 destinationStages);
+extern "C" void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout,
+ReadOnlySpan<DescriptorWrite> writes, ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z);
 extern "C" void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer source, VkBuffer destination, uint64 bytes);
 extern "C" void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64 bytes, uint32 word);
 extern "C" void ConceptVkCmdTimestamp(VkCommandBuffer recording, VkQueryPool queries, uint32 index);
 extern "C" SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer recording);
 extern "C" int ConceptVkWait(VkDevice device, VkFence fence);
-extern "C" void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording, VkFence fence, VkQueryPool queries);
-extern "C" Elapsed ConceptVkElapsed(VkDevice device, VkPhysicalDevice physical, VkQueryPool queries, uint32 from, uint32 to);
-
+extern "C" void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording,
+VkFence fence, VkQueryPool queries);
+extern "C" Elapsed ConceptVkElapsed(VkDevice device, VkPhysicalDevice physical, VkQueryPool queries,
+uint32 from, uint32 to);
 // ---- Context ------------------------------------------------------------
-
 enum DeviceKind
 {
     Other,
@@ -205,7 +196,6 @@ enum DeviceKind
     Virtual,
     Cpu,
 }
-
 DeviceKind DeviceKindOf(ref const DeviceFacts facts)
 {
     return match (facts.deviceType)
@@ -217,13 +207,12 @@ DeviceKind DeviceKindOf(ref const DeviceFacts facts)
         _ => DeviceKind::Other,
     };
 }
-
 // A Vulkan 1.4 device with a compute queue, a command pool and a pipeline
 // cache. A discrete GPU is preferred; CONCEPT_VULKAN_DEVICE (an index, or a
 // substring of the device name) chooses explicitly.
 class Context
 {
-public:
+    public:
     VkInstance instance;
     VkPhysicalDevice physical;
     VkDevice device;
@@ -231,27 +220,24 @@ public:
     VkCommandPool commands;
     VkPipelineCache cache;
 };
-
 void Drop(owned Context context)
 {
     ConceptVkDestroyContext(context.instance, context.device, context.commands, context.cache);
 }
-
 Result<Context, VulkanError> CreateContext()
 {
     ContextCreation created = ConceptVkCreateContext();
-    Check(created.code)?;
-    owned Context context = Context{created.instance, created.physical, created.device, created.queue, created.commands, created.cache};
+    Check(created.code) ?;
+    owned Context context = Context {
+        created.instance, created.physical, created.device, created.queue, created.commands, created.cache
+    };
     return Result::Ok(move context);
 }
-
 DeviceFacts Facts(ref const Context context)
 {
     return ConceptVkDeviceFacts(context.physical);
 }
-
 // ---- Buffers ------------------------------------------------------------
-
 // Where a buffer's memory lives. Device is fastest for kernels; Upload and
 // Readback are host-visible staging; Shared is device-local memory the host
 // can also map when the device has it (resizable BAR, integrated GPUs).
@@ -262,7 +248,6 @@ enum Placement
     Readback,
     Shared,
 }
-
 uint32 PlacementCode(Placement placement)
 {
     return match (placement)
@@ -273,45 +258,43 @@ uint32 PlacementCode(Placement placement)
         Placement::Shared => 3,
     };
 }
-
 // Count elements of T in device memory. Dropping it frees the memory once.
 template <typename T>
 class Buffer
 {
-public:
+    public:
     VkDevice device;
     VkBuffer buffer;
     VkDeviceMemory memory;
     usize count;
     bool hostVisible;
 };
-
 template <typename T>
 void Drop(owned Buffer<T> buffer)
 {
     ConceptVkDestroyBuffer(buffer.device, buffer.buffer, buffer.memory);
 }
-
 template <typename T>
 Result<Buffer<T>, VulkanError> CreateBuffer(ref const Context context, usize count, Placement placement)
 {
     usize<byte> bytes = count * SizeOf<T>();
-    BufferCreation created = ConceptVkCreateBuffer(context.physical, context.device, Magnitude(bytes) as uint64, PlacementCode(placement));
-    Check(created.code)?;
-    owned Buffer<T> buffer = Buffer<T>{context.device, created.buffer, created.memory, count, created.hostVisible != 0};
+    BufferCreation created = ConceptVkCreateBuffer(context.physical, context.device, Magnitude(bytes) as uint64,
+    PlacementCode(placement));
+    Check(created.code) ?;
+    owned Buffer<T> buffer = Buffer<T>{
+        context.device, created.buffer, created.memory, count, created.hostVisible != 0
+    };
     return Result::Ok(move buffer);
 }
-
 template <typename T>
 usize<byte> ByteSize(ref const Buffer<T> buffer)
 {
     return buffer.count * SizeOf<T>();
 }
-
 // Copies data into the start of target. A host-visible buffer is written
 // directly; a device-local one goes through a temporary Upload buffer and a
 // one-off copy that is waited for.
-template <typename T>
+template <typename T> requires PlainData<T>
 Result<void, VulkanError> Upload(ref const Context context, ref const Buffer<T> target, ReadOnlySpan<T> data)
 {
     assert((Len(data) as usize) <= target.count, "Upload: more data than the buffer holds");
@@ -319,18 +302,17 @@ Result<void, VulkanError> Upload(ref const Context context, ref const Buffer<T> 
     {
         return Check(ConceptVkWriteBytes(target.device, target.memory, 0, AsBytes(data)));
     }
-    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(data) as usize, Placement::Upload)?;
-    Check(ConceptVkWriteBytes(staging.device, staging.memory, 0, AsBytes(data)))?;
-    owned Recording recording = BeginRecording(ref const context, 0)?;
+    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(data) as usize, Placement::Upload) ?;
+    Check(ConceptVkWriteBytes(staging.device, staging.memory, 0, AsBytes(data))) ?;
+    owned Recording recording = BeginRecording(ref const context, 0) ?;
     Copy(ref recording, ref const staging, ref const target);
-    owned Submission work = Submit(move recording)?;
+    owned Submission work = Submit(move recording) ?;
     return Wait(ref work);
 }
-
 // Copies the start of source into destination (as many elements as
 // destination holds). A device-local buffer is read through a temporary
 // Readback buffer.
-template <typename T>
+template <typename T> requires PlainData<T>
 Result<void, VulkanError> Download(ref const Context context, ref const Buffer<T> source, Span<T> destination)
 {
     assert((Len(destination) as usize) <= source.count, "Download: destination is larger than the buffer");
@@ -338,22 +320,19 @@ Result<void, VulkanError> Download(ref const Context context, ref const Buffer<T
     {
         return Check(ConceptVkReadBytes(source.device, source.memory, 0, AsBytes(destination)));
     }
-    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(destination) as usize, Placement::Readback)?;
-    owned Recording recording = BeginRecording(ref const context, 0)?;
+    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(destination) as usize, Placement::Readback) ?;
+    owned Recording recording = BeginRecording(ref const context, 0) ?;
     Copy(ref recording, ref const source, ref const staging);
-    owned Submission work = Submit(move recording)?;
-    Wait(ref work)?;
+    owned Submission work = Submit(move recording) ?;
+    Wait(ref work) ?;
     return Check(ConceptVkReadBytes(staging.device, staging.memory, 0, AsBytes(destination)));
 }
-
 // ---- Pipelines ----------------------------------------------------------
-
 enum DescriptorKind
 {
     StorageBuffer,
     UniformBuffer,
 }
-
 uint32 DescriptorKindCode(DescriptorKind kind)
 {
     return match (kind)
@@ -362,12 +341,11 @@ uint32 DescriptorKindCode(DescriptorKind kind)
         DescriptorKind::UniformBuffer => 1,
     };
 }
-
 // A compute pipeline. Its set-0 bindings are push descriptors, so binding
 // buffers is part of recording a dispatch rather than a separate object.
 class Pipeline
 {
-public:
+    public:
     VkDevice device;
     VkShaderModule shader;
     VkDescriptorSetLayout setLayout;
@@ -375,59 +353,59 @@ public:
     VkPipeline pipeline;
     uint32 pushBytes;
 };
-
 void Drop(owned Pipeline pipeline)
 {
     ConceptVkDestroyPipeline(pipeline.device, pipeline.shader, pipeline.setLayout, pipeline.layout, pipeline.pipeline);
 }
-
 // kernel is a SPIR-V path; relative paths resolve against
 // CONCEPT_VULKAN_KERNELS when set (`concept test` sets it to the test's
 // directory). entry is the entry point name ("main" for GLSL).
-Result<Pipeline, VulkanError> CreatePipeline(ref const Context context, string kernel, string entry, ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes)
+Result<Pipeline, VulkanError> CreatePipeline(ref const Context context, string kernel, string entry,
+ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes)
 {
-    PipelineCreation created = ConceptVkCreatePipeline(context.device, context.cache, kernel, entry, bindings, pushBytes);
-    Check(created.code)?;
-    owned Pipeline pipeline = Pipeline{context.device, created.shader, created.setLayout, created.layout, created.pipeline, pushBytes};
+    PipelineCreation created = ConceptVkCreatePipeline(context.device, context.cache, kernel, entry,
+    bindings, pushBytes);
+    Check(created.code) ?;
+    owned Pipeline pipeline = Pipeline {
+        context.device, created.shader, created.setLayout, created.layout, created.pipeline, pushBytes
+    };
     return Result::Ok(move pipeline);
 }
-
 // ---- Recording ----------------------------------------------------------
-
 // Pipeline stages a command runs in, as far as synchronization is concerned.
-bits Stages : uint32
+bits Stages: uint32
 {
     compute: 0;
     transfer: 1;
     host: 2;
 }
-
 Stages NoStages()
 {
     return Stages{0};
 }
-
 Stages ComputeStage()
 {
-    return NoStages() with { compute = true; };
+    return NoStages() with {
+        compute = true;
+    };
 }
-
 Stages TransferStage()
 {
-    return NoStages() with { transfer = true; };
+    return NoStages() with {
+        transfer = true;
+    };
 }
-
 Stages HostStage()
 {
-    return NoStages() with { host = true; };
+    return NoStages() with {
+        host = true;
+    };
 }
-
 enum Access
 {
     Read,
     Write,
 }
-
 // One buffer bound to one binding of a dispatch, with what the kernel does
 // to it. Generated kernel wrappers fill Access from the SPIR-V.
 record struct Binding
@@ -438,19 +416,22 @@ record struct Binding
     DescriptorKind kind;
     Access access;
 };
-
 template <typename T>
 Binding Bind(uint32 slot, ref const Buffer<T> buffer, Access access)
 {
-    return Binding{slot, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64, DescriptorKind::StorageBuffer, access};
+    return Binding {
+        slot, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64, DescriptorKind::StorageBuffer,
+        access
+    };
 }
-
 template <typename T>
 Binding BindUniform(uint32 slot, ref const Buffer<T> buffer)
 {
-    return Binding{slot, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64, DescriptorKind::UniformBuffer, Access::Read};
+    return Binding {
+        slot, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64, DescriptorKind::UniformBuffer,
+        Access::Read
+    };
 }
-
 // What happened to one buffer since the last barrier that covered it.
 record struct Tracked
 {
@@ -458,7 +439,6 @@ record struct Tracked
     Stages readStages;
     Stages writeStages;
 };
-
 // A buffer use by one command.
 record struct Use
 {
@@ -466,13 +446,12 @@ record struct Use
     Stages stage;
     bool writes;
 };
-
 // A command buffer being recorded. Every command declares the buffers it
 // touches; Record derives the barriers. Dropping an unsubmitted recording
 // frees it.
 class Recording
 {
-public:
+    public:
     VkDevice device;
     VkQueue queue;
     VkCommandPool pool;
@@ -486,7 +465,6 @@ public:
     int barriers;
     bool submitted;
 };
-
 void Drop(owned Recording recording)
 {
     if (not recording.submitted)
@@ -494,17 +472,18 @@ void Drop(owned Recording recording)
         ConceptVkEndAbandoned(recording.device, recording.pool, recording.commands, recording.queries);
     }
 }
-
 // timestamps is how many timestamp queries the recording may write.
 Result<Recording, VulkanError> BeginRecording(ref const Context context, uint32 timestamps)
 {
     RecordingBegin begun = ConceptVkBeginRecording(context.device, context.commands, timestamps);
-    Check(begun.code)?;
+    Check(begun.code) ?;
     Tracked empty = Tracked{Option::None, NoStages(), NoStages()};
-    owned Recording recording = Recording{context.device, context.queue, context.commands, context.physical, begun.commands, begun.queries, timestamps, 0, [empty...], 0, 0, false};
+    owned Recording recording = Recording {
+        context.device, context.queue, context.commands, context.physical, begun.commands, begun.queries,
+        timestamps, 0,[empty ...], 0, 0, false
+    };
     return Result::Ok(move recording);
 }
-
 bool Tracks(ref const Tracked entry, VkBuffer buffer)
 {
     return match (entry.buffer)
@@ -513,15 +492,12 @@ bool Tracks(ref const Tracked entry, VkBuffer buffer)
         Option::None => false,
     };
 }
-
 int TrackedIndex(ref Recording recording, VkBuffer buffer)
 {
-    for (i in 0..recording.trackedCount)
+    for (i in 0 .. recording.trackedCount)
     {
         if (Tracks(ref const recording.tracked[i], buffer))
-        {
-            return i;
-        }
+        { return i; }
     }
     assert(recording.trackedCount < 64, "a recording tracks at most 64 buffers");
     int index = recording.trackedCount;
@@ -529,22 +505,18 @@ int TrackedIndex(ref Recording recording, VkBuffer buffer)
     recording.trackedCount = index + 1;
     return index;
 }
-
 Stages Union(Stages left, Stages right)
 {
     return Stages{left.raw | right.raw};
 }
-
 Stages Without(Stages stages, Stages removed)
 {
-    return Stages{stages.raw - (stages.raw & removed.raw)};
+    return Stages{stages.raw -(stages.raw & removed.raw)};
 }
-
 bool Any(Stages stages)
 {
     return stages.raw != 0;
 }
-
 // Derives and records the barrier a command needs before it touches uses,
 // then records those uses. Read-after-write and write-after-write need a
 // memory dependency on the earlier writes; write-after-read needs only an
@@ -555,7 +527,7 @@ void Touch(ref Recording recording, ReadOnlySpan<Use> uses)
     Stages sourceStages = NoStages();
     Stages destinationStages = NoStages();
     bool sourceWrites = false;
-    for (u in 0..Len(uses))
+    for (u in 0 .. Len(uses))
     {
         Use use = uses[u];
         int index = TrackedIndex(ref recording, use.buffer);
@@ -582,28 +554,35 @@ void Touch(ref Recording recording, ReadOnlySpan<Use> uses)
         ConceptVkCmdBarrier(recording.commands, sourceStages.raw, memoryDependency, destinationStages.raw);
         recording.barriers = recording.barriers + 1;
         // Everything the barrier waited on is now ordered before this command.
-        for (i in 0..recording.trackedCount)
+        for (i in 0 .. recording.trackedCount)
         {
             Tracked covered = recording.tracked[i];
-            recording.tracked[i] = covered with { readStages = Without(covered.readStages, sourceStages); writeStages = Without(covered.writeStages, sourceStages); };
+            recording.tracked[i] = covered with {
+                readStages = Without(covered.readStages, sourceStages);
+                writeStages = Without(covered.writeStages, sourceStages);
+            };
         }
     }
-    for (u in 0..Len(uses))
+    for (u in 0 .. Len(uses))
     {
         Use use = uses[u];
         int index = TrackedIndex(ref recording, use.buffer);
         Tracked entry = recording.tracked[index];
         if (use.writes)
         {
-            recording.tracked[index] = entry with { readStages = NoStages(); writeStages = use.stage; };
+            recording.tracked[index] = entry with {
+                readStages = NoStages();
+                writeStages = use.stage;
+            };
         }
         else
         {
-            recording.tracked[index] = entry with { readStages = Union(entry.readStages, use.stage); };
+            recording.tracked[index] = entry with {
+                readStages = Union(entry.readStages, use.stage);
+            };
         }
     }
 }
-
 uint32 AccessWrites(Access access)
 {
     return match (access)
@@ -612,31 +591,36 @@ uint32 AccessWrites(Access access)
         Access::Write => 1,
     };
 }
-
 // Binds pipeline, pushes the bindings as descriptors and the constants, and
 // dispatches groups. Barriers come from each binding's declared access.
-void DispatchWith(ref Recording recording, ref const Pipeline pipeline, ReadOnlySpan<Binding> bindings, ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z)
+void DispatchWith(ref Recording recording, ref const Pipeline pipeline, ReadOnlySpan<Binding> bindings,
+ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z)
 {
     assert(Len(bindings) <= 16, "a dispatch binds at most 16 buffers");
     assert((Len(pushConstants) as uint32) == pipeline.pushBytes, "push constants must match the pipeline's push-constant size");
-    Use<array>[16] uses = [Use{bindings[0].buffer, ComputeStage(), false}...];
-    DescriptorWrite<array>[16] writes = [DescriptorWrite{bindings[0].buffer, 0, 0, 0, 0}...];
-    for (b in 0..Len(bindings))
+    Use<array>[16] uses =[Use{bindings[0].buffer, ComputeStage(), false}
+    ...];
+    DescriptorWrite<array>[16] writes =[DescriptorWrite{bindings[0].buffer, 0, 0, 0, 0}
+    ...];
+    for (b in 0 .. Len(bindings))
     {
         Binding binding = bindings[b];
         uses[b] = Use{binding.buffer, ComputeStage(), AccessWrites(binding.access) != 0};
-        writes[b] = DescriptorWrite{binding.buffer, 0, binding.bytes, binding.slot, DescriptorKindCode(binding.kind)};
+        writes[b] = DescriptorWrite {
+            binding.buffer, 0, binding.bytes, binding.slot, DescriptorKindCode(binding.kind)
+        };
     }
     Touch(ref recording, Subspan(ReadOnlySpan(uses), 0, Len(bindings)));
-    ConceptVkCmdDispatch(recording.commands, pipeline.pipeline, pipeline.layout, Subspan(ReadOnlySpan(writes), 0, Len(bindings)), pushConstants, x, y, z);
+    ConceptVkCmdDispatch(recording.commands, pipeline.pipeline, pipeline.layout, Subspan(ReadOnlySpan(writes),
+    0, Len(bindings)), pushConstants, x, y, z);
 }
-
-void Dispatch(ref Recording recording, ref const Pipeline pipeline, ReadOnlySpan<Binding> bindings, uint32 x, uint32 y, uint32 z)
+void Dispatch(ref Recording recording, ref const Pipeline pipeline, ReadOnlySpan<Binding> bindings, uint32 x,
+uint32 y, uint32 z)
 {
-    byte<array>[1] none = [0];
-    DispatchWith(ref recording, ref const pipeline, bindings, Subspan(ReadOnlySpan(none), 0, 0), x, y, z);
+    byte<array>[1] none =[0];
+    DispatchWith(ref recording, ref const pipeline, bindings, Subspan(ReadOnlySpan(none), 0, 0), x, y,
+    z);
 }
-
 // Copies all of source into destination (as many elements as both hold).
 template <typename T>
 void Copy(ref Recording recording, ref const Buffer<T> source, ref const Buffer<T> destination)
@@ -647,20 +631,21 @@ void Copy(ref Recording recording, ref const Buffer<T> source, ref const Buffer<
         count = destination.count;
     }
     usize<byte> bytes = count * SizeOf<T>();
-    Use<array>[2] uses = [Use{source.buffer, TransferStage(), false}, Use{destination.buffer, TransferStage(), true}];
+    Use<array>[2] uses =[Use{source.buffer, TransferStage(), false}, Use {
+        destination.buffer, TransferStage(), true
+    }];
     Touch(ref recording, ReadOnlySpan(uses));
     ConceptVkCmdCopy(recording.commands, source.buffer, destination.buffer, Magnitude(bytes) as uint64);
 }
-
 // Sets every 32-bit word of buffer to word.
 template <typename T>
 void Fill(ref Recording recording, ref const Buffer<T> buffer, uint32 word)
 {
-    Use<array>[1] uses = [Use{buffer.buffer, TransferStage(), true}];
+    Use<array>[1] uses =[Use{buffer.buffer, TransferStage(), true}];
     Touch(ref recording, ReadOnlySpan(uses));
-    ConceptVkCmdFill(recording.commands, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64, word);
+    ConceptVkCmdFill(recording.commands, buffer.buffer, Magnitude(ByteSize(ref const buffer)) as uint64,
+    word);
 }
-
 // Writes the next timestamp and returns its index for Elapsed.
 uint32 Timestamp(ref Recording recording)
 {
@@ -670,12 +655,11 @@ uint32 Timestamp(ref Recording recording)
     recording.timestampsUsed = index + 1;
     return index;
 }
-
 // Submitted work. Wait blocks until it finishes; Drop waits if nobody did,
 // then frees the command buffer, fence and queries.
 class Submission
 {
-public:
+    public:
     VkDevice device;
     VkPhysicalDevice physical;
     VkCommandPool pool;
@@ -684,7 +668,6 @@ public:
     VkQueryPool queries;
     bool waited;
 };
-
 void Drop(owned Submission submission)
 {
     if (not submission.waited)
@@ -693,13 +676,12 @@ void Drop(owned Submission submission)
     }
     ConceptVkRelease(submission.device, submission.pool, submission.commands, submission.fence, submission.queries);
 }
-
 // Ends the recording and submits it. Any buffer written on the device gets a
 // final barrier to the host, so host reads after Wait see the results.
 Result<Submission, VulkanError> Submit(owned Recording recording)
 {
     Stages written = NoStages();
-    for (i in 0..recording.trackedCount)
+    for (i in 0 .. recording.trackedCount)
     {
         written = Union(written, recording.tracked[i].writeStages);
     }
@@ -715,25 +697,25 @@ Result<Submission, VulkanError> Submit(owned Recording recording)
         ConceptVkEndAbandoned(recording.device, recording.pool, recording.commands, recording.queries);
         return Result::Error(ErrorFromCode(submitted.code));
     }
-    owned Submission submission = Submission{recording.device, recording.physical, recording.pool, recording.commands, submitted.fence, recording.queries, false};
+    owned Submission submission = Submission {
+        recording.device, recording.physical, recording.pool, recording.commands, submitted.fence, recording.queries,
+        false
+    };
     return Result::Ok(move submission);
 }
-
 Result<void, VulkanError> Wait(ref Submission submission)
 {
     if (submission.waited)
-    {
-        return Result::Ok();
-    }
+    { return Result::Ok(); }
     submission.waited = true;
     return Check(ConceptVkWait(submission.device, submission.fence));
 }
-
 // Nanoseconds between two timestamps of a finished submission.
 Result<double, VulkanError> ElapsedNanoseconds(ref const Submission submission, uint32 from, uint32 to)
 {
     assert(submission.waited, "timestamps are read after Wait");
-    Elapsed elapsed = ConceptVkElapsed(submission.device, submission.physical, submission.queries, from, to);
-    Check(elapsed.code)?;
+    Elapsed elapsed = ConceptVkElapsed(submission.device, submission.physical, submission.queries, from,
+    to);
+    Check(elapsed.code) ?;
     return Result::Ok(elapsed.nanoseconds);
 }

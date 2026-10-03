@@ -1,0 +1,14 @@
+module Research.FinitePayloadProbe;
+profile Core;
+import Research.Finite;
+
+enum Message
+{
+    Text(string value),
+}
+
+int Read()
+{
+    Assert.Concept<FiniteDomain>(Message, "research: case inventory does not enumerate payload values");
+    return 0;
+}

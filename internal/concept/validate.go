@@ -4285,7 +4285,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			out, _ := evt1BuiltinType("int", e.Span)
 			return out, nil
 		}
-		if templateInfo != nil {
+		if _, comptimeCallee := env.comptimeFunctions[e.Callee]; templateInfo != nil && !comptimeCallee {
 			return validateTemplateCallExpr(env, scope, e, templateInfo)
 		}
 		if _, exists := env.comptimeFunctions[e.Callee]; exists && !inComptimeFn {
@@ -6806,8 +6806,11 @@ func checkConceptApplicationSatisfaction(env *semanticEnv, conceptName string, a
 	for _, req := range conceptDecl.Requirements {
 		switch r := req.(type) {
 		case *PredicateRequirement:
-			outcome, detail, at, _ := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
+			outcome, detail, at, verdict := evt1EvaluateDeclaredPredicate(env, conceptDecl, r, bindings, nil)
 			if outcome != FactProven {
+				if verdict != nil {
+					detail = evt1VerdictDiagnosticDetail(*verdict)
+				}
 				code := "PREDICATE_REQUIREMENT_UNSATISFIED"
 				if outcome == FactUnknown {
 					code = "PREDICATE_REQUIREMENT_UNDECIDED"
@@ -7820,7 +7823,19 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call *CallExpr
 		}
 		argTypes = append(argTypes, argType)
 	}
-	if !dependent || templateInfo.Decl.Constraint.ConceptName == "" {
+	// A descriptive predicate does not erase ordinary named operations from a
+	// template's lexical environment. Only operations on an otherwise unknown
+	// dependent type need to be supplied by an operation requirement.
+	_, knownTemplate := env.templates[call.Callee]
+	for _, requirement := range templateInfo.Requirements {
+		if requirement.Operation.Name == call.Callee {
+			// The operation supplied by a constraint takes precedence over a
+			// same-named generic wrapper in the surrounding module.
+			knownTemplate = false
+			break
+		}
+	}
+	if !dependent || templateInfo.Decl.Constraint.ConceptName == "" || knownTemplate {
 		fn, err := evt1ResolveOrdinaryCall(env, scope, call.Callee, call.Args, argTypes, templateInfo, call.Span)
 		if err != nil {
 			if calleeDecl, exists := env.templates[call.Callee]; exists {

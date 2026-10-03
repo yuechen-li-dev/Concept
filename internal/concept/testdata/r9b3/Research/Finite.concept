@@ -1,0 +1,81 @@
+module Research.Finite;
+profile Core;
+
+record struct FiniteEvidence
+{
+    int cardinality;
+}
+
+enum FiniteRefutation
+{
+    NotVariantType(typename subject),
+}
+
+comptime Verdict<FiniteEvidence, FiniteRefutation> FiniteCasesHolds(typename subject)
+{
+    if (compiler.IsEnum(subject) and not compiler.IsBorrowLike(subject) and not compiler.IsOwnedType(subject))
+    {
+        return Verdict::Proven(FiniteEvidence
+        {
+            compiler.CaseCount(compiler.Declaration(subject))
+        });
+    }
+    return Verdict::Disproven(FiniteRefutation::NotVariantType(subject));
+}
+
+comptime string FiniteCasesHoldsDescribe(FiniteRefutation reason)
+{
+    return match (reason)
+    {
+        FiniteRefutation::NotVariantType(subject) => compiler.TypeName(subject) + " has no enum case inventory",
+    };
+}
+
+concept FiniteCases<T>
+{
+    requires FiniteCasesHolds(T);
+}
+
+// Complete value enumeration is qualified only for bool and payload-free
+// enums. Payload-bearing sums and large scalar domains remain Unknown.
+comptime Verdict<FiniteEvidence, FiniteRefutation> FiniteDomainHolds(typename subject)
+{
+    if (compiler.TypeName(subject) == "bool" and not compiler.IsBorrowLike(subject) and not compiler.IsOwnedType(subject))
+    {
+        return Verdict::Proven(FiniteEvidence
+        {
+            2
+        });
+    }
+    if (compiler.IsEnum(subject) and not compiler.IsBorrowLike(subject) and not compiler.IsOwnedType(subject))
+    {
+        declaration sum = compiler.Declaration(subject);
+        for (i in 0 .. compiler.CaseCount(sum))
+        {
+            if (compiler.CasePayloadCount(sum, i) != 0)
+            {
+                return Verdict::Unknown;
+            }
+        }
+        return Verdict::Proven(FiniteEvidence
+        {
+            compiler.CaseCount(sum)
+        });
+    }
+    return Verdict::Unknown;
+}
+
+concept FiniteDomain<T>
+{
+    requires FiniteDomainHolds(T);
+}
+
+comptime string FiniteDomainHoldsUnknownDescribe(typename subject)
+{
+    return match
+    {
+        when compiler.IsEnum(subject) => "case inventory is known; complete payload values are not enumerated",
+        when compiler.IsScalar(subject) => "complete scalar values are not enumerated by this research contract",
+        otherwise => "no complete enumerable value-domain summary for " + compiler.TypeName(subject),
+    };
+}

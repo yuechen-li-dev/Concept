@@ -11,3 +11,7 @@ docs/design/EVT2-MACHINEIR-BRIDGE.schema.json text eol=lf
 internal/concept/testdata/machinebridge/*.cmir1 binary
 internal/concept/testdata/machinebridge/*.amd64 binary
 internal/concept/module_artifact.go text eol=lf
+libraries/Standard/Semantic/*.concept text eol=lf
+internal/concept/testdata/r9b3/**/*.concept text eol=lf
+libraries/Standard/Backend/AMD64.concept text eol=lf
+libraries/Vulkan/concept/Vulkan.concept text eol=lf

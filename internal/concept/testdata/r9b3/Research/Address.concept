@@ -1,0 +1,60 @@
+module Research.Address;
+profile Core;
+
+// Research only. Movability and Drop observations cannot certify relocation.
+enum RelocationEvidence
+{
+    BitwiseLiveMove
+}
+enum RelocationRefutation
+{
+    RequiresStableStorage(typename subject)
+}
+comptime Verdict<RelocationEvidence, RelocationRefutation> RelocationProbe(typename subject)
+{
+    if (compiler.IsImmovableType(subject))
+    {
+        return Verdict::Disproven(RelocationRefutation::RequiresStableStorage(subject));
+    }
+    return Verdict::Unknown;
+}
+comptime string RelocationProbeDescribe(RelocationRefutation reason)
+{
+    return match (reason)
+    {
+        RelocationRefutation::RequiresStableStorage(subject) => compiler.TypeName(subject) + " is immovable; live storage relocation is not legal",
+    };
+}
+comptime string RelocationProbeUnknownDescribe(typename subject)
+{
+    return "no bitwise relocation invariant summary or qualified compaction consumer for " + compiler.TypeName(subject);
+}
+concept ResearchRelocatable<T>
+{
+    requires RelocationProbe(T);
+}
+
+enum AddressRequirementEvidence
+{
+    Immovable(typename subject)
+}
+enum AddressRequirementRefutation
+{
+    Contradicted
+}
+comptime Verdict<AddressRequirementEvidence, AddressRequirementRefutation> AddressRequirementProbe(typename subject)
+{
+    if (compiler.IsImmovableType(subject))
+    {
+        return Verdict::Proven(AddressRequirementEvidence::Immovable(subject));
+    }
+    return Verdict::Unknown;
+}
+comptime string AddressRequirementProbeUnknownDescribe(typename subject)
+{
+    return "absence of immovable does not describe external address invariants for " + compiler.TypeName(subject);
+}
+concept ResearchRequiresStableAddress<T>
+{
+    requires AddressRequirementProbe(T);
+}

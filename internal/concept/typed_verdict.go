@@ -162,17 +162,26 @@ func evt1InvokePredicateOnMeasured(env, subjects *semanticEnv, name string, args
 	if err != nil {
 		return result, err
 	}
+	renderer, renderArgs := name+"Describe", args
 	if result.Refutation != nil {
-		if _, ok := env.comptimeFunctions[name+"Describe"]; ok {
-			message, err := evt1InvokeComptimeValues(state, name+"Describe", []Value{*result.Refutation}, span)
-			if err != nil {
-				return result, err
-			}
-			if message.Kind != ValueString || strings.TrimSpace(message.StringValue) == "" {
-				return result, fmt.Errorf("%sDescribe must render a nonempty refutation message", name)
-			}
-			result.Message = message.StringValue
+		renderArgs = []Value{*result.Refutation}
+	} else if result.Outcome == FactUnknown && evt1IsTypedVerdict(result.Type) {
+		renderer = name + "UnknownDescribe"
+	} else {
+		return result, nil
+	}
+	if _, ok := env.comptimeFunctions[renderer]; ok {
+		message, err := evt1InvokeComptimeValues(state, renderer, renderArgs, span)
+		if err != nil {
+			return result, err
 		}
+		if message.Kind != ValueString || strings.TrimSpace(message.StringValue) == "" {
+			return result, fmt.Errorf("%s must render a nonempty semantic message", renderer)
+		}
+		if len(message.StringValue) > evt1ComptimeMaxStringBytes {
+			return result, evt1Diagnostic("VERDICT_DESCRIPTION_LIMIT", "semantic description exceeds bounded string size", span)
+		}
+		result.Message = message.StringValue
 	}
 	return result, nil
 }

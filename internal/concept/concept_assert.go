@@ -158,6 +158,14 @@ func evt1ResolveConceptAssertionSubject(env *semanticEnv, scope *evt1Scope, name
 	if alias, ok := env.typeAliases[name.Name]; ok {
 		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: alias.String()}, typeValue: alias, span: name.Span}, nil
 	}
+	if decl, ok := env.enums[name.Name]; ok {
+		t := Type{Name: decl.Name, Kind: TypeEnum, Span: name.Span}
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: name.Name}, typeValue: t, declaration: evt1FindDeclarationSubject(env, name.Name, TypeDeclaration, decl.Span), span: name.Span}, nil
+	}
+	if decl, ok := env.handles[name.Name]; ok {
+		t := Type{Name: decl.Name, Kind: TypeHandle, Span: name.Span}
+		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: name.Name}, typeValue: t, declaration: evt1FindDeclarationSubject(env, name.Name, TypeDeclaration, decl.Span), span: name.Span}, nil
+	}
 	if builtin, ok := env.profile.builtinType(name.Name, name.Span); ok {
 		return conceptAssertionSubject{description: ProofSubjectDescription{Kind: "type", Name: name.Name, Type: builtin.String()}, typeValue: builtin, span: name.Span}, nil
 	}

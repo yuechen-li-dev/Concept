@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64;
 profile Core;
 import Standard.Backend.BridgeCodec;
+import Standard.Semantic.Vocabulary;
 record struct MachineOperand
 {
     OperandKind kind;
@@ -1297,4 +1298,13 @@ void BackendFacts()
     Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
     Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
+}
+
+// This pins self-contained in-memory records, independently of the explicit
+// field-by-field wire codec above. PlainData is not the wire representation.
+void CheckBridgeRepresentation()
+{
+    Assert.Concept<PlainData>(WireHeader, "bridge header carries only data");
+    Assert.Concept<PlainData>(WireMachineFrame, "bridge frame carries only data");
+    Assert.Concept<PlainData>(WireMachineOperand, "bridge operand carries only data");
 }

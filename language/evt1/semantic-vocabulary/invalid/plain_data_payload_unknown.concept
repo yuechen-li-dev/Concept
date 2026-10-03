@@ -1,0 +1,14 @@
+module Research.PlainPayload;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+enum Payload
+{
+    Count(int value),
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(Payload, "payload-sum geometry is not qualified");
+    return 0;
+}

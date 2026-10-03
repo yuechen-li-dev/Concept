@@ -1,0 +1,21 @@
+module Research.PlainArray;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+using Words = uint16<array>[4];
+enum Tag
+{
+    Start,
+    Finish,
+}
+
+int Read()
+{
+    Assert.Concept<PlainData>(bool, "boolean representation");
+    Assert.Concept<PlainData>(half, "binary16 representation");
+    Assert.Concept<PlainData>(float, "binary32 representation");
+    Assert.Concept<PlainData>(double, "binary64 representation");
+    Assert.Concept<PlainData>(Words, "fixed self-contained elements");
+    Assert.Concept<PlainData>(Tag, "fixed payload-free enum tag");
+    return 0;
+}

@@ -28,36 +28,84 @@ func evt1AlignUp(value, alignment int) int {
 	return (value + alignment - 1) / alignment * alignment
 }
 
+// Geometry is a bounded type graph query, not an expansion of every repeated
+// field subtree. The scratch cache belongs to one query and carries no facts.
+type evt1GeometryQuery struct {
+	visiting map[string]bool
+	known    map[string][2]int
+	accesses int
+}
+
+func newEVT1GeometryQuery() *evt1GeometryQuery {
+	return &evt1GeometryQuery{visiting: map[string]bool{}, known: map[string][2]int{}}
+}
+
 // evt1StructFieldOffsets uses the same geometry as SizeOf/AlignOf. Native ABI
 // claims compare these offsets with the selected compiler's offsetof results.
 func evt1StructFieldOffsets(env *semanticEnv, decl StructDecl) ([]int, int, int, error) {
+	return evt1StructFieldOffsetsWithin(env, decl, newEVT1GeometryQuery())
+}
+
+func evt1StructFieldOffsetsWithin(env *semanticEnv, decl StructDecl, query *evt1GeometryQuery) ([]int, int, int, error) {
 	if len(decl.Fields) == 0 {
 		return nil, 0, 0, evt1Diagnostic("C_ABI_LAYOUT_INVALID", "C ABI struct must have fields", decl.Span)
 	}
 	offsets := make([]int, len(decl.Fields))
 	end, alignment := 0, 1
+	maxGeometry := int(^uint(0) >> 1)
 	for i, field := range decl.Fields {
 		// Ownership changes lifetime responsibility, not a field's physical
 		// representation inside an otherwise fixed-layout record.
-		size, fieldAlign, err := evt1TypeGeometry(env, field.Type.valueType())
+		size, fieldAlign, err := evt1TypeGeometryWithin(env, field.Type.valueType(), query)
 		if err != nil {
 			return nil, 0, 0, err
 		}
+		if end > maxGeometry-(fieldAlign-1) {
+			return nil, 0, 0, evt1Diagnostic("CV4573", "fixed representation alignment overflows", field.Span)
+		}
 		end = evt1AlignUp(end, fieldAlign)
 		offsets[i] = end
+		if size < 0 || end > maxGeometry-size {
+			return nil, 0, 0, evt1Diagnostic("CV4573", "fixed representation size overflows", field.Span)
+		}
 		end += size
 		if fieldAlign > alignment {
 			alignment = fieldAlign
 		}
 	}
+	if end > maxGeometry-(alignment-1) {
+		return nil, 0, 0, evt1Diagnostic("CV4573", "fixed representation tail alignment overflows", decl.Span)
+	}
 	return offsets, evt1AlignUp(end, alignment), alignment, nil
 }
 
 func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
+	return evt1TypeGeometryWithin(env, t, newEVT1GeometryQuery())
+}
+
+func evt1TypeGeometryWithin(env *semanticEnv, t Type, query *evt1GeometryQuery) (resultSize, resultAlignment int, resultErr error) {
+	query.accesses++
+	if query.accesses > evt1ComptimeMaxFuel {
+		return 0, 0, evt1Diagnostic("CV4573", "fixed representation exceeds the bounded geometry graph budget", t.Span)
+	}
 	resolved, err := evt1ResolveType(env, nil, t)
 	if err != nil {
 		return 0, 0, err
 	}
+	key := resolved.String()
+	if known, ok := query.known[key]; ok {
+		return known[0], known[1], nil
+	}
+	if query.visiting[key] || len(query.visiting) >= evt1ComptimeMaxCallDepth {
+		return 0, 0, evt1Diagnostic("CV4573", "fixed representation is recursive or exceeds the bounded geometry depth", t.Span)
+	}
+	query.visiting[key] = true
+	defer func() {
+		delete(query.visiting, key)
+		if resultErr == nil {
+			query.known[key] = [2]int{resultSize, resultAlignment}
+		}
+	}()
 	if resolved.isBorrowLike() || resolved.isOwned() || resolved.PointerTo != nil {
 		return 0, 0, evt1Diagnostic("CV4573", "layout regions require fixed value storage", t.Span)
 	}
@@ -65,21 +113,42 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		if evt1StorageHasRuntimeShape(resolved) {
 			return 0, 0, evt1Diagnostic("CV4573", "layout extents must be compile-time fixed", t.Span)
 		}
-		size, alignment, err := evt1TypeGeometry(env, *resolved.ArrayElem)
+		size, alignment, err := evt1TypeGeometryWithin(env, *resolved.ArrayElem, query)
 		if err != nil {
 			return 0, 0, err
 		}
+		maxGeometry := int(^uint(0) >> 1)
+		count := resolved.ArrayLength
+		if len(resolved.Shape) != 0 {
+			count = 1
+			for _, dimension := range resolved.Shape {
+				if dimension.Extent < 0 || dimension.Extent != 0 && count > maxGeometry/dimension.Extent {
+					return 0, 0, evt1Diagnostic("CV4573", "fixed representation extent product overflows", t.Span)
+				}
+				count *= dimension.Extent
+			}
+		}
+		if count < 0 || size < 0 || count != 0 && size > maxGeometry/count {
+			return 0, 0, evt1Diagnostic("CV4573", "fixed representation size overflows", t.Span)
+		}
+		bytes := size * count
 		if resolved.StorageKind == StorageRaw {
 			if alignment < 4 {
 				alignment = 4
 			}
-			end := evt1AlignUp(size*evt1StorageElementCount(resolved), 4) + 4
+			if bytes > maxGeometry-7-(alignment-1) {
+				return 0, 0, evt1Diagnostic("CV4573", "fixed raw representation size overflows", t.Span)
+			}
+			end := evt1AlignUp(bytes, 4) + 4
 			return evt1AlignUp(end, alignment), alignment, nil
 		}
 		if resolved.StorageKind == StorageSparse {
-			return evt1AlignUp(size*evt1StorageElementCount(resolved)+evt1StorageElementCount(resolved), alignment), alignment, nil
+			if bytes > maxGeometry-count-(alignment-1) {
+				return 0, 0, evt1Diagnostic("CV4573", "fixed sparse representation size overflows", t.Span)
+			}
+			return evt1AlignUp(bytes+count, alignment), alignment, nil
 		}
-		return size * evt1StorageElementCount(resolved), alignment, nil
+		return bytes, alignment, nil
 	}
 	switch resolved.Name {
 	case "byte", "uint8", "bool":
@@ -112,7 +181,7 @@ func evt1TypeGeometry(env *semanticEnv, t Type) (int, int, error) {
 		if len(decl.Fields) == 0 {
 			return 0, 1, nil // preserve ordinary nominal tag geometry; repr(C) rejects empty
 		}
-		_, size, alignment, err := evt1StructFieldOffsets(env, decl)
+		_, size, alignment, err := evt1StructFieldOffsetsWithin(env, decl, query)
 		return size, alignment, err
 	}
 	return 0, 0, evt1Diagnostic("CV4573", "type "+resolved.String()+" has no fixed layout geometry", t.Span)

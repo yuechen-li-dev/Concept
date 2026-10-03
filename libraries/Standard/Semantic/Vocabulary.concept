@@ -1,0 +1,173 @@
+module Standard.Semantic.Vocabulary;
+profile Core;
+
+// Restrictive predicates over checked observations. These predicates do not
+// authorize optimizer facts, arbitrary-byte decoding, or C ABI compatibility.
+record struct PlainDataEvidence
+{
+    usize<byte> size;
+    usize<byte> alignment;
+}
+
+enum StructuralEvidence
+{
+    SelfContained
+}
+
+enum PlainDataRefutation
+{
+    HasDrop(typename subject),
+    HasOwnedResource(typename subject),
+    ContainsReference(typename subject),
+    RuntimeManaged(typename subject),
+    AddressSensitive(typename subject),
+    FieldProblem(declaration field, string problem),
+}
+
+comptime string PlainDataHoldsDescribe(PlainDataRefutation reason)
+{
+    return match (reason)
+    {
+        PlainDataRefutation::HasDrop(subject) => compiler.TypeName(subject) + " has Drop",
+        PlainDataRefutation::HasOwnedResource(subject) => compiler.TypeName(subject) + " carries ownership",
+        PlainDataRefutation::ContainsReference(subject) => compiler.TypeName(subject) + " carries reference or pointer lifetime semantics",
+        PlainDataRefutation::RuntimeManaged(subject) => compiler.TypeName(subject) + " has managed storage semantics",
+        PlainDataRefutation::AddressSensitive(subject) => compiler.TypeName(subject) + " is immovable",
+        PlainDataRefutation::FieldProblem(field, problem) => "field " + compiler.QualifiedName(field) + ": " + problem,
+    };
+}
+
+comptime bool StructureProven(Verdict<StructuralEvidence, PlainDataRefutation> result)
+{
+    return match (result)
+    {
+        Verdict::Proven(evidence) => true,
+        Verdict::Disproven(reason) => false,
+        Verdict::Unknown => false,
+    };
+}
+
+// The closed marker keeps recursive evaluation on the qualified template
+// path. Fields and array elements share the caller's fuel and depth budget.
+template <typename Marker>
+comptime Verdict<StructuralEvidence, PlainDataRefutation> PlainDataStructure(typename subject) bounded(16)
+{
+    if (compiler.IsOwnedType(subject))
+    {
+        return Verdict::Disproven(PlainDataRefutation::HasOwnedResource(subject));
+    }
+    if (compiler.IsBorrowLike(subject) or compiler.IsPointer(subject))
+    {
+        return Verdict::Disproven(PlainDataRefutation::ContainsReference(subject));
+    }
+    if (compiler.HasDrop(subject))
+    {
+        return Verdict::Disproven(PlainDataRefutation::HasDrop(subject));
+    }
+    if (compiler.IsImmovableType(subject))
+    {
+        return Verdict::Disproven(PlainDataRefutation::AddressSensitive(subject));
+    }
+    if (compiler.IsHandle(subject) or compiler.IsPartialStorage(subject) or compiler.RuntimeShape(subject))
+    {
+        return Verdict::Unknown;
+    }
+    if (compiler.HasFixedGeometry(subject) and Magnitude(compiler.RepresentationSize(subject)) == 0)
+    {
+        return Verdict::Unknown;
+    }
+    if (compiler.IsArray(subject))
+    {
+        return PlainDataStructure<int>(compiler.Element(subject));
+    }
+    if (compiler.IsStruct(subject))
+    {
+        declaration aggregate = compiler.Declaration(subject);
+        if (compiler.IsClass(aggregate) or compiler.IsTable(aggregate))
+        {
+            return Verdict::Disproven(PlainDataRefutation::RuntimeManaged(subject));
+        }
+        if (compiler.IsRefStruct(aggregate))
+        {
+            return Verdict::Disproven(PlainDataRefutation::ContainsReference(subject));
+        }
+        if (not compiler.IsRecord(aggregate))
+        {
+            return Verdict::Unknown;
+        }
+        for (i in 0 .. compiler.FieldCount(aggregate))
+        {
+            declaration field = compiler.Field(aggregate, i);
+            Verdict<StructuralEvidence, PlainDataRefutation> child = PlainDataStructure<int>(compiler.TypeOf(field));
+            if (not StructureProven(child))
+            {
+                return match (child)
+                {
+                    Verdict::Proven(evidence) => Verdict::Proven(evidence),
+                    Verdict::Disproven(reason) => Verdict::Disproven(PlainDataRefutation::FieldProblem(field,
+                    PlainDataHoldsDescribe(reason))),
+                    Verdict::Unknown => Verdict::Unknown,
+                };
+            }
+        }
+        return Verdict::Proven(StructuralEvidence::SelfContained);
+    }
+    if (compiler.IsEnum(subject))
+    {
+        declaration sum = compiler.Declaration(subject);
+        for (i in 0 .. compiler.CaseCount(sum))
+        {
+            if (compiler.CasePayloadCount(sum, i) != 0)
+            {
+                return Verdict::Unknown;
+            }
+        }
+        return Verdict::Proven(StructuralEvidence::SelfContained);
+    }
+    string name = compiler.TypeName(subject);
+    if (name == "string")
+    {
+        return Verdict::Disproven(PlainDataRefutation::ContainsReference(subject));
+    }
+    if (compiler.IsScalar(subject) and compiler.HasFixedGeometry(subject))
+    {
+        return Verdict::Proven(StructuralEvidence::SelfContained);
+    }
+    return Verdict::Unknown;
+}
+
+comptime Verdict<PlainDataEvidence, PlainDataRefutation> PlainDataHolds(typename subject)
+{
+    Verdict<StructuralEvidence, PlainDataRefutation> structure = PlainDataStructure<int>(subject);
+    return match (structure)
+    {
+        Verdict::Proven(evidence) => match
+        {
+            when compiler.HasFixedGeometry(subject) and Magnitude(compiler.RepresentationSize(subject)) > 0 => Verdict::Proven(PlainDataEvidence
+            {
+                compiler.RepresentationSize(subject), compiler.RepresentationAlignment(subject)
+            }),
+            otherwise => Verdict::Unknown,
+        },
+        Verdict::Disproven(reason) => Verdict::Disproven(reason),
+        Verdict::Unknown => Verdict::Unknown,
+    };
+}
+
+concept PlainData<T>
+{
+    requires PlainDataHolds(T);
+}
+
+comptime string PlainDataHoldsUnknownDescribe(typename subject)
+{
+    return match
+    {
+        when compiler.IsHandle(subject) => "no trusted self-contained representation summary for opaque foreign handle " + compiler.TypeName(subject),
+        when compiler.IsPartialStorage(subject) => "partial storage carries a live-element initialization protocol outside this PlainData scope",
+        when compiler.RuntimeShape(subject) => "storage extent is not fixed",
+        when compiler.IsEnum(subject) => "payload-sum representation geometry is not qualified",
+        when compiler.HasFixedGeometry(subject) and Magnitude(compiler.RepresentationSize(subject)) == 0 => "zero-size nominal or storage representation is not qualified for physical byte transfer",
+        otherwise => "no complete self-contained representation proof for " + compiler.TypeName(subject),
+    };
+}
