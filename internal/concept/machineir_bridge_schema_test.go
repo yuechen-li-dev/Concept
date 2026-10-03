@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -71,10 +72,31 @@ func bridgeFrozenParity(t *testing.T, name string, m MachineModule) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(old[8:], derived[machineBridgeHeaderSize:]) {
-		_, fields := bridgeTracedPayload(t, m)
-		t.Fatal(machineBridgePayloadDifference(old[8:], derived[machineBridgeHeaderSize:], fields))
+	// CMIRAMD3 adds an empty call sequence to every non-call instruction.
+	// Remove only those generated, traced fields to compare every preexisting
+	// wire byte with the frozen oracle. No legacy codec is reintroduced.
+	payload, fields := bridgeTracedPayload(t, m)
+	var additions []machineBridgeWireField
+	for _, field := range fields {
+		if field.Record == "WireMachineInstruction" && field.Field == "Calls" {
+			if field.End-field.Offset != 4 {
+				t.Fatal("non-call gained a call contract")
+			}
+			additions = append(additions, field)
+		}
 	}
+	sort.Slice(additions, func(i, j int) bool { return additions[i].Offset < additions[j].Offset })
+	var legacyProjection []byte
+	start := 0
+	for _, field := range additions {
+		legacyProjection = append(legacyProjection, payload[start:field.Offset]...)
+		start = field.End
+	}
+	legacyProjection = append(legacyProjection, payload[start:]...)
+	if !bytes.Equal(old[8:], legacyProjection) {
+		t.Fatal("preexisting wire fields differ from frozen payload")
+	}
+	t.Logf("CMIRAMD3 artifact=%d bytes; CMIRAMD2 equivalent=%d; call-sequence overhead=%d", len(derived), len(old)+36, 4*len(additions))
 	decoded, err := DecodeMachineBridge(derived)
 	if err != nil {
 		t.Fatal(err)
@@ -265,9 +287,12 @@ func TestR9a2BridgeConceptRoundTrip(t *testing.T) {
 	}
 	var harness strings.Builder
 	harness.WriteString("#include \"bridgecodec.generated.h\"\n#include <string.h>\nint main(void) {\n")
-	for name := range bridgeParityCorpus(t) {
-		old := bridgeFrozenOracle(t, name, ".cmir1")
-		data := old[8:]
+	for name, model := range bridgeParityCorpus(t) {
+		artifact, err := EncodeMachineBridge(model)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := artifact[machineBridgeHeaderSize:]
 		fmt.Fprint(&harness, "{static const unsigned char input[]={")
 		for _, b := range data {
 			fmt.Fprintf(&harness, "%d,", b)

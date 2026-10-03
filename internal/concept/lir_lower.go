@@ -60,7 +60,7 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		if plan.Functions[i].Function != fn.Name {
 			return LIRModule{}, fmt.Errorf("EVT2_PLAN_MISMATCH %s", fn.Name)
 		}
-		b := &lirBuilder{mir: fn, plan: plan.Functions[i], current: 0, names: map[string]lirBinding{}}
+		b := &lirBuilder{mir: fn, plan: plan.Functions[i], env: env, current: 0, names: map[string]lirBinding{}}
 		b.fn = LIRFunction{Identity: fn.DeclarationIdentity, Name: fn.Name, Source: fn.SourceSpan}
 		for _, fact := range mir.SemanticFacts {
 			for _, subject := range fact.Subjects {
@@ -159,6 +159,7 @@ type lirBinding struct {
 type lirBuilder struct {
 	mir           MIRFunction
 	plan          FunctionPlan
+	env           *semanticEnv
 	fn            LIRFunction
 	current       int
 	nextValue     int
@@ -220,6 +221,10 @@ func (b *lirBuilder) block(block Block) error {
 }
 func (b *lirBuilder) statement(stmt Statement) error {
 	switch s := stmt.(type) {
+	case *ExprStmt:
+		if _, _, err := b.expr(s.Value); err != nil {
+			return err
+		}
 	case *VarDecl:
 		if s.Comptime {
 			return fmt.Errorf("EVT2_UNSUPPORTED_COMPTIME_LOCAL at %d:%d", s.Span.Line, s.Span.Column)
@@ -461,6 +466,48 @@ func (b *lirBuilder) foreach(s *ForeachStmt) error {
 
 func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	switch e := expr.(type) {
+	case *CallExpr:
+		if e.Intrinsic != "" || e.Member || e.Receiver != nil || e.CallableInvoke || e.DynDispatch || e.resolvedSignature == "" {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL %s at %d:%d", e.Callee, e.Span.Line, e.Span.Column)
+		}
+		var target *FunctionDecl
+		for i := range b.env.functions[e.Callee] {
+			candidate := &b.env.functions[e.Callee][i]
+			if evt1FunctionParamSignature(*candidate) == e.resolvedSignature {
+				target = candidate
+				break
+			}
+		}
+		if target == nil || target.Body == nil || target.ExternABI != "" || target.Async || len(target.Params) != len(e.Args) {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_TARGET %s at %d:%d", e.Callee, e.Span.Line, e.Span.Column)
+		}
+		resultType, err := lirType(target.ReturnType)
+		if err != nil {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %w", e.Callee, err)
+		}
+		args := make([]int, 0, len(e.Args))
+		argTypes := make([]LIRType, 0, len(e.Args))
+		for i, arg := range e.Args {
+			v, actual, err := b.expr(arg)
+			if err != nil {
+				return 0, "", err
+			}
+			expected, err := lirType(target.Params[i].Type)
+			if err != nil || !lirCallScalar(expected) || actual != expected {
+				return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_ARGUMENT %s arg=%d", e.Callee, i)
+			}
+			args = append(args, v)
+			argTypes = append(argTypes, expected)
+		}
+		if resultType != "void" && !lirCallScalar(resultType) {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %s", e.Callee, resultType)
+		}
+		result := 0
+		if resultType == "void" {
+			result = -1
+		}
+		id := b.emit(LIRInstruction{Op: "call", Result: result, Type: resultType, Args: args, Slot: -1, Callee: target.Name, CallTarget: evt1FunctionProvenanceKey(*target), CallABI: "win64", ArgTypes: argTypes, Source: e.Span})
+		return id, resultType, nil
 	case *NameExpr:
 		v, ok := b.names[e.Name]
 		if !ok {

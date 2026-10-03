@@ -1,6 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
-import Standard.Backend.BridgeCodec;
+import Standard.Backend.BridgeValidate;
 import Standard.Semantic.Vocabulary;
 record struct MachineOperand
 {
@@ -172,7 +172,7 @@ MachineOperand ProjectWireOperand(WireMachineOperand value) {
 }
 // This is a semantic projection. Wire order belongs exclusively to ReadWire.
 Result<void, BackendError> ProjectWireFunction(
-ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function) {
+ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function, bool forEncoding) {
     if (not TextEquals(ref const source, wire.Target, "amd64-windows") or
     not TextEquals(ref const source, wire.ABI, "win64")) {
         return Result::Error(BackendError::BridgeInvalid);
@@ -238,6 +238,9 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
             WireMachineInstruction value = ReadWire(ref instructions, BridgeType<WireMachineInstruction>{
                 0
             }) ?;
+            if (value.Op == Opcode::Call and forEncoding) {
+                return Result::Error(BackendError::UnsupportedCallLowering);
+            }
             if (value.Src.count > 2) { return Result::Error(BackendError::BridgeInvalid); }
             MachineOperand destination = ProjectWireOperand(value.Dst);
             MachineOperand source0 = EmptyOperand();
@@ -277,6 +280,7 @@ ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction fun
 }
 Result<void, BackendError> DecodeFunction(
 ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
+    ValidateMachineBridge(artifact) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
     ReadBridgeIdentity(ref reader) ?;
     WireMachineModule document = ReadWire(ref reader, BridgeType<WireMachineModule>{0}) ?;
@@ -288,13 +292,20 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
     for (i in 0 .. document.Functions.count) {
         WireMachineFunction wire = ReadWire(ref reader, BridgeType<WireMachineFunction>{0}) ?;
         function = EmptyFunction();
-        ProjectWireFunction(ref const reader, wire, ref function) ?;
+        ProjectWireFunction(ref const reader, wire, ref function, i == ordinal) ?;
         if (i == ordinal) {
             selected = function;
         }
     }
     function = selected;
     return Result::Ok();
+}
+string DescribeBackendError(BackendError error)
+{
+    if (error == BackendError::UnsupportedCallLowering) {
+        return "AMD64_UNSUPPORTED_CALL_LOWERING: call ABI lowering is not implemented";
+    }
+    return "AMD64_BACKEND_ERROR";
 }
 struct Allocation
 {
@@ -1237,6 +1248,7 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
             Opcode::Cmp => { return Result::Error(BackendError::UnsupportedInstruction); }
             Opcode::Test => { return Result::Error(BackendError::UnsupportedInstruction); }
             Opcode::Setcc => { return Result::Error(BackendError::UnsupportedInstruction); }
+            Opcode::Call => { return Result::Error(BackendError::UnsupportedCallLowering); }
         }
     }
     for (i in 0 .. plan.fixupCount)

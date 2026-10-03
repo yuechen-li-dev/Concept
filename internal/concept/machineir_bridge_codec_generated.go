@@ -6,9 +6,9 @@ import (
 	"io"
 )
 
-const MachineBridgeSchema = "CMIRAMD2"
-const MachineBridgeVersion = 2
-const MachineBridgeSchemaHash = "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593"
+const MachineBridgeSchema = "CMIRAMD3"
+const MachineBridgeVersion = 3
+const MachineBridgeSchemaHash = "3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312"
 const MachineBridgeMaxItems = 1048576
 const MachineBridgeHeaderSize = 44
 
@@ -62,8 +62,11 @@ func (r machineBridgeReader) readWireHeader() (bridgeWireHeader, error) {
 
 var bridgeTagsRegister = []string{"RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"}
 var bridgeTagsOperandKind = []string{"", "vreg", "preg", "imm", "slot", "mem", "block"}
-var bridgeTagsOpcode = []string{"", "MOV", "LOAD", "STORE", "LEA", "ADD", "SUB", "IMUL", "UMUL", "CMP", "TEST", "SETCC", "TRAP", "JMP", "JCC", "RET"}
+var bridgeTagsOpcode = []string{"", "MOV", "LOAD", "STORE", "LEA", "ADD", "SUB", "IMUL", "UMUL", "CMP", "TEST", "SETCC", "TRAP", "JMP", "JCC", "RET", "CALL"}
 var bridgeTagsCondition = []string{"", "E", "NE", "L", "LE", "G", "GE", "B", "BE", "A", "AE", "O", "C"}
+var bridgeTagsCallKind = []string{"direct"}
+var bridgeTagsCallConvention = []string{"win64"}
+var bridgeTagsCallValueType = []string{"void", "bool", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64"}
 
 func (w *machineBridgeWriter) writeWireSpan(v Span) error {
 	{
@@ -495,6 +498,128 @@ func (r machineBridgeReader) readWireMachineStackSlot() (MachineStackSlot, error
 	}
 	return v, nil
 }
+func (w *machineBridgeWriter) writeWireMachineCallArgument(v MachineCallArgument) error {
+	{
+		offset := w.Len()
+		if err := w.i32(int(v.Value)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCallArgument.Value offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCallArgument", "Value", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCallValueType, v.Type); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCallArgument.Type offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCallArgument", "Type", offset)
+	}
+	return nil
+}
+func (r machineBridgeReader) readWireMachineCallArgument() (MachineCallArgument, error) {
+	var v MachineCallArgument
+	var err error
+	v.Value, err = r.i32()
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCallArgument.Value offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Type, err = r.tag(bridgeTagsCallValueType)
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCallArgument.Type offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	return v, nil
+}
+func (w *machineBridgeWriter) writeWireMachineCall(v MachineCall) error {
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCallKind, v.Kind); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Kind offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCall", "Kind", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.str(string(v.Target)); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Target offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCall", "Target", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCallConvention, v.Convention); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Convention offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCall", "Convention", offset)
+	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if len(v.Arguments) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Arguments))
+			}
+			if err := w.u32(len(v.Arguments)); err != nil {
+				return err
+			}
+			for _, element := range v.Arguments {
+				if err := w.writeWireMachineCallArgument(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Arguments offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCall", "Arguments", offset)
+	}
+	{
+		offset := w.Len()
+		if err := w.tag(bridgeTagsCallValueType, v.Result); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Result offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineCall", "Result", offset)
+	}
+	return nil
+}
+func (r machineBridgeReader) readWireMachineCall() (MachineCall, error) {
+	var v MachineCall
+	var err error
+	v.Kind, err = r.tag(bridgeTagsCallKind)
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Kind offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Target, err = r.str()
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Target offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Convention, err = r.tag(bridgeTagsCallConvention)
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Convention offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Arguments, err = func() ([]MachineCallArgument, error) {
+		n, err := r.count()
+		if err != nil {
+			return nil, err
+		}
+		if n > r.Len() {
+			return nil, fmt.Errorf("MIR_BRIDGE_COUNT exceeds remaining input")
+		}
+		v := make([]MachineCallArgument, n)
+		for i := range v {
+			v[i], err = r.readWireMachineCallArgument()
+			if err != nil {
+				return nil, err
+			}
+		}
+		return v, nil
+	}()
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Arguments offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Result, err = r.tag(bridgeTagsCallValueType)
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineCall.Result offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	return v, nil
+}
 func (w *machineBridgeWriter) writeWireMachineInstruction(v MachineInstruction) error {
 	{
 		offset := w.Len()
@@ -606,6 +731,26 @@ func (w *machineBridgeWriter) writeWireMachineInstruction(v MachineInstruction) 
 		}
 		w.traceField("WireMachineInstruction", "Facts", offset)
 	}
+	{
+		offset := w.Len()
+		if err := func() error {
+			if len(v.Calls) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Calls))
+			}
+			if err := w.u32(len(v.Calls)); err != nil {
+				return err
+			}
+			for _, element := range v.Calls {
+				if err := w.writeWireMachineCall(element); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			return fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Calls offset=%d: %w", offset, err)
+		}
+		w.traceField("WireMachineInstruction", "Calls", offset)
+	}
 	return nil
 }
 func (r machineBridgeReader) readWireMachineInstruction() (MachineInstruction, error) {
@@ -690,6 +835,26 @@ func (r machineBridgeReader) readWireMachineInstruction() (MachineInstruction, e
 	}()
 	if err != nil {
 		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Facts offset=%d: %w", r.Size()-int64(r.Len()), err)
+	}
+	v.Calls, err = func() ([]MachineCall, error) {
+		n, err := r.count()
+		if err != nil {
+			return nil, err
+		}
+		if n > r.Len() {
+			return nil, fmt.Errorf("MIR_BRIDGE_COUNT exceeds remaining input")
+		}
+		v := make([]MachineCall, n)
+		for i := range v {
+			v[i], err = r.readWireMachineCall()
+			if err != nil {
+				return nil, err
+			}
+		}
+		return v, nil
+	}()
+	if err != nil {
+		return v, fmt.Errorf("MIR_BRIDGE_FIELD WireMachineInstruction.Calls offset=%d: %w", r.Size()-int64(r.Len()), err)
 	}
 	return v, nil
 }

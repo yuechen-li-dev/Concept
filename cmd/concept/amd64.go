@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
   concept_result_int_backend_error result = concept_standard__backend__amd64_emit_function(source, atoi(argv[2]), target);
   free(input);
   if (result.tag != 0) {
-    fprintf(stderr, "Concept AMD64 backend error tag=%u\n", result.payload.error.error.tag);
+    fprintf(stderr, "%s (tag=%u)\n", concept_standard__backend__amd64_describe_backend_error(result.payload.error.error), result.payload.error.error.tag);
     return 7;
   }
   if (fwrite(output, 1, (size_t)result.payload.ok.value, stdout) != (size_t)result.payload.ok.value) return 8;

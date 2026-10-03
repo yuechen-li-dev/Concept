@@ -81,6 +81,26 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 				}
 				w := machineScalarWidth(in.Type)
 				switch in.Op {
+				case "call":
+					ctx.Op = "CALL"
+					call := MachineCall{Kind: "direct", Target: in.CallTarget, Convention: in.CallABI, Result: string(in.Type)}
+					for i, id := range in.Args {
+						value, err := get(i)
+						if err != nil {
+							return MachineModule{}, err
+						}
+						if value.Kind != "vreg" {
+							return MachineModule{}, fmt.Errorf("MIR_CALL_ARGUMENT_NOT_VIRTUAL v%d", id)
+						}
+						call.Arguments = append(call.Arguments, MachineCallArgument{Value: value.ID, Type: string(in.ArgTypes[i])})
+					}
+					ctx.Calls = []MachineCall{call}
+					if in.Type != "void" {
+						v := b.vreg(w, false)
+						ctx.Dst, ctx.Width = mv(v.ID, w), w
+						b.bind(in.Result, in.Type, ctx.Dst)
+					}
+					b.emit(current, ctx)
 				case "const":
 					imm, e := machineImmediate(in.Literal, w, machineSigned(in.Type))
 					if e != nil {

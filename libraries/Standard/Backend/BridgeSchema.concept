@@ -1,18 +1,17 @@
 module Standard.Backend.BridgeSchema;
 profile Core;
-
 // The sole wire authority. Integers are explicit little-endian 32-bit values;
 // bool is i32 0/1, BridgeText is u32 byte-length + UTF-8 bytes, and
 // BridgeSequence<T> is u32 count + recursively encoded T values.
 static_assert(SizeOf<int>() == 4);
-comptime string BridgeMagic = "CMIRAMD2";
-comptime uint BridgeVersion = 2u;
+comptime string BridgeMagic = "CMIRAMD3";
+comptime uint BridgeVersion = 3u;
 comptime uint BridgeMaxItems = 1048576u;
 comptime string BridgeRepresentation = "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32]";
-
 enum BackendError {
     BridgeInvalid, BridgeVersion, CapacityExceeded,
     UnsupportedInstruction, RegisterExhausted, BufferFull, InvalidEncoding, BridgeSchemaMismatch,
+    UnsupportedCallLowering,
 }
 [[reflect]] enum Register {
     RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
@@ -44,6 +43,26 @@ enum BackendError {
     [[bridge_value("JMP")]] Jmp,
     [[bridge_value("JCC")]] Jcc,
     [[bridge_value("RET")]] Ret,
+    [[bridge_value("CALL")]] Call,
+}
+[[reflect]] enum CallKind {
+    [[bridge_value("direct")]] Direct,
+}
+[[reflect]] enum CallConvention {
+    [[bridge_value("win64")]] Win64,
+}
+// Exact value classes, before ABI widening or placement.
+[[reflect]] enum CallValueType {
+    [[bridge_value("void")]] Void,
+    [[bridge_value("bool")]] Bool,
+    [[bridge_value("i8")]] I8,
+    [[bridge_value("u8")]] U8,
+    [[bridge_value("i16")]] I16,
+    [[bridge_value("u16")]] U16,
+    [[bridge_value("i32")]] I32,
+    [[bridge_value("u32")]] U32,
+    [[bridge_value("i64")]] I64,
+    [[bridge_value("u64")]] U64,
 }
 [[reflect]] enum Condition {
     [[bridge_value("")]] None,
@@ -73,7 +92,6 @@ template <typename T>
 record struct BridgeType {
     int marker;
 }
-
 // Header is fixed bytes, independent of either host ABI. It precedes the
 // payload and is validated against the generated identity before any records.
 [[reflect]] record struct WireHeader {
@@ -127,6 +145,17 @@ record struct BridgeType {
     int BaseVReg;
     BridgeText Source;
 }
+[[reflect]] record struct WireMachineCallArgument {
+    int Value;
+    CallValueType Type;
+}
+[[reflect]] record struct WireMachineCall {
+    CallKind Kind;
+    BridgeText Target;
+    CallConvention Convention;
+    BridgeSequence<WireMachineCallArgument> Arguments;
+    CallValueType Result;
+}
 [[reflect]] record struct WireMachineInstruction {
     Opcode Op;
     WireMachineOperand Dst;
@@ -140,6 +169,8 @@ record struct BridgeType {
     WireSpan Source;
     BridgeText Decision;
     BridgeSequence<BridgeText> Facts;
+    // Cardinality zero for other operations, exactly one for CALL.
+    BridgeSequence<WireMachineCall> Calls;
 }
 [[reflect]] record struct WireMachineTerminator {
     Opcode Op;
@@ -173,18 +204,22 @@ record struct BridgeType {
 [[reflect]] record struct WireMachineModule {
     BridgeSequence<WireMachineFunction> Functions;
 }
-
 reflect<WireHeader>;
 reflect<Register>;
 reflect<OperandKind>;
 reflect<Opcode>;
 reflect<Condition>;
+reflect<CallKind>;
+reflect<CallConvention>;
+reflect<CallValueType>;
 reflect<WireSpan>;
 reflect<WireMachineFrame>;
 reflect<WireMachineOperand>;
 reflect<WireMachineArg>;
 reflect<WireMachineVReg>;
 reflect<WireMachineStackSlot>;
+reflect<WireMachineCallArgument>;
+reflect<WireMachineCall>;
 reflect<WireMachineInstruction>;
 reflect<WireMachineTerminator>;
 reflect<WireMachineBlock>;
