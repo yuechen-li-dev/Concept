@@ -58,7 +58,6 @@ func TestIntegerMatchDiagnostics(t *testing.T) {
 		{"unreachable after wildcard", `profile Core; int F(int x) { return match (x) { _ => 1, 0 => 2 }; }`, "CV4113"},
 		{"literal out of range", `profile Core; int F(uint8 x) { return match (x) { 256 => 1, _ => 2 }; }`, "CV4644"},
 		{"enum wildcard still explicit", `profile Core; enum State { Ready, Stopped } int F(State x) { return match (x) { State::Ready => 1, _ => 2 }; }`, "CV4109"},
-		{"else if recommends now valid match", `profile Core; int F(int x) { return if (x == 0) 1 else if (x == 1) 2 else 3; }`, "CV4185"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse("r8g_integer_invalid.concept", tc.source)

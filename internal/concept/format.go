@@ -106,6 +106,9 @@ func FormatSource(path, source string, options FormatOptions) (string, error) {
 		if token.Lexeme == "{" && options.BraceStyle == "allman" && prev != "" && prev != "{" {
 			printer.newline()
 		}
+		if token.Lexeme == "else" && prev == "}" && options.BraceStyle == "allman" {
+			printer.newline()
+		}
 		if !(compact && compactKind == "aggregate" && (token.Lexeme == "{" || prev == "{" || token.Lexeme == "}")) {
 			printer.spaceBefore(token.Lexeme, prev, token.Leading)
 		}

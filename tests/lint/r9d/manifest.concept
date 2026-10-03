@@ -1,0 +1,18 @@
+module R9d.Manifest;
+profile Core;
+record struct LintPolicy
+{
+    string concept;
+    string severity;
+    string kind;
+    string subject;
+}
+concept PreferMatchOverElseIfLadder<declaration F>
+{
+    requires compiler.NoMatchShapedElseIfLadder(F);
+}
+comptime LintPolicy MatchPreference = LintPolicy
+{
+    "PreferMatchOverElseIfLadder", "warning", "FunctionDeclaration", ""
+};
+comptime string FormatBraceStyle = "allman";

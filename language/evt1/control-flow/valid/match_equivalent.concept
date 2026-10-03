@@ -1,0 +1,10 @@
+module R9d.match_equivalent;
+profile Core;
+enum Kind {
+    A, B, C
+}
+int Decode(Kind kind) {
+    return match (kind) {
+        Kind::A => 10, Kind::B => 20, Kind::C => 30
+    };
+}

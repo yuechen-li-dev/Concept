@@ -140,6 +140,26 @@ func lintModuleWithPredicateEnvironment(module Module, policies []LintPolicy, ma
 			if graph.Outcome == FactProven {
 				continue
 			}
+			if graph.Outcome == FactUnknown && !policyHasOtherRefutation(graph) {
+				continue // unavailable body observation is not a preference finding
+			}
+			// Control-flow observations carry stable ladder sites in the ordinary
+			// proof graph. Project each refuted observation once, rather than
+			// reporting each nested else-if or only the enclosing declaration.
+			ladderFindings := false
+			ladderSites := map[Span]bool{}
+			for _, node := range graph.Nodes {
+				if node.Label != "categorical if ladder" || node.Outcome != FactDisproven || ladderSites[node.SourceSpan] {
+					continue
+				}
+				ladderSites[node.SourceSpan] = true
+				ladderFindings = true
+				message := fmt.Sprintf("%s; policy from %s:%d", node.Detail, policy.Source, policy.Site.Line)
+				findings = append(findings, LintFinding{Severity: policy.Severity, Policy: policy.Identity, SubjectID: fmt.Sprintf("%s|ladder:%d:%d", subject.ID, node.SourceSpan.Line, node.SourceSpan.Column), Kind: subject.Kind, Name: subject.Name, Source: module.Path, Site: node.SourceSpan, Outcome: FactDisproven, Message: message, Proof: graph})
+			}
+			if ladderFindings && !policyHasOtherRefutation(graph) {
+				continue
+			}
 			message := fmt.Sprintf("%s %q violates %s: %s", subject.Kind, subject.Name, policy.Identity, graph.Outcome)
 			for _, node := range graph.Nodes {
 				if node.Verdict != nil && node.Outcome != FactProven {
@@ -171,6 +191,21 @@ func lintModuleWithPredicateEnvironment(module Module, policies []LintPolicy, ma
 		return a.SubjectID < b.SubjectID
 	})
 	return findings, nil
+}
+
+// Keep ordinary requirement failures visible when a project composes a body
+// preference with naming, effects or another existing policy requirement.
+func policyHasOtherRefutation(graph ProofGraph) bool {
+	hasChildren := map[string]bool{}
+	for _, edge := range graph.Edges {
+		hasChildren[edge.From] = true
+	}
+	for _, node := range graph.Nodes {
+		if (node.Kind == ProofContradiction || node.Kind == ProofMissingFact) && node.Outcome != FactProven && !hasChildren[node.ID] && node.Label != "categorical if ladder" && node.Label != "NoMatchShapedElseIfLadder" {
+			return true
+		}
+	}
+	return false
 }
 
 func policyNameStyle(decl ConceptDecl, subject DeclarationSubject) string {

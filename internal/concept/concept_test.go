@@ -427,11 +427,6 @@ func TestEVT1M1BCDiagnosticsAreStable(t *testing.T) {
 			code: "CV4184",
 		},
 		{
-			name: "else if rejected",
-			src:  "profile Vulkan;\nint Use(bool a, bool b) { return if (a) 1 else if (b) 2 else 3; }\n",
-			code: "CV4185",
-		},
-		{
 			name: "runtime cannot call comptime function",
 			src:  "profile Vulkan;\ncomptime int Bound(int value) { return value; }\nint Use() { return Bound(1); }\n",
 			code: "CV4210",

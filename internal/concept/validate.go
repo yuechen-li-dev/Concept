@@ -9,23 +9,24 @@ import (
 )
 
 type evt1Scope struct {
-	staticExpansion   *evt1ComptimeState
-	context           evt1ValidationContext
-	parent            *evt1Scope
-	values            map[string]evt1ValueBinding
-	depth             int
-	returnType        Type
-	tryHandlers       map[string]Type
-	transitionTargets map[string]bool
-	inAutomataState   bool
-	automataName      string
-	machineName       string
-	machineNames      map[string]bool
-	machineResultType Type
-	machineErrorType  Type
-	inAsync           bool
-	callableOuter     *evt1Scope
-	functionName      string
+	staticExpansion     *evt1ComptimeState
+	context             evt1ValidationContext
+	parent              *evt1Scope
+	values              map[string]evt1ValueBinding
+	depth               int
+	returnType          Type
+	tryHandlers         map[string]Type
+	transitionTargets   map[string]bool
+	inAutomataState     bool
+	automataName        string
+	machineName         string
+	machineNames        map[string]bool
+	machineResultType   Type
+	machineErrorType    Type
+	inAsync             bool
+	callableOuter       *evt1Scope
+	functionName        string
+	observationFunction *FunctionDecl
 }
 
 type evt1ProvenanceKind string
@@ -124,6 +125,7 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 		s.inAsync = parent.inAsync
 		s.callableOuter = parent.callableOuter
 		s.functionName = parent.functionName
+		s.observationFunction = parent.observationFunction
 	}
 	return s
 }
@@ -457,6 +459,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.inAsync = scope.inAsync
 	out.callableOuter = scope.callableOuter
 	out.functionName = scope.functionName
+	out.observationFunction = scope.observationFunction
 	for name, binding := range scope.values {
 		if binding.storageStates != nil {
 			states := make(map[string]evt1StorageState, len(binding.storageStates))
@@ -558,11 +561,12 @@ func validateModule(module Module) error {
 // innate concepts by diagnostic code. The zero value is the compiler's normal
 // configuration.
 type evt1AnalysisOptions struct {
-	goRulesOff       map[string]bool
-	goRulesOn        map[string]bool
-	innateOff        map[string]bool
-	innateMetrics    *evt1InnateMetrics
-	policyPredicates *semanticEnv
+	goRulesOff         map[string]bool
+	goRulesOn          map[string]bool
+	innateOff          map[string]bool
+	innateMetrics      *evt1InnateMetrics
+	policyPredicates   *semanticEnv
+	observeControlFlow bool
 }
 
 // evt1RetiredGoRules are Go rules whose innate concept is authoritative. A
@@ -582,6 +586,13 @@ func analyzeModule(module Module) (*semanticEnv, error) {
 }
 
 func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv, error) {
+	for _, decl := range module.Concepts {
+		for _, raw := range decl.Requirements {
+			if r, ok := raw.(*CompilerAnalysisRequirement); ok && r.Analysis == "NoMatchShapedElseIfLadder" {
+				options.observeControlFlow = true
+			}
+		}
+	}
 	if err := evt1ValidateAttributePlacement(module); err != nil {
 		return nil, err
 	}
@@ -1215,6 +1226,8 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		env.validatingMethod = fn.MethodOf
 		env.validatingFunction = fn.Name
 		env.validatingModule = fn.Module
+		env.observationFunction = &fn
+		scope.observationFunction = env.observationFunction
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, false); err != nil {
 			env.validatingMethod = ""
 			env.validatingFunction = ""
@@ -1230,6 +1243,8 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		env.validatingMethod = ""
 		env.validatingFunction = ""
 		env.validatingModule = ""
+		env.observationFunction = nil
+		completeControlFlowObservation(env, fn)
 	}
 	for _, fn := range module.ComptimeFns {
 		scope := evt1ModuleScope(env)
@@ -1255,9 +1270,13 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 			})
 		}
 		collectEscapedArmBindings(fn.Body, env)
+		env.observationFunction = &fn
+		scope.observationFunction = env.observationFunction
 		if err := validateBlock(env, scope, resolvedReturn, *fn.Body, nil, true); err != nil {
 			return nil, err
 		}
+		env.observationFunction = nil
+		completeControlFlowObservation(env, fn)
 	}
 	if err := validateComptimeFunctionCycles(module, env); err != nil {
 		return nil, err
@@ -2587,6 +2606,9 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			}
 			if conditionType.Name != "bool" {
 				return evt1Diagnostic("CV4186", "Concept conditions require bool; compare a pointer or number explicitly instead of relying on truthiness", s.Condition.exprSpan())
+			}
+			if env.options.observeControlFlow && env.observationFunction != nil && local.observationFunction == env.observationFunction {
+				evt1ObserveIfLadder(env, local, s)
 			}
 			thenScope := evt1CloneScope(local)
 			elseScope := evt1CloneScope(local)

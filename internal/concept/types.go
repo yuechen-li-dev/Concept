@@ -1913,6 +1913,10 @@ type semanticEnv struct {
 	templates               map[string]TemplateDecl
 	concepts                map[string]ConceptDecl
 	declarationSubjects     []DeclarationSubject
+	observationFunction     *FunctionDecl
+	ifLadders               []IfLadderObservation
+	ifLadderContinuations   map[string]bool
+	controlFlowReady        map[string]bool
 	comptimeDecls           map[string]ComptimeDecl
 	comptimeValues          map[string]Value
 	fieldSets               map[string]map[string]Type
