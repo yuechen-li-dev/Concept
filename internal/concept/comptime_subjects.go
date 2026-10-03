@@ -55,6 +55,9 @@ func evt1TypeIsComptimeOnly(env *semanticEnv, t Type) bool {
 }
 
 func evt1TypeIsComptimeOnlyVisiting(env *semanticEnv, t Type, visiting map[string]bool) bool {
+	if evt1IsTypedVerdict(t) {
+		return true
+	}
 	if evt1IsSubjectTypeName(t.Name) && t.Kind == TypeBuiltin {
 		return true
 	}
@@ -172,6 +175,13 @@ func evt1InvokeComptimeFunctionOn(env, subjects *semanticEnv, name string, args 
 }
 
 func evt1InvokeComptimeFunctionOnMeasured(env, subjects *semanticEnv, name string, args []Value, span Span, usage *evt1ComptimeUsage) (Value, error) {
+	state := newEVT1ComptimeState(env)
+	state.subjects, state.usage = subjects, usage
+	return evt1InvokeComptimeValues(state, name, args, span)
+}
+
+func evt1InvokeComptimeValues(state *evt1ComptimeState, name string, args []Value, span Span) (Value, error) {
+	env := state.env
 	fn, ok := env.comptimeFunctions[name]
 	if !ok {
 		return Value{}, evt1Diagnostic("CV4210", fmt.Sprintf("%s is not a comptime function", name), span)
@@ -179,9 +189,6 @@ func evt1InvokeComptimeFunctionOnMeasured(env, subjects *semanticEnv, name strin
 	if len(fn.Params) != len(args) {
 		return Value{}, evt1Diagnostic("CV4106", fmt.Sprintf("%s expects %d argument(s), got %d", name, len(fn.Params), len(args)), span)
 	}
-	state := newEVT1ComptimeState(env)
-	state.subjects = subjects
-	state.usage = usage
 	if err := state.push("comptime fn " + name); err != nil {
 		return Value{}, err
 	}

@@ -1,0 +1,7 @@
+profile Core;
+template <typename T> comptime int Id(int value) {
+    return value;
+}
+comptime int Open(typename subject) {
+    return Id<subject>(1);
+}

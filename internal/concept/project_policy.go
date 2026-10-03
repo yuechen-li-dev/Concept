@@ -141,6 +141,11 @@ func lintModuleWithPredicateEnvironment(module Module, policies []LintPolicy, ma
 				continue
 			}
 			message := fmt.Sprintf("%s %q violates %s: %s", subject.Kind, subject.Name, policy.Identity, graph.Outcome)
+			for _, node := range graph.Nodes {
+				if node.Verdict != nil && node.Outcome != FactProven {
+					message += "; " + evt1VerdictDiagnosticDetail(*node.Verdict)
+				}
+			}
 			suggestion := ""
 			if style != "" {
 				message += "; expected " + style

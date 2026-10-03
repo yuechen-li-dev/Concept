@@ -120,6 +120,9 @@ func evt1IsComptimeTypeVisiting(env *semanticEnv, t Type, visiting map[string]bo
 	if t.PointerTo != nil || t.isBorrowLike() || t.isOwned() || evt1TypeContainsConceptParameter(t) {
 		return false
 	}
+	if evt1IsTypedVerdict(t) {
+		return evt1IsComptimeTypeVisiting(env, t.TypeArgs[0], visiting) && evt1IsComptimeTypeVisiting(env, t.TypeArgs[1], visiting)
+	}
 	// Close through the ordinary structured generic identity. Do not recover
 	// arguments by parsing the display name or admit open template machinery.
 	if len(t.TypeArgs) > 0 {
@@ -471,6 +474,28 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		base.Fields = fields
 		return base, nil
 	case *ConstructExpr:
+		resolved := e.ResolvedType
+		if expected != nil && evt1IsTypedVerdict(*expected) && e.EnumName == "Verdict" {
+			resolved = *expected
+		}
+		if evt1IsTypedVerdict(resolved) {
+			variant, ok := evt1LookupVariant(evt1VerdictEnum(resolved), e.VariantName)
+			if !ok || len(e.Args) != len(variant.Payload) {
+				return Value{}, evt1Diagnostic("VERDICT_CASE_INVALID", "invalid Verdict constructor payload", e.Span)
+			}
+			var payload []Value
+			for i, arg := range e.Args {
+				value, err := evt1EvalExprTyped(state, scope, arg, &variant.Payload[i].Type)
+				if err != nil {
+					return Value{}, err
+				}
+				if err := evt1BoundVerdictPayload(value); err != nil {
+					return Value{}, err
+				}
+				payload = append(payload, value)
+			}
+			return Value{Kind: ValueEnum, Type: resolved, EnumName: "Verdict", Variant: e.VariantName, Payload: payload}, nil
+		}
 		var payload []Value
 		for _, arg := range e.Args {
 			value, err := evt1EvalExpr(state, scope, arg)
@@ -495,11 +520,11 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			return Value{}, evt1Diagnostic("CV4201", "comptime if condition must evaluate to bool", e.Condition.exprSpan())
 		}
 		if condition.BoolValue {
-			return evt1EvalExpr(state, scope, e.Then)
+			return evt1EvalExprTyped(state, scope, e.Then, expected)
 		}
-		return evt1EvalExpr(state, scope, e.Else)
+		return evt1EvalExprTyped(state, scope, e.Else, expected)
 	case *MatchExpr:
-		return evt1EvalMatchExpr(state, scope, *e)
+		return evt1EvalMatchExpr(state, scope, *e, expected)
 	case *CallExpr:
 		if evt1IsObservationCall(e) {
 			return evt1EvalObservation(state, scope, e)
@@ -571,7 +596,30 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			t, _ := evt1BuiltinType("int", e.Span)
 			return Value{Kind: ValueInt, Type: t, IntValue: value}, nil
 		}
-		return Value{}, evt1Diagnostic("CV4201", "templates are not available during comptime evaluation", e.Span)
+		for _, arg := range evt1TemplateCallArgs(e) {
+			if evt1TypeContainsConceptParameter(arg) {
+				return Value{}, evt1Diagnostic("COMPTIME_TEMPLATE_CLOSURE_REQUIRED", "closed template instantiation required during comptime evaluation", e.Span)
+			}
+		}
+		instance, err := instantiateTemplateArgs(state.env, e.Callee, evt1TemplateCallArgs(e), e.Span)
+		if err != nil {
+			return Value{}, err
+		}
+		if instance.Function.Body == nil || !evt1IsComptimeType(state.env, instance.Function.ReturnType) {
+			return Value{}, evt1Diagnostic("COMPTIME_TEMPLATE_UNSUPPORTED", "closed template requires an available body and comptime-supported return type", e.Span)
+		}
+		if len(e.Args) != len(instance.Function.Params) {
+			return Value{}, evt1Diagnostic("CV4106", "wrong closed template argument count", e.Span)
+		}
+		values := make([]Value, len(e.Args))
+		for i, arg := range e.Args {
+			value, err := evt1EvalExprTyped(state, scope, arg, &instance.Function.Params[i].Type)
+			if err != nil {
+				return Value{}, err
+			}
+			values[i] = value
+		}
+		return evt1InvokeClosedTemplateValues(state, instance, values, e.Span)
 	default:
 		return Value{}, evt1Diagnostic("CV4201", "unsupported comptime expression", expr.exprSpan())
 	}
@@ -918,7 +966,7 @@ func evt1ValueEqual(left, right Value) bool {
 	}
 }
 
-func evt1EvalMatchExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr MatchExpr) (Value, error) {
+func evt1EvalMatchExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr MatchExpr, expected *Type) (Value, error) {
 	subject, err := evt1EvalExpr(state, scope, expr.Subject)
 	if err != nil {
 		return Value{}, err
@@ -934,7 +982,7 @@ func evt1EvalMatchExpr(state *evt1ComptimeState, scope *evt1EvalScope, expr Matc
 		for i, binding := range arm.Pattern.Bindings {
 			armScope.declare(binding, evt1EvalBinding{value: subject.Payload[i], mutable: false, comptime: true})
 		}
-		return evt1EvalExpr(state, armScope, arm.Value)
+		return evt1EvalExprTyped(state, armScope, arm.Value, expected)
 	}
 	return Value{}, evt1Diagnostic("CV4201", "comptime match found no selected arm", expr.Span)
 }

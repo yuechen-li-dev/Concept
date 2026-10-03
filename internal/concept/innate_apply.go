@@ -21,6 +21,7 @@ type evt1InnateEvaluation struct {
 	Subject evt1DeclarationRef
 	Outcome SemanticFactCertainty
 	Detail  string
+	Verdict *PredicateVerdict
 	At      Span
 }
 
@@ -48,8 +49,8 @@ func evt1ApplyInnateConcepts(env *semanticEnv, module Module, innate evt1InnateS
 				continue
 			}
 			code, _ := evt1InnateDiagnosticCode(decl)
-			outcome, detail, at, err := evt1EvaluateInnateConcept(env, innate, decl, subject, 0)
-			evaluation := evt1InnateEvaluation{Concept: decl.Name, Code: code, Subject: subject, Outcome: outcome, Detail: detail, At: at}
+			outcome, detail, at, verdict, err := evt1EvaluateInnateConcept(env, innate, decl, subject, 0)
+			evaluation := evt1InnateEvaluation{Concept: decl.Name, Code: code, Subject: subject, Outcome: outcome, Detail: detail, At: at, Verdict: verdict}
 			env.innateEvaluations = append(env.innateEvaluations, evaluation)
 			if err != nil {
 				undecided := evt1Diagnostic("INNATE_UNDECIDED", fmt.Sprintf("innate concept %s could not decide %s: %v. This is a defect in the compiler's innate module, not in your program", decl.Name, subject.qualifiedName(), err), subject.Site)
@@ -134,10 +135,11 @@ func evt1InnateSubjects(env *semanticEnv, module Module) []evt1DeclarationRef {
 
 // evt1EvaluateInnateConcept decides decl for subject. All requirements must
 // hold; the first refutation decides.
-func evt1EvaluateInnateConcept(env *semanticEnv, innate evt1InnateSet, decl ConceptDecl, subject evt1DeclarationRef, depth int) (SemanticFactCertainty, string, Span, error) {
+func evt1EvaluateInnateConcept(env *semanticEnv, innate evt1InnateSet, decl ConceptDecl, subject evt1DeclarationRef, depth int) (SemanticFactCertainty, string, Span, *PredicateVerdict, error) {
 	if depth > evt1InnatePrerequisiteDepth {
-		return FactUnknown, "", subject.Site, fmt.Errorf("prerequisite concepts nest deeper than %d", evt1InnatePrerequisiteDepth)
+		return FactUnknown, "", subject.Site, nil, fmt.Errorf("prerequisite concepts nest deeper than %d", evt1InnatePrerequisiteDepth)
 	}
+	var metadata *PredicateVerdict
 	parameter := evt1ConceptParameters(decl)[0].Name
 	for _, requirement := range decl.Requirements {
 		switch r := requirement.(type) {
@@ -146,68 +148,61 @@ func evt1EvaluateInnateConcept(env *semanticEnv, innate evt1InnateSet, decl Conc
 			for i := range r.Subjects {
 				args[i] = evt1DeclarationValue(subject)
 			}
-			value, err := evt1InvokeInnatePredicate(env, innate.env, r.Predicate, args, subject, r.Span)
+			result, err := evt1InvokeInnatePredicate(env, innate.env, r.Predicate, args, subject, subject.Site)
 			if err != nil {
-				return FactUnknown, "", subject.Site, fmt.Errorf("%s: %w", r.Predicate, err)
+				return FactUnknown, "", subject.Site, nil, fmt.Errorf("%s: %w", r.Predicate, err)
 			}
-			if value.Kind != ValueEnum || value.EnumName != "Verdict" {
-				return FactUnknown, "", subject.Site, fmt.Errorf("%s returned %s, not a Verdict", r.Predicate, value.Render())
+			if evt1IsTypedVerdict(result.Type) {
+				result.FactAuthority = evt1TrustedPredicateFactKinds(innate.env, decl)
+				metadata = &result
 			}
-			if value.Variant == "Refuted" {
-				at := subject.Site
-				if len(value.Payload) == 2 && value.Payload[0].Declaration != nil {
-					at = value.Payload[0].Declaration.Site
-				}
-				message := ""
-				if len(value.Payload) == 2 {
-					message = value.Payload[1].StringValue
-				}
-				if message == "" {
-					return FactUnknown, "", at, fmt.Errorf("%s refuted %s without a message", r.Predicate, subject.qualifiedName())
-				}
-				return FactDisproven, message, at, nil
+			if result.Outcome == FactUnknown {
+				return FactUnknown, result.Message, result.At, metadata, fmt.Errorf("%s returned Unknown", r.Predicate)
+			}
+			if result.Outcome == FactDisproven {
+				return result.Outcome, result.Message, result.At, metadata, nil
 			}
 		case *CompilerAnalysisRequirement:
 			if len(r.SubjectArgs) != 1 || r.SubjectArgs[0].Name != parameter {
-				return FactUnknown, "", subject.Site, fmt.Errorf("compiler.%s is not applied to %s", r.Analysis, parameter)
+				return FactUnknown, "", subject.Site, nil, fmt.Errorf("compiler.%s is not applied to %s", r.Analysis, parameter)
 			}
 			declaration := DeclarationSubject{Kind: subject.Kind, Name: subject.Name, Owner: subject.Owner, Provenance: subject.Provenance, Site: subject.Site}
 			graph := &ProofGraph{}
 			outcome, detail := evt1ProjectDeclarationAnalysis(env, graph, "", r.Analysis, declaration)
 			if outcome == FactUnknown {
-				return FactUnknown, "", subject.Site, fmt.Errorf("compiler.%s: %s", r.Analysis, detail)
+				return FactUnknown, "", subject.Site, nil, fmt.Errorf("compiler.%s: %s", r.Analysis, detail)
 			}
 			if outcome == FactDisproven {
-				return FactDisproven, fmt.Sprintf("%s: %s", subject.qualifiedName(), detail), subject.Site, nil
+				return FactDisproven, fmt.Sprintf("%s: %s", subject.qualifiedName(), detail), subject.Site, metadata, nil
 			}
 		case *PrerequisiteRequirement:
 			prerequisite, ok := innate.env.concepts[r.ConceptName]
 			if !ok || len(evt1ConceptParameters(prerequisite)) != 1 || evt1ConceptParameters(prerequisite)[0].Kind != "declaration" {
-				return FactUnknown, "", subject.Site, fmt.Errorf("prerequisite %s is not a declaration concept of the innate module", r.ConceptName)
+				return FactUnknown, "", subject.Site, nil, fmt.Errorf("prerequisite %s is not a declaration concept of the innate module", r.ConceptName)
 			}
-			outcome, detail, at, err := evt1EvaluateInnateConcept(env, innate, prerequisite, subject, depth+1)
+			outcome, detail, at, verdict, err := evt1EvaluateInnateConcept(env, innate, prerequisite, subject, depth+1)
 			if err != nil || outcome != FactProven {
-				return outcome, detail, at, err
+				return outcome, detail, at, verdict, err
 			}
 		default:
-			return FactUnknown, "", subject.Site, fmt.Errorf("unsupported innate requirement")
+			return FactUnknown, "", subject.Site, nil, fmt.Errorf("unsupported innate requirement")
 		}
 	}
-	return FactProven, "", subject.Site, nil
+	return FactProven, "", subject.Site, metadata, nil
 }
 
-func evt1InvokeInnatePredicate(env, innateEnv *semanticEnv, name string, args []Value, subject evt1DeclarationRef, span Span) (Value, error) {
+func evt1InvokeInnatePredicate(env, innateEnv *semanticEnv, name string, args []Value, subject evt1DeclarationRef, span Span) (PredicateVerdict, error) {
 	metrics := env.options.innateMetrics
 	if metrics == nil {
 		evt1InnateEvalMu.Lock()
 		defer evt1InnateEvalMu.Unlock()
-		return evt1InvokeComptimeFunctionOn(innateEnv, env, name, args, span)
+		return evt1InvokePredicateOnMeasured(innateEnv, env, name, args, span, nil)
 	}
 	start := time.Now()
 	evt1InnateEvalMu.Lock()
 	locked := time.Now()
 	var usage evt1ComptimeUsage
-	value, err := evt1InvokeComptimeFunctionOnMeasured(innateEnv, env, name, args, span, &usage)
+	value, err := evt1InvokePredicateOnMeasured(innateEnv, env, name, args, span, &usage)
 	finished := time.Now()
 	evt1InnateEvalMu.Unlock()
 	metrics.record(evt1InnateSample{Module: env.moduleName, Predicate: name, Subject: subject.qualifiedName(), Usage: usage, Wait: locked.Sub(start), Execution: finished.Sub(locked)})
@@ -237,6 +232,7 @@ func evt1InnateProofGraph(source string, subject evt1DeclarationRef, evaluations
 		}
 		label := fmt.Sprintf("%s (%s)", evaluation.Concept, evaluation.Code)
 		node := graph.addNode(kind, label, detail, evaluation.Outcome, FactOriginCompilerAnalysis, evaluation.At)
+		graph.Nodes[len(graph.Nodes)-1].Verdict = evaluation.Verdict
 		graph.addEdge(root, node, edge)
 		reasons = append(reasons, label+": "+detail)
 	}

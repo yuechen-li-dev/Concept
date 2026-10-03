@@ -482,17 +482,19 @@ type TemplateConstraint struct {
 }
 
 type TemplateDecl struct {
-	Async         bool               `json:"async,omitempty"`
-	Module        string             `json:"-"`
-	Name          string             `json:"name"`
-	Parameters    []GenericParameter `json:"parameters,omitempty"`
-	TypeParam     string             `json:"type_param"`
-	TypeParamSpan Span               `json:"type_param_span"`
-	Constraint    TemplateConstraint `json:"constraint"`
-	ReturnType    Type               `json:"return_type"`
-	Params        []Param            `json:"params,omitempty"`
-	Body          *Block             `json:"body,omitempty"`
-	Span          Span               `json:"span"`
+	Comptime       bool               `json:"comptime,omitempty"`
+	RecursionBound int                `json:"recursion_bound,omitempty"`
+	Async          bool               `json:"async,omitempty"`
+	Module         string             `json:"-"`
+	Name           string             `json:"name"`
+	Parameters     []GenericParameter `json:"parameters,omitempty"`
+	TypeParam      string             `json:"type_param"`
+	TypeParamSpan  Span               `json:"type_param_span"`
+	Constraint     TemplateConstraint `json:"constraint"`
+	ReturnType     Type               `json:"return_type"`
+	Params         []Param            `json:"params,omitempty"`
+	Body           *Block             `json:"body,omitempty"`
+	Span           Span               `json:"span"`
 }
 
 type GenericParameter struct {
@@ -1797,6 +1799,7 @@ type MIRInferenceCandidate struct {
 }
 
 type MIRSemanticProof struct {
+	Verdicts        []PredicateVerdict    `json:"verdicts,omitempty"`
 	ID              string                `json:"id,omitempty"`
 	Concept         string                `json:"concept"`
 	Analysis        string                `json:"analysis"`

@@ -446,6 +446,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		})
 	}
 	for _, templateDecl := range module.Templates {
+		if templateDecl.Comptime {
+			continue
+		}
 		info := env.templateInfos[templateDecl.Name]
 		mirTemplate := MIRTemplate{
 			Async:     templateDecl.Async,
@@ -498,6 +501,9 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		mir.Templates = append(mir.Templates, mirTemplate)
 	}
 	for _, templateDecl := range module.Templates {
+		if templateDecl.Comptime {
+			continue
+		}
 		var instances []*evt1TemplateInstance
 		for _, instance := range env.templateInstances {
 			if instance.TemplateName == templateDecl.Name {
@@ -1999,7 +2005,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	// Give them the same forward declarations as ordinary generic bodies.
 	var forwardInstances []*evt1TemplateInstance
 	for _, instance := range l.env.templateInstances {
-		if !instance.Function.Async {
+		if !instance.Function.Async && !instance.Function.Comptime {
 			forwardInstances = append(forwardInstances, instance)
 		}
 	}
@@ -2041,7 +2047,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {
-			if instance.TemplateName == templateDecl.Name {
+			if instance.TemplateName == templateDecl.Name && !instance.Function.Comptime {
 				instances = append(instances, instance)
 			}
 		}
@@ -2880,6 +2886,9 @@ func evt1TypeUsed(module Module, match func(Type) bool) bool {
 		}
 	}
 	for _, templateDecl := range module.Templates {
+		if templateDecl.Comptime {
+			continue
+		}
 		if visitType(templateDecl.ReturnType) {
 			return true
 		}

@@ -133,7 +133,7 @@ func TestR9bNegativeCorpusDiagnostics(t *testing.T) {
 		{"extent_partial_capacity", "CONCEPT_ASSERT_UNKNOWN"},
 		{"closed_evidence_reference", "CV4216"},
 		{"closed_evidence_owned", "CV4216"},
-		{"typed_predicate_protocol", "PREDICATE_REQUIREMENT_INVALID"},
+		{"wrong_predicate_return", "PREDICATE_REQUIREMENT_INVALID"},
 	} {
 		path := filepath.Join("..", "..", "language", "evt1", "semantic-vocabulary", "invalid", specimen.file+".concept")
 		source, err := os.ReadFile(path)

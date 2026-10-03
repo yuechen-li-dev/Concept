@@ -1,0 +1,10 @@
+profile Core;
+ref struct Refutation {
+    ref int field;
+}
+enum Evidence {
+    Valid
+}
+comptime Verdict<Evidence, Refutation> Judge(typename subject) {
+    return Verdict::Unknown;
+}

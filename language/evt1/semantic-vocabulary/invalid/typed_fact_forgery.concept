@@ -1,0 +1,18 @@
+profile Core;
+enum E {
+    Valid
+}
+enum R {
+    Invalid
+}
+comptime Verdict<E, R> Claim(typename subject) {
+    return Verdict::Proven(E::Valid);
+}
+concept ClaimedExtent<T> {
+    requires Claim(T);
+}
+int Use(Span<int> input) {
+    Assert.Concept<ClaimedExtent>(input, "claimed");
+    Assert.Concept<StaticExtent<4>>(input, "actual layout unknown");
+    return 0;
+}
