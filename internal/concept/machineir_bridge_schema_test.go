@@ -52,33 +52,71 @@ func TestR9a2BridgeGeneratedOutputs(t *testing.T) {
 		}
 	}
 }
-func TestR9a2BridgeShadowPayloadParity(t *testing.T) {
+func TestR9a2BridgeFrozenPayloadParity(t *testing.T) {
 	for name, m := range bridgeParityCorpus(t) {
-		t.Run(name, func(t *testing.T) { bridgeShadowParity(t, m) })
+		t.Run(name, func(t *testing.T) { bridgeFrozenParity(t, name, m) })
 	}
 }
-func bridgeShadowParity(t *testing.T, m MachineModule) {
-	old, err := encodeMachineBridgeManual(m)
+func bridgeFrozenOracle(t *testing.T, name, suffix string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", "machinebridge", strings.TrimSuffix(name, ".concept")+suffix))
 	if err != nil {
 		t.Fatal(err)
 	}
-	derived, err := EncodeMachineBridgeDerived(m)
+	return data
+}
+func bridgeFrozenParity(t *testing.T, name string, m MachineModule) {
+	old := bridgeFrozenOracle(t, name, ".cmir1")
+	derived, err := EncodeMachineBridge(m)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(old[8:], derived[machineBridgeHeaderSize:]) {
-		t.Fatal("derived payload differs from manual oracle")
+		_, fields := bridgeTracedPayload(t, m)
+		t.Fatal(machineBridgePayloadDifference(old[8:], derived[machineBridgeHeaderSize:], fields))
 	}
-	decoded, err := DecodeMachineBridgeDerived(derived)
+	decoded, err := DecodeMachineBridge(derived)
 	if err != nil {
 		t.Fatal(err)
 	}
-	oracle, err := decodeMachineBridgeManual(old)
-	if err != nil {
-		t.Fatal(err)
+	if !bridgeSemanticEqual(reflect.ValueOf(m), reflect.ValueOf(decoded)) {
+		t.Fatal("roundtrip differs from transported semantic fields")
 	}
-	if !reflect.DeepEqual(oracle, decoded) {
-		t.Fatal("roundtrip differs from every transported oracle field")
+	for run := 0; run < 100; run++ {
+		again, err := EncodeMachineBridge(m)
+		if err != nil || !bytes.Equal(again, derived) {
+			t.Fatalf("bridge unstable run %d: %v", run, err)
+		}
+		roundtrip, err := DecodeMachineBridge(again)
+		if err != nil || !bridgeSemanticEqual(reflect.ValueOf(decoded), reflect.ValueOf(roundtrip)) {
+			t.Fatalf("decoded representation unstable run %d: %v", run, err)
+		}
+	}
+}
+func bridgeSemanticEqual(a, b reflect.Value) bool {
+	if a.Type() != b.Type() {
+		return false
+	}
+	switch a.Kind() {
+	case reflect.Struct:
+		for i := 0; i < a.NumField(); i++ {
+			if !bridgeSemanticEqual(a.Field(i), b.Field(i)) {
+				return false
+			}
+		}
+		return true
+	case reflect.Slice:
+		if a.Len() != b.Len() {
+			return false
+		}
+		for i := 0; i < a.Len(); i++ {
+			if !bridgeSemanticEqual(a.Index(i), b.Index(i)) {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(a.Interface(), b.Interface())
 	}
 }
 
@@ -166,6 +204,50 @@ func TestR9a2BridgeConceptGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+func TestR9a2BridgeDeclarationDeterminism100(t *testing.T) {
+	path := "../../libraries/Standard/Backend/BridgeCodec.concept"
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imports, err := SemanticModuleImports(path, string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := BuildSemanticModuleArtifactsFromSources([]string{"../../libraries"}, imports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstView []byte
+	var firstOutputs Outputs
+	for run := 0; run < 100; run++ {
+		module, err := ParseWithSemanticModules(path, string(source), artifacts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		view, err := InspectGeneratedDeclarations(module, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := Generate(module, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run == 0 {
+			firstView = view
+			firstOutputs = outputs
+			continue
+		}
+		if !bytes.Equal(view, firstView) {
+			t.Fatalf("generated Concept identities/declarations changed run %d", run)
+		}
+		for name, body := range firstOutputs {
+			if !bytes.Equal(body, outputs[name]) {
+				t.Fatalf("generated Concept artifact %s changed run %d", name, run)
+			}
+		}
+	}
+}
 
 func TestR9a2BridgeConceptRoundTrip(t *testing.T) {
 	path := "../../libraries/Standard/Backend/BridgeCodec.concept"
@@ -183,11 +265,8 @@ func TestR9a2BridgeConceptRoundTrip(t *testing.T) {
 	}
 	var harness strings.Builder
 	harness.WriteString("#include \"bridgecodec.generated.h\"\n#include <string.h>\nint main(void) {\n")
-	for name, m := range bridgeParityCorpus(t) {
-		old, err := encodeMachineBridgeManual(m)
-		if err != nil {
-			t.Fatal(err)
-		}
+	for name := range bridgeParityCorpus(t) {
+		old := bridgeFrozenOracle(t, name, ".cmir1")
 		data := old[8:]
 		fmt.Fprint(&harness, "{static const unsigned char input[]={")
 		for _, b := range data {

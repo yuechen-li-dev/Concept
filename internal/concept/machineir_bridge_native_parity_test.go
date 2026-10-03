@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 )
@@ -39,16 +38,10 @@ int main(int argc,char**argv) {
  fclose(out);free(data);return 0;
 }`
 
-func bridgeNativeEmitter(t *testing.T, source []byte, manual bool) string {
+func bridgeNativeEmitter(t *testing.T, source []byte) string {
 	t.Helper()
 	path := "../../libraries/Standard/Backend/AMD64.concept"
-	var module Module
-	var err error
-	if manual {
-		module, err = Parse(path, string(source))
-	} else {
-		module, err = ParseWithBuiltSemanticModuleRoots(path, string(source), []string{"../../libraries"})
-	}
+	module, err := ParseWithBuiltSemanticModuleRoots(path, string(source), []string{"../../libraries"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,19 +87,14 @@ func bridgeNativeBytes(t *testing.T, exe string, data []byte, count int) ([]byte
 	return result, duration
 }
 
-// During migration the exact baseline source is an ignored snapshot. On
-// retirement these comparisons become frozen byte oracles; no old codec ships.
-func TestR9a2BridgeShadowNativeBytes(t *testing.T) {
-	oldSource, err := os.ReadFile("../../artifacts/r9a2/manual-AMD64.concept.txt")
-	if err != nil {
-		t.Skip("shadow-only baseline snapshot not present")
-	}
+// Frozen outputs were captured from the exact pre-migration manual backend
+// after live shadow agreement. No manual codec or fallback ships in tests.
+func TestR9a2BridgeNativeFrozenOracle(t *testing.T) {
 	source, err := os.ReadFile("../../libraries/Standard/Backend/AMD64.concept")
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldExe := bridgeNativeEmitter(t, oldSource, true)
-	derivedExe := bridgeNativeEmitter(t, source, false)
+	derivedExe := bridgeNativeEmitter(t, source)
 	corpus := bridgeParityCorpus(t)
 	var names []string
 	for name := range corpus {
@@ -116,45 +104,16 @@ func TestR9a2BridgeShadowNativeBytes(t *testing.T) {
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			m := corpus[name]
-			start := time.Now()
-			for run := 0; run < 1000; run++ {
-				if _, err := encodeMachineBridgeManual(m); err != nil {
-					t.Fatal(err)
-				}
-			}
-			manualEncode := time.Since(start)
-			start = time.Now()
-			for run := 0; run < 1000; run++ {
-				if _, err := EncodeMachineBridge(m); err != nil {
-					t.Fatal(err)
-				}
-			}
-			t.Logf("1000 Go encodes manual=%s derived=%s", manualEncode, time.Since(start))
-			old, err := encodeMachineBridgeManual(m)
-			if err != nil {
-				t.Fatal(err)
-			}
 			derived, err := EncodeMachineBridge(m)
 			if err != nil {
 				t.Fatal(err)
 			}
-			expected, oldTime := bridgeNativeBytes(t, oldExe, old, len(m.Functions))
+			expected := bridgeFrozenOracle(t, name, ".amd64")
 			actual, newTime := bridgeNativeBytes(t, derivedExe, derived, len(m.Functions))
 			if !bytes.Equal(expected, actual) {
 				t.Fatalf("native code byte mismatch %s", name)
 			}
-			t.Logf("%s: %d functions %d encoded native bytes; 100 emissions/function manual=%s derived=%s", name, len(m.Functions), len(actual), oldTime, newTime)
-			if os.Getenv("CONCEPT_R9A2_WRITE_ORACLES") == "1" {
-				dir := "testdata/machinebridge"
-				if err := os.MkdirAll(dir, 0755); err != nil {
-					t.Fatal(err)
-				}
-				for suffix, data := range map[string][]byte{".cmir1": old, ".amd64": expected} {
-					if err := os.WriteFile(filepath.Join(dir, strings.TrimSuffix(name, ".concept")+suffix), data, 0644); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
+			t.Logf("%s: %d functions %d native bytes; 100 emissions/function=%s, frozen manual bytes identical", name, len(m.Functions), len(actual), newTime)
 		})
 	}
 }

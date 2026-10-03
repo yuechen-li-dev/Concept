@@ -7,10 +7,7 @@ import (
 	"fmt"
 )
 
-const machineBridgeHeaderSize = 8 + 4 + 32
-const MachineBridgeSchema = DerivedMachineBridgeSchema
-const MachineBridgeVersion = DerivedMachineBridgeVersion
-const MachineBridgeSchemaHash = DerivedMachineBridgeSchemaHash
+const machineBridgeHeaderSize = MachineBridgeHeaderSize
 
 type machineBridgeWireField struct {
 	Record, Field string
@@ -51,9 +48,6 @@ func machineBridgePayloadDifference(expected, actual []byte, fields []machineBri
 	return fmt.Errorf("MIR_BRIDGE_BYTE_MISMATCH %s.%s expected_offset=%d actual_offset=%d expected=%s actual=%s", record, field, offset, offset, want, got)
 }
 
-func EncodeMachineBridge(m MachineModule) ([]byte, error)    { return EncodeMachineBridgeDerived(m) }
-func DecodeMachineBridge(data []byte) (MachineModule, error) { return DecodeMachineBridgeDerived(data) }
-
 func (r machineBridgeReader) u32() (uint32, error) {
 	var value uint32
 	err := binary.Read(r.Reader, binary.LittleEndian, &value)
@@ -87,18 +81,18 @@ func (r machineBridgeReader) boolean() (bool, error) {
 	return v == 1, nil
 }
 
-// Shadow entry point until whole-corpus payload agreement is qualified.
-func EncodeMachineBridgeDerived(m MachineModule) ([]byte, error) {
+// Production bridge invocation over the generated codec. No legacy fallback.
+func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	if err := VerifyMachineIR(m); err != nil {
 		return nil, err
 	}
 	w := &machineBridgeWriter{}
-	hash, err := hex.DecodeString(DerivedMachineBridgeSchemaHash)
+	hash, err := hex.DecodeString(MachineBridgeSchemaHash)
 	if err != nil {
 		return nil, err
 	}
-	header := bridgeWireHeader{version: DerivedMachineBridgeVersion}
-	copy(header.magic[:], DerivedMachineBridgeSchema)
+	header := bridgeWireHeader{version: MachineBridgeVersion}
+	copy(header.magic[:], MachineBridgeSchema)
 	copy(header.schemaHash[:], hash)
 	if err := w.writeWireHeader(header); err != nil {
 		return nil, err
@@ -108,7 +102,7 @@ func EncodeMachineBridgeDerived(m MachineModule) ([]byte, error) {
 	}
 	return w.Bytes(), nil
 }
-func DecodeMachineBridgeDerived(data []byte) (MachineModule, error) {
+func DecodeMachineBridge(data []byte) (MachineModule, error) {
 	if len(data) < machineBridgeHeaderSize {
 		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_TRUNCATED_HEADER")
 	}
@@ -117,13 +111,13 @@ func DecodeMachineBridgeDerived(data []byte) (MachineModule, error) {
 	if err != nil {
 		return MachineModule{}, err
 	}
-	if string(header.magic[:]) != DerivedMachineBridgeSchema {
-		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_SCHEMA_MISMATCH: want %s", DerivedMachineBridgeSchema)
+	if string(header.magic[:]) != MachineBridgeSchema {
+		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_SCHEMA_MISMATCH: want %s", MachineBridgeSchema)
 	}
-	if header.version != DerivedMachineBridgeVersion {
-		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_VERSION_MISMATCH: got %d want %d", header.version, DerivedMachineBridgeVersion)
+	if header.version != MachineBridgeVersion {
+		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_VERSION_MISMATCH: got %d want %d", header.version, MachineBridgeVersion)
 	}
-	hash, _ := hex.DecodeString(DerivedMachineBridgeSchemaHash)
+	hash, _ := hex.DecodeString(MachineBridgeSchemaHash)
 	if !bytes.Equal(header.schemaHash[:], hash) {
 		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_SCHEMA_HASH_MISMATCH")
 	}

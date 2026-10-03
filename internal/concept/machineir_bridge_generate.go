@@ -190,9 +190,18 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	for _, r := range def.Records {
 		emitter.records[r.Name] = r
 	}
+	headerSize := 0
+	for _, field := range emitter.records["WireHeader"].Fields {
+		size, err := bridgeFixedWireSize(field.Type)
+		if err != nil {
+			return out, err
+		}
+		headerSize += size
+	}
 	var goSource bytes.Buffer
-	fmt.Fprintf(&goSource, "// Code generated from checked Standard.Backend.BridgeSchema; DO NOT EDIT.\npackage concept\nimport (\"fmt\";\"io\")\nconst DerivedMachineBridgeSchema = %q\nconst DerivedMachineBridgeVersion = %d\nconst DerivedMachineBridgeSchemaHash = %q\n", out.Magic, out.Version, out.Hash)
+	fmt.Fprintf(&goSource, "// Code generated from checked Standard.Backend.BridgeSchema; DO NOT EDIT.\npackage concept\nimport (\"fmt\";\"io\")\nconst MachineBridgeSchema = %q\nconst MachineBridgeVersion = %d\nconst MachineBridgeSchemaHash = %q\n", out.Magic, out.Version, out.Hash)
 	fmt.Fprintf(&goSource, "const MachineBridgeMaxItems = %d\n", maxItems)
+	fmt.Fprintf(&goSource, "const MachineBridgeHeaderSize = %d\n", headerSize)
 	var conceptSource bytes.Buffer
 	fmt.Fprintf(&conceptSource, "// Code generated from checked BridgeSchema metadata; DO NOT EDIT.\nmodule Standard.Backend.BridgeCodec;\nprofile Core;\nimport Standard.Backend.BridgeDerive;\nstring MachineBridgeSchemaHash() { return %q; }\n", out.Hash)
 	hashBytes, _ := hex.DecodeString(out.Hash)
@@ -323,6 +332,24 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 
 type bridgeGoEmitter struct{ records map[string]bridgeSchemaRecord }
 
+func bridgeFixedWireSize(t bridgeSchemaType) (int, error) {
+	switch t.Name {
+	case "int", "int32", "uint", "uint32", "bool":
+		return 4, nil
+	case "uint8":
+		return 1, nil
+	case "array":
+		if t.Element != nil && t.Extent > 0 {
+			size, err := bridgeFixedWireSize(*t.Element)
+			if err != nil {
+				return 0, err
+			}
+			return t.Extent * size, nil
+		}
+	}
+	return 0, fmt.Errorf("MIR_BRIDGE_SCHEMA_HEADER_NOT_FIXED %+v", t)
+}
+
 func (e bridgeGoEmitter) write(t bridgeSchemaType, v string) (string, error) {
 	switch t.Name {
 	case "uint32", "uint":
@@ -345,7 +372,7 @@ func (e bridgeGoEmitter) write(t bridgeSchemaType, v string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return "func() error { if err:=w.u32(len(" + v + ")); err!=nil{return err}; for _,element:=range " + v + " {if err:=" + inner + ";err!=nil{return err}};return nil }()", nil
+		return "func() error { if len(" + v + ")>MachineBridgeMaxItems{return fmt.Errorf(\"MIR_BRIDGE_COUNT %d\",len(" + v + "))}; if err:=w.u32(len(" + v + ")); err!=nil{return err}; for _,element:=range " + v + " {if err:=" + inner + ";err!=nil{return err}};return nil }()", nil
 	}
 	if r, ok := e.records[t.Name]; ok {
 		if len(r.Cases) > 0 {

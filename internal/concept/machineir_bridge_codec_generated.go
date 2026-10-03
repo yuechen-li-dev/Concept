@@ -6,10 +6,11 @@ import (
 	"io"
 )
 
-const DerivedMachineBridgeSchema = "CMIRAMD2"
-const DerivedMachineBridgeVersion = 2
-const DerivedMachineBridgeSchemaHash = "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593"
+const MachineBridgeSchema = "CMIRAMD2"
+const MachineBridgeVersion = 2
+const MachineBridgeSchemaHash = "99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593"
 const MachineBridgeMaxItems = 1048576
+const MachineBridgeHeaderSize = 44
 
 type bridgeWireHeader struct {
 	magic      [8]byte
@@ -512,6 +513,9 @@ func (w *machineBridgeWriter) writeWireMachineInstruction(v MachineInstruction) 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Src) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Src))
+			}
 			if err := w.u32(len(v.Src)); err != nil {
 				return err
 			}
@@ -585,6 +589,9 @@ func (w *machineBridgeWriter) writeWireMachineInstruction(v MachineInstruction) 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Facts) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Facts))
+			}
 			if err := w.u32(len(v.Facts)); err != nil {
 				return err
 			}
@@ -778,6 +785,9 @@ func (w *machineBridgeWriter) writeWireMachineBlock(v MachineBlock) error {
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Instructions) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Instructions))
+			}
 			if err := w.u32(len(v.Instructions)); err != nil {
 				return err
 			}
@@ -884,6 +894,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Facts) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Facts))
+			}
 			if err := w.u32(len(v.Facts)); err != nil {
 				return err
 			}
@@ -901,6 +914,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Decisions) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Decisions))
+			}
 			if err := w.u32(len(v.Decisions)); err != nil {
 				return err
 			}
@@ -925,6 +941,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Args) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Args))
+			}
 			if err := w.u32(len(v.Args)); err != nil {
 				return err
 			}
@@ -942,6 +961,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.VRegs) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.VRegs))
+			}
 			if err := w.u32(len(v.VRegs)); err != nil {
 				return err
 			}
@@ -959,6 +981,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Slots) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Slots))
+			}
 			if err := w.u32(len(v.Slots)); err != nil {
 				return err
 			}
@@ -976,6 +1001,9 @@ func (w *machineBridgeWriter) writeWireMachineFunction(v MachineFunction) error 
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Blocks) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Blocks))
+			}
 			if err := w.u32(len(v.Blocks)); err != nil {
 				return err
 			}
@@ -1153,6 +1181,9 @@ func (w *machineBridgeWriter) writeWireMachineModule(v MachineModule) error {
 	{
 		offset := w.Len()
 		if err := func() error {
+			if len(v.Functions) > MachineBridgeMaxItems {
+				return fmt.Errorf("MIR_BRIDGE_COUNT %d", len(v.Functions))
+			}
 			if err := w.u32(len(v.Functions)); err != nil {
 				return err
 			}

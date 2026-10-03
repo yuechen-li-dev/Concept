@@ -140,6 +140,17 @@ func TestR9a2BridgeSchemaMutationAndArtifactIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	outputs, err := Generate(consumer, changed.Concept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var staleHarness strings.Builder
+	staleHarness.WriteString("#include \"bridgecodec.generated.h\"\nint main(void) { const unsigned char input[]={")
+	for _, b := range data[:MachineBridgeHeaderSize] {
+		fmt.Fprintf(&staleHarness, "%d,", b)
+	}
+	staleHarness.WriteString("};concept_bridge_reader reader={{input,sizeof input},0};concept_result_void_backend_error r=concept_standard__backend__bridge_codec_read_bridge_identity(&reader);return r.tag==1 && r.payload.error.error.tag==7 ? 0:1;}\n")
+	runFoundationNativeHarness(t, outputs, "stale_schema.c", staleHarness.String())
 	changedHash := bytes.Clone(data)
 	copy(changedHash[12:44], bytes.Repeat([]byte{0}, 32))
 	if _, err := DecodeMachineBridge(changedHash); err == nil || !strings.Contains(err.Error(), "MIR_BRIDGE_SCHEMA_HASH_MISMATCH") {
@@ -220,7 +231,14 @@ func TestR9a2BridgeConceptMalformedInput(t *testing.T) {
 			}
 			fmt.Fprint(&harness, "};size_t size=sizeof input;\n")
 		}
-		fmt.Fprint(&harness, "unsigned char output[4096];memset(output,0xa5,sizeof output);concept_readonly_span_byte src={input,size};concept_span_byte dst={output,sizeof output};concept_result_int_backend_error r=concept_standard__backend__amd64_emit_function(src,0,dst);if(r.tag==0)return 1;for(size_t i=0;i<sizeof output;++i)if(output[i]!=0xa5)return 2; }")
+		expectedTag := 0
+		if name == "magic" || name == "version" {
+			expectedTag = 1
+		}
+		if name == "hash" {
+			expectedTag = 7
+		}
+		fmt.Fprintf(&harness, "unsigned char output[4096];memset(output,0xa5,sizeof output);concept_readonly_span_byte src={input,size};concept_span_byte dst={output,sizeof output};concept_result_int_backend_error r=concept_standard__backend__amd64_emit_function(src,0,dst);if(r.tag!=1 || r.payload.error.error.tag!=%d)return 1;for(size_t i=0;i<sizeof output;++i)if(output[i]!=0xa5)return 2; }", expectedTag)
 		t.Logf("Concept safely rejects %s", name)
 	}
 	harness.WriteString("return 0;}\n")
