@@ -1,0 +1,155 @@
+module Standard.Backend.BridgeRead;
+profile Core;
+import Standard.Backend.BridgeSchema;
+
+extern "C" usize strlen(string text);
+ref struct BridgeReader {
+    ReadOnlySpan<byte> data;
+    int offset;
+}
+Result<int, BackendError> ReadI32(ref BridgeReader reader) {
+    if (reader.offset < 0 or Len(reader.data) - reader.offset < 4) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    int high = reader.data[reader.offset + 3] as int;
+    if (high >= 128) {
+        high = high - 256;
+    }
+    int value =(reader.data[reader.offset] as int) +
+    (reader.data[reader.offset + 1] as int) * 256 +
+    (reader.data[reader.offset + 2] as int) * 65536 + high * 16777216;
+    reader.offset = reader.offset + 4;
+    return Result::Ok(value);
+}
+Result<int, BackendError> ReadCount(ref BridgeReader reader) {
+    int count = ReadI32(ref reader) ?;
+    if (count < 0 or count > 1048576) { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok(count);
+}
+Result<BridgeText, BackendError> ReadText(ref BridgeReader reader) {
+    int length = ReadCount(ref reader) ?;
+    if (length > Len(reader.data) - reader.offset) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeText text = BridgeText{reader.offset, length};
+    reader.offset = reader.offset + length;
+    return Result::Ok(text);
+}
+bool TextEquals(ref const BridgeReader reader, BridgeText text, string expected) {
+    if (text.length !=(strlen(expected) as int)) { return false; }
+    for (i in 0 .. text.length) {
+        if (reader.data[text.offset + i] != expected[i]) { return false; }
+    }
+    return true;
+}
+Result<int, BackendError> ReadWire(ref BridgeReader reader, BridgeType<int> type) {
+    return ReadI32(ref reader);
+}
+Result<uint8, BackendError> ReadWire(ref BridgeReader reader, BridgeType<uint8> type) {
+    if (reader.offset < 0 or reader.offset >= Len(reader.data)) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    uint8 value = reader.data[reader.offset] as uint8;
+    reader.offset += 1;
+    return Result::Ok(value);
+}
+Result<uint, BackendError> ReadWire(ref BridgeReader reader, BridgeType<uint> type) {
+    uint value = 0u;
+    uint multiplier = 1u;
+    for (i in 0 .. 4) {
+        uint part = ReadWire(ref reader, BridgeType<uint8>{0}) ? as uint;
+        value += part * multiplier;
+        if (i < 3) {
+            multiplier *= 256u;
+        }
+    }
+    return Result::Ok(value);
+}
+Result<bool, BackendError> ReadWire(ref BridgeReader reader, BridgeType<bool> type) {
+    int value = ReadI32(ref reader) ?;
+    if (value == 0) { return Result::Ok(false); }
+    if (value == 1) { return Result::Ok(true); }
+    return Result::Error(BackendError::BridgeInvalid);
+}
+Result<BridgeText, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeText> type) {
+    return ReadText(ref reader);
+}
+// A sequence stores a byte view, never a hidden heap or a nested fixed array.
+// Reading still validates every element, including unselected functions.
+concept BridgeReadable<T> {
+    requires Result<T, BackendError> ReadWire(ref BridgeReader reader, BridgeType<T> type);
+}
+template <typename T> requires BridgeReadable<T>
+Result<BridgeSequence<T>, BackendError> ReadBridgeSequence(
+ref BridgeReader reader, BridgeType<BridgeSequence<T>> type) {
+    int count = ReadCount(ref reader) ?;
+    if (count > Len(reader.data) - reader.offset) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    int offset = reader.offset;
+    for (i in 0 .. count) {
+        ReadWire(ref reader, BridgeType<T>{0}) ?;
+    }
+    BridgeSequence<T> value = BridgeSequence<T>{offset, count};
+    return Result::Ok(move value);
+}
+bool BridgeTagEquals(int value, int tag) {
+    return value == tag;
+}
+
+ref struct BridgeWriter {
+    Span<byte> data;
+    int offset;
+}
+Result<void, BackendError> BridgeWriteByte(ref BridgeWriter writer, byte value) {
+    if (writer.offset < 0 or writer.offset >= Len(writer.data)) {
+        return Result::Error(BackendError::BufferFull);
+    }
+    writer.data[writer.offset] = value;
+    writer.offset += 1;
+    return Result::Ok();
+}
+Result<void, BackendError> BridgeWriteI32(ref BridgeWriter writer, int value) {
+    int remaining = value;
+    for (i in 0 .. 4) {
+        int digit = remaining % 256;
+        if (digit < 0) {
+            digit += 256;
+        }
+        BridgeWriteByte(ref writer, digit as byte) ?;
+        remaining =(remaining - digit) / 256;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteWire(ref const int value, ref const BridgeReader source, ref BridgeWriter writer) {
+    return BridgeWriteI32(ref writer, value);
+}
+Result<void, BackendError> WriteWire(ref const bool value, ref const BridgeReader source, ref BridgeWriter writer) {
+    if (value) { return BridgeWriteI32(ref writer, 1); }
+    return BridgeWriteI32(ref writer, 0);
+}
+Result<void, BackendError> WriteWire(ref const BridgeText value, ref const BridgeReader source, ref BridgeWriter writer) {
+    BridgeWriteI32(ref writer, value.length) ?;
+    for (i in 0 .. value.length) {
+        BridgeWriteByte(ref writer, source.data[value.offset + i]) ?;
+    }
+    return Result::Ok();
+}
+concept BridgeWritable<T> {
+    requires Result<void, BackendError> WriteWire(ref const T value, ref const BridgeReader source, ref BridgeWriter writer);
+}
+concept BridgeCodec<T> {
+    requires BridgeReadable<T>;
+    requires BridgeWritable<T>;
+}
+template <typename T> requires BridgeCodec<T>
+Result<void, BackendError> WriteBridgeSequence(ref const BridgeSequence<T> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    BridgeWriteI32(ref writer, value.count) ?;
+    BridgeReader reader = BridgeReader{source.data, value.offset};
+    for (i in 0 .. value.count) {
+        T element = ReadWire(ref reader, BridgeType<T>{0}) ?;
+        WriteWire(ref const element, ref const source, ref writer) ?;
+    }
+    return Result::Ok();
+}

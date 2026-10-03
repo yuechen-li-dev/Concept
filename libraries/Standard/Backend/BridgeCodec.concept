@@ -1,0 +1,140 @@
+// Code generated from checked BridgeSchema metadata; DO NOT EDIT.
+module Standard.Backend.BridgeCodec;
+profile Core;
+import Standard.Backend.BridgeDerive;
+string MachineBridgeSchemaHash() {
+    return "811a24e57119ec1e458deaf0b1e2c3dd36ca26b522e2bd31548e8bc8d7d2d4a6";
+}
+uint8[32] MachineBridgeSchemaHashBytes() {
+    uint8[32] value =[129u, 26u, 36u, 229u, 113u, 25u, 236u, 30u, 69u, 141u, 234u, 240u, 177u, 226u,
+    195u, 221u, 54u, 202u, 38u, 181u, 34u, 226u, 189u, 49u, 84u, 142u, 139u, 200u, 215u, 210u, 212u,
+    166u];
+    return value;
+}
+derive DeriveBridgeRead reflect<WireHeader>;
+derive DeriveBridgeEnumRead reflect<Register>;
+derive DeriveBridgeEnumWrite reflect<Register>;
+derive DeriveBridgeEnumRead reflect<OperandKind>;
+derive DeriveBridgeEnumWrite reflect<OperandKind>;
+derive DeriveBridgeEnumRead reflect<Opcode>;
+derive DeriveBridgeEnumWrite reflect<Opcode>;
+derive DeriveBridgeEnumRead reflect<Condition>;
+derive DeriveBridgeEnumWrite reflect<Condition>;
+derive DeriveBridgeRead reflect<WireSpan>;
+derive DeriveBridgeWrite reflect<WireSpan>;
+derive DeriveBridgeRead reflect<WireMachineFrame>;
+derive DeriveBridgeWrite reflect<WireMachineFrame>;
+derive DeriveBridgeRead reflect<WireMachineOperand>;
+derive DeriveBridgeWrite reflect<WireMachineOperand>;
+derive DeriveBridgeRead reflect<WireMachineArg>;
+derive DeriveBridgeWrite reflect<WireMachineArg>;
+derive DeriveBridgeRead reflect<WireMachineVReg>;
+derive DeriveBridgeWrite reflect<WireMachineVReg>;
+derive DeriveBridgeRead reflect<WireMachineStackSlot>;
+derive DeriveBridgeWrite reflect<WireMachineStackSlot>;
+derive DeriveBridgeRead reflect<WireMachineInstruction>;
+derive DeriveBridgeWrite reflect<WireMachineInstruction>;
+derive DeriveBridgeRead reflect<WireMachineTerminator>;
+derive DeriveBridgeWrite reflect<WireMachineTerminator>;
+derive DeriveBridgeRead reflect<WireMachineBlock>;
+derive DeriveBridgeWrite reflect<WireMachineBlock>;
+derive DeriveBridgeRead reflect<WireMachineFunction>;
+derive DeriveBridgeWrite reflect<WireMachineFunction>;
+derive DeriveBridgeRead reflect<WireMachineModule>;
+derive DeriveBridgeWrite reflect<WireMachineModule>;
+Result<uint8[8], BackendError> ReadWire(ref BridgeReader reader, BridgeType<uint8[8]> type) {
+    uint8[8] values =[0u ...];
+    for (i in 0 .. 8) {
+        values[i] = ReadWire(ref reader, BridgeType<uint8>{0}) ?;
+    }
+    return Result::Ok(values);
+}
+Result<uint8[32], BackendError> ReadWire(ref BridgeReader reader, BridgeType<uint8[32]> type) {
+    uint8[32] values =[0u ...];
+    for (i in 0 .. 32) {
+        values[i] = ReadWire(ref reader, BridgeType<uint8>{0}) ?;
+    }
+    return Result::Ok(values);
+}
+Result<BridgeSequence<WireMachineOperand>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineOperand>> type) {
+    return ReadBridgeSequence<WireMachineOperand>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineOperand> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineOperand>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<BridgeText>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<BridgeText>> type) {
+    return ReadBridgeSequence<BridgeText>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<BridgeText> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<BridgeText>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineInstruction>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineInstruction>> type) {
+    return ReadBridgeSequence<WireMachineInstruction>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineInstruction> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineInstruction>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineArg>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineArg>> type) {
+    return ReadBridgeSequence<WireMachineArg>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineArg> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineArg>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineVReg>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineVReg>> type) {
+    return ReadBridgeSequence<WireMachineVReg>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineVReg> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineVReg>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineStackSlot>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineStackSlot>> type) {
+    return ReadBridgeSequence<WireMachineStackSlot>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineStackSlot> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineStackSlot>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineBlock>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineBlock>> type) {
+    return ReadBridgeSequence<WireMachineBlock>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineBlock> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineBlock>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireMachineFunction>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireMachineFunction>> type) {
+    return ReadBridgeSequence<WireMachineFunction>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireMachineFunction> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireMachineFunction>(ref const value, ref const source, ref writer);
+}
+Result<int, BackendError> BridgeRoundTrip(ReadOnlySpan<byte> payload, Span<byte> output) {
+    BridgeReader reader = BridgeReader{payload, 0};
+    WireMachineModule value = ReadWire(ref reader, BridgeType<WireMachineModule>{0}) ?;
+    if (reader.offset != Len(payload)) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeWriter writer = BridgeWriter{output, 0};
+    WriteWire(ref const value, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> ReadBridgeIdentity(ref BridgeReader reader) {
+    WireHeader header = ReadWire(ref reader, BridgeType<WireHeader>{0}) ?;
+    for (i in 0 .. Len(header.magic)) {
+        if (header.magic[i] !=(BridgeMagic[i] as uint8)) {
+            return Result::Error(BackendError::BridgeVersion);
+        }
+    }
+    if (header.version != BridgeVersion) {
+        return Result::Error(BackendError::BridgeVersion);
+    }
+    uint8[32] expected = MachineBridgeSchemaHashBytes();
+    for (i in 0 .. Len(header.schemaHash)) {
+        if (header.schemaHash[i] != expected[i]) {
+            return Result::Error(BackendError::BridgeSchemaMismatch);
+        }
+    }
+    return Result::Ok();
+}

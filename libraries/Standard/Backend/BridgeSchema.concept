@@ -1,0 +1,190 @@
+module Standard.Backend.BridgeSchema;
+profile Core;
+
+// The sole wire authority. Integers are explicit little-endian 32-bit values;
+// bool is i32 0/1, BridgeText is u32 byte-length + UTF-8 bytes, and
+// BridgeSequence<T> is u32 count + recursively encoded T values.
+static_assert(SizeOf<int>() == 4);
+comptime string BridgeMagic = "CMIRAMD2";
+comptime uint BridgeVersion = 2u;
+
+enum BackendError {
+    BridgeInvalid, BridgeVersion, BridgeSchemaMismatch, CapacityExceeded,
+    UnsupportedInstruction, RegisterExhausted, BufferFull, InvalidEncoding,
+}
+[[reflect]] enum Register {
+    RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
+    R8, R9, R10, R11, R12, R13, R14, R15,
+}
+[[reflect]] enum OperandKind {
+    [[bridge_value("")]] None,
+    [[bridge_value("vreg")]] Virtual,
+    [[bridge_value("preg")]] Physical,
+    [[bridge_value("imm")]] Immediate,
+    [[bridge_value("slot")]] Slot,
+    [[bridge_value("mem")]] Memory,
+    [[bridge_value("block")]] Block,
+}
+[[reflect]] enum Opcode {
+    [[bridge_value("")]] None,
+    [[bridge_value("MOV")]] Mov,
+    [[bridge_value("LOAD")]] Load,
+    [[bridge_value("STORE")]] Store,
+    [[bridge_value("LEA")]] Lea,
+    [[bridge_value("ADD")]] Add,
+    [[bridge_value("SUB")]] Sub,
+    [[bridge_value("IMUL")]] Imul,
+    [[bridge_value("UMUL")]] Umul,
+    [[bridge_value("CMP")]] Cmp,
+    [[bridge_value("TEST")]] Test,
+    [[bridge_value("SETCC")]] Setcc,
+    [[bridge_value("TRAP")]] Trap,
+    [[bridge_value("JMP")]] Jmp,
+    [[bridge_value("JCC")]] Jcc,
+    [[bridge_value("RET")]] Ret,
+}
+[[reflect]] enum Condition {
+    [[bridge_value("")]] None,
+    [[bridge_value("E")]] Equal,
+    [[bridge_value("NE")]] NotEqual,
+    [[bridge_value("L")]] Less,
+    [[bridge_value("LE")]] LessEqual,
+    [[bridge_value("G")]] Greater,
+    [[bridge_value("GE")]] GreaterEqual,
+    [[bridge_value("B")]] Below,
+    [[bridge_value("BE")]] BelowEqual,
+    [[bridge_value("A")]] Above,
+    [[bridge_value("AE")]] AboveEqual,
+    [[bridge_value("O")]] Overflow,
+    [[bridge_value("C")]] Carry,
+}
+record struct BridgeText {
+    int offset;
+    int length;
+}
+template <typename T>
+record struct BridgeSequence {
+    int offset;
+    int count;
+}
+template <typename T>
+record struct BridgeType {
+    int marker;
+}
+
+// Header is fixed bytes, independent of either host ABI. It precedes the
+// payload and is validated against the generated identity before any records.
+[[reflect]] record struct WireHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireSpan {
+    int Line;
+    int Column;
+}
+[[reflect]] record struct WireMachineFrame {
+    int LocalSize;
+    int Alignment;
+    int ShadowSpace;
+    bool HasCalls;
+}
+[[reflect]] record struct WireMachineOperand {
+    int ID;
+    int Width;
+    int Base;
+    int BaseSlot;
+    int Index;
+    int Scale;
+    int Disp;
+    OperandKind Kind;
+    BridgeText Literal;
+    BridgeText Region;
+    bool Signed;
+}
+[[reflect]] record struct WireMachineArg {
+    [[bridge_go_type(LIRType)]] BridgeText Type;
+    int Index;
+    int Width;
+    bool Indirect;
+    [[bridge_go_type(MachineReg)]] Register Register;
+    int StackOffset;
+    bool OnStack;
+    int VReg;
+}
+[[reflect]] record struct WireMachineVReg {
+    int ID;
+    int Width;
+    bool Address;
+}
+[[reflect]] record struct WireMachineStackSlot {
+    int ID;
+    int Size;
+    int Align;
+    bool IncomingIndirect;
+    int BaseVReg;
+    BridgeText Source;
+}
+[[reflect]] record struct WireMachineInstruction {
+    Opcode Op;
+    WireMachineOperand Dst;
+    BridgeSequence<WireMachineOperand> Src;
+    int Width;
+    int FlagsDef;
+    int FlagsUse;
+    int LIRBlock;
+    int LIRInstruction;
+    Condition Cond;
+    WireSpan Source;
+    BridgeText Decision;
+    BridgeSequence<BridgeText> Facts;
+}
+[[reflect]] record struct WireMachineTerminator {
+    Opcode Op;
+    int True;
+    int False;
+    int FlagsUse;
+    Condition Cond;
+    WireSpan Source;
+}
+[[reflect]] record struct WireMachineBlock {
+    int ID;
+    int LIRBlock;
+    BridgeSequence<WireMachineInstruction> Instructions;
+    WireMachineTerminator Term;
+}
+[[reflect]] record struct WireMachineFunction {
+    BridgeText Identity;
+    BridgeText Name;
+    BridgeText Target;
+    BridgeText ABI;
+    [[bridge_go_type(LIRType)]] BridgeText Result;
+    WireSpan Source;
+    BridgeSequence<BridgeText> Facts;
+    BridgeSequence<BridgeText> Decisions;
+    WireMachineFrame Frame;
+    BridgeSequence<WireMachineArg> Args;
+    BridgeSequence<WireMachineVReg> VRegs;
+    BridgeSequence<WireMachineStackSlot> Slots;
+    BridgeSequence<WireMachineBlock> Blocks;
+}
+[[reflect]] record struct WireMachineModule {
+    BridgeSequence<WireMachineFunction> Functions;
+}
+
+reflect<WireHeader>;
+reflect<Register>;
+reflect<OperandKind>;
+reflect<Opcode>;
+reflect<Condition>;
+reflect<WireSpan>;
+reflect<WireMachineFrame>;
+reflect<WireMachineOperand>;
+reflect<WireMachineArg>;
+reflect<WireMachineVReg>;
+reflect<WireMachineStackSlot>;
+reflect<WireMachineInstruction>;
+reflect<WireMachineTerminator>;
+reflect<WireMachineBlock>;
+reflect<WireMachineFunction>;
+reflect<WireMachineModule>;
