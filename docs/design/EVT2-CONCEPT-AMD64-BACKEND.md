@@ -22,27 +22,31 @@ The Concept reader uses typed `Register`, `OperandKind`, `Opcode`, and `Conditio
 
 ## Encoding
 
-### EVT2e4 concrete frame and action boundary
+### EVT2e5 module calls and concrete frames
 
 CMIRAMD3 calls are projected into bounded scalar call metadata. Concept
 `Win64ABI` owns argument/return tables, 32-byte home space, outgoing symbolic
 slots, clobber sets and parallel argument moves. The existing liveness and
 allocator recognize call uses, derive fixed call-point constraints and expose
 preservation/used-callee-saved summaries. Call functions may plan additional
-callee-saved candidates; the no-call pool and emitted bytes are unchanged.
+callee-saved candidates; the legacy single-function no-call pool and frozen
+bytes are unchanged. Module leaf callees may use callee-saved candidates when
+eight incoming values require them, with concrete save/restore emission.
 
 Cycle temporaries, preservation spills, used-callee saves and outgoing slots
 now receive concrete storage through the same finalizer as existing locals.
 Offsets use post-prologue RSP; the maximum outgoing area is reserved once.
 Explicit prologue/epilogue actions, return bindings and pre/post-call actions
 are verified with independent value replay and an executable automata protocol.
-Normal emit entry points stop at `AMD64_UNSUPPORTED_CALL_ENCODING` after
-qualifying these actions and before writing any call-bearing bytes. The C11
-bootstrap renders returned metadata; its Go host chooses no stack policy.
-The underlying UnsupportedCallLowering bridge tag is unchanged. See
-[EVT2e4 conformance](../conformance/EVT2E4-CONFORMANCE.md) for exact storage,
-ownership, output, bounds, measurements and qualification limits.
-The bounded Concept `ByteWriter` writes bytes and little-endian `i32` values, then patches `rel32` branches after deterministic block layout. Errors return `Result`; callers discard the buffer when encoding fails. The encoder handles MOV, LOAD, STORE, LEA, ADD, SUB, IMUL, CMP, TEST, SETCC, JMP, Jcc, RET, stack adjustment, and UD2. It emits only the forms used by the qualified integer fixture; unsupported widths, operands, pseudo-operations (including UMUL), calls, and spill needs return explicit errors. Signed and unsigned condition codes have distinct encodings. Checked overflow uses JO to a UD2 block. Bounds checks use unsigned JAE, which also rejects negative signed indexes after a 32-bit compare.
+Normal CLI emission uses Concept `EmitModule`: declaration-order bodies,
+semantic-identity symbols, E8 rel32 placeholders and one checked forward/backward
+fixup pass. Concrete actions emit before/after each call and at every return.
+The C11 bootstrap renders returned metadata; its Go host chooses no stack,
+symbol or patch policy. Single-function compatibility APIs stop at
+`AMD64_CALL_REQUIRES_MODULE_IMAGE` without writing call-bearing bytes; the bridge
+enum tag is unchanged. See [EVT2e5 conformance](../conformance/EVT2E5-CONFORMANCE.md)
+for actual native C11 parity, ABI probes, exact subset, bounds and measurements.
+The bounded Concept `ByteWriter` writes bytes and little-endian `i32` values, then patches `rel32` branches and calls after deterministic layout. Errors return `Result`; callers discard the buffer when encoding fails. The encoder handles MOV, LOAD, STORE, LEA, ADD, SUB, IMUL, CMP, TEST, SETCC, JMP, Jcc, RET, stack adjustment, UD2 and direct internal CALL. It emits the qualified integer instruction and scalar frame/call forms; unsupported widths, operands, pseudo-operations (including UMUL) and general register-exhaustion spilling still return explicit errors. Signed and unsigned condition codes have distinct encodings. Checked overflow uses JO to a UD2 block. Bounds checks use unsigned JAE, which also rejects negative signed indexes after a 32-bit compare.
 
 Register encoding has one typed mapping. REX selection accounts for operand width and extended ModRM/SIB register fields. Memory forms use base plus optional index times 1, 2, 4, or 8 plus displacement. RSP/R12 force SIB; RBP/R13 with zero displacement force a zero `disp8`; larger displacement uses `disp32`. The direct C11-hosted encoder test pins simple MOV/ADD/CMP bytes and an addressing matrix for low, extended, RSP/R12, RBP/R13, indexed, all scales, and `disp32` cases. Add and Max end-to-end tests pin their whole-function bytes.
 
@@ -50,4 +54,12 @@ Register encoding has one typed mapping. REX selection accounts for operand widt
 
 ## Current boundary
 
-The seven EVT2 fixtures emit native bytes: Add, Max, Sum4, CheckedIndex, StoreIndex, Choose, and Early. Representative native calls are compared with the C backend, including a loop, stack locals, indexed reads, indexed writes, and multiple return paths. Source semantics still come from Stage-0 MachineIR. Float/SIMD, general calls, object files, spills, nonleaf unwind metadata, and a production native failure runtime remain future work. A UD2 encodes both overflow and bounds failure in this bootstrap slice.
+The original seven EVT2 fixtures remain qualified: Add, Max, Sum4, CheckedIndex,
+StoreIndex, Choose and Early, including loops, indexed memory and multiple
+returns. EVT2e5 adds real direct internal Win64 scalar calls, saves and
+call-preservation spills, with strict C11 parity and independent native ABI
+probes. Source semantics still come from Stage-0 MachineIR. Float/SIMD,
+external/indirect/aggregate/varargs calls, pointer-like source calls, object files,
+general register-exhaustion spilling, unwind metadata, stack probing and a
+production native failure runtime remain future work. Frames of 4 KiB or more
+stop explicitly. UD2 remains the bootstrap overflow/bounds failure instruction.

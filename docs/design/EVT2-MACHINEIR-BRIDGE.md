@@ -166,10 +166,11 @@ Neither decoding nor roundtrip needs the originating source. Runtime errors use
 Result; the wire-record PlainData assertions use Vocabulary's typed Verdict
 with size/alignment evidence. No PlainData assertion grants ABI equivalence.
 EVT2e3 derives transient physical ABI plans from these same semantic records.
-EVT2e4 selected CALL functions stop at `AMD64_UNSUPPORTED_CALL_ENCODING` after
-verified placement, frame storage and concrete preservation actions, before
-encoding. The schema is unchanged. See [EVT2e2 conformance](../conformance/EVT2E2-CONFORMANCE.md)
-and [EVT2e3 planning](../conformance/EVT2E3-CONFORMANCE.md).
+EVT2e5 module emission consumes verified placement, frame storage and concrete
+preservation actions, emits direct internal CALL rel32 and resolves semantic
+identities before executable publication. Symbol/fixup records are transient;
+the schema is unchanged. See [EVT2e5 conformance](../conformance/EVT2E5-CONFORMANCE.md)
+for the real native path and the bounded scalar Win64 qualification.
 
 ## Migration and evidence
 

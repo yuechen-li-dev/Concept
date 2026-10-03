@@ -21,7 +21,9 @@ the unchanged CMIRAMD3 call records. It does not add physical call fields to
 MachineIR or change its inspection printer. Plans retain fixed argument and
 result constraints, symbolic stack slots/home space, FLAGS/register clobbers,
 parallel moves and live-across preservation requirements. EVT2e4 derives concrete call frames,
-spills, saves/restores, temporary storage and actions; CALL encoding remains deferred. The existing incoming
+spills, saves/restores, temporary storage and actions; EVT2e5 emits direct internal
+CALL rel32 with deterministic module layout and checked fixups, then qualifies
+native Win64 execution. The existing incoming
 ABI descriptors below remain the Stage-0 compatibility seam; no new outgoing
 algorithm is added there. See [planning conformance](../conformance/EVT2E3-CONFORMANCE.md).
 

@@ -336,7 +336,7 @@ ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
 string DescribeBackendError(BackendError error)
 {
     if (error == BackendError::UnsupportedCallLowering) {
-        return "AMD64_UNSUPPORTED_CALL_ENCODING: verified concrete frame/actions require target encoding and fixups";
+        return "AMD64_CALL_REQUIRES_MODULE_IMAGE: direct calls require complete internal symbol layout";
     }
     return "AMD64_BACKEND_ERROR";
 }
@@ -645,6 +645,11 @@ Register PoolRegister(int ordinal)
 Result<void, BackendError> AllocateRegisters(
 ref const BackendFunction function, ref Allocation allocation)
 {
+    return AllocateRegistersWithPolicy(ref const function, ref allocation, false);
+}
+Result<void, BackendError> AllocateRegistersWithPolicy(
+ref const BackendFunction function, ref Allocation allocation, bool allowCalleeSaved)
+{
     ComputeIntervals(ref const function, ref allocation) ?;
     // Fixed call uses/defs are derived before assignments. General assignments
     // remain the qualified pool; call-point moves and preservation are explicit.
@@ -673,7 +678,7 @@ ref const BackendFunction function, ref Allocation allocation)
                 bool found = false;
                 Register choice = Register::R10;
                 int candidateCount = 5;
-                if (allocation.callCount > 0) {
+                if (allocation.callCount > 0 or allowCalleeSaved) {
                     candidateCount += Len(Win64Registers().calleeSaved);
                 }
                 for (candidate in 0 .. candidateCount)
@@ -939,6 +944,159 @@ struct EncodingWorkspace
     Span<int> blockOffsets;
     Span<BranchFixup> fixups;
     int fixupCount;
+    Span<CallFixup> calls;
+    int callCount;
+    int functionOrdinal;
+    bool allowCalls;
+}
+enum CallFixupKind {
+    Rel32Call
+}
+record struct CallFixup {
+    CallFixupKind kind;
+    int sourceOrdinal;
+    BridgeText source;
+    BridgeText target;
+    int callOffset;
+    int patchOffset;
+    int displacement;
+    bool resolved;
+}
+record struct NativeSymbol {
+    BridgeText identity;
+    BridgeText name;
+    int ordinal;
+    int offset;
+    int size;
+    int calls;
+}
+enum NativeError {
+    CapacityExceeded, InvalidInput, DuplicateSymbol, UnresolvedSymbol, Rel32OutOfRange, MalformedPatch,
+    UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired
+}
+struct NativeImage {
+    NativeSymbol[128] symbols;
+    int symbolCount;
+    CallFixup[512] fixups;
+    int fixupCount;
+    int byteCount;
+    bool finalized;
+}
+CallFixup EmptyCallFixup() {
+    return CallFixup {
+        CallFixupKind::Rel32Call, - 1, BridgeText{0, 0}, BridgeText{0, 0}, - 1, - 1, 0, false
+    };
+}
+NativeImage EmptyNativeImage() {
+    return NativeImage {
+        [NativeSymbol {
+            BridgeText{0, 0}, BridgeText{0, 0}, - 1, 0, 0, 0
+        }
+        ...], 0,[EmptyCallFixup() ...], 0, 0, false
+    };
+}
+string DescribeNativeError(NativeError error) {
+    return match (error) {
+        NativeError::CapacityExceeded => "AMD64_NATIVE_CAPACITY_EXCEEDED",
+        NativeError::InvalidInput => "AMD64_NATIVE_INVALID_INPUT",
+        NativeError::DuplicateSymbol => "AMD64_DUPLICATE_SYMBOL",
+        NativeError::UnresolvedSymbol => "AMD64_UNRESOLVED_SYMBOL",
+        NativeError::Rel32OutOfRange => "AMD64_REL32_OUT_OF_RANGE",
+        NativeError::MalformedPatch => "AMD64_MALFORMED_CALL_PATCH",
+        NativeError::UnresolvedFixup => "AMD64_UNRESOLVED_CALL_FIXUP",
+        NativeError::UnsupportedEncoding => "AMD64_UNSUPPORTED_ENCODING_OR_MEMORY_OPERAND",
+        NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
+        NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
+    };
+}
+Result<int, NativeError> CallDisplacement(uint64 target, uint64 call) {
+    uint64 limit = 18446744073709551610;
+    if (call > limit) { return Result::Error(NativeError::Rel32OutOfRange); }
+    uint64 after = call + 5;
+    if (target >= after) {
+        uint64 magnitude = target - after;
+        if (magnitude > 2147483647) { return Result::Error(NativeError::Rel32OutOfRange); }
+        return Result::Ok(magnitude as int);
+    }
+    uint64 magnitude = after - target;
+    if (magnitude > 2147483648) { return Result::Error(NativeError::Rel32OutOfRange); }
+    if (magnitude == 2147483648) { return Result::Ok(- 2147483648); }
+    return Result::Ok(-(magnitude as int));
+}
+Result<void, BackendError> WriteCallPlaceholder(ref ByteWriter writer, ref EncodingWorkspace workspace,
+BridgeText source, BridgeText target) {
+    if (not workspace.allowCalls) {
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
+    if (workspace.callCount >= Len(workspace.calls)) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    int site = writer.offset;
+    WriteByte(ref writer, 232) ?;
+    WriteI32LE(ref writer, 0) ?;
+    workspace.calls[workspace.callCount] = CallFixup {
+        CallFixupKind::Rel32Call, workspace.functionOrdinal, source, target, site, site + 1, 0, false
+    };
+    workspace.callCount += 1;
+    return Result::Ok();
+}
+// Fixed RSP addressing, independent of logical local slot IDs. This realizes
+// only admitted frame actions and incoming stack descriptors.
+Result<void, BackendError> WriteRSPReg(ref ByteWriter writer, bool load, Register physical, int offset,
+int width) {
+    if (offset < 0 or not ScalarStorageWidth(width)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    int code = RegisterEncoding(physical);
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, code, 4) ?;
+    }
+    int opcode = 137;
+    if (load) {
+        opcode = 139;
+    }
+    if (width == 1) {
+        opcode -= 1;
+    }
+    WriteByte(ref writer, opcode) ?;
+    if (offset <= 127) {
+        WriteByte(ref writer, 64 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteByte(ref writer, offset) ?;
+    }
+    else {
+        WriteByte(ref writer, 128 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteI32LE(ref writer, offset) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> EmitFrameAction(ref ByteWriter writer, FrameAction action) {
+    return match (action.kind) {
+        FrameActionKind::Allocate => WriteStackAdjustment(ref writer, true, action.offset),
+        FrameActionKind::Release => WriteStackAdjustment(ref writer, false, action.offset),
+        FrameActionKind::Save => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Restore => WriteRSPReg(ref writer, true, action.destination, action.offset,
+        action.width),
+        FrameActionKind::Store => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Load => WriteRSPReg(ref writer, true, action.destination, action.offset, action.width),
+        FrameActionKind::Copy => EmitFrameCopy(ref writer, action),
+        FrameActionKind::AbstractCall => Result::Error(BackendError::UnsupportedCallLowering),
+        FrameActionKind::Return => WriteByte(ref writer, 195),
+    };
+}
+Result<void, BackendError> EmitFrameCopy(ref ByteWriter writer, FrameAction action) {
+    int opcode = 137;
+    if (action.width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, action.destination, action.source, action.width);
 }
 // Native stack storage is distinct from persistent automata MachineFrame state.
 enum FrameError {
@@ -2031,11 +2189,19 @@ ref ByteWriter writer, bool wide, int regCode, int rmCode)
 Result<void, BackendError> WriteRegReg(
 ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
 {
-    if (width != 1 and width != 4 and width != 8)
+    if (width != 1 and width != 2 and width != 4 and width != 8)
     { return Result::Error(BackendError::UnsupportedInstruction); }
     int rmCode = RegisterEncoding(rm);
     int regCode = RegisterEncoding(reg);
-    WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    if (width == 1 and regCode < 8 and rmCode < 8 and(regCode >= 4 or rmCode >= 4)) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    }
     WriteByte(ref writer, opcode) ?;
     WriteByte(ref writer, 192 +(regCode % 8) * 8 + rmCode % 8) ?;
     return Result::Ok();
@@ -2082,7 +2248,7 @@ int opcode, Register reg, MachineOperand memory, int width)
     if (base >= 8) {
         rex = rex + 1;
     }
-    if (rex != 64) {
+    if (rex != 64 or(width == 1 and regCode >= 4 and regCode < 8)) {
         WriteByte(ref writer, rex) ?;
     }
     WriteByte(ref writer, opcode) ?;
@@ -2229,7 +2395,12 @@ ref ByteWriter writer, Register destination, int value, int width)
     if (width != 1 and width != 4)
     { return Result::Error(BackendError::UnsupportedInstruction); }
     int code = RegisterEncoding(destination);
-    WriteRex(ref writer, false, 0, code) ?;
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, false, 0, code) ?;
+    }
     if (width == 1)
     {
         if (value < - 128 or value > 255)
@@ -2346,6 +2517,14 @@ MachineInstruction instruction)
     if (instruction.op == Opcode::Mov)
     {
         Register destination = ResolveRegister(ref const allocation, instruction.destination) ?;
+        if (instruction.source0.kind == OperandKind::Memory and instruction.source0.base == - 1 and
+        TextEquals(ref const reader, instruction.source0.region, "incoming-arg")) {
+            if (instruction.source0.displacement < 40 or instruction.source0.displacement > 64 or frame.byteCount > 65528) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            return WriteRSPReg(ref writer, true, destination, frame.byteCount + instruction.source0.displacement,
+            instruction.width);
+        }
         if (instruction.source0.kind == OperandKind::Immediate)
         {
             int value = ParseI32Literal(ref const reader, instruction.source0.literal) ?;
@@ -2409,7 +2588,12 @@ MachineInstruction instruction)
         int condition = ConditionEncoding(instruction.condition);
         if (condition < 0) { return Result::Error(BackendError::InvalidEncoding); }
         int code = RegisterEncoding(destination);
-        WriteRex(ref writer, false, 0, code) ?;
+        if (code >= 4 and code < 8) {
+            WriteByte(ref writer, 64) ?;
+        }
+        else {
+            WriteRex(ref writer, false, 0, code) ?;
+        }
         WriteByte(ref writer, 15) ?;
         WriteByte(ref writer, 144 + condition) ?;
         WriteByte(ref writer, 192 + code % 8) ?;
@@ -2418,11 +2602,10 @@ MachineInstruction instruction)
     return Result::Error(BackendError::UnsupportedInstruction);
 }
 // Callers must discard output on Error; the published count is transactional.
-Result<int, BackendError> EncodeFunctionWithWorkspace(
-ref const BridgeReader reader, ref const BackendFunction function,
-ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan)
+Result<void, BackendError> EncodeFunctionIntoWriter(
+ref ByteWriter writer, ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, ref EncodingWorkspace plan)
 {
-    ByteWriter writer = ByteWriter{output, 0};
     if (function.blockCount < 0 or function.blockCount > Len(plan.blockOffsets))
     { return Result::Error(BackendError::CapacityExceeded); }
     int requiredFixups = 0;
@@ -2438,15 +2621,44 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
     if (requiredFixups > Len(plan.fixups))
     { return Result::Error(BackendError::CapacityExceeded); }
     plan.fixupCount = 0;
-    WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
+    Liveness live = EmptyLiveness();
+    if (plan.allowCalls) {
+        ComputeLiveness(ref const function, ref live) ?;
+        for (a in 0 .. frame.prologueCount) {
+            EmitFrameAction(ref writer, frame.prologue[a]) ?;
+        }
+    } else {
+        WriteStackAdjustment(ref writer, true, frame.byteCount) ?;
+    }
     for (bi in 0 .. function.blockCount)
     {
         MachineBlock block = function.blocks[bi];
         plan.blockOffsets[bi] = writer.offset;
         for (ii in 0 .. block.instructionCount)
         {
-            EmitInstruction(ref writer, ref const reader, ref const allocation,
-            ref const frame, function.instructions[block.firstInstruction + ii]) ?;
+            int position = block.firstInstruction + ii;
+            MachineInstruction instruction = function.instructions[position];
+            if (instruction.op == Opcode::Call) {
+                CallSiteActions site = EmptyCallSiteActions();
+                match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+                position, ref const frame, ref site)) {
+                    Result::Ok() => { }
+                    Result::Error(error) => {
+                        return Result::Error(BackendError::InvalidEncoding);
+                    }
+                }
+                for (a in 0 .. site.count) {
+                    if (a == site.callIndex) {
+                        WriteCallPlaceholder(ref writer, ref plan, function.identity, site.abi.target) ?;
+                    }
+                    else {
+                        EmitFrameAction(ref writer, site.actions[a]) ?;
+                    }
+                }
+            } else {
+                EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
+                instruction) ?;
+            }
         }
         match (block.terminator)
         {
@@ -2464,8 +2676,15 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
                 AddWorkspaceFixup(ref writer, ref plan, block.falseBlock) ?;
             }
             Opcode::Ret => {
-                WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
-                WriteByte(ref writer, 195) ?;
+                if (plan.allowCalls) {
+                    for (a in 0 .. frame.epilogueCount) {
+                        EmitFrameAction(ref writer, frame.epilogue[a]) ?;
+                    }
+                }
+                else {
+                    WriteStackAdjustment(ref writer, false, frame.byteCount) ?;
+                    WriteByte(ref writer, 195) ?;
+                }
             }
             Opcode::Trap => { }
             Opcode::None => { return Result::Error(BackendError::UnsupportedInstruction); }
@@ -2491,6 +2710,13 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
         int displacement = plan.blockOffsets[fixup.targetBlock] -(fixup.patchOffset + 4);
         PatchI32LE(ref writer, fixup.patchOffset, displacement) ?;
     }
+    return Result::Ok();
+}
+Result<int, BackendError> EncodeFunctionWithWorkspace(ref const BridgeReader reader, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan) {
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
+    ref const frame, ref plan) ?;
     return Result::Ok(writer.offset);
 }
 // Compatibility entry point retains the original bounded inline scratch budget.
@@ -2499,8 +2725,9 @@ ref const BridgeReader reader, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output)
 {
     EncodingPlan storage = EmptyEncodingPlan();
+    CallFixup[1] unused =[EmptyCallFixup() ...];
     EncodingWorkspace workspace = EncodingWorkspace {
-        Span(storage.blockOffsets), Span(storage.fixups), 0
+        Span(storage.blockOffsets), Span(storage.fixups), 0, Span(unused), 0, 0, false
     };
     return EncodeFunctionWithWorkspace(ref const reader, ref const function,
     ref const allocation, ref const frame, output, ref workspace);
@@ -2525,7 +2752,10 @@ Span<int> blockOffsets, Span<BranchFixup> fixups)
     }
     FinalizedFrame frame = FinalizeFrame(ref const function) ?;
     BridgeReader reader = BridgeReader{artifact, 0};
-    EncodingWorkspace workspace = EncodingWorkspace{blockOffsets, fixups, 0};
+    CallFixup[1] unused =[EmptyCallFixup() ...];
+    EncodingWorkspace workspace = EncodingWorkspace {
+        blockOffsets, fixups, 0, Span(unused), 0, 0, false
+    };
     return EncodeFunctionWithWorkspace(ref const reader, ref const function,
     ref const allocation, ref const frame, output, ref workspace);
 }
@@ -2562,6 +2792,252 @@ void BackendFacts()
     Assert.Concept<NoAllocation>(EmitFunctionWithWorkspace, "caller-supplied phase-local scratch");
     Assert.Concept<NoAllocation>(EncodeFunction, "bounded direct AMD64 encoding");
     Assert.Concept<NoAllocation>(EmitFunction, "artifact to bytes uses fixed storage");
+}
+Result<int, NativeError> FindNativeSymbol(ref const BridgeReader reader, ref const NativeImage image,
+BridgeText identity) {
+    if (image.symbolCount < 0 or image.symbolCount > 128) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int found = - 1;
+    if (identity.offset < 0 or identity.length <= 0 or identity.offset > Len(reader.data) or identity.length > Len(reader.data) - identity.offset) {
+        return Result::Error(NativeError::UnresolvedSymbol);
+    }
+    for (i in 0 .. image.symbolCount) {
+        BridgeText candidate = image.symbols[i].identity;
+        if (candidate.offset < 0 or candidate.length <= 0 or candidate.offset > Len(reader.data) or candidate.length > Len(reader.data) - candidate.offset) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        if (SameText(ref const reader, image.symbols[i].identity, identity)) {
+            if (found >= 0) { return Result::Error(NativeError::DuplicateSymbol); }
+            found = i;
+        }
+    }
+    if (found < 0) { return Result::Error(NativeError::UnresolvedSymbol); }
+    return Result::Ok(found);
+}
+Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFixup fixup, Span<byte> bytes) {
+    if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 5) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    if (fixup.kind != CallFixupKind::Rel32Call or fixup.sourceOrdinal < 0 or fixup.sourceOrdinal >= image.symbolCount or
+    fixup.callOffset < 0 or fixup.callOffset > image.byteCount - 5 or fixup.patchOffset != fixup.callOffset + 1 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    NativeSymbol source = image.symbols[fixup.sourceOrdinal];
+    if (source.offset < 0 or source.size < 5 or source.offset > image.byteCount or source.size > image.byteCount - source.offset) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or bytes[fixup.callOffset] as int != 232) {
+        return Result::Error(NativeError::MalformedPatch);
+    }
+    return Result::Ok();
+}
+// Validate all patch sites and targets before touching bytes. Both forward and
+// backward calls use this single pass after declaration-order body emission.
+Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref NativeImage image, Span<byte> bytes) {
+    if (image.finalized or image.symbolCount < 0 or image.symbolCount > 128 or image.fixupCount < 0 or image.fixupCount > 512 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int end = 0;
+    for (i in 0 .. image.symbolCount) {
+        NativeSymbol symbol = image.symbols[i];
+        if (symbol.ordinal != i or symbol.offset != end or symbol.size <= 0 or symbol.size > image.byteCount - end or symbol.calls < 0 or symbol.calls > 512) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        FindNativeSymbol(ref const reader, ref const image, symbol.identity) ?;
+        end += symbol.size;
+    }
+    if (end != image.byteCount) { return Result::Error(NativeError::InvalidInput); }
+    int[128] counts =[0 ...];
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        counts[fixup.sourceOrdinal] += 1;
+        int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
+        if (fixup.resolved or source != fixup.sourceOrdinal) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        if (i > 0) {
+            if (fixup.callOffset < image.fixups[i - 1].callOffset + 5) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        for (b in 0 .. 4) {
+            if (bytes[fixup.patchOffset + b] != 0) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+    }
+    ByteWriter writer = ByteWriter{bytes, image.byteCount};
+    for (i in 0 .. image.symbolCount) {
+        if (counts[i] != image.symbols[i].calls) {
+            return Result::Error(NativeError::UnresolvedFixup);
+        }
+    }
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        int delta = CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+        match (PatchI32LE(ref writer, fixup.patchOffset, delta)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::MalformedPatch); }
+        }
+        image.fixups[i] = CallFixup {
+            fixup.kind, fixup.sourceOrdinal, fixup.source, fixup.target, fixup.callOffset, fixup.patchOffset,
+            delta, true
+        };
+    }
+    image.finalized = true;
+    return ValidateNativeImage(ref const reader, ref const image, bytes);
+}
+Result<void, NativeError> ValidateNativeImage(ref const BridgeReader reader, ref const NativeImage image,
+Span<byte> bytes) {
+    if (not image.finalized or image.fixupCount < 0 or image.fixupCount > 512) {
+        return Result::Error(NativeError::UnresolvedFixup);
+    }
+    if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
+        return Result::Error(NativeError::InvalidInput);
+    }
+    int end = 0;
+    for (i in 0 .. image.symbolCount) {
+        NativeSymbol symbol = image.symbols[i];
+        if (symbol.ordinal != i or symbol.offset != end or symbol.size <= 0 or symbol.size > image.byteCount - end or symbol.calls < 0 or symbol.calls > 512) {
+            return Result::Error(NativeError::InvalidInput);
+        }
+        FindNativeSymbol(ref const reader, ref const image, symbol.identity) ?;
+        end += symbol.size;
+    }
+    if (end != image.byteCount) { return Result::Error(NativeError::InvalidInput); }
+    int[128] counts =[0 ...];
+    for (i in 0 .. image.fixupCount) {
+        CallFixup fixup = image.fixups[i];
+        if (not fixup.resolved) { return Result::Error(NativeError::UnresolvedFixup); }
+        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
+        if (source != fixup.sourceOrdinal) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        if (i > 0) {
+            if (fixup.callOffset < image.fixups[i - 1].callOffset + 5) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+        }
+        counts[fixup.sourceOrdinal] += 1;
+        int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
+        int delta = CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
+        if (delta != fixup.displacement) {
+            return Result::Error(NativeError::MalformedPatch);
+        }
+        int remaining = delta;
+        for (b in 0 .. 4) {
+            int digit = remaining % 256;
+            if (digit < 0) {
+                digit += 256;
+            }
+            if (bytes[fixup.patchOffset + b] as int != digit) {
+                return Result::Error(NativeError::MalformedPatch);
+            }
+            remaining =(remaining - digit) / 256;
+        }
+    }
+    for (i in 0 .. image.symbolCount) {
+        if (counts[i] != image.symbols[i].calls) {
+            return Result::Error(NativeError::UnresolvedFixup);
+        }
+    }
+    return Result::Ok();
+}
+// Output is scratch until Ok and finalized. Bootstrap callers must never
+// publish an image after Error; all code/branch/call patches precede RX.
+Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    image = EmptyNativeImage();
+    match (ValidateMachineBridge(artifact)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadBridgeIdentity(ref reader)) {
+        Result::Ok() => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    WireMachineModule document = ReadNativeModule(ref reader) ?;
+    if (document.Functions.count > 128) {
+        return Result::Error(NativeError::CapacityExceeded);
+    }
+    reader.offset = document.Functions.offset;
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
+    for (ordinal in 0 .. document.Functions.count) {
+        WireMachineFunction wire = ReadNativeFunction(ref reader) ?;
+        BackendFunction function = EmptyFunction();
+        match (ProjectWireFunction(ref const reader, wire, ref function)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        match (LayoutLoweredBlocks(ref function)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        Allocation allocation = EmptyAllocation();
+        match (AllocateRegistersWithPolicy(ref const function, ref allocation, true)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::CapacityExceeded); }
+        }
+        FinalizedFrame frame = EmptyFinalizedFrame();
+        match (QualifyFunctionFrame(ref const function, ref const allocation, ref frame)) {
+            Result::Ok() => { }
+            Result::Error(error) => { return Result::Error(NativeError::FrameFailure); }
+        }
+        // Large physical adjustments require guard-page probing, not a naked
+        // subtraction. Keep that separate production capability explicit.
+        if (frame.byteCount >= 4096) {
+            return Result::Error(NativeError::StackProbeRequired);
+        }
+        workspace.functionOrdinal = ordinal;
+        int begin = writer.offset;
+        // One writer coordinate system for body, branch and call offsets.
+        match (EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
+        ref const frame, ref workspace)) {
+            Result::Ok() => { }
+            Result::Error(error) => {
+                if (error == BackendError::BufferFull or error == BackendError::CapacityExceeded) {
+                    return Result::Error(NativeError::CapacityExceeded);
+                }
+                return Result::Error(NativeError::UnsupportedEncoding);
+            }
+        }
+        image.symbols[ordinal] = NativeSymbol {
+            function.identity, function.name, ordinal, begin, writer.offset - begin, allocation.callCount
+        };
+        image.symbolCount += 1;
+    }
+    image.fixupCount = workspace.callCount;
+    image.byteCount = writer.offset;
+    ResolveNativeCalls(ref const reader, ref image, output) ?;
+    return Result::Ok(image.byteCount);
+}
+Result<WireMachineModule, NativeError> ReadNativeModule(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<WireMachineModule>{0})) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput),
+    };
+}
+Result<WireMachineFunction, NativeError> ReadNativeFunction(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<WireMachineFunction>{0})) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput),
+    };
+}
+void NativeFacts() {
+    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
+    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
+    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
+    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
 }
 
 // This pins self-contained in-memory records, independently of the explicit

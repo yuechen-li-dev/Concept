@@ -1,5 +1,8 @@
 # EVT2e call handoffs
 
+Current state: **EVT2e complete for bounded direct internal scalar Win64 calls**.
+The dated handoffs below preserve the boundaries at each milestone.
+
 ## EVT2e1: meaningful progression (historical)
 
 Baseline: `a85747a2ff061848e06ecbc10e68d88710cf278c` (`concept-evt1-stage0-go`). The existing bridge remains `CMIRAMD2`, version 2, schema hash `99d13195dd9968f6d9807075e6ac8890ec711d569ad2dcc35ff0c3ca56709593`. Its wire contract has not been changed.
@@ -83,3 +86,36 @@ plans repeat deterministically in Normal/Verify. Qualified fixture frames span
 and unwind/SEH remain deferred. See
 [EVT2e4 conformance](../../conformance/EVT2E4-CONFORMANCE.md) for full evidence,
 metadata, measurements and boundary details.
+
+## EVT2e5: success — native direct-call qualification and EVT2e closure
+
+Baseline `5b2e2b3cc630f1bfc7ec9077837fdd1918503168`, compiler
+`concept-evt1-stage0-go`, unchanged CMIRAMD3 v3 hash
+`3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312`.
+
+The normal CLI now selects Concept-owned module emission. Declaration-order
+bodies retain checked semantic identities; E8 rel32 placeholders are resolved
+through one forward/backward pass with checked successor-relative signed range,
+complete patch admission and independent final-image validation. Concrete frame
+actions emit prologues, epilogues, saves, logical-width spills/reloads,
+cycle temporaries, outgoing arguments and RAX result handoff. Go remains
+bootstrap/test/diagnostic orchestration, without an encoding or linking algorithm.
+
+The 2368-byte flagship contains 37 functions and 29 calls. Strict C11/native
+Normal/Verify parity covers 0/1/4/5/8 arguments, scalar/bool/void returns,
+narrow and wide values and spills, nested/multiple calls, callee saves,
+repeated sources, early returns and bounded recursion. Independent GPR/RSP/canary
+and entry alignment probes pass, as do controlled native two/three-way cycles.
+100 complete emissions pin all final bytes and metadata; no-call frozen bytes
+and EVT2x native execution remain stable.
+
+EVT2e is **complete for direct module-local integer/bool Win64 calls through
+eight arguments**. Address-sized U64 data is preserved, but pointer-like source
+calls remain outside the checked producer contract. External linkage, XMM,
+aggregates/sret, varargs, indirect/tail calls, object relocations and unwind/SEH
+remain deferred; frames requiring stack probing stop explicitly. The single-body
+compatibility API names `AMD64_CALL_REQUIRES_MODULE_IMAGE`; it is not the normal
+CLI path. No following float milestone is begun.
+
+See [EVT2e5 conformance](../../conformance/EVT2E5-CONFORMANCE.md) for exact bytes,
+authority boundaries, ABI instrumentation, measurements and all regression gates.

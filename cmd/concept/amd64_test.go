@@ -29,14 +29,14 @@ func TestAMD64BootstrapLoadsBackendImports(t *testing.T) {
 	}
 }
 
-func TestEVT2e2CLIContractAndBoundary(t *testing.T) {
+func TestEVT2e5CLIContractAndEmission(t *testing.T) {
 	fixture := "../../internal/concept/testdata/evt2e_calls.concept"
 	for _, command := range []string{"lir", "machineir", "amd64"} {
 		cmd := exec.Command("go", "run", ".", command, fixture)
 		output, err := cmd.CombinedOutput()
 		if command == "amd64" {
-			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_ENCODING") {
-				t.Fatalf("imprecise later backend boundary: %v\n%s", err, output)
+			if err != nil || !strings.Contains(string(output), "native image bytes=") {
+				t.Fatalf("native module emission failed: %v\n%s", err, output)
 			}
 		} else if err != nil || !strings.Contains(string(output), "call @") && !strings.Contains(string(output), "call i32 @") {
 			t.Fatalf("%s call CLI: %v\n%s", command, err, output)
@@ -64,7 +64,7 @@ func TestEVT2e2CLIContractAndBoundary(t *testing.T) {
 	}
 }
 
-func TestEVT2e3CLIDebugPlans(t *testing.T) {
+func TestEVT2e5CLIDebugPlans(t *testing.T) {
 	cases := []struct {
 		name, source string
 		wants        []string
@@ -81,8 +81,8 @@ func TestEVT2e3CLIDebugPlans(t *testing.T) {
 				t.Fatal(err)
 			}
 			output, err := exec.Command("go", "run", ".", "amd64", path).CombinedOutput()
-			if err == nil || !strings.Contains(string(output), "AMD64_UNSUPPORTED_CALL_ENCODING") {
-				t.Fatalf("boundary: %v\n%s", err, output)
+			if err != nil || !strings.Contains(string(output), "native image bytes=") {
+				t.Fatalf("native module emission failed: %v\n%s", err, output)
 			}
 			for _, want := range tc.wants {
 				if !strings.Contains(string(output), want) {
