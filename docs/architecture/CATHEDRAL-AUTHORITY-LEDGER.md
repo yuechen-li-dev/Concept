@@ -22,7 +22,8 @@ second contract author.
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
 | Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call and EVT2f width-specific floating input contracts qualified; later Concept transformation parity |
-| Scalar floating/XMM native backend | Pending Cathedral implementation | Strict C11 source oracle only | Stage-0 produces checked floating LIR; rejects it before CMIRAMD3 projection | NOT_YET_QUALIFIED | CMIRAMD4 must add exact scalar/register classes; allocation, SSE selection, ABI, spills and encoding remain Concept responsibilities |
+| Scalar floating/XMM native backend | Pending Cathedral implementation | Strict C11 source oracle only | Stage-0 produces checked floating LIR and virtual CMIRAMD4 | NOT_YET_QUALIFIED | Whole-artifact Concept admission precedes AMD64_UNSUPPORTED_XMM_ALLOCATION; physical allocation, floating ABI, spills, SSE and execution remain pending Cathedral |
+| CMIRAMD4 scalar/XMM contract | Concept BridgeSchema4 | Exact generated codec agreement and 52 malformed artifacts | Generated Go transport; checked LIR projection/verifier | CONCEPT_AUTHORITATIVE | Virtual class, exact representation, IEEE bits, semantic operations and ordered calls qualified in EVT2f2; no physical XMM identities |
 | MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
 | Call artifact admission | Concept `BridgeValidate` on normal AMD64 path | Stage-0 verifier checks producer input | Go semantic transport/verifier; generated codec | SHARED_BY_DESIGN | Typed transport through native scalar Win64 execution qualified |
@@ -89,3 +90,16 @@ cycles, alignment and 100-run bytes. CMIRAMD3 is unchanged. EVT2e is complete
 for direct internal integer/bool Win64 calls through eight arguments; pointer
 source calls and the deferred ABI/linkage/unwind features remain unqualified.
 See [EVT2e5 conformance](../conformance/EVT2E5-CONFORMANCE.md).
+
+EVT2f2 adds a separate virtual-only scalar contract without mutating CMIRAMD3.
+BridgeSchema4 owns its enums and records; both codecs and the Go model are derived
+from checked Concept reflection. BridgeValidate4 owns complete artifact admission
+on the normal Concept EmitModule path, before output/image mutation. Stage-0
+projects verified LIR, checks input consistency through the existing LIR verifier,
+transports artifacts and orchestrates C bootstrap execution. Class metadata is
+checked input, not physical allocation policy. The retained Go code is the seed
+and independent producer checker; no XMM allocator, float ABI planner, spill
+algorithm or SSE encoder exists in Go. XMM allocation, floating ABI/clobbers,
+floating spills/frame integration, SSE encoding and native float execution remain
+NOT_YET_QUALIFIED, with Cathedral as the intended owner. See the
+[EVT2f2 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f2--cmiramd4-transport-qualification).

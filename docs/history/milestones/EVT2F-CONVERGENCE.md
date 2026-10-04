@@ -56,3 +56,69 @@ ledgers; tracked worktree cleanliness is checked after commit.
 
 MEANINGFUL PROGRESSION — checked float32/float64 LIR works; CMIRAMD4 scalar/XMM
 transport is the next explicit backend boundary.
+
+## EVT2f2 — scalar/XMM contract qualification
+
+Started clean at requested baseline
+`9b1b9ea25d5f017b9146db676d02f914d348601f`, compiler
+`concept-evt1-stage0-go`, on `codex/evt2f2-cmiramd4`. Baseline full regression was
+verified in an isolated detached checkout of that exact commit (compiler
+327.518 s, CLI 24.375 s, GPU-free Vulkan 0.411 s). Baseline vet and focused race
+passed (5.561 s); Standard 42, DragonGod 23 and Golden 130 passed each in
+Normal/Verify. The full lane covers semantic corpus, EVT2/EVT2x/EVT2e native,
+frozen bytes and representative determinism. The isolated baseline checkout is
+removed after its completed run.
+
+Removed blocker: CMIRAMD3 could not represent scalar floating class/semantics.
+The separate checked Concept CMIRAMD4 virtual schema now carries exact scalar
+representation, GPR/XMM class, IEEE bit literals, arithmetic/negation/comparisons,
+typed slots/arrays, ordered mixed calls, return and provenance identities.
+Generated Go model/codec and Concept decoder are schema-derived. Existing
+CMIRAMD3 schema/codecs/metadata/native fixtures remain byte-for-byte unchanged.
+
+CMIRAMD4 is version 4/hash
+`aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c`.
+Its separate schema adds 13 records/four enums, 62 fields and 50 enum cases.
+Real `concept generated` codec discovery rises from 41 to 73 declarations
+(+32 including inherited v3). Strict v4 readers reject older identities and
+stale v4 hashes; the public dispatcher deliberately retains a separate v3 reader.
+
+The 32-function fixture now succeeds in LIR and MachineIR. Concept validates
+the complete v4 artifact before native output/image mutation, then stops at
+`AMD64_UNSUPPORTED_XMM_ALLOCATION`. This is the first true unimplemented backend
+step. EVT2f3 must qualify physical XMM allocation, positional mixed Win64 ABI,
+XMM clobbers, float spills and frame integration; subsequent SSE encoding/native
+execution remain unqualified. No physical XMM, floating frame/ABI or SSE feature
+was implemented in this tranche.
+
+Focused tests passed: 100-run schema/codec/text/transport/digest agreement, a
+20-byte exact transport golden, five digest-sensitive mutation families, 52
+malformed artifacts in Go and compiled Concept, exact special values and special
+comparison operands, typed mixed and void calls, Normal/Verify source-free
+roundtrip and untouched output/native-image checks. The real CLI boundary test
+passed (5.530 s). V3 generated-output agreement passed without regenerating any
+frozen fixture. Informational size/time measurements and the Stage-0 classification
+are recorded in the [conformance report](../../conformance/EVT2F-CONFORMANCE.md#evt2f2--cmiramd4-transport-qualification).
+
+Final `go test ./... -count=1` passed: compiler 358.086 s, CLI 35.709 s,
+GPU-free Vulkan 0.348 s, including corpus, EVT2/EVT2x/EVT2e native, frozen
+integer/native bytes and representative deterministic gates. Final vet passed;
+focused race passed (49.941 s while other qualification lanes
+ran). Standard 42, DragonGod 23 and Golden 130 passed in each Normal/Verify mode.
+Authored schema/validator check/format and the real R9d match-preference manifest
+lint in both modes passed with no findings. Typed PlainData/NoAllocation
+assertions were checked through the real backend compile. Optimized routine
+shared-build reuse remains intact; opt-in 100 cold-build/probe stress was not
+enabled. Frozen root/legacy Zig suites were skipped because their paths were
+unchanged. Qualification logs are under ignored `artifacts/evt2f2-*`.
+
+Implementation and tests are committed as
+`8d7d726c4e6bbed6d83d0e5eed4e6d59563d73a2` (EVT2f2: qualify CMIRAMD4 virtual
+scalar and XMM transport). The following qualification commit contains this
+conformance history and authority/migration ledgers; its full identity and clean
+tracked worktree status are reported at completion. After the final whitespace
+formatting, compiled Concept admission/native-boundary and existing EVT2e5
+native internal-call tests passed again (17.589 s, both Normal/Verify, real native
+ABI sentinels and 100 image emissions). No frozen v3 artifact changed.
+
+SUCCESS — EVT2f2 CMIRAMD4 scalar/XMM contract qualified.
