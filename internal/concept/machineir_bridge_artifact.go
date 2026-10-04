@@ -86,6 +86,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	if err := VerifyMachineIR(m); err != nil {
 		return nil, err
 	}
+	if m.Scalar != nil {
+		return encodeScalarMachineBridge(*m.Scalar)
+	}
 	w := &machineBridgeWriter{}
 	hash, err := hex.DecodeString(MachineBridgeSchemaHash)
 	if err != nil {
@@ -103,6 +106,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	return w.Bytes(), nil
 }
 func DecodeMachineBridge(data []byte) (MachineModule, error) {
+	if len(data) >= 8 && string(data[:8]) == ScalarMachineBridgeSchema {
+		return DecodeScalarMachineBridge(data)
+	}
 	if len(data) < machineBridgeHeaderSize {
 		return MachineModule{}, fmt.Errorf("MIR_BRIDGE_TRUNCATED_HEADER")
 	}

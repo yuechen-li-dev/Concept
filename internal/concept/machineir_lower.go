@@ -11,33 +11,28 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
-	// Admission precedes incoming ABI selection and every GPR projection. The
-	// next backend contract must version exact scalar/XMM classes in Concept's
-	// sole bridge schema; never reinterpret CMIRAMD3's integer width vocabulary.
+	// Select the virtual scalar contract before any legacy physical projection.
 	for _, f := range lir.Functions {
-		requireClass := func(t LIRType) error {
-			if strings.Contains(string(t), "float32") || strings.Contains(string(t), "float64") {
-				return fmt.Errorf("MIR_FLOAT_REQUIRES_CMIRAMD4 %s: %s requires explicit scalar and XMM register classes", f.Name, t)
-			}
-			return nil
+		hasFloat := func(t LIRType) bool {
+			return strings.Contains(string(t), "float32") || strings.Contains(string(t), "float64")
 		}
-		if err := requireClass(f.Result); err != nil {
-			return MachineModule{}, err
+		if hasFloat(f.Result) {
+			return projectScalarMachine(lir)
 		}
 		for _, p := range f.Params {
-			if err := requireClass(p.Type); err != nil {
-				return MachineModule{}, err
+			if hasFloat(p.Type) {
+				return projectScalarMachine(lir)
 			}
 		}
 		for _, s := range f.Slots {
-			if err := requireClass(s.Type); err != nil {
-				return MachineModule{}, err
+			if hasFloat(s.Type) {
+				return projectScalarMachine(lir)
 			}
 		}
 		for _, b := range f.Blocks {
 			for _, in := range b.Instructions {
-				if err := requireClass(in.Type); err != nil {
-					return MachineModule{}, err
+				if hasFloat(in.Type) {
+					return projectScalarMachine(lir)
 				}
 			}
 		}

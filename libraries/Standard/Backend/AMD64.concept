@@ -1,5 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
+import Standard.Backend.BridgeValidate4;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.Win64ABI;
 import Standard.Semantic.Vocabulary;
@@ -972,7 +973,7 @@ record struct NativeSymbol {
 }
 enum NativeError {
     CapacityExceeded, InvalidInput, DuplicateSymbol, UnresolvedSymbol, Rel32OutOfRange, MalformedPatch,
-    UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired
+    UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation
 }
 struct NativeImage {
     NativeSymbol[128] symbols;
@@ -1005,6 +1006,7 @@ string DescribeNativeError(NativeError error) {
         NativeError::MalformedPatch => "AMD64_MALFORMED_CALL_PATCH",
         NativeError::UnresolvedFixup => "AMD64_UNRESOLVED_CALL_FIXUP",
         NativeError::UnsupportedEncoding => "AMD64_UNSUPPORTED_ENCODING_OR_MEMORY_OPERAND",
+        NativeError::UnsupportedXMMAllocation => "AMD64_UNSUPPORTED_XMM_ALLOCATION",
         NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
         NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
     };
@@ -2952,6 +2954,20 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8) {
+        bool scalar = true;
+        for (i in 0 .. 8) {
+            if (artifact[i] != ScalarBridgeMagic[i]) {
+                scalar = false;
+            }
+        }
+        if (scalar) {
+            match (ValidateScalarMachineBridge(artifact)) {
+                Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+                Result::Ok => { return Result::Error(NativeError::UnsupportedXMMAllocation); }
+            }
+        }
+    }
     image = EmptyNativeImage();
     match (ValidateMachineBridge(artifact)) {
         Result::Ok() => { }

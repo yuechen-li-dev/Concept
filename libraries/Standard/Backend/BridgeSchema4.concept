@@ -1,0 +1,173 @@
+module Standard.Backend.BridgeSchema4;
+profile Core;
+import Standard.Backend.BridgeSchema;
+
+// CMIRAMD3 remains frozen. CMIRAMD4 is virtual-only checked scalar input.
+comptime string ScalarBridgeMagic = "CMIRAMD4";
+comptime uint ScalarBridgeVersion = 4u;
+comptime uint ScalarBridgeMaxItems = 1048576u;
+comptime string ScalarBridgeRepresentation = "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32];scalar=exact;register-class=virtual;float-bits=lowercase-fixed-hex";
+
+[[reflect]] enum RegisterClass {
+    [[bridge_value("GPR")]] GPR,
+    [[bridge_value("XMM")]] XMM
+}
+[[reflect]] enum ScalarRepresentation {
+    [[bridge_value("void")]] Void,
+    [[bridge_value("bool")]] Bool,
+    [[bridge_value("i8")]] I8,
+    [[bridge_value("u8")]] U8,
+    [[bridge_value("i16")]] I16,
+    [[bridge_value("u16")]] U16,
+    [[bridge_value("i32")]] I32,
+    [[bridge_value("u32")]] U32,
+    [[bridge_value("i64")]] I64,
+    [[bridge_value("u64")]] U64,
+    [[bridge_value("float32")]] Float32,
+    [[bridge_value("float64")]] Float64,
+    [[bridge_value("address")]] Address
+}
+[[reflect]] enum ScalarOpcode {
+    [[bridge_value("const")]] Const,
+    [[bridge_value("fconst")]] FloatConst,
+    [[bridge_value("load_slot")]] LoadSlot,
+    [[bridge_value("store_slot")]] StoreSlot,
+    [[bridge_value("load")]] Load,
+    [[bridge_value("store")]] Store,
+    [[bridge_value("index_address")]] IndexAddress,
+    [[bridge_value("check_index")]] CheckIndex,
+    [[bridge_value("checked_add")]] CheckedAdd,
+    [[bridge_value("checked_sub")]] CheckedSub,
+    [[bridge_value("checked_mul")]] CheckedMul,
+    [[bridge_value("add")]] Add,
+    [[bridge_value("sub")]] Sub,
+    [[bridge_value("mul")]] Mul,
+    [[bridge_value("eq")]] Equal,
+    [[bridge_value("ne")]] NotEqual,
+    [[bridge_value("lt")]] Less,
+    [[bridge_value("le")]] LessEqual,
+    [[bridge_value("gt")]] Greater,
+    [[bridge_value("ge")]] GreaterEqual,
+    [[bridge_value("fadd")]] FloatAdd,
+    [[bridge_value("fsub")]] FloatSub,
+    [[bridge_value("fmul")]] FloatMul,
+    [[bridge_value("fdiv")]] FloatDiv,
+    [[bridge_value("fneg")]] FloatNeg,
+    [[bridge_value("feq")]] FloatEqual,
+    [[bridge_value("fne")]] FloatNotEqual,
+    [[bridge_value("flt")]] FloatLess,
+    [[bridge_value("fle")]] FloatLessEqual,
+    [[bridge_value("fgt")]] FloatGreater,
+    [[bridge_value("fge")]] FloatGreaterEqual,
+    [[bridge_value("call")]] Call
+}
+[[reflect]] enum ScalarTerminator {
+    [[bridge_value("return")]] Return,
+    [[bridge_value("jump")]] Jump,
+    [[bridge_value("branch")]] Branch
+}
+[[reflect]] record struct WireScalarHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireScalarSpan {
+    int Line;
+    int Column;
+}
+[[reflect]] record struct WireScalarValueUse {
+    int Value;
+}
+[[reflect]] record struct WireScalarMachineVReg {
+    int ID;
+    RegisterClass Class;
+    ScalarRepresentation Representation;
+    int Width;
+    bool Address;
+}
+[[reflect]] record struct WireScalarMachineParameter {
+    int Index;
+    int Value;
+    BridgeText Type;
+}
+[[reflect]] record struct WireScalarMachineSlot {
+    int ID;
+    BridgeText Name;
+    ScalarRepresentation Representation;
+    int Size;
+    int Align;
+    int Extent;
+    int ParamValue;
+}
+[[reflect]] record struct WireScalarMachineCallArgument {
+    int Value;
+    ScalarRepresentation Type;
+}
+[[reflect]] record struct WireScalarMachineCall {
+    BridgeText Target;
+    BridgeText Convention;
+    BridgeSequence<WireScalarMachineCallArgument> Arguments;
+    ScalarRepresentation Result;
+}
+[[reflect]] record struct WireScalarMachineInstruction {
+    ScalarOpcode Op;
+    int Result;
+    ScalarRepresentation Representation;
+    BridgeSequence<WireScalarValueUse> Args;
+    int Slot;
+    BridgeText Literal;
+    int Extent;
+    int Stride;
+    int LIRBlock;
+    int LIRInstruction;
+    WireScalarSpan Source;
+    BridgeText Decision;
+    BridgeSequence<BridgeText> Facts;
+    BridgeSequence<WireScalarMachineCall> Calls;
+}
+[[reflect]] record struct WireScalarMachineTerminator {
+    ScalarTerminator Op;
+    int Value;
+    int True;
+    int False;
+    WireScalarSpan Source;
+}
+[[reflect]] record struct WireScalarMachineBlock {
+    int ID;
+    BridgeSequence<WireScalarMachineInstruction> Instructions;
+    WireScalarMachineTerminator Term;
+}
+[[reflect]] record struct WireScalarMachineFunction {
+    BridgeText Identity;
+    BridgeText Name;
+    BridgeText Target;
+    BridgeText ABI;
+    ScalarRepresentation Result;
+    WireScalarSpan Source;
+    BridgeSequence<BridgeText> Facts;
+    BridgeSequence<BridgeText> Decisions;
+    BridgeSequence<WireScalarMachineParameter> Params;
+    BridgeSequence<WireScalarMachineVReg> VRegs;
+    BridgeSequence<WireScalarMachineSlot> Slots;
+    BridgeSequence<WireScalarMachineBlock> Blocks;
+}
+[[reflect]] record struct WireScalarMachineModule {
+    BridgeSequence<WireScalarMachineFunction> Functions;
+}
+reflect<RegisterClass>;
+reflect<ScalarRepresentation>;
+reflect<ScalarOpcode>;
+reflect<ScalarTerminator>;
+reflect<WireScalarHeader>;
+reflect<WireScalarSpan>;
+reflect<WireScalarValueUse>;
+reflect<WireScalarMachineVReg>;
+reflect<WireScalarMachineParameter>;
+reflect<WireScalarMachineSlot>;
+reflect<WireScalarMachineCallArgument>;
+reflect<WireScalarMachineCall>;
+reflect<WireScalarMachineInstruction>;
+reflect<WireScalarMachineTerminator>;
+reflect<WireScalarMachineBlock>;
+reflect<WireScalarMachineFunction>;
+reflect<WireScalarMachineModule>;

@@ -64,6 +64,26 @@ func TestEVT2e5CLIContractAndEmission(t *testing.T) {
 	}
 }
 
+func TestEVT2f2CLIContractAndBoundary(t *testing.T) {
+	fixture := "../../language/evt2f/valid/scalars.concept"
+	for _, command := range []string{"lir", "machineir", "amd64"} {
+		output, err := exec.Command("go", "run", ".", command, fixture).CombinedOutput()
+		text := string(output)
+		if command == "amd64" {
+			if err == nil || !strings.Contains(text, "AMD64_UNSUPPORTED_XMM_ALLOCATION") || strings.Contains(text, "native image bytes=") {
+				t.Fatalf("native boundary: %v\n%s", err, text)
+			}
+		} else {
+			if err != nil || !strings.Contains(text, "fadd float32") || !strings.Contains(text, "0x3ff0000000000001") {
+				t.Fatalf("%s: %v\n%s", command, err, text)
+			}
+			if command == "machineir" && (!strings.Contains(text, "CMIRAMD4 v4") || !strings.Contains(text, "float32 / XMM")) {
+				t.Fatal(text)
+			}
+		}
+	}
+}
+
 func TestEVT2e5CLIDebugPlans(t *testing.T) {
 	cases := []struct {
 		name, source string

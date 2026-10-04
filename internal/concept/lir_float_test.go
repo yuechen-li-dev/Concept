@@ -50,8 +50,8 @@ func TestEVT2fScalarLIRAndDeterminism(t *testing.T) {
 			t.Fatalf("floating LIR changed on run %d: %v", i+1, err)
 		}
 	}
-	if machine, err := LowerLirToAmd64Machine(lir); err == nil || !strings.Contains(err.Error(), "MIR_FLOAT_REQUIRES_CMIRAMD4") || len(machine.Functions) != 0 {
-		t.Fatalf("float entered CMIRAMD3: %+v, %v", machine, err)
+	if machine, err := LowerLirToAmd64Machine(lir); err != nil || machine.Scalar == nil || len(machine.Functions) != 0 {
+		t.Fatalf("float did not enter the virtual CMIRAMD4 contract: %+v, %v", machine, err)
 	}
 }
 
@@ -145,9 +145,9 @@ func TestEVT2fScalarBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = GenerateMachineIR(m)
-		if err == nil || !strings.Contains(err.Error(), "MIR_FLOAT_REQUIRES_CMIRAMD4") {
-			t.Fatalf("floating input escaped class admission: %v", err)
+		machine, err := GenerateMachineIR(m)
+		if err != nil || machine.Scalar == nil {
+			t.Fatalf("floating input did not select scalar class transport: %v", err)
 		}
 	}
 }
