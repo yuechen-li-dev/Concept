@@ -1,0 +1,11 @@
+profile Core;
+// A packed four-lane wrapper has no scalar XMM admission.
+record struct Float4 {
+    float x;
+    float y;
+    float z;
+    float w;
+}
+Float4 RejectVector(Float4 value) {
+    return value;
+}

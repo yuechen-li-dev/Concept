@@ -1,0 +1,4 @@
+profile Core;
+half RejectHalf(half value) {
+    return value;
+}

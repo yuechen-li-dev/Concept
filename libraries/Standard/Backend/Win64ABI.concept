@@ -1,6 +1,7 @@
 module Standard.Backend.Win64ABI;
 profile Core;
 import Standard.Backend.BridgeValidate;
+import Standard.Backend.BridgeValidate4;
 import Standard.Semantic.Vocabulary;
 
 using IntegerRegisterTable = Register<array>[4];
@@ -21,7 +22,7 @@ comptime int ShadowSpaceBytes = 32;
 comptime int StackArgumentBytes = 8;
 enum ABIError {
     InvalidPlan, CapacityExceeded, UnsupportedClass, UnsupportedForm, UnsupportedConvention, InvalidAllocation,
-    StaleFlags
+    StaleFlags, ReservedXMM, IncompatibleRepresentation, SpillCapacityExceeded
 }
 enum ABIForm {
     Direct, Indirect, VarArgs, Tail
@@ -50,6 +51,7 @@ struct CallRequest {
     ABIValue result;
     bool hasResult;
     int instruction;
+    ScalarCallState scalar;
 }
 record struct ArgumentPlacement {
     int index;
@@ -83,6 +85,7 @@ struct CallPlan {
     ArgumentMove[12] moves;
     int moveCount;
     int temporaryCount;
+    ScalarCallState scalar;
 }
 record struct Preservation {
     int value;
@@ -93,6 +96,8 @@ record struct Preservation {
     int start;
     int end;
     PreservationClass classification;
+    ScalarLocation location;
+    ScalarRepresentation representation;
 }
 ABIValue EmptyABIValue() {
     return ABIValue{- 1, CallValueType::Void, ABIClass::Integer, 0};
@@ -105,7 +110,7 @@ ArgumentMove EmptyArgumentMove() {
 CallRequest EmptyCallRequest() {
     return CallRequest {
         ABIForm::Direct, CallConvention::Win64, BridgeText{0, 0},[EmptyABIValue() ...], 0, EmptyABIValue(),
-        false, - 1
+        false, - 1, EmptyScalarCallState()
     };
 }
 CallPlan EmptyCallPlan() {
@@ -114,7 +119,7 @@ CallPlan EmptyCallPlan() {
         [ArgumentPlacement{0, EmptyABIValue(), Register::RAX, false, - 1}
         ...], 0,
         EmptyABIValue(), false, Register::RAX, 32, 0, 0, true,
-        [EmptyArgumentMove() ...], 0, 0
+        [EmptyArgumentMove() ...], 0, 0, EmptyScalarCallState()
     };
 }
 bool IsCallerSaved(Register physical) {
@@ -160,50 +165,48 @@ Result<void, ABIError> ValidateABIValue(ABIValue value) {
     if (not valid) { return Result::Error(ABIError::InvalidPlan); }
     return Result::Ok();
 }
+// CMIRAMD3 is an explicitly checked adapter to the same positional policy.
+// Its public legacy shape remains unchanged for existing integer consumers.
 Result<void, ABIError> PlanWin64Call(ref const CallRequest request, ref CallPlan plan) {
+    if (request.scalar.enabled) { return PlanScalarWin64Call(ref const request, ref plan); }
     if (request.form != ABIForm::Direct) { return Result::Error(ABIError::UnsupportedForm); }
     if (request.convention != CallConvention::Win64) {
         return Result::Error(ABIError::UnsupportedConvention);
     }
-    if (request.argumentCount < 0 or request.argumentCount > 8) {
+    if (request.argumentCount<0 or request.argumentCount>8) {
         return Result::Error(ABIError::CapacityExceeded);
     }
-    plan = EmptyCallPlan();
-    plan.convention = request.convention;
-    plan.target = request.target;
-    plan.instruction = request.instruction;
-    plan.argumentCount = request.argumentCount;
+    CallRequest typed = request;
+    typed.scalar.enabled = true;
     for (i in 0 .. request.argumentCount) {
         ValidateABIValue(request.arguments[i]) ?;
-        Register physical = Register::RAX;
-        bool stack = i >= Len(Win64Registers().integerArguments);
-        int slot = - 1;
-        if (stack) {
-            slot = i - Len(Win64Registers().integerArguments);
-            plan.stackArgumentCount += 1;
-        }
-        else {
-            physical = Win64Registers().integerArguments[i];
-        }
-        plan.arguments[i] = ArgumentPlacement {
-            i, request.arguments[i], physical, stack, slot
-        };
+        typed.scalar.arguments[i] = ScalarFromLegacyValue(request.arguments[i]);
     }
-    plan.stackArgumentBytes = plan.stackArgumentCount * StackArgumentBytes;
-    plan.shadowSpaceBytes = ShadowSpaceBytes;
-    plan.hasResult = request.hasResult;
     if (request.hasResult) {
         ValidateABIValue(request.result) ?;
-        plan.result = request.result;
+        typed.scalar.result = ScalarFromLegacyValue(request.result);
     }
     else {
         if (request.result.value != - 1 or request.result.width != 0 or request.result.type != CallValueType::Void) {
             return Result::Error(ABIError::InvalidPlan);
         }
     }
-    return Result::Ok();
+    PlanScalarWin64Call(ref const typed, ref plan) ?;
+    plan.scalar.enabled = false;
+    return ValidateCallPlan(ref const plan);
+}
+ScalarRepresentation ScalarFromLegacyValue(ABIValue value) {
+    if (value.category == ABIClass::Address) { return ScalarRepresentation::Address; }
+    return match (value.type) {
+        CallValueType::Void => ScalarRepresentation::Void, CallValueType::Bool => ScalarRepresentation::Bool,
+        CallValueType::I8 => ScalarRepresentation::I8, CallValueType::U8 => ScalarRepresentation::U8,
+        CallValueType::I16 => ScalarRepresentation::I16, CallValueType::U16 => ScalarRepresentation::U16,
+        CallValueType::I32 => ScalarRepresentation::I32, CallValueType::U32 => ScalarRepresentation::U32,
+        CallValueType::I64 => ScalarRepresentation::I64, CallValueType::U64 => ScalarRepresentation::U64
+    };
 }
 Result<void, ABIError> ValidateCallPlan(ref const CallPlan plan) {
+    if (plan.scalar.enabled) { return ValidateScalarCallPlan(ref const plan); }
     if (plan.convention != CallConvention::Win64 or plan.argumentCount < 0 or plan.argumentCount > 8 or
     plan.shadowSpaceBytes != ShadowSpaceBytes or not plan.flagsClobbered or plan.resultPhysical != Register::RAX) {
         return Result::Error(ABIError::InvalidPlan);
@@ -248,6 +251,7 @@ Result<void, ABIError> AppendArgumentMove(ref CallPlan plan, ArgumentMove operat
 // Stack stores capture sources first. Register cycles save one full canonical
 // GPR into a symbolic temporary; no unproved scratch register is selected.
 Result<void, ABIError> PlanArgumentMoves(ref CallPlan plan, ref const Register[8] sources) {
+    if (plan.scalar.enabled) { return PlanScalarArgumentMoves(ref plan); }
     ValidateCallPlan(ref const plan) ?;
     if (Len(sources) < plan.argumentCount) {
         return Result::Error(ABIError::InvalidAllocation);
@@ -332,6 +336,7 @@ Result<void, ABIError> PlanArgumentMoves(ref CallPlan plan, ref const Register[8
 // Independently replay symbolic source identities; missing moves, destructive
 // cycles and conflicting destinations cannot be accepted by a shape check.
 Result<void, ABIError> ValidateArgumentMoves(ref const CallPlan plan, ref const Register[8] sources) {
+    if (plan.scalar.enabled) { return ValidateScalarArgumentMoves(ref const plan); }
     ValidateCallPlan(ref const plan) ?;
     if (Len(sources) < plan.argumentCount or plan.moveCount < 0 or plan.moveCount > 12 or plan.temporaryCount < 0 or plan.temporaryCount > 4) {
         return Result::Error(ABIError::InvalidPlan);
@@ -435,6 +440,13 @@ Result<void, ABIError> ValidateArgumentMoves(ref const CallPlan plan, ref const 
 }
 
 Result<void, ABIError> ValidatePreservation(Preservation value) {
+    if (ScalarFloating(value.representation)) {
+        ValidateScalarLocation(value.location, value.representation) ?;
+        if (value.classification != PreservationClass::MustPreserve or value.location.kind != ScalarLocationKind::Physical or value.start >= value.instruction or value.end <= value.instruction or value.width != ScalarWidth(value.representation)) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+        return Result::Ok();
+    }
     if (value.value < 0 or value.start >= value.instruction or value.end <= value.instruction or
     (value.width != 1 and value.width != 2 and value.width != 4 and value.width != 8) or
     (value.address and value.width != 8)) { return Result::Error(ABIError::InvalidPlan); }
@@ -469,5 +481,449 @@ string PreservationName(PreservationClass classification) {
         PreservationClass::MustPreserve => "MustPreserve",
         PreservationClass::SafeInCalleeSaved => "SafeInCalleeSaved",
         PreservationClass::OutsideClobbers => "OutsideClobbers",
+    };
+}
+
+// Derived physical state, deliberately absent from the frozen wire contracts.
+enum XMMRegister {
+    XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15
+}
+using XMMArgumentTable = XMMRegister<array>[4];
+record struct XMMRegisterTables {
+    XMMArgumentTable arguments;
+    XMMRegister[6] callerSaved;
+    XMMRegister[10] reserved;
+}
+XMMRegisterTables Win64XMMRegisters() {
+    return XMMRegisterTables {
+        [XMMRegister::XMM0, XMMRegister::XMM1, XMMRegister::XMM2, XMMRegister::XMM3],
+        [XMMRegister::XMM0, XMMRegister::XMM1, XMMRegister::XMM2, XMMRegister::XMM3, XMMRegister::XMM4,
+        XMMRegister::XMM5],
+        [XMMRegister::XMM6, XMMRegister::XMM7, XMMRegister::XMM8, XMMRegister::XMM9, XMMRegister::XMM10,
+        XMMRegister::XMM11, XMMRegister::XMM12, XMMRegister::XMM13, XMMRegister::XMM14, XMMRegister::XMM15]
+    };
+}
+enum ScalarLocationKind {
+    Physical, Outgoing, Temporary, Spill, Incoming
+}
+record struct ScalarLocation {
+    ScalarLocationKind kind;
+    RegisterClass registerClass;
+    Register gpr;
+    XMMRegister xmm;
+    int slot;
+}
+record struct ScalarMove {
+    ScalarLocation source;
+    ScalarLocation destination;
+    ScalarRepresentation representation;
+}
+struct ScalarCallState {
+    bool enabled;
+    ScalarRepresentation[8] arguments;
+    ScalarRepresentation result;
+    ScalarLocation[8] destinations;
+    ScalarLocation resultSource;
+    ScalarLocation[8] sources;
+    ScalarMove[12] moves;
+    ScalarRepresentation[4] temporaries;
+    int xmmClobberMask;
+}
+ScalarLocation GPRLocation(Register physical) {
+    return ScalarLocation {
+        ScalarLocationKind::Physical, RegisterClass::GPR, physical, XMMRegister::XMM0, - 1
+    };
+}
+ScalarLocation XMMLocation(XMMRegister physical) {
+    return ScalarLocation {
+        ScalarLocationKind::Physical, RegisterClass::XMM, Register::RAX, physical, - 1
+    };
+}
+RegisterClass ScalarClass(ScalarRepresentation type) {
+    if (ScalarFloating(type)) { return RegisterClass::XMM; }
+    return RegisterClass::GPR;
+}
+ABIClass ScalarCategory(ScalarRepresentation type) {
+    return match (type) {
+        ScalarRepresentation::Void => ABIClass::Integer, ScalarRepresentation::Bool => ABIClass::Bool,
+        ScalarRepresentation::Address => ABIClass::Address, ScalarRepresentation::Float32 => ABIClass::Float,
+        ScalarRepresentation::Float64 => ABIClass::Float,
+        ScalarRepresentation::I8 => ABIClass::Integer, ScalarRepresentation::U8 => ABIClass::Integer,
+        ScalarRepresentation::I16 => ABIClass::Integer, ScalarRepresentation::U16 => ABIClass::Integer,
+        ScalarRepresentation::I32 => ABIClass::Integer, ScalarRepresentation::U32 => ABIClass::Integer,
+        ScalarRepresentation::I64 => ABIClass::Integer, ScalarRepresentation::U64 => ABIClass::Integer
+    };
+}
+ScalarLocation StorageLocation(ScalarLocationKind kind, int slot, ScalarRepresentation type) {
+    return ScalarLocation {
+        kind, ScalarClass(type), Register::RAX, XMMRegister::XMM0, slot
+    };
+}
+ScalarCallState EmptyScalarCallState() {
+    return ScalarCallState {
+        false,[ScalarRepresentation::Void ...], ScalarRepresentation::Void,
+        [GPRLocation(Register::RAX) ...], GPRLocation(Register::RAX),[GPRLocation(Register::RAX) ...],
+        [ScalarMove {
+            GPRLocation(Register::RAX), GPRLocation(Register::RAX), ScalarRepresentation::Void
+        }
+        ...],
+        [ScalarRepresentation::Void ...], 0
+    };
+}
+XMMRegister XMMAt(int index) {
+    XMMRegister[16] registers =[XMMRegister::XMM0, XMMRegister::XMM1, XMMRegister::XMM2, XMMRegister::XMM3,
+    XMMRegister::XMM4, XMMRegister::XMM5, XMMRegister::XMM6, XMMRegister::XMM7, XMMRegister::XMM8, XMMRegister::XMM9,
+    XMMRegister::XMM10, XMMRegister::XMM11, XMMRegister::XMM12, XMMRegister::XMM13, XMMRegister::XMM14,
+    XMMRegister::XMM15];
+    return registers[index];
+}
+int XMMIndex(XMMRegister register) {
+    return match (register) {
+        XMMRegister::XMM0 => 0, XMMRegister::XMM1 => 1, XMMRegister::XMM2 => 2, XMMRegister::XMM3 => 3,
+        XMMRegister::XMM4 => 4, XMMRegister::XMM5 => 5, XMMRegister::XMM6 => 6, XMMRegister::XMM7 => 7,
+        XMMRegister::XMM8 => 8, XMMRegister::XMM9 => 9, XMMRegister::XMM10 => 10, XMMRegister::XMM11 => 11,
+        XMMRegister::XMM12 => 12, XMMRegister::XMM13 => 13, XMMRegister::XMM14 => 14, XMMRegister::XMM15 => 15
+    };
+}
+string XMMName(XMMRegister register) {
+    return match (register) {
+        XMMRegister::XMM0 => "XMM0", XMMRegister::XMM1 => "XMM1", XMMRegister::XMM2 => "XMM2", XMMRegister::XMM3 => "XMM3",
+        XMMRegister::XMM4 => "XMM4", XMMRegister::XMM5 => "XMM5", XMMRegister::XMM6 => "XMM6", XMMRegister::XMM7 => "XMM7",
+        XMMRegister::XMM8 => "XMM8", XMMRegister::XMM9 => "XMM9", XMMRegister::XMM10 => "XMM10", XMMRegister::XMM11 => "XMM11",
+        XMMRegister::XMM12 => "XMM12", XMMRegister::XMM13 => "XMM13", XMMRegister::XMM14 => "XMM14",
+        XMMRegister::XMM15 => "XMM15"
+    };
+}
+bool XMMVolatile(XMMRegister register) {
+    for (i in 0 .. Len(Win64XMMRegisters().callerSaved)) {
+        if (Win64XMMRegisters().callerSaved[i] == register) { return true; }
+    }
+    return false;
+}
+bool XMMReserved(XMMRegister register) {
+    return not XMMVolatile(register);
+}
+int ScalarPhysicalIndex(ScalarLocation location) {
+    if (location.kind != ScalarLocationKind::Physical) { return - 1; }
+    return match (location.registerClass) {
+        RegisterClass::GPR => RegisterIndex(location.gpr), RegisterClass::XMM => 16 + XMMIndex(location.xmm)
+    };
+}
+bool SameScalarLocation(ScalarLocation a, ScalarLocation b) {
+    if (a.kind != b.kind or a.registerClass != b.registerClass) { return false; }
+    if (a.kind == ScalarLocationKind::Physical) {
+        return ScalarPhysicalIndex(a) == ScalarPhysicalIndex(b);
+    }
+    return a.slot == b.slot;
+}
+Result<void, ABIError> ValidateScalarLocation(ScalarLocation location, ScalarRepresentation type) {
+    if (type == ScalarRepresentation::Void or ScalarWidth(type) == 0 or location.registerClass != ScalarClass(type)) {
+        return Result::Error(ABIError::UnsupportedClass);
+    }
+    if (location.kind == ScalarLocationKind::Physical) {
+        if (location.slot != - 1) { return Result::Error(ABIError::InvalidAllocation); }
+        if (location.registerClass == RegisterClass::XMM and XMMReserved(location.xmm)) {
+            return Result::Error(ABIError::ReservedXMM);
+        }
+        if (location.registerClass == RegisterClass::GPR and not IsValueRegister(location.gpr)) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+    } else {
+        if (location.slot<0 or location.slot >= 512) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+    }
+    return Result::Ok();
+}
+ScalarLocation Win64ScalarArgument(int ordinal, ScalarRepresentation type) {
+    if (ordinal >= 4) {
+        return StorageLocation(ScalarLocationKind::Outgoing, ordinal - 4, type);
+    }
+    if (ScalarFloating(type)) {
+        return XMMLocation(Win64XMMRegisters().arguments[ordinal]);
+    }
+    return GPRLocation(Win64Registers().integerArguments[ordinal]);
+}
+ScalarLocation Win64ScalarResult(ScalarRepresentation type) {
+    if (ScalarFloating(type)) { return XMMLocation(XMMRegister::XMM0); }
+    return GPRLocation(Register::RAX);
+}
+Result<void, ABIError> PlanScalarWin64Call(ref const CallRequest request, ref CallPlan plan) {
+    if (request.form != ABIForm::Direct) { return Result::Error(ABIError::UnsupportedForm); }
+    if (request.convention != CallConvention::Win64) {
+        return Result::Error(ABIError::UnsupportedConvention);
+    }
+    if (request.argumentCount<0 or request.argumentCount>8) {
+        return Result::Error(ABIError::CapacityExceeded);
+    }
+    plan = EmptyCallPlan();
+    plan.scalar = request.scalar;
+    plan.scalar.enabled = true;
+    plan.target = request.target;
+    plan.instruction = request.instruction;
+    plan.argumentCount = request.argumentCount;
+    plan.scalar.xmmClobberMask = 63;
+    for (i in 0 .. request.argumentCount) {
+        ScalarRepresentation type = request.scalar.arguments[i];
+        if (type == ScalarRepresentation::Void or ScalarWidth(type) == 0 or request.arguments[i].width != ScalarWidth(type) or request.arguments[i].value<0 or request.arguments[i].category != ScalarCategory(type)) {
+            return Result::Error(ABIError::UnsupportedClass);
+        }
+        ScalarLocation destination = Win64ScalarArgument(i, type);
+        plan.scalar.destinations[i] = destination;
+        plan.arguments[i] = ArgumentPlacement {
+            i, request.arguments[i], destination.gpr, i >= 4, destination.slot
+        };
+        if (i >= 4) {
+            plan.stackArgumentCount += 1;
+        }
+    }
+    plan.stackArgumentBytes = plan.stackArgumentCount * 8;
+    plan.hasResult = request.hasResult;
+    plan.result = request.result;
+    plan.scalar.resultSource = Win64ScalarResult(request.scalar.result);
+    return ValidateScalarCallPlan(ref const plan);
+}
+Result<void, ABIError> ValidateScalarCallPlan(ref const CallPlan plan) {
+    if (plan.convention != CallConvention::Win64 or plan.argumentCount<0 or plan.argumentCount>8 or plan.shadowSpaceBytes != 32 or not plan.flagsClobbered or plan.scalar.xmmClobberMask != 63) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    int stack = 0;
+    for (i in 0 .. plan.argumentCount) {
+        ScalarRepresentation type = plan.scalar.arguments[i];
+        ValidateScalarLocation(plan.scalar.destinations[i], type) ?;
+        if (plan.arguments[i].index != i or plan.arguments[i].source.value<0 or plan.arguments[i].source.width != ScalarWidth(type) or plan.arguments[i].source.category != ScalarCategory(type) or plan.arguments[i].onStack !=(i >= 4) or plan.arguments[i].stackSlot != plan.scalar.destinations[i].slot or not SameScalarLocation(plan.scalar.destinations[i],
+        Win64ScalarArgument(i, type))) { return Result::Error(ABIError::InvalidPlan); }
+        if (i >= 4) {
+            stack += 1;
+        }
+    }
+    if (plan.stackArgumentCount != stack or plan.stackArgumentBytes != stack * 8) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    if (plan.hasResult) {
+        ValidateScalarLocation(plan.scalar.resultSource, plan.scalar.result) ?;
+        if (plan.result.value<0 or plan.result.width != ScalarWidth(plan.scalar.result) or plan.result.category != ScalarCategory(plan.scalar.result) or not SameScalarLocation(plan.scalar.resultSource,
+        Win64ScalarResult(plan.scalar.result))) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+    } else {
+        if (plan.scalar.result != ScalarRepresentation::Void or plan.result.value != - 1) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> AppendScalarMove(ref CallPlan plan, ScalarLocation source, ScalarLocation destination,
+ScalarRepresentation type) {
+    if (plan.moveCount >= 12) { return Result::Error(ABIError::CapacityExceeded); }
+    plan.scalar.moves[plan.moveCount] = ScalarMove{source, destination, type};
+    plan.moveCount += 1;
+    return Result::Ok();
+}
+// The same typed graph covers GPR, XMM and spill sources. Classes never alias.
+Result<void, ABIError> PlanScalarArgumentMoves(ref CallPlan plan) {
+    ValidateScalarCallPlan(ref const plan) ?;
+    plan.moveCount = 0;
+    plan.temporaryCount = 0;
+    bool[4] pending =[false ...];
+    ScalarLocation[4] from =[GPRLocation(Register::RAX) ...];
+    int remaining = 0;
+    for (i in 0 .. plan.argumentCount) {
+        ScalarRepresentation type = plan.scalar.arguments[i];
+        ScalarLocation source = plan.scalar.sources[i];
+        ValidateScalarLocation(source, type) ?;
+        for (j in 0 .. i) {
+            if (SameScalarLocation(source, plan.scalar.sources[j]) and(plan.arguments[i].source.value != plan.arguments[j].source.value or type != plan.scalar.arguments[j])) {
+                return Result::Error(ABIError::IncompatibleRepresentation);
+            }
+        }
+        if (i >= 4) {
+            AppendScalarMove(ref plan, source, plan.scalar.destinations[i], type) ?;
+        }
+        else {
+            if (not SameScalarLocation(source, plan.scalar.destinations[i])) {
+                pending[i] = true;
+                from[i] = source;
+                remaining += 1;
+            }
+        }
+    }
+    for (step in 0 .. 8) {
+        if (remaining == 0) { return ValidateScalarArgumentMoves(ref const plan); }
+        bool progressed = false;
+        for (i in 0 .. 4) {
+            if (pending[i] and not progressed) {
+                bool needed = false;
+                for (j in 0 .. 4) {
+                    if (pending[j] and SameScalarLocation(from[j], plan.scalar.destinations[i])) {
+                        needed = true;
+                    }
+                }
+                if (not needed) {
+                    AppendScalarMove(ref plan, from[i], plan.scalar.destinations[i], plan.scalar.arguments[i]) ?;
+                    pending[i] = false;
+                    remaining -= 1;
+                    progressed = true;
+                }
+            }
+        }
+        if (not progressed) {
+            bool saved = false;
+            for (i in 0 .. 4) {
+                if (pending[i] and not saved) {
+                    if (plan.temporaryCount >= 4) {
+                        return Result::Error(ABIError::CapacityExceeded);
+                    }
+                    ScalarLocation physical = plan.scalar.destinations[i];
+                    ScalarRepresentation type = ScalarRepresentation::Void;
+                    for (j in 0 .. 4) {
+                        if (pending[j] and SameScalarLocation(from[j], physical)) {
+                            if (type != ScalarRepresentation::Void and type != plan.scalar.arguments[j]) {
+                                return Result::Error(ABIError::IncompatibleRepresentation);
+                            }
+                            type = plan.scalar.arguments[j];
+                        }
+                    }
+                    if (type != plan.scalar.arguments[i]) {
+                        return Result::Error(ABIError::IncompatibleRepresentation);
+                    }
+                    ScalarLocation temporary = StorageLocation(ScalarLocationKind::Temporary, plan.temporaryCount,
+                    type);
+                    plan.scalar.temporaries[plan.temporaryCount] = type;
+                    plan.temporaryCount += 1;
+                    AppendScalarMove(ref plan, physical, temporary, type) ?;
+                    for (j in 0 .. 4) {
+                        if (pending[j] and SameScalarLocation(from[j], physical)) {
+                            from[j] = temporary;
+                        }
+                    }
+                    saved = true;
+                }
+            }
+        }
+    }
+    return Result::Error(ABIError::InvalidPlan);
+}
+// Independent token AND exact-representation replay, not a shape-only check.
+Result<void, ABIError> ValidateScalarArgumentMoves(ref const CallPlan plan) {
+    ValidateScalarCallPlan(ref const plan) ?;
+    if (plan.moveCount<0 or plan.moveCount>12 or plan.temporaryCount<0 or plan.temporaryCount>4) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    int[32] registers =[- 1 ...];
+    ScalarRepresentation[32] types =[ScalarRepresentation::Void ...];
+    int[512] spills =[- 1 ...];
+    ScalarRepresentation[512] spillTypes =[ScalarRepresentation::Void ...];
+    int[4] temps =[- 1 ...];
+    ScalarRepresentation[4] tempTypes =[ScalarRepresentation::Void ...];
+    int[4] outgoing =[- 1 ...];
+    ScalarRepresentation[4] outgoingTypes =[ScalarRepresentation::Void ...];
+    for (i in 0 .. plan.argumentCount) {
+        ScalarLocation source = plan.scalar.sources[i];
+        ValidateScalarLocation(source, plan.scalar.arguments[i]) ?;
+        if (source.kind == ScalarLocationKind::Physical) {
+            int index = ScalarPhysicalIndex(source);
+            registers[index] = plan.arguments[i].source.value;
+            types[index] = plan.scalar.arguments[i];
+        }
+        else {
+            if (source.kind != ScalarLocationKind::Spill or source.slot >= 512) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+            spills[source.slot] = plan.arguments[i].source.value;
+            spillTypes[source.slot] = plan.scalar.arguments[i];
+        }
+    }
+    for (mi in 0 .. plan.moveCount) {
+        ScalarMove transfer = plan.scalar.moves[mi];
+        ValidateScalarLocation(transfer.source, transfer.representation) ?;
+        ValidateScalarLocation(transfer.destination, transfer.representation) ?;
+        int token = - 1;
+        ScalarRepresentation type = ScalarRepresentation::Void;
+        match (transfer.source.kind) {
+            ScalarLocationKind::Physical => {
+                int index = ScalarPhysicalIndex(transfer.source);
+                token = registers[index];
+                type = types[index];
+            }
+            ScalarLocationKind::Spill => {
+                token = spills[transfer.source.slot];
+                type = spillTypes[transfer.source.slot];
+            }
+            ScalarLocationKind::Temporary => {
+                if (transfer.source.slot >= plan.temporaryCount) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                token = temps[transfer.source.slot];
+                type = tempTypes[transfer.source.slot];
+            }
+            ScalarLocationKind::Outgoing => { return Result::Error(ABIError::InvalidPlan); }
+            ScalarLocationKind::Incoming => { return Result::Error(ABIError::InvalidPlan); }
+        }
+        if (token<0 or type != transfer.representation) {
+            return Result::Error(ABIError::IncompatibleRepresentation);
+        }
+        match (transfer.destination.kind) {
+            ScalarLocationKind::Physical => {
+                int index = ScalarPhysicalIndex(transfer.destination);
+                registers[index] = token;
+                types[index] = type;
+            }
+            ScalarLocationKind::Outgoing => {
+                if (transfer.destination.slot >= plan.stackArgumentCount) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                outgoing[transfer.destination.slot] = token;
+                outgoingTypes[transfer.destination.slot] = type;
+            }
+            ScalarLocationKind::Temporary => {
+                if (transfer.destination.slot >= plan.temporaryCount or type != plan.scalar.temporaries[transfer.destination.slot] or temps[transfer.destination.slot] >= 0) {
+                    return Result::Error(ABIError::InvalidPlan);
+                }
+                temps[transfer.destination.slot] = token;
+                tempTypes[transfer.destination.slot] = type;
+            }
+            ScalarLocationKind::Spill => { return Result::Error(ABIError::InvalidPlan); }
+            ScalarLocationKind::Incoming => { return Result::Error(ABIError::InvalidPlan); }
+        }
+    }
+    for (i in 0 .. plan.argumentCount) {
+        ScalarLocation destination = plan.scalar.destinations[i];
+        int token = - 1;
+        ScalarRepresentation type = ScalarRepresentation::Void;
+        if (i<4) {
+            int index = ScalarPhysicalIndex(destination);
+            token = registers[index];
+            type = types[index];
+        }
+        else {
+            token = outgoing[i - 4];
+            type = outgoingTypes[i - 4];
+        }
+        if (token != plan.arguments[i].source.value or type != plan.scalar.arguments[i]) {
+            return Result::Error(ABIError::InvalidPlan);
+        }
+    }
+    return Result::Ok();
+}
+string DescribeABIError(ABIError error) {
+    return match (error) {
+        ABIError::InvalidPlan => "AMD64_ABI_INVALID_PLAN", ABIError::CapacityExceeded => "AMD64_ABI_CAPACITY_EXCEEDED",
+        ABIError::UnsupportedClass => "AMD64_ABI_UNSUPPORTED_SCALAR_CLASS", ABIError::UnsupportedForm => "AMD64_ABI_UNSUPPORTED_FORM",
+        ABIError::UnsupportedConvention => "AMD64_ABI_UNSUPPORTED_CONVENTION", ABIError::InvalidAllocation => "AMD64_ABI_INVALID_ALLOCATION",
+        ABIError::StaleFlags => "AMD64_ABI_STALE_FLAGS", ABIError::ReservedXMM => "AMD64_RESERVED_NONVOLATILE_XMM",
+        ABIError::IncompatibleRepresentation => "AMD64_MOVE_INCOMPATIBLE_REPRESENTATION", ABIError::SpillCapacityExceeded => "AMD64_SPILL_CAPACITY_EXCEEDED"
+    };
+}
+void ScalarABIProofs() {
+    Assert.Concept<StaticExtent<4>>(XMMArgumentTable, "four positional scalar XMM argument registers");
+    Assert.Concept<PlainData>(XMMRegisterTables, "explicit Win64 XMM volatility and reserved policy");
+    Assert.Concept<PlainData>(ScalarLocation, "class-separated scalar physical or storage location");
+    Assert.Concept<PlainData>(ScalarMove, "exact-representation move edge");
+    Assert.Concept<NoAllocation>(PlanScalarArgumentMoves, "bounded mixed move graph");
+}
+string ScalarPhysicalName(ScalarLocation location) {
+    return match (location.registerClass) {
+        RegisterClass::GPR => ABIRegisterName(location.gpr), RegisterClass::XMM => XMMName(location.xmm)
     };
 }

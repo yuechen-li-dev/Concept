@@ -462,7 +462,7 @@ func TestEVT2f2ConceptArtifactOnlyRoundTrip(t *testing.T) {
 		if name == "valid" || (!strings.HasPrefix(name, "valid") && len(data) >= 8 && string(data[:8]) == "CMIRAMD4") {
 			want := "AMD64_NATIVE_INVALID_INPUT"
 			if name == "valid" {
-				want = "AMD64_UNSUPPORTED_XMM_ALLOCATION"
+				want = "AMD64_UNSUPPORTED_SSE_ENCODING"
 			}
 			fmt.Fprintf(&c, "memset(output,0x5a,sizeof output);concept_native_image image,before;memset(&image,0x3c,sizeof image);memcpy(&before,&image,sizeof image);concept_result_int_native_error native=concept_standard__backend__amd64_emit_module(src,dst,&image);if(!native.tag || strcmp(concept_standard__backend__amd64_describe_native_error(native.payload.error.error),\"%s\") || memcmp(&image,&before,sizeof image))return %d;for(size_t i=0;i<sizeof output;i++)if(output[i]!=0x5a)return %d;\n", want, index+1, index+1)
 		}

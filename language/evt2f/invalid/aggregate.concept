@@ -1,0 +1,8 @@
+profile Core;
+record struct FloatingPair {
+    float a;
+    double b;
+}
+FloatingPair RejectAggregate(FloatingPair value) {
+    return value;
+}
