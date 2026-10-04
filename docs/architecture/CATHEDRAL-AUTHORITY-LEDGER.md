@@ -22,7 +22,8 @@ second contract author.
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
 | Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call and EVT2f width-specific floating input contracts qualified; later Concept transformation parity |
-| Scalar floating/XMM native backend | Pending Cathedral implementation | Strict C11 source oracle only | Stage-0 produces checked floating LIR and virtual CMIRAMD4 | NOT_YET_QUALIFIED | Whole-artifact Concept admission precedes AMD64_UNSUPPORTED_XMM_ALLOCATION; physical allocation, floating ABI, spills, SSE and execution remain pending Cathedral |
+| Scalar floating/XMM allocation, ABI and frames | Cathedral AMD64/Win64ABI | Independent byte-stack replay and strict C11 source oracle | Stage-0 produces checked floating LIR/CMIRAMD4 and hosts compiled Concept | CONCEPT_AUTHORITATIVE | EVT2f3 qualifies XMM0..XMM5, mixed positional ABI, typed spills/moves and one frame; normal path reaches AMD64_UNSUPPORTED_SSE_ENCODING |
+| SSE encoding and native floating execution | Pending Cathedral | Source oracle and abstract call simulator only | No Go floating native algorithm | NOT_YET_QUALIFIED | No floating machine bytes or native execution claim |
 | CMIRAMD4 scalar/XMM contract | Concept BridgeSchema4 | Exact generated codec agreement and 52 malformed artifacts | Generated Go transport; checked LIR projection/verifier | CONCEPT_AUTHORITATIVE | Virtual class, exact representation, IEEE bits, semantic operations and ordered calls qualified in EVT2f2; no physical XMM identities |
 | MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
@@ -103,3 +104,15 @@ algorithm or SSE encoder exists in Go. XMM allocation, floating ABI/clobbers,
 floating spills/frame integration, SSE encoding and native float execution remain
 NOT_YET_QUALIFIED, with Cathedral as the intended owner. See the
 [EVT2f2 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f2--cmiramd4-transport-qualification).
+
+
+EVT2f3 completes Concept authority for physical XMM allocation, mixed positional
+Win64 calls/XMM clobbers and typed floating storage in the existing frame. Derived
+metadata never enters frozen CMIRAMD3/4. The same positional core admits legacy
+integer and typed mixed requests; class-separated moves and the existing frame
+finalizer own realization. Concept preserves exact result capture before reload,
+reserved-register rejection and named planner errors. Go additions are
+BOOTSTRAP_ONLY presentation and INDEPENDENT_ORACLE tests. The current stop is
+`AMD64_UNSUPPORTED_SSE_ENCODING`; native floating execution remains
+NOT_YET_QUALIFIED. Earlier EVT2f2 statements above describe that historical state.
+See [EVT2f3 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f3--xmm-allocation-mixed-win64-abi-and-floating-frames).

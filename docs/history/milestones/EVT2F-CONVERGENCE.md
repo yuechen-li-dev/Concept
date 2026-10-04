@@ -122,3 +122,88 @@ native internal-call tests passed again (17.589 s, both Normal/Verify, real nati
 ABI sentinels and 100 image emissions). No frozen v3 artifact changed.
 
 SUCCESS — EVT2f2 CMIRAMD4 scalar/XMM contract qualified.
+
+
+## EVT2f3 — Cathedral XMM allocation and mixed Win64 ABI
+
+Started clean at EVT2f2 baseline
+`2f8443865aab1f9d1407735426c32f27751efb98`, compiler
+`concept-evt1-stage0-go`, on `codex/evt2f3-xmm-planning`. An isolated detached
+checkout inside the repository ran the exact baseline: full Go passed (compiler
+336.831 s, CLI 38.020 s, GPU-free Vulkan 0.414 s), vet passed, focused race passed
+(11.196 s), Standard 42 / DragonGod 23 / Golden 130 passed each in Normal/Verify.
+That clean task-created checkout was removed after its qualification processes
+completed. No other checkout was modified.
+
+Concept now owns derived XMM0..XMM15 identities, XMM0..XMM5 allocation, reserved
+XMM6..XMM15 rejection, typed mixed positional Win64 placement, XMM clobbers,
+class-separated argument moves, floating pressure/live-across spills and their
+integration into the existing one-frame finalizer. The unified placement core
+also handles legacy integer requests; it does not introduce a FloatCallPlan.
+Both four-argument mixed examples are pinned, as are mixed eight-argument slots,
+XMM0 float results, bool/RAX results, void, cycles, repeated sources, pressure
+and capture-before-reload. The new planning file has 29 functions; the existing
+32-function file remains unchanged. Three early-admission negative source files
+cover binary16, a four-lane record wrapper and a floating aggregate. Typed
+negative tests cover varargs, reserved XMMs, mixed representation moves, spill
+capacity, malformed geometry and stale FLAGS.
+
+CMIRAMD3 remains version 3/hash
+`3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312`;
+CMIRAMD4 remains version 4/hash
+`aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c`.
+No schema, generated codec/model/metadata, frozen native byte specimen or corpus
+manifest changed. Derived physical state is not serialized into either contract.
+Go changes are bootstrap diagnostic presentation and independent oracles only.
+
+Qualification exposed two concrete storage regressions, both repaired before
+completion. Duplicated per-instruction call-type metadata enlarged the
+unoptimized frame bootstrap beyond its stack budget. Deriving exact call types
+from the owning function map removed 22,016 bytes from BackendFunction and the
+unoptimized frame harness passed. A full regression then found a legacy GPR
+value at index 128 eagerly accessing that scalar map (Concept boolean operators
+do not short-circuit). The shared AllocatedGPR discriminator now guards the
+scalar-only map explicitly. Both EVT2x6 Normal/Verify native trace parity and the
+frozen R9a2 pushdown native byte oracle pass; a dedicated highest legacy index
+511 check protects the discriminator. Evidence for the initial failure is kept
+in ignored `artifacts/evt2f3-before-capacity-fix-go.log`.
+
+`TestEVT2f3ScalarAllocationABIAndFrames` checks 100 fresh plans per function for
+61 functions, exact Normal/Verify assignment/frame/call-action observations and
+independent C11 byte-stack replay. The C simulator uses explicit architectural
+clobber tables and preserves exact float payload bits; it is not floating native
+execution. All 256 four-source XMM graphs, simultaneous GPR/XMM cycles and typed
+negative mutations pass. Existing source C11 oracle, EVT2f2 schema/artifact
+100-run gates, 52 malformed artifacts and unchanged-output/image sentinels pass.
+The normal CLI prints physical placement and concrete frame actions, then stops
+at `AMD64_UNSUPPORTED_SSE_ENCODING`.
+
+Implementation/tests are committed as
+`46b2813bd4f1e2f1d2a8625c1895e1fb09758178` (EVT2f3: qualify Cathedral XMM
+allocation and mixed Win64 frames). The following documentation commit records
+conformance, authority and migration state; its full identity and the final
+tracked-clean status are reported at completion.
+
+Final `go test ./... -count=1` passed: compiler 366.025 s, CLI 62.003 s,
+GPU-free Vulkan 0.398 s. This includes corpus, EVT2/EVT2x/EVT2e native paths,
+frozen integer bytes, generated-output agreement, scalar source oracle and
+representative determinism. Final vet passed; focused race passed (68.038 s).
+The final strengthened scalar planning/input gate passed again (13.547 s).
+Standard 42, DragonGod 23 and Golden 130 passed each in Normal/Verify. Real CLI
+check passed for both authored backend files and the planning fixture, and both
+scalar fixture files reached the SSE boundary. Format checks and real R9d
+match-preference lint in Normal/Verify passed without findings for all six
+authored Concept files. PlainData/StaticExtent/NoAllocation dogfood assertions
+were checked through the backend compile. Frozen root/legacy Zig suites were
+skipped because neither legacy compiler nor its test/build infrastructure
+changed. Routine optimized shared-build reuse was retained; no opt-in cold-build
+stress or heap fallback was enabled. Qualification logs remain under ignored
+`artifacts/evt2f3-*`. `git diff --check` passed.
+
+The [conformance report](../../conformance/EVT2F-CONFORMANCE.md#evt2f3--xmm-allocation-mixed-win64-abi-and-floating-frames)
+records pools, exact placements, shared frame geometry, generalized eight-byte
+temporaries, sample frame sizes, metadata growth and informational timings.
+SSE encoding, native floating execution, SIMD/aggregates/varargs, nonvolatile XMM
+save/restore and external/indirect calls remain unqualified. EVT2f4 was not begun.
+
+SUCCESS — EVT2f3 Cathedral XMM allocation and mixed Win64 ABI qualified.

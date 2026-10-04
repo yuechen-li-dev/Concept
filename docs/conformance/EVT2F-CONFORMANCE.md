@@ -307,3 +307,159 @@ schema/semantic cases use exhaustive match; sequential admission checks remain
 ordinary conditionals. Generated codecs remain regeneration-exact. Frozen Zig
 lanes are skipped; optimized shared-build reuse and lightweight 100-run gates
 are retained, without opt-in cold-build stress.
+
+
+## EVT2f3 — XMM allocation, mixed Win64 ABI and floating frames
+
+**SUCCESS for the bounded allocation/ABI/frame slice. Native floating execution
+remains unqualified.** The earlier sections record historical EVT2f1/EVT2f2
+boundaries; the current real `concept amd64` path reaches
+`AMD64_UNSUPPORTED_SSE_ENCODING` after Concept qualifies all scalar functions.
+It publishes no native image and does not encode SSE operations.
+
+### Derived physical authority
+
+`Win64ABI.concept` owns physical `XMMRegister` identities XMM0 through XMM15,
+argument table XMM0..XMM3, volatile allocation/clobber table XMM0..XMM5, and the
+reserved XMM6..XMM15 table. These are derived state, outside both wire contracts.
+`AMD64.concept` extends the existing allocator entry point and interval/liveness
+analysis with a class-aware bounded scalar allocation branch. Floating values
+use XMM; integers, bools and addresses use GPR. FLAGS remains separate.
+
+Allocation visits instruction positions and virtual identities in stable order,
+chooses the first free register in the owning class, and deterministically spills
+the newly encountered XMM value when six volatile candidates are occupied. It
+does not evict another value. GPR pools retain their existing five no-call or
+thirteen call-bearing candidates; XMM pressure does not consume GPR capacity.
+Pressure-spilled values stay in typed stack storage. Live-across resident volatile
+values receive per-call preservation, using the existing CFG liveness predicate.
+Call arguments dying at the call and the newly defined result are excluded.
+XMM6..XMM15 allocation is rejected; no nonvolatile XMM saves were introduced.
+
+The artifact-only scalar decoder projects admitted CMIRAMD4 instructions into
+the existing BackendFunction analysis view, retaining exact representation,
+scalar operation and source locations. Arithmetic, fneg, constants, slots,
+array address/index uses and comparisons participate in allocation. Float compare
+operands are XMM and the bool result is GPR. This is an abstract three-address
+planning view, without SSE selection, constant materialization or instruction
+encoding. Call types are derived from the checked function's 128-entry type map;
+no duplicated type arrays were added to each instruction. CMIRAMD3's larger
+virtual capacity is protected by checking the scalar discriminator before
+accessing this map.
+
+### One mixed call plan
+
+Existing `CallRequest`/`CallPlan` carry typed scalar locations and moves. The
+legacy integer request adapts into the same positional placement core; no
+parallel floating call-plan model or Go placement policy exists. For arguments
+0..3, the argument ordinal selects the GPR or XMM position:
+
+| Signature | arg0 | arg1 | arg2 | arg3 |
+| --- | --- | --- | --- | --- |
+| i32, float64, i32, float32 | RCX | XMM1 | R8 | XMM3 |
+| float64, i32, float32, i32 | XMM0 | RDX | XMM2 | R9 |
+| i32, float64, bool, float32 | RCX | XMM1 | R8 | XMM3 |
+
+The eight-argument fixture continues with float64, float32, i32, bool at outgoing
+stack slots 0, 1, 2, 3, offsets 32, 40, 48, 56 from post-prologue RSP. Shadow space
+remains exactly 32 bytes. Outgoing storage uses eight-byte ABI slots, while the
+typed call-site destination and transfer metadata retain each value's exact
+representation, class and copy width. Geometry is shared across calls; it does
+not pretend a reused outgoing slot has one permanent semantic type.
+
+Float32/float64 call results originate in XMM0; integer/bool results use RAX;
+void has no result handoff. Call result capture precedes preservation reloads,
+including a pressure-spilled result. Each call clobbers the existing volatile
+GPR set, XMM0..XMM5, and FLAGS. Stale FLAGS, unsupported classes/forms/conventions,
+invalid locations, reserved XMMs, incompatible moves and capacity failures have
+named Concept errors. The native qualification path preserves ABI diagnostics
+through the checked call-summary helper; the legacy wrapper retains its existing
+BackendError interface.
+
+### Shared frame and move realization
+
+The existing finalizer retains its seven regions: shadow, outgoing arguments,
+semantic locals, callee saves, spills, move temporaries, padding. There is one
+frame and one post-prologue RSP coordinate system. Float32 spills occupy four
+bytes with alignment four; float64 spills occupy eight with alignment eight.
+Spill representation determines class and is checked alongside width, identity
+and offset. No scalar spill uses a sixteen-byte XMM-sized allocation.
+
+Move cycles use the existing generalized eight-byte, alignment-eight temporary
+slots, with exact four/eight-byte typed transfers. GPR and XMM physical identities
+occupy distinct graph domains. Two-way float32 and three-way float64 cycles,
+acyclic moves, repeated sources, XMM-to-outgoing and spill/temp-to-XMM edges are
+qualified. Mixed float32/float64 cycles are explicitly rejected with
+`AMD64_MOVE_INCOMPATIBLE_REPRESENTATION`; no implicit conversion is assumed.
+Pressure storage copies are abstract typed actions. Their eventual SSE scratch
+register and instruction materialization are outside this slice.
+
+| Planning fixture | Frame bytes | Relevant storage |
+| --- | ---: | --- |
+| Live32 | 40 | local float32 at 32, live spill at 36, each 4/4 |
+| Live64 | 56 | local float64 at 32, live spill at 40, each 8/8; padding 8 |
+| Pressure32 / Pressure64 | 8 / 24 | two pressure spills, 4/4 or 8/8 |
+| CallA / CallB | 40 | shadow 32, padding 8 |
+| Call8 | 72 | shadow 32, outgoing 32, padding 8 |
+| CallFive | 40 | shadow 32, fifth scalar at 32 |
+| Cycle2 / Cycle3 | 40 | shadow 32, generalized temporary 8 |
+| MixedLive | 56 | i32, float32 and float64 preservation in one frame |
+| MixedPressure | 104 | six XMM preserves, GPR/bool preserves, pressure-spilled result |
+
+Call-bearing frames satisfy frame byte count modulo 16 equals eight, accounting
+for the Win64 return-address entry offset. The existing integer frame harness
+still qualifies its 136-byte maximum specimen. Integer native bytes and the
+CMIRAMD3/CMIRAMD4 schemas, generated codecs and metadata remain unchanged.
+
+### Evidence and limits
+
+`TestEVT2f3ScalarAllocationABIAndFrames` runs 100 fresh allocation, ABI, frame and
+concrete action plans per function for 61 functions (the existing 32 plus 29 new
+planning functions), in Normal and Verify. It compares canonical assignment,
+spill, frame and call-action observations across runs and modes. Independently
+compiled C11 byte-stack replay checks exact float payload bits through abstract
+calls and explicit architectural clobber tables. This executes compiled Concept
+planning and a test-side call simulator, **not emitted floating machine code**.
+Both mixed ABI examples have independent expected-location tables. All 256
+four-source XMM combinations, simultaneous separate GPR/XMM cycles, repeated
+sources, bool/RAX result placement, cycle temporaries, outgoing
+ordering, capture-before-reload, live-across counts, class separation and exact
+spill geometry are checked. Mutated transfer types, missing moves, stale FLAGS,
+reserved XMM6..XMM15, insufficient spill capacity, frame offsets/widths and
+capture/reload reordering are rejected. Representation-swapped cycles reject.
+
+Three checked negative source specimens reject binary16, a four-lane record
+wrapper and a floating aggregate before scalar MachineIR allocation. The wrapper
+is an unsupported aggregate-shaped vector specimen; no SIMD frontend capability
+is implied. Varargs reject at the typed ABI request seam. Existing transport
+qualification still runs 100 schema/artifact repetitions, 52 malformed artifacts,
+exact constants/digests and untouched output/native-image sentinels. Source C11
+floating behavior remains the independent source oracle.
+
+One informational run measured 100 plans per function over the existing 32:
+allocation 13 ms, ABI below 1 ms timer resolution, frame 21 ms (Normal); 10/0/26 ms
+(Verify). The additional 29 measured 20/3/27 and 20/1/23 ms. These are aggregate
+CPU-clock samples with millisecond resolution, not performance thresholds.
+The final shared C bootstrap metadata sizes are CallRequest 1,100 bytes,
+CallPlan 1,588 (previous 660; delta 928), ScalarLocation 20, Preservation 56,
+BackendFunction 158,052, Allocation 17,444, FinalizedFrame 15,868 and
+CallSiteActions 4,156. Bounded shared-build reuse remains enabled; no heap fallback
+or routine cold-build stress was added.
+
+Go changes are bootstrap orchestration and diagnostic presentation
+(`cmd/concept/amd64.go`), independent qualification oracles and CLI tests. Go
+injects only the checked scalar function count; Concept produces allocation,
+placement, clobbers, preservation, geometry and actions. Stage-0 remains the
+seed and checked semantic/transport producer. No production Go floating backend
+algorithm was introduced. Typed PlainData, StaticExtent-four and NoAllocation
+assertions are checked through the real backend compiler.
+
+The convergence ledger records exact baseline/final validation and commit IDs.
+Frozen Zig is skipped because its paths are unchanged. Format checks and real
+Normal/Verify R9d match-preference lint pass for authored planning sources.
+The semantic manifest remains 440 valid / 357 static-invalid / 15
+runtime-negative / five compatibility / four expected-divergence; EVT2f planning
+and negative source specimens are checked by dedicated tests outside that
+manifest. SSE encoding, constant materialization, nonvolatile XMM saves, SIMD,
+aggregates, varargs, external/indirect calls and native float execution remain
+unqualified. EVT2f4 was not begun.
