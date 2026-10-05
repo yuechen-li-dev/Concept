@@ -1,7 +1,23 @@
 # Concept
 
-Concept is a C++-lineage systems language for auditable compiler, runtime,
-native, and bare-metal programming.
+Concept is a C-lineage systems language for auditable kernels, compiler, runtime, native, safety critical and bare-metal programming. 
+
+Concept was conceived to address the issues with current low level systems programming languages, primarily C/C++, as well Rust, Go, and Zig. It's designed to primarily fill the niche currently occupied by C++ and for which Rust and Zig are inadequate replacements for. Rust's borrow checker prevents certain class of memory bugs, but lifetime propagation makes refactoring existing codebases and compile time painful. Zig's `comptime` was one of the most revolutionary ideas in programming language history, yet Zig the language is needlessly verbose and frustrating to write due to its overreliance on `comptime`, in addition to questionable governance in recent years. 
+
+Concept was conceived, designed, and implemented by me and frontier LLMs as the "Programmer's programming language": It aims to be the fastest, most powerful, safest, and most readable programming language with all the lessons we've learned over the years, a greenfield low level systems programming language with zero unprincipled compromises.
+
+It's a lofty north star of a goal. I hope it is achievable, so I'm going to try. Crazier things have happened.
+
+Concept is probably too complex for most application code, you probably don't need to use Concept if you don't know exactly why you would want to use it. A GC'd language like Go/C#/TypeScript is probably a better fit for most applications. 
+
+# Why is the language called Concept?
+
+The language is called "Concept" for a few reasons:
+1. The primary idea is that it expands the definition of C++20 concepts from compile-time template constraints to the fundamental concept behind the language.
+2. It takes the multitude of the best language concepts from Rust, Zig, and modern C++/low level C#, so it's a combination of their concepts.
+3. It's a very experimental language designed to explore the conceptual cutting edge of programming language design for the AI era.
+
+Design-wise, it's a very weird programming language based off a whole bunch of weird ideas, but with a boring, very readable syntax. 
 
 ## Project status
 
@@ -13,11 +29,7 @@ Current backend:             deterministic MIR and strict C11 C/H
 Backend in progress:         EVT2 target-independent LIR and AMD64 MachineIR
 ```
 
-R0 starts a new canonical compiler line. The Go compiler architecture extracted
-from Oct's Concept/Vulkan work is now the implementation seed for general
-Concept. Concept/Vulkan was not renamed wholesale: Vulkan is an explicit
-profile consumer, while the language specification reconciles its evidence
-with the broader PoC3 corpus.
+Compiles to strict subset C11 via GCC/LLVM currently. Go compiler is being strangler-figged for self-hosting.
 
 ## Active compiler
 
