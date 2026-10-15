@@ -151,7 +151,7 @@ func evt1ValidateMemberCall(env *semanticEnv, scope *evt1Scope, call *CallExpr, 
 	// method lookup. The receiver's normal place mutability governs whether a
 	// mutating environment may be used.
 	if receiverType.Kind != TypeDyn {
-		if fields, _, fieldErr := evt1FieldSet(env, receiverType); fieldErr == nil {
+		if fields, _, fieldErr := evt1FieldSet(env, scope, receiverType); fieldErr == nil {
 			if fieldType, ok := fields[call.Callee]; ok && (fieldType.valueType().Kind == TypeCallable || fieldType.valueType().Kind == TypeCallback) {
 				mutable := false
 				if place, placeErr := validateAssignable(env, scope, call.Receiver, templateInfo); placeErr == nil {

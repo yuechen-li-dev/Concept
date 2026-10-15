@@ -68,7 +68,10 @@ func evt1InferTemplatePattern(env *semanticEnv, pattern, actual Type, parameters
 		}
 	}
 	for _, parameter := range parameters {
-		if parameter.Kind == "type" && pattern.Name == parameter.Name && pattern.PointerTo == nil && pattern.ArrayElem == nil && len(pattern.TypeArgs) == 0 {
+		if pattern.Name == parameter.Name && pattern.PointerTo == nil && pattern.ArrayElem == nil && len(pattern.TypeArgs) == 0 {
+			if parameter.Kind == "value" && (pattern.Kind != TypeTemplateValue || actual.Kind != TypeTemplateValue) {
+				return false
+			}
 			candidate := actual.valueType()
 			if prior, ok := bindings[parameter.Name]; ok {
 				return evt1SemanticTypeEqual(env, prior, candidate)

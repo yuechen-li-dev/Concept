@@ -3,7 +3,6 @@ package concept
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -49,33 +48,13 @@ func evt1MaterializeGenericInstances(module *Module, env *semanticEnv) {
 }
 
 func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error) {
+	application = evt1CloneType(application)
 	decl, ok := env.genericTypes[application.Name]
 	if !ok {
 		return Type{}, evt1Diagnostic("GENERIC_UNKNOWN", "unknown generic type "+application.Name, application.Span)
 	}
 	if len(application.TypeArgs) != len(decl.Parameters) {
 		return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_COUNT", fmt.Sprintf("%s requires %d template argument(s), got %d", decl.Name, len(decl.Parameters), len(application.TypeArgs)), application.Span)
-	}
-	// An application inside an open generic declaration is still symbolic.
-	// Materializing it now would collapse its child argument structure into a
-	// nominal string such as Owner<T>, preventing the eventual T -> Concrete
-	// binding from reaching the nested application. Closed applications are
-	// monomorphized below through the ordinary cache.
-	if evt1TypeContainsConceptParameter(application) {
-		return application, nil
-	}
-	if decl.Constraint.ConceptName != "" {
-		bindings := evt1TemplateBindings(decl.Parameters, application.TypeArgs)
-		constraintArguments := evt1SubstituteArguments(evt1ConstraintArguments(decl.Constraint), bindings)
-		open := false
-		for _, argument := range constraintArguments {
-			open = open || evt1TypeContainsConceptParameter(argument)
-		}
-		if !open {
-			if err := checkConceptApplicationSatisfaction(env, decl.Constraint.ConceptName, constraintArguments, nil, application.Span); err != nil {
-				return Type{}, err
-			}
-		}
 	}
 	parts := make([]string, len(application.TypeArgs))
 	for i, arg := range application.TypeArgs {
@@ -108,6 +87,27 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			}
 		}
 		parts[i] = arg.String()
+	}
+	// An application inside an open generic declaration is still symbolic.
+	// Materializing it now would collapse its child argument structure into a
+	// nominal string such as Owner<T>, preventing the eventual T -> Concrete
+	// binding from reaching the nested application. Closed applications are
+	// monomorphized below through the ordinary cache.
+	if evt1TypeContainsConceptParameter(application) {
+		return application, nil
+	}
+	if decl.Constraint.ConceptName != "" {
+		bindings := evt1TemplateBindings(decl.Parameters, application.TypeArgs)
+		constraintArguments := evt1SubstituteArguments(evt1ConstraintArguments(decl.Constraint), bindings)
+		open := false
+		for _, argument := range constraintArguments {
+			open = open || evt1TypeContainsConceptParameter(argument)
+		}
+		if !open {
+			if err := checkConceptApplicationSatisfaction(env, decl.Constraint.ConceptName, constraintArguments, nil, application.Span); err != nil {
+				return Type{}, err
+			}
+		}
 	}
 	identity := decl.Name + "<" + strings.Join(parts, ", ") + ">"
 	metadata := evt1NewGenericApplication(decl, application.TypeArgs)
@@ -216,75 +216,13 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	return evt1AppliedConcreteType(application, identity, metadata), nil
 }
 
+// Value arguments use the same structural substitution as type arguments.
+// This preserves symbolic-to-symbolic bindings (Capacity -> N), not just literals.
 func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args []Type) Type {
-	values := map[string]int{}
-	for i, param := range params {
-		if param.Kind == "value" {
-			value, err := strconv.Atoi(args[i].Name)
-			if err != nil {
-				// Invalid value arguments are diagnosed before substitution; do
-				// not turn an unexpected parse failure into a semantic zero.
-				continue
-			}
-			values[param.Name] = value
+	for i, parameter := range params {
+		if parameter.Kind == "value" {
+			t = evt1SubstituteType(t, parameter.Name, args[i])
 		}
-	}
-	if value, found := values[t.Name]; found && t.PointerTo == nil && t.ArrayElem == nil && len(t.TypeArgs) == 0 && len(t.CallableParams) == 0 && t.CallableResult == nil {
-		t.Name = strconv.Itoa(value)
-		t.Kind = TypeTemplateValue
-		return t
-	}
-	var replace func(Expr) Expr
-	replace = func(expr Expr) Expr {
-		switch e := expr.(type) {
-		case *NameExpr:
-			if value, found := values[e.Name]; found {
-				if value < 0 {
-					return &IntLiteral{Magnitude: uint64(-int64(value)), Negative: true, Lexeme: fmt.Sprint(-int64(value)), Span: e.Span}
-				}
-				return &IntLiteral{Magnitude: uint64(value), Lexeme: fmt.Sprint(value), Span: e.Span}
-			}
-		case *BinaryExpr:
-			copy := *e
-			copy.Left, copy.Right = replace(e.Left), replace(e.Right)
-			return &copy
-		case *ParenExpr:
-			copy := *e
-			copy.Value = replace(e.Value)
-			return &copy
-		}
-		return expr
-	}
-	if t.Kind == TypeTemplateValue {
-		if value, found := values[t.Name]; found {
-			t.Name = strconv.Itoa(value)
-		}
-		return t
-	}
-	if t.ArrayLengthExpr != nil {
-		t.ArrayLengthExpr = replace(t.ArrayLengthExpr)
-	}
-	t.Shape = append([]StorageDimension(nil), t.Shape...)
-	for i := range t.Shape {
-		if t.Shape[i].Expr != nil {
-			t.Shape[i].Expr = replace(t.Shape[i].Expr)
-		}
-	}
-	if t.ArrayElem != nil {
-		elem := evt1SubstituteGenericValueExtents(*t.ArrayElem, params, args)
-		t.ArrayElem = &elem
-	}
-	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
-	for i := range t.TypeArgs {
-		t.TypeArgs[i] = evt1SubstituteGenericValueExtents(t.TypeArgs[i], params, args)
-	}
-	t.CallableParams = append([]Type(nil), t.CallableParams...)
-	for i := range t.CallableParams {
-		t.CallableParams[i] = evt1SubstituteGenericValueExtents(t.CallableParams[i], params, args)
-	}
-	if t.CallableResult != nil {
-		result := evt1SubstituteGenericValueExtents(*t.CallableResult, params, args)
-		t.CallableResult = &result
 	}
 	return t
 }
@@ -301,11 +239,12 @@ func evt1StructView(env *semanticEnv, t Type) (StructDecl, bool) {
 	if decl, ok := env.structs[base.Name]; ok {
 		return decl, true
 	}
-	if len(base.TypeArgs) == 0 {
+	application, applied := evt1GenericApplicationOf(env, base)
+	if !applied {
 		return StructDecl{}, false
 	}
-	generic, ok := env.genericTypes[base.Name]
-	if !ok || len(generic.Parameters) != len(base.TypeArgs) {
+	generic, ok := env.genericTypes[application.Name]
+	if !ok || len(generic.Parameters) != len(application.TypeArgs) {
 		return StructDecl{}, false
 	}
 	decl := evt1CloneStructDecl(generic.Struct)
@@ -313,10 +252,10 @@ func evt1StructView(env *semanticEnv, t Type) (StructDecl, bool) {
 	for i := range decl.Fields {
 		for j, parameter := range generic.Parameters {
 			if parameter.Kind == "type" {
-				decl.Fields[i].Type = evt1SubstituteType(decl.Fields[i].Type, parameter.Name, base.TypeArgs[j])
+				decl.Fields[i].Type = evt1SubstituteType(decl.Fields[i].Type, parameter.Name, application.TypeArgs[j])
 			}
 		}
-		decl.Fields[i].Type = evt1SubstituteGenericValueExtents(decl.Fields[i].Type, generic.Parameters, base.TypeArgs)
+		decl.Fields[i].Type = evt1SubstituteGenericValueExtents(decl.Fields[i].Type, generic.Parameters, application.TypeArgs)
 	}
 	return decl, true
 }

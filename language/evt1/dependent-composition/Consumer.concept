@@ -1,0 +1,27 @@
+module Consumer;
+profile Core;
+import Library.Dependent;
+extern "C" void Observed(int id);
+struct Token { int id; }
+struct Other { int id; }
+void Drop(owned Other item) { Observed(item.id); }
+double Weight(ref const Other item) { return 2.0 * (item.id as double); }
+void Drop(owned Token item) { Observed(item.id); }
+double Weight(ref const Token item) { return item.id as double; }
+comptime usize Dimension = 3u;
+double Main() {
+    Values<Dimension> backing = Values<Dimension>{[1.0 ...]};
+    Values<Dimension> produced = MakeValues<Dimension>();
+    if (produced.data[0] != 1.0) { return -1.0; }
+    tensor<double,1> view = Tensor(backing.data);
+    Assert.Concept<FixedShape>(view, "closed comptime extent survives field projection");
+    owned Token first = Token{1};
+    owned Token second = Token{2};
+    owned Token third = Token{3};
+    owned Token eighth = Token{8};
+    owned Token sixteenth = Token{16};
+    owned Other other = Other{7};
+    return Compute<Token,1>(move first) + Compute<Token,2>(move second)
+        + Compute<Token,Dimension>(move third) + Compute<Token,8>(move eighth)
+        + Compute<Token,16>(move sixteenth) + Compute<Other,2>(move other);
+}

@@ -4619,11 +4619,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		}
 		return prelude.String(), ctor + "(" + strings.Join(args, ", ") + ")", enumType
 	case *StructConstructExpr:
-		structType := evt1CanonicalType(f.l.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span})
+		structType := e.StructType
+		if structType.Name == "" {
+			structType = evt1CanonicalType(f.l.env, Type{Name: e.StructName, Kind: TypeStruct, Span: e.Span})
+		}
 		var prelude strings.Builder
 		var args []string
 		var initializers []string
-		structDecl := f.l.env.structs[e.StructName]
+		structDecl := f.l.env.structs[structType.Name]
 		args = make([]string, len(structDecl.Fields))
 		initializers = make([]string, len(structDecl.Fields))
 		fieldIndex := make(map[string]int, len(structDecl.Fields))
@@ -4636,7 +4639,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				index = fieldIndex[e.ArgNames[i]]
 			}
 			fieldType := structDecl.Fields[index].Type
-			if resolved, ok := f.l.env.fieldSets[e.StructName][structDecl.Fields[index].Name]; ok {
+			if resolved, ok := f.l.env.fieldSets[structType.Name][structDecl.Fields[index].Name]; ok {
 				fieldType = resolved
 			}
 			argPrelude, argExpr, argType := f.lowerExprExpected(arg, fieldType, indent)

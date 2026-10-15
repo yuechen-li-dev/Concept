@@ -120,7 +120,7 @@ func evt1TemplateBindings(parameters []GenericParameter, arguments []Type) map[s
 
 func evt1TypeDependsOnAnyParameter(t Type, parameters []GenericParameter) bool {
 	for _, parameter := range parameters {
-		if parameter.Kind == "type" && evt1TypeDependsOnParam(t, parameter.Name) {
+		if evt1TypeDependsOnParam(t, parameter.Name) {
 			return true
 		}
 	}

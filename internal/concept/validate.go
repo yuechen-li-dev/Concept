@@ -357,7 +357,7 @@ func evt1StorageStatesFromFacts(t Type, facts *SemanticValueFacts, prefix []stri
 		out[evt1StoragePathKey(prefix)] = state
 		return
 	}
-	fields, _, err := evt1FieldSet(env, t)
+	fields, _, err := evt1FieldSet(env, nil, t)
 	if err != nil {
 		return
 	}
@@ -1495,7 +1495,7 @@ func evt1CarriesInvalidatableReference(env *semanticEnv, t Type) bool {
 		if !evt1IsRefStructType(env, current) {
 			return false
 		}
-		fields, _, err := evt1FieldSet(env, current)
+		fields, _, err := evt1FieldSet(env, nil, current)
 		if err != nil {
 			return false
 		}
@@ -3075,6 +3075,7 @@ func validateBindExpr(env *semanticEnv, scope *evt1Scope, bind *BindExpr, expect
 }
 
 func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
+	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
 	if alias, ok := env.typeAliases[t.Name]; ok && t.PointerTo == nil && t.ArrayElem == nil && len(t.TypeArgs) == 0 {
 		resolved := alias
 		resolved.Ownership = t.Ownership
@@ -3095,8 +3096,11 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 	}
 	for i := range t.TypeArgs {
 		if decl, ok := env.genericTypes[t.Name]; ok && i < len(decl.Parameters) && decl.Parameters[i].Kind == "value" {
-			if scope != nil {
-				if binding, found := scope.lookup(t.TypeArgs[i].Name); found && binding.t.Name == decl.Parameters[i].ValueType.Name {
+			if scope != nil && t.TypeArgs[i].Kind == TypeTemplateValue && evt1TypeContainsConceptParameter(t.TypeArgs[i]) {
+				if binding, found := scope.lookup(t.TypeArgs[i].Name); found {
+					if !binding.t.Equal(decl.Parameters[i].ValueType) {
+						return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_KIND", "symbolic value parameter type does not match "+decl.Parameters[i].ValueType.String(), t.TypeArgs[i].Span)
+					}
 					continue
 				}
 			}
@@ -3990,7 +3994,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return Type{}, evt1Diagnostic("DYN_FIELD_NOT_IN_INTERFACE", fmt.Sprintf("field %s is not in interface %s", e.Field, receiverType.Name), e.Span)
 		}
-		fields, baseName, err := evt1FieldSet(env, receiverType)
+		fields, baseName, err := evt1FieldSet(env, scope, receiverType)
 		if err != nil {
 			return Type{}, evt1Diagnostic("CV4025", err.Error(), e.Span)
 		}
@@ -5144,7 +5148,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, err
 			}
 		}
-		return validateStructConstructExpr(env, scope, *e, templateInfo, inComptimeFn)
+		return validateStructConstructExpr(env, scope, e, templateInfo, inComptimeFn)
 	case *WithExpr:
 		return validateWithExpr(env, scope, *e, templateInfo, inComptimeFn)
 	case *IfExpr:
@@ -5313,7 +5317,7 @@ func validateAssignable(env *semanticEnv, scope *evt1Scope, expr Expr, templateI
 			}
 			return evt1LValue{}, evt1Diagnostic("DYN_FIELD_NOT_IN_INTERFACE", fmt.Sprintf("field %s is not in interface %s", e.Field, receiver.t.Name), e.Span)
 		}
-		fields, baseName, err := evt1FieldSet(env, receiver.t)
+		fields, baseName, err := evt1FieldSet(env, scope, receiver.t)
 		if err != nil {
 			return evt1LValue{}, evt1Diagnostic("CV4025", err.Error(), e.Span)
 		}
@@ -5454,7 +5458,7 @@ func evt1AccessPathsOverlap(a, b evt1AccessPath) bool {
 	return true
 }
 
-func evt1FieldSet(env *semanticEnv, t Type) (map[string]Type, string, error) {
+func evt1FieldSet(env *semanticEnv, scope *evt1Scope, t Type) (map[string]Type, string, error) {
 	base := t
 	if t.isBorrowLike() {
 		base = t.borrowBase()
@@ -5481,6 +5485,23 @@ func evt1FieldSet(env *semanticEnv, t Type) (map[string]Type, string, error) {
 	}
 	if !ok {
 		return nil, baseName, fmt.Errorf("type %s has no fields", baseName)
+	}
+	if scope != nil {
+		resolved := make(map[string]Type, len(fields))
+		var names []string
+		for name := range fields {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			field := fields[name]
+			value, err := evt1ResolveType(env, scope, field)
+			if err != nil {
+				return nil, baseName, err
+			}
+			resolved[name] = value
+		}
+		fields = resolved
 	}
 	return fields, baseName, nil
 }
@@ -5527,7 +5548,7 @@ func validateConstructExpr(env *semanticEnv, scope *evt1Scope, expr ConstructExp
 	return Type{Name: enumDecl.Name, Kind: TypeEnum, Span: expr.Span}, nil
 }
 
-func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr StructConstructExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr *StructConstructExpr, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	resolvedType := evt1CanonicalType(env, Type{Name: expr.StructName, Kind: TypeStruct, Span: expr.Span})
 	if expr.StructType.Name != "" {
 		resolved, err := evt1ResolveType(env, scope, expr.StructType)
@@ -5535,6 +5556,7 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 			return Type{}, err
 		}
 		resolvedType = resolved
+		expr.StructType = resolved
 		expr.StructName = resolved.Name
 	}
 	structDecl, ok := env.structs[expr.StructName]
@@ -5577,6 +5599,11 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 		} else {
 			field = structDecl.Fields[i]
 		}
+		resolvedField, err := evt1ResolveType(env, scope, field.Type)
+		if err != nil {
+			return Type{}, err
+		}
+		field.Type = resolvedField
 		argType, err := validateExprAgainstExpected(env, scope, arg, field.Type, templateInfo, inComptimeFn)
 		if err != nil {
 			return Type{}, err
@@ -6604,6 +6631,10 @@ func evt1ByValueTypeName(t Type) (string, bool) {
 }
 
 func evt1TypeCopyable(env *semanticEnv, t Type) bool {
+	return evt1TypeCopyableVisiting(env, t, map[string]bool{})
+}
+
+func evt1TypeCopyableVisiting(env *semanticEnv, t Type, visiting map[string]bool) bool {
 	if evt1IsTypedVerdict(t) {
 		return evt1IsComptimeType(env, t)
 	}
@@ -6632,11 +6663,11 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		if t.StorageKind == StorageRaw || t.StorageKind == StorageSparse {
 			return false
 		}
-		return evt1TypeCopyable(env, *t.ArrayElem)
+		return evt1TypeCopyableVisiting(env, *t.ArrayElem, visiting)
 	}
 	if evt1IsFailureType(t) {
 		for _, arg := range t.TypeArgs {
-			if !evt1TypeCopyable(env, arg) {
+			if !evt1TypeCopyableVisiting(env, arg, visiting) {
 				return false
 			}
 		}
@@ -6652,6 +6683,23 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		return true
 	}
 	if len(t.TypeArgs) > 0 {
+		key := t.String()
+		if visiting[key] {
+			return false
+		}
+		visiting[key] = true
+		defer delete(visiting, key)
+		if decl, ok := evt1StructView(env, t); ok {
+			if decl.Immovable {
+				return false
+			}
+			for _, field := range decl.Fields {
+				if !evt1TypeCopyableVisiting(env, field.Type, visiting) {
+					return false
+				}
+			}
+			return true
+		}
 		return false
 	}
 	if _, ok := env.profile.builtinType(t.Name, t.Span); ok {
@@ -6670,7 +6718,7 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		}
 		env.copyableCache[t.Name] = true
 		for _, field := range structDecl.Fields {
-			if !evt1TypeCopyable(env, field.Type) {
+			if !evt1TypeCopyableVisiting(env, field.Type, visiting) {
 				env.copyableCache[t.Name] = false
 				return false
 			}
@@ -6681,7 +6729,7 @@ func evt1TypeCopyable(env *semanticEnv, t Type) bool {
 		env.copyableCache[t.Name] = true
 		for _, variant := range enumDecl.Variants {
 			for _, field := range variant.Payload {
-				if !evt1TypeCopyable(env, field.Type) {
+				if !evt1TypeCopyableVisiting(env, field.Type, visiting) {
 					env.copyableCache[t.Name] = false
 					return false
 				}
@@ -6815,6 +6863,10 @@ func evt1CanDirectInitialize(env *semanticEnv, t Type, expr Expr) bool {
 			return evt1IsFailureType(t) && evt1IsFailureType(e.ResolvedType) && t.SameValueType(e.ResolvedType)
 		}
 		return false
+	}
+	if construct.StructType.Name != "" {
+		_, known := evt1StructView(env, t)
+		return known && evt1SemanticTypeEqual(env, construct.StructType.valueType(), t.valueType())
 	}
 	return construct.StructName == t.Name && evt1LookupStruct(env, t.Name)
 }
@@ -7730,7 +7782,7 @@ func evt1TypeDependsOnParam(t Type, typeParam string) bool {
 		}
 		return false
 	}
-	if t.Kind == TypeConceptParam && t.Name == typeParam {
+	if (t.Kind == TypeConceptParam || t.Kind == TypeTemplateValue) && t.Name == typeParam {
 		return true
 	}
 	if t.PointerTo != nil && evt1TypeDependsOnParam(*t.PointerTo, typeParam) {
@@ -8579,6 +8631,9 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		return &UnaryExpr{Op: e.Op, Value: value, Span: e.Span}, nil
 	case *NameExpr:
 		if e.Name == typeParam && concreteType.Kind == TypeTemplateValue {
+			if isIdentifier(concreteType.Name) {
+				return &NameExpr{Name: concreteType.Name, Span: e.Span}, nil
+			}
 			value, err := strconv.Atoi(concreteType.Name)
 			if err == nil {
 				if value < 0 {

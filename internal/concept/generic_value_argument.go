@@ -15,6 +15,11 @@ func evt1ResolveGenericValueArgument(env *semanticEnv, argument Type, parameterT
 	}
 	var value int
 	if argument.Kind == TypeTemplateValue {
+		if _, err := strconv.Atoi(argument.Name); err != nil && isIdentifier(argument.Name) {
+			// The parser marks lexically bound value parameters explicitly.
+			// Preserve this leaf until the owning template supplies a value.
+			return argument, nil
+		}
 		parsed, err := strconv.ParseUint(argument.Name, 0, 64)
 		if err != nil || parsed > uint64(^uint(0)>>1) {
 			return Type{}, evt1Diagnostic("GENERIC_NON_TYPE_ARGUMENT_INVALID", fmt.Sprintf("invalid compile-time integer %s", argument.Name), argument.Span)

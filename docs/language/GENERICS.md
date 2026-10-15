@@ -82,6 +82,31 @@ parameters, and template metaprogramming remain out of scope.
 
 ## Structural substitution
 
+Dependent generic records compose with local construction, constraints, field
+projection, and tensor backing storage. Lexically bound value arguments such as
+`N` are symbolic `TypeTemplateValue` leaves in the structural application tree,
+not nominal types or runtime variables. An open application is checked for arity
+and argument kinds without materializing a nominal instance. Substitution can
+rename one symbolic value to another (`Capacity` to `N`) before closing it to an
+integer; array/ndarray extent expressions use that same substitution operation.
+
+Field projection substitutes the record's ordered arguments and resolves the
+result in the active template scope. A symbolic storage extent therefore cannot
+be mistaken for a zero-length field. Copyability inspects the projected fields;
+an open record containing an owned field remains non-copyable. Concrete bodies
+are revalidated with the existing move, borrow, cleanup and escape authorities.
+
+Semantic module artifacts preserve the structural arguments. Closed applications
+retain their defining module, ordered type/value identity and resolved fields;
+constructor nodes retain the resolved type for emission. Display names are not
+parsed to reconstruct generic identity in code generation. This correction adds
+no new generic syntax, runtime state, allocation, or implicit numeric conversion.
+
+The combined specimen is under `language/evt1/dependent-composition`; its native
+regression checks imported constrained workspaces with field-backed tensors,
+computed extents, two owned resource types, dimensions 1/2/3/8/16, and exactly-once
+cleanup in Normal and Verify, including a second module artifact import.
+
 R6m makes substitution recursive over the semantic type structure. Nested
 applications, storage types, reference and ownership qualifiers, array and
 ndarray elements/extents, address spaces, and callable signatures are rebuilt

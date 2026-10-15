@@ -8,14 +8,15 @@ import (
 )
 
 type parser struct {
-	path               string
-	tokens             []Token
-	pos                int
-	profileDef         *ProfileDefinition
-	callableOrdinal    int
-	templateTypeParams map[string]bool
-	inGeneratorBody    bool
-	suppressAs         bool
+	path                string
+	tokens              []Token
+	pos                 int
+	profileDef          *ProfileDefinition
+	callableOrdinal     int
+	templateTypeParams  map[string]bool
+	templateValueParams map[string]Type
+	inGeneratorBody     bool
+	suppressAs          bool
 }
 
 func Parse(path, text string) (Module, error) {
@@ -1353,6 +1354,7 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 	}
 	var params []GenericParameter
 	typeParams := map[string]bool{}
+	valueParams := map[string]Type{}
 	for {
 		if p.peekLexeme() == "typename" || p.peekLexeme() == "class" {
 			p.next()
@@ -1372,6 +1374,7 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 				return GenericTypeDecl{}, e
 			}
 			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "value", ValueType: valueType, Span: name.Span})
+			valueParams[name.Lexeme] = valueType
 		}
 		if p.peekLexeme() != "," {
 			break
@@ -1382,8 +1385,9 @@ func (p *parser) parseGenericTypeDecl() (GenericTypeDecl, error) {
 		return GenericTypeDecl{}, err
 	}
 	old := p.templateTypeParams
-	p.templateTypeParams = typeParams
-	defer func() { p.templateTypeParams = old }()
+	oldValues := p.templateValueParams
+	p.templateTypeParams, p.templateValueParams = typeParams, valueParams
+	defer func() { p.templateTypeParams, p.templateValueParams = old, oldValues }()
 	var constraint TemplateConstraint
 	if p.peekLexeme() == "requires" {
 		req := p.next()
@@ -1428,6 +1432,7 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 	}
 	var params []GenericParameter
 	typeParams := map[string]bool{}
+	valueParams := map[string]Type{}
 	for {
 		if p.peekLexeme() == "typename" || p.peekLexeme() == "class" {
 			p.next()
@@ -1447,6 +1452,7 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 				return TemplateDecl{}, parseErr
 			}
 			params = append(params, GenericParameter{Name: name.Lexeme, Kind: "value", ValueType: valueType, Span: name.Span})
+			valueParams[name.Lexeme] = valueType
 		}
 		if p.peekLexeme() != "," {
 			break
@@ -1460,8 +1466,9 @@ func (p *parser) parseTemplateDecl() (TemplateDecl, error) {
 		return TemplateDecl{}, err
 	}
 	oldTypeParams := p.templateTypeParams
-	p.templateTypeParams = typeParams
-	defer func() { p.templateTypeParams = oldTypeParams }()
+	oldValues := p.templateValueParams
+	p.templateTypeParams, p.templateValueParams = typeParams, valueParams
+	defer func() { p.templateTypeParams, p.templateValueParams = oldTypeParams, oldValues }()
 	var constraint TemplateConstraint
 	if p.peekLexeme() == "requires" {
 		reqTok := p.next()
@@ -2560,6 +2567,8 @@ done:
 		t.Name = builtin.Name
 		t.Kind = builtin.Kind
 		t.FloatRepresentation = builtin.FloatRepresentation
+	} else if _, valueParameter := p.templateValueParams[nameTok.Lexeme]; valueParameter {
+		t.Name, t.Kind = nameTok.Lexeme, TypeTemplateValue
 	} else if conceptParam != "" && nameTok.Lexeme == conceptParam {
 		t.Name = nameTok.Lexeme
 		t.Kind = TypeConceptParam

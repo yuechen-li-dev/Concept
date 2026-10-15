@@ -88,6 +88,9 @@ func evt1GenericApplicationOf(env *semanticEnv, t Type) (Type, bool) {
 		if decl, ok := env.structs[t.Name]; ok && decl.Application != nil {
 			return decl.Application.Type(), true
 		}
+		if _, generic := env.genericTypes[t.Name]; generic && len(t.TypeArgs) != 0 {
+			return t, true
+		}
 	}
 	return Type{}, false
 }
