@@ -8236,11 +8236,14 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 			return nil, err
 		}
 		instFn.Params[paramIndex].Type = resolvedParam
+		parameterProvenance := evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth)
 		scope.declare(param.Name, evt1ValueBinding{
 			t:          evt1CanonicalType(env, resolvedParam),
 			mutable:    !param.Type.Const,
 			state:      evt1StorageInitialized,
-			provenance: evt1InitialParameterProvenance(env, resolvedParam, paramIndex, scope.depth),
+			provenance: parameterProvenance,
+			spanFacts:  evt1ParameterSpanFacts(env, param.Name, resolvedParam, parameterProvenance),
+			valueFacts: evt1ParameterSemanticValueFacts(env, param.Name, resolvedParam, parameterProvenance),
 		})
 	}
 	if err := evt1RequireClosedType(instFn.ReturnType, templateName+" result", span); err != nil {
