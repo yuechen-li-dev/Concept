@@ -65,3 +65,26 @@ go vet ./...
 Frozen Zig tests are skipped because the retired compiler and its build
 infrastructure are unchanged. Nested whole-view tensor expression fusion remains
 outside this change; the combined test uses existing indexed tensor semantics.
+
+## Final validation
+
+Qualified compiler code: `04700e1` (initial constructor/application repair
+`6a04f47`). Full `go test -count=1 ./...` passed: cmd/concept 27.210s,
+internal/concept 335.015s, profile/vulkan 0.481s. `go vet ./...` passed. The
+focused generic/substitution/SMLib/checked-output and scheduler consumer lane
+passed without regenerating checked outputs.
+
+The real CLI also passed `build-module`, artifact-only import, twice-repeated
+five-file emission, strict C11 compilation/link/execution in Normal/Verify, and
+FixedShape inspection through `explain --verbose` and `--json`. Reproducible
+host-local artifacts and proof JSON are under ignored `artifacts/dependent-cli`;
+Go logs are under `artifacts/smlib-phase1a/dependent-complete-go-test.log` and
+`dependent-complete-go-vet.log`.
+
+The external SMLib full qualification rebuilds all five original/modernized
+implementations in both policies: 239 cases and 478 comparisons per pair, exact
+historical numerical reports, standalone execution, deterministic strict C11,
+native safety assertions, and the original local-record reproducer now accepted.
+All 47 frozen source/evidence hashes remain unchanged. The consumer retains its
+own evidence and commits separately; no numerical implementation or C++ reference
+was rewritten for this compiler change.
