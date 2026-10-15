@@ -43,6 +43,13 @@ parameter but cannot escape a local environment. Unwrapping or forwarding an alr
 erased pair requires no new erasure adapter. These are applications of existing
 lexical lifetime laws, not owning erased callbacks or hidden allocation.
 
+Closed function-template instantiations give callback literals distinct concrete
+environment identities. Callback environments, erased adapters, and tensor
+descriptors in those bodies follow the same semantic collection and deterministic
+emission as authored functions. Dependent `static_assert` conditions/messages are
+typed in the open body and evaluated after concrete substitution. Runtime operands
+are rejected before deferral; an unresolved template parameter cannot hide them.
+
 Status: R5 language-core semantics frozen for R6 tooling
 
 This document defines the authority categories and the smallest currently

@@ -14,6 +14,9 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 		return Type{}, evt1Diagnostic("CALLABLE_COMPTIME_DEFERRED", "runtime callable literals are not compile-time values", expr.Span)
 	}
 	name := outer.functionName
+	if outer.callableContext != "" {
+		name = outer.callableContext
+	}
 	if name == "" {
 		name = env.validatingFunction
 	}
@@ -417,7 +420,10 @@ func evt1CArgsSuffix(args []string) string {
 	return ", " + strings.Join(args, ", ")
 }
 
-func evt1ModuleCallables(module Module) []*CallableExpr {
+func evt1ModuleCallables(module Module, environments ...*semanticEnv) []*CallableExpr {
+	if len(environments) > 0 {
+		module = evt1ModuleWithConcreteFunctions(module, environments[0])
+	}
 	seen := map[string]*CallableExpr{}
 	for _, fn := range module.Functions {
 		if fn.Body != nil {
@@ -436,7 +442,10 @@ func evt1ModuleCallables(module Module) []*CallableExpr {
 	return out
 }
 
-func evt1ModuleCallbackTypes(module Module) []Type {
+func evt1ModuleCallbackTypes(module Module, environments ...*semanticEnv) []Type {
+	if len(environments) > 0 {
+		module = evt1ModuleWithConcreteFunctions(module, environments[0])
+	}
 	seen := map[string]Type{}
 	var add func(Type)
 	add = func(t Type) {
@@ -497,7 +506,10 @@ func evt1ModuleCallbackTypes(module Module) []Type {
 	return out
 }
 
-func evt1ModuleCallbackWitnesses(module Module) []MIRCallbackWitness {
+func evt1ModuleCallbackWitnesses(module Module, environments ...*semanticEnv) []MIRCallbackWitness {
+	if len(environments) > 0 {
+		module = evt1ModuleWithConcreteFunctions(module, environments[0])
+	}
 	seen := map[string]MIRCallbackWitness{}
 	for _, fn := range module.Functions {
 		if fn.Body != nil {
@@ -537,7 +549,7 @@ func evt1ErasedCallbackDeclaration(callback Type) string {
 
 func (l *lowering) callableDeclarations() string {
 	var b strings.Builder
-	for _, callable := range evt1ModuleCallables(l.module) {
+	for _, callable := range evt1ModuleCallables(l.module, l.env) {
 		b.WriteString(l.callableDeclaration(callable))
 	}
 	return b.String()
@@ -566,7 +578,7 @@ func (l *lowering) callableDeclaration(callable *CallableExpr) string {
 
 func (l *lowering) callableDefinitions() string {
 	var b strings.Builder
-	for _, callable := range evt1ModuleCallables(l.module) {
+	for _, callable := range evt1ModuleCallables(l.module, l.env) {
 		fn := FunctionDecl{Name: callable.Identity, ReturnType: callable.ResultType, Params: callable.Params, Body: &callable.Body, Span: callable.Span}
 		lower := newEVT1FunctionLowerer(l, fn, evt1CallableInvokeCName(callable.Identity), false)
 		for _, capture := range callable.Captures {
@@ -586,7 +598,7 @@ func (l *lowering) callableDefinitions() string {
 		b.WriteString(lower.lowerBlock(callable.Body, 1))
 		b.WriteString("}\n\n")
 	}
-	for _, witness := range evt1ModuleCallbackWitnesses(l.module) {
+	for _, witness := range evt1ModuleCallbackWitnesses(l.module, l.env) {
 		callback := witness.Signature
 		b.WriteString(fmt.Sprintf("static %s %s(void *raw", evt1CType(*callback.CallableResult), evt1CallbackAdapterCName(witness.ConcreteCallable, callback)))
 		for i, param := range callback.CallableParams {

@@ -27,6 +27,7 @@ type evt1Scope struct {
 	inAsync             bool
 	callableOuter       *evt1Scope
 	functionName        string
+	callableContext     string
 	observationFunction *FunctionDecl
 }
 
@@ -127,6 +128,7 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 		s.inAsync = parent.inAsync
 		s.callableOuter = parent.callableOuter
 		s.functionName = parent.functionName
+		s.callableContext = parent.callableContext
 		s.observationFunction = parent.observationFunction
 	}
 	return s
@@ -462,6 +464,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	out.inAsync = scope.inAsync
 	out.callableOuter = scope.callableOuter
 	out.functionName = scope.functionName
+	out.callableContext = scope.callableContext
 	out.observationFunction = scope.observationFunction
 	for name, binding := range scope.values {
 		if binding.storageStates != nil {
@@ -8146,6 +8149,7 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 	scope.returnType = instFn.ReturnType
 	scope.inAsync = instFn.Async
 	scope.functionName = templateName
+	scope.callableContext = templateName + "<" + strings.Join(identities, ", ") + ">"
 	for paramIndex, param := range instFn.Params {
 		resolvedParam, err := evt1ResolveType(env, scope, param.Type)
 		if err != nil {
@@ -8365,6 +8369,11 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		}
 		out := *s
 		out.Type, out.Value = evt1SubstituteType(s.Type, typeParam, concreteType), value
+		if literal, ok := s.Value.(*CallableExpr); ok && s.Type.Kind == TypeCallable && s.Type.CallableID == literal.Identity {
+			// The open body's inferred literal type belongs to that open
+			// environment. Rebind it in the closed lexical function identity.
+			out.Type = Type{Name: "auto", Kind: TypeInferred, Span: s.Type.Span}
+		}
 		return &out, nil
 	case *InstanceDecl:
 		return &InstanceDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil

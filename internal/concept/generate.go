@@ -186,7 +186,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 		}
 		t := evt1MIRType(env, alias.ResolvedType)
 		entry := MIRTypeAlias{Name: alias.Name, ExactType: t, Query: evt1ExprIdentity(alias.Query), Unevaluated: true, CallableIdentity: t.CallableID, EnvironmentIdentity: t.CallableID + "#environment", Storage: "Inline", Dispatch: "DirectCallable", NoAllocation: true, SourceSpan: alias.Span}
-		for _, callable := range evt1ModuleCallables(module) {
+		for _, callable := range evt1ModuleCallables(module, env) {
 			if callable.Identity == t.CallableID {
 				geometry := evt1CallableMIR(env, callable).Environment
 				entry.EnvironmentIdentity, entry.EnvironmentSize, entry.EnvironmentAlignment = geometry.Identity, geometry.Size, geometry.Alignment
@@ -632,7 +632,7 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 			Ownership:   evt1StorageOwnership(storageType),
 		})
 	}
-	mir.CallbackWitnesses = evt1ModuleCallbackWitnesses(module)
+	mir.CallbackWitnesses = evt1ModuleCallbackWitnesses(module, env)
 	return mir
 }
 
@@ -2121,7 +2121,7 @@ type evt1RuntimeHeaderDecl struct {
 }
 
 func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes, viewTypes, failureTypes []Type, canonicalFailureTypes map[string]bool) error {
-	callbackTypes := evt1ModuleCallbackTypes(l.module)
+	callbackTypes := evt1ModuleCallbackTypes(l.module, l.env)
 	knownNamed := make(map[string]bool, len(typeDecls))
 	knownCallable := map[string]bool{}
 	knownStorage := make(map[string]bool, len(storageTypes))
@@ -2131,7 +2131,7 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 		knownNamed[decl.Name] = true
 	}
 	if len(l.module.TypeAliases) > 0 {
-		for _, callable := range evt1ModuleCallables(l.module) {
+		for _, callable := range evt1ModuleCallables(l.module, l.env) {
 			knownCallable[callable.Identity] = true
 		}
 	}
@@ -2244,7 +2244,7 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 		decls = append(decls, evt1RuntimeHeaderDecl{key: "erased:" + evt1CallbackCName(callback), deps: deps, emit: func() string { return evt1ErasedCallbackDeclaration(current) }})
 	}
 	if len(l.module.TypeAliases) > 0 {
-		for _, callable := range evt1ModuleCallables(l.module) {
+		for _, callable := range evt1ModuleCallables(l.module, l.env) {
 			current := callable
 			deps := []string{}
 			seen := map[string]bool{"callable:" + callable.Identity: true}
@@ -5016,7 +5016,7 @@ func (f *evt1FunctionLowerer) lowerDropValue(t Type, value string, indent int) s
 	}
 	if t.Kind == TypeCallable {
 		var b strings.Builder
-		for _, callable := range evt1ModuleCallables(f.l.module) {
+		for _, callable := range evt1ModuleCallables(f.l.module, f.l.env) {
 			if callable.Identity != t.CallableID {
 				continue
 			}

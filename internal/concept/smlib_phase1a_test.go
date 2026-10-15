@@ -1,6 +1,7 @@
 package concept
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -74,5 +75,70 @@ double Main() {
 		if _, err := ParseWithSemanticModules("invalid.concept", invalid, map[string][]byte{"Library.TensorKernel": artifact}); err == nil {
 			t.Fatal("dimension-mismatched tensor generic accepted")
 		}
+	}
+}
+
+func TestSMLibPhase1aClosedCallbackEnvironments(t *testing.T) {
+	provider := `module Library.Adapter; profile Core;
+int Apply(callback<int -> int> fn) { return fn(7); }
+template <typename T> int Forward(ref const T item) {
+    const auto callbackValue = callback(int x) with (ref const item) { return x; };
+    return Apply(ref callbackValue);
+}`
+	artifact := buildSemanticArtifact(t, "Library/Adapter.concept", provider, nil)
+	source := `module Consumer; profile Core; import Library.Adapter;
+int Main() { int a=1; double b=2.0; return Forward<int>(ref const a)+Forward<double>(ref const b)+Forward<int>(ref const a); }`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := ParseWithSemanticModules("consumer.concept", source, map[string][]byte{"Library.Adapter": artifact})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertR8cStrictC11(t, outputs, "consumer.generated.c")
+		runFoundationNativeHarness(t, outputs, "generic_callback_harness.c", "#include \"consumer.generated.h\"\nint main(void){return concept_consumer_main()==21?0:1;}")
+		for name, data := range outputs {
+			if strings.HasSuffix(name, ".mir.json") {
+				var mir MIR
+				if err := json.Unmarshal(data, &mir); err != nil {
+					t.Fatal(err)
+				}
+				if len(mir.CallbackWitnesses) != 2 || mir.CallbackWitnesses[0].ConcreteCallable == mir.CallbackWitnesses[1].ConcreteCallable {
+					t.Fatalf("closed callback identities: %+v", mir.CallbackWitnesses)
+				}
+			}
+		}
+	}
+}
+
+func TestSMLibPhase1aGenericOwnedCaptureCleanup(t *testing.T) {
+	source := `profile Core;
+extern "C" void Observed(int id);
+struct First { int id; } struct Second { int id; }
+void Drop(owned First x) { Observed(x.id); }
+void Drop(owned Second x) { Observed(x.id); }
+template <typename T> int Scope(owned T item) {
+    const auto fn = callback() with (move item) { return 7; };
+    return fn();
+}
+int Main() { owned First a=First{1}; owned Second b=Second{2}; return Scope<First>(move a)+Scope<Second>(move b); }`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := Parse("generic_owner.concept", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runFoundationNativeHarness(t, outputs, "generic_owner_harness.c", `#include "generic_owner.generated.h"
+static int drops=0;void Observed(int id){drops+=id;}
+int main(void){return concept_generic_owner_main()==14 && drops==3 ? 0:1;}`)
+	}
+	invalid := `profile Core; template <typename T> callback<int -> int> Escape(T seed) { const auto fn=callback(int x) with(seed){return x;};return ref fn; }`
+	if _, err := Parse("generic_escape.concept", invalid); err == nil {
+		t.Fatal("generic local callback environment escaped")
 	}
 }

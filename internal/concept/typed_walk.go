@@ -1,5 +1,23 @@
 package concept
 
+import "sort"
+
+// Semantic collectors must see the same closed bodies that native emission sees.
+// This projection does not turn instances into authored module declarations.
+func evt1ModuleWithConcreteFunctions(module Module, env *semanticEnv) Module {
+	result := module
+	result.Functions = append([]FunctionDecl{}, module.Functions...)
+	keys := make([]string, 0, len(env.templateInstances))
+	for key := range env.templateInstances {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		result.Functions = append(result.Functions, env.templateInstances[key].Function)
+	}
+	return result
+}
+
 // Walk the typed syntax, including nested closures and failure expressions.
 // Semantic collectors share this traversal rather than recognizing source text.
 func evt1WalkTypedExpr(expr Expr, visit func(Expr)) {
