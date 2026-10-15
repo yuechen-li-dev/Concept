@@ -7,6 +7,40 @@ import (
 	"testing"
 )
 
+func TestSMLibPhase1aTensorValueShapeProofs(t *testing.T) {
+	source := `profile Core;
+int Check(int count) {
+    int<array>[4] storage = [1 ...];
+    tensor<int,1> fixed = Tensor(storage);
+    Assert.Concept<FixedShape>(fixed, "fixed backing extent is retained");
+    ref int<array>[count] view = bind storage;
+    tensor<int,1> dynamic = Tensor(view);
+    Assert.Concept<RuntimeShape>(dynamic, "runtime backing extent is retained");
+    return 0;
+}
+int Main() { return Check(4); }`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := Parse("tensor_proof.concept", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertR8cStrictC11(t, outputs, "tensor_proof.generated.c")
+		runFoundationNativeHarness(t, outputs, "tensor_proof_harness.c", "#include \"tensor_proof.generated.h\"\nint main(void){return concept_tensor_proof_main();}")
+	}
+	for _, bad := range []string{
+		strings.Replace(source, "<FixedShape>(fixed", "<RuntimeShape>(fixed", 1),
+		strings.Replace(source, "<RuntimeShape>(dynamic", "<FixedShape>(dynamic", 1),
+	} {
+		if _, err := Parse("invalid.concept", bad); err == nil || !strings.Contains(err.Error(), "CONCEPT_ASSERT_DISPROVEN") {
+			t.Fatalf("wrong shape proof diagnostic: %v", err)
+		}
+	}
+}
+
 func TestSMLibPhase1aDependentStaticAssert(t *testing.T) {
 	provider := `module Library.Square; profile Core;
 template <usize N, usize M> int Extent() {
@@ -83,6 +117,9 @@ func TestSMLibPhase1aClosedCallbackEnvironments(t *testing.T) {
 int Apply(callback<int -> int> fn) { return fn(7); }
 template <typename T> int Forward(ref const T item) {
     const auto callbackValue = callback(int x) with (ref const item) { return x; };
+    Assert.Concept<LifetimeSafe>(callbackValue, "adapter borrows only the parameter");
+    int<array>[3] storage = [0 ...];
+    Assert.Concept<Rank<1>>(storage, "proof parameters survive concrete instantiation");
     return Apply(ref callbackValue);
 }`
 	artifact := buildSemanticArtifact(t, "Library/Adapter.concept", provider, nil)

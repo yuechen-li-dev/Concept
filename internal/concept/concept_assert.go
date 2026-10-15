@@ -423,6 +423,19 @@ func evt1RefineValueFact(goal string, parameters []int, binding evt1ValueBinding
 	if binding.tensorFacts != nil {
 		facts := binding.tensorFacts
 		switch SemanticFactKind(goal) {
+		case FactFixedShape, FactRuntimeShape:
+			if facts.Rank > 0 && len(facts.Shape) == facts.Rank {
+				fixed := true
+				for _, dimension := range facts.Shape {
+					fixed = fixed && !dimension.Runtime
+				}
+				fallback.Origin = FactOriginTensorBacking
+				fallback.Evidence.Shape = append([]StorageDimension{}, facts.Shape...)
+				fallback.Outcome = FactDisproven
+				if (SemanticFactKind(goal) == FactFixedShape) == fixed {
+					fallback.Outcome = FactProven
+				}
+			}
 		case FactAligned:
 			fallback.Evidence.Alignment, fallback.Origin = facts.Alignment, FactOriginTensorBacking
 			fallback.Outcome = FactDisproven

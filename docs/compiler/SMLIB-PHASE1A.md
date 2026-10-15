@@ -51,3 +51,18 @@ The selected executable also passes all 239 cases from an executable-only direct
 Nine paired benchmark rounds show a small-system gain and a roughly 2% 16-variable
 regression; the consumer report retains dispersion, increased code/stack costs,
 tensor equivalence, and the higher cost of explicit stepping.
+
+## Explicit safety assertion follow-up
+
+The consumer now demands `Assert.Concept` proofs for allocation-free concrete
+residual/LU/clamping helpers, borrowed evaluator-adapter lifetime, and tensor
+contiguity, readonly/fixed-shape storage, no copying/ownership transfer and disjoint
+backing. Arbitrary evaluator allocation effects remain unproven; no such assertion
+is made for all callbacks or the general callback solver.
+
+This exposed two further bounded repairs: generic expression substitution must
+retain assertion goals and integer proof parameters, and tensor value shape facts
+must refine FixedShape/RuntimeShape queries rather than fall back to the unshaped
+descriptor type. New regressions check imported generic assertions, fixed/runtime
+shape positives and opposite-shape negatives. No semantic requirement is weakened
+to turn an Unknown proof into acceptance.

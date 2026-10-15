@@ -8603,7 +8603,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return &FieldExpr{Receiver: receiver, Field: e.Field, DynInterface: e.DynInterface, DynReadonly: e.DynReadonly, Span: e.Span}, nil
 	case *CallExpr:
-		out := &CallExpr{Callee: e.Callee, Member: e.Member, DynDispatch: e.DynDispatch, DynInterface: e.DynInterface, WitnessID: e.WitnessID, Span: e.Span}
+		out := &CallExpr{Callee: e.Callee, Member: e.Member, DynDispatch: e.DynDispatch, DynInterface: e.DynInterface, WitnessID: e.WitnessID, ConceptGoal: e.ConceptGoal, ConceptParameters: append([]int(nil), e.ConceptParameters...), Span: e.Span}
 		if e.Receiver != nil {
 			receiver, err := evt1SubstituteExpr(e.Receiver, typeParam, concreteType)
 			if err != nil {
