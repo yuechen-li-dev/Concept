@@ -258,7 +258,7 @@ T Identity(T value)
 {
     return value;
 }
-int Main() { return Identity<int>(42); }
+int Main(int value) { return Identity<int>(value); }
 `
 	module, err := Parse("generic_function_basic.concept", source)
 	if err != nil {
@@ -272,6 +272,8 @@ int Main() { return Identity<int>(42); }
 	if !strings.Contains(body, "concept_template_identity__int") {
 		t.Fatalf("unconstrained generic function did not instantiate:\n%s", body)
 	}
+	runFoundationNativeHarness(t, outputs, "identity.c", `#include "generic_function_basic.generated.h"
+int main(void) {return concept_generic_function_basic_main(42)==42 ? 0 : 1;}`)
 }
 
 func TestGenericFunctionCanQueryConcreteTypeLayout(t *testing.T) {
