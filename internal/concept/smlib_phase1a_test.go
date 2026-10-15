@@ -1,9 +1,48 @@
 package concept
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestSMLibPhase1aDependentStaticAssert(t *testing.T) {
+	provider := `module Library.Square; profile Core;
+template <usize N, usize M> int Extent() {
+    static_assert(N > 0u and M == N*N, "square capacity");
+    return N as int;
+}`
+	artifact := buildSemanticArtifact(t, "Library/Square.concept", provider, nil)
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		source := `module Consumer; profile Core; import Library.Square;
+int Main() { return Extent<3,9>() + Extent<8,64>(); }`
+		module, err := ParseWithSemanticModules("consumer.concept", source, map[string][]byte{"Library.Square": artifact})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runFoundationNativeHarness(t, outputs, "static_generic_harness.c", "#include \"consumer.generated.h\"\nint main(void) { return concept_consumer_main() == 11 ? 0 : 1; }")
+		for _, args := range []string{"0,0", "3,8"} {
+			bad := fmt.Sprintf("profile Core; import Library.Square; int Main(){return Extent<%s>();}", args)
+			if _, err := ParseWithSemanticModules("invalid.concept", bad, map[string][]byte{"Library.Square": artifact}); err == nil || !strings.Contains(err.Error(), "CV4207") {
+				t.Fatalf("invalid square accepted or wrong diagnostic: %v", err)
+			}
+		}
+	}
+	for _, body := range []string{
+		`static_assert(N == 3u and runtime > 0, "runtime operand");`,
+		`static_assert(N);`,
+		`static_assert(N > 0u, N);`,
+	} {
+		source := "profile Core; template <usize N> int Check(int runtime) {" + body + "return 0;}"
+		if _, err := Parse("invalid.concept", source); err == nil {
+			t.Fatal("invalid dependent assertion accepted")
+		}
+	}
+}
 
 func TestSMLibPhase1aImportedTensorTemplate(t *testing.T) {
 	provider := `module Library.TensorKernel; profile Core;

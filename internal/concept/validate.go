@@ -2603,13 +2603,38 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 			}
 		case *StaticAssertStmt:
-			if _, err := validateExpr(env, local, s.Condition, templateInfo, true); err != nil {
+			conditionType, err := validateExpr(env, local, s.Condition, templateInfo, true)
+			if err != nil {
+				return err
+			}
+			if conditionType.Name != "bool" {
+				return evt1Diagnostic("CV4207", "static_assert condition must evaluate to bool", s.Condition.exprSpan())
+			}
+			if s.Message != nil {
+				messageType, err := validateExpr(env, local, s.Message, templateInfo, true)
+				if err != nil {
+					return err
+				}
+				if messageType.Name != "string" {
+					return evt1Diagnostic("CV4208", "static_assert message must evaluate to string", s.Message.exprSpan())
+				}
+			}
+			// Open generic assertions are checked again after substitution.
+			// Reuse static-control dependency validation so a runtime operand
+			// cannot hide behind an unresolved template parameter.
+			dependent, err := evt1StaticControlDependencies(local, s.Condition, templateInfo)
+			if err != nil {
 				return err
 			}
 			if s.Message != nil {
-				if _, err := validateExpr(env, local, s.Message, templateInfo, true); err != nil {
+				messageDependent, err := evt1StaticControlDependencies(local, s.Message, templateInfo)
+				if err != nil {
 					return err
 				}
+				dependent = dependent || messageDependent
+			}
+			if dependent {
+				continue
 			}
 			if err := evt1EvaluateStaticAssert(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(local, env), &StaticAssert{Condition: s.Condition, Message: s.Message, Span: s.Span}); err != nil {
 				return err
