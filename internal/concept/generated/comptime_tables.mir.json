@@ -443,6 +443,7 @@
           "id": "DefaultRetryBudget.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 99,
             "column": 12
@@ -496,6 +497,7 @@
           "id": "MatrixCorner.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 104,
             "column": 12
@@ -505,6 +507,7 @@
           "id": "MatrixCorner.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 104,
             "column": 12
@@ -576,6 +579,7 @@
           "id": "SummaryValue.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 109,
             "column": 12
@@ -612,6 +616,7 @@
           "id": "SummaryValue.07",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 109,
             "column": 32
@@ -976,6 +981,7 @@
           "id": "SumBudgets.15",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 47,
             "column": 25
@@ -1324,6 +1330,7 @@
           "id": "HasDuplicateTransitionKeys.24",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 62,
             "column": 29
@@ -1360,6 +1367,7 @@
           "id": "HasDuplicateTransitionKeys.28",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 62,
             "column": 51
@@ -1415,6 +1423,7 @@
           "id": "HasDuplicateTransitionKeys.34",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 63,
             "column": 31
@@ -1451,6 +1460,7 @@
           "id": "HasDuplicateTransitionKeys.38",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 63,
             "column": 55
@@ -1841,6 +1851,7 @@
           "id": "LookupTransition.14",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 78,
             "column": 25
@@ -1905,6 +1916,7 @@
           "id": "LookupTransition.21",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 79,
             "column": 27
@@ -2004,6 +2016,7 @@
           "id": "LookupTransition.32",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 80,
             "column": 47

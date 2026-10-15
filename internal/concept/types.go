@@ -1316,6 +1316,8 @@ func (*RepeatInitializer) evt1Expr()        {}
 func (e *RepeatInitializer) exprSpan() Span { return e.Span }
 
 type IndexExpr struct {
+	// Recomputed by validation; never accepted as artifact-owned authority.
+	BoundsProven     bool     `json:"-"`
 	Base             Expr     `json:"base"`
 	Index            Expr     `json:"index"` // first index retained for the legacy rank-1 evaluator
 	Indices          []Expr   `json:"indices,omitempty"`

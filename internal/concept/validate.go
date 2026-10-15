@@ -4537,6 +4537,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, instance.Function.ReturnType), nil
 	case *IndexExpr:
+		e.BoundsProven = false
 		if facts, ok := evt1TensorFactsForExpr(scope, e.Base); ok {
 			return validateOrdinaryTensorIndex(env, scope, e, facts, templateInfo, inComptimeFn)
 		}
@@ -4623,6 +4624,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			}
 			return Type{}, evt1Diagnostic(code, fmt.Sprintf("%s index requires %d index(es), got %d", baseType.StorageKind, rank, len(indices)), e.Span)
 		}
+		allStatic := true
 		for i, indexExpr := range indices {
 			indexType, err := validateExpr(env, scope, indexExpr, templateInfo, inComptimeFn)
 			if err != nil {
@@ -4632,6 +4634,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return Type{}, evt1Diagnostic("CV4232", "storage index must be an integer scalar; use an explicit rounding operation for floating values", indexExpr.exprSpan())
 			}
 			indexValue, evalErr := evt1EvalExpr(newEVT1ComptimeState(env), evt1EvalScopeFromValidation(scope, env), indexExpr)
+			allStatic = allStatic && evalErr == nil && !baseType.Shape[i].Runtime
 			if evalErr == nil && !baseType.Shape[i].Runtime {
 				if indexValue.Kind != ValueInt {
 					return Type{}, evt1Diagnostic("CV4232", "storage index must evaluate to int", indexExpr.exprSpan())
@@ -4645,6 +4648,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				}
 			}
 		}
+		e.BoundsProven = allStatic
 		return evt1CanonicalType(env, *baseType.ArrayElem), nil
 	case *UnaryExpr:
 		valueType, err := validateExpr(env, scope, e.Value, templateInfo, inComptimeFn)
@@ -8186,6 +8190,12 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 		}
 	}
 	info := env.templateInfos[templateName]
+	if info == nil {
+		// Exact callable type inference runs before template requirements are
+		// prepared. Unsupported early queries must diagnose, never dereference
+		// an absent requirement environment or manufacture an empty one.
+		return nil, evt1Diagnostic("CALLABLE_TYPE_QUERY_INVALID", "template instantiation is unavailable during early exact callable type inference", span)
+	}
 	templateBindings := evt1TemplateBindings(parameters, concreteArgs)
 	var bindings []evt1InstanceRequirementBinding
 	for _, req := range info.Requirements {

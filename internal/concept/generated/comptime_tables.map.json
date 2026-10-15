@@ -272,6 +272,7 @@
           "id": "DefaultRetryBudget.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 99,
             "column": 12
@@ -325,6 +326,7 @@
           "id": "MatrixCorner.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 104,
             "column": 12
@@ -334,6 +336,7 @@
           "id": "MatrixCorner.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 104,
             "column": 12
@@ -405,6 +408,7 @@
           "id": "SummaryValue.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 109,
             "column": 12
@@ -441,6 +445,7 @@
           "id": "SummaryValue.07",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 109,
             "column": 32

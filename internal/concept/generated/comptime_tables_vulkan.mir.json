@@ -304,6 +304,7 @@
           "id": "ClassifyRange.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 69,
             "column": 12
@@ -388,6 +389,7 @@
           "id": "PipelineStride.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 74,
             "column": 12
@@ -397,6 +399,7 @@
           "id": "PipelineStride.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 74,
             "column": 12
@@ -509,6 +512,7 @@
           "id": "PoolReady.05",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 79,
             "column": 23
@@ -804,6 +808,7 @@
           "id": "HasDuplicateBindings.24",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 39,
             "column": 28
@@ -840,6 +845,7 @@
           "id": "HasDuplicateBindings.28",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 39,
             "column": 49
@@ -895,6 +901,7 @@
           "id": "HasDuplicateBindings.34",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 40,
             "column": 32
@@ -931,6 +938,7 @@
           "id": "HasDuplicateBindings.38",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 40,
             "column": 57
@@ -1325,6 +1333,7 @@
           "id": "ActiveWriteCount.17",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "zero_le_index_lt_extent",
           "source_span": {
             "line": 55,
             "column": 29

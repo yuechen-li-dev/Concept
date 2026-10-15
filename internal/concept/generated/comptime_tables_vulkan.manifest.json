@@ -11,11 +11,11 @@
     },
     {
       "path": "comptime_tables_vulkan.mir.json",
-      "sha256": "0f67e4ac7c0f2053e8fefb8f14db8798513b21d0c9739a5b71060dee8414dc50"
+      "sha256": "4b456d5ddc1197f42002c3ef08e02b6f3b6f9dd09e71594a70424f60363bdc69"
     },
     {
       "path": "comptime_tables_vulkan.map.json",
-      "sha256": "b1a2f3a21c1b4e8e40fadf75d85ea68c0d5db09505a146e4f5bd0ba1737a1630"
+      "sha256": "35f5000c520ee6d059dc74e6ed525b23106530c67dfbb6e29a30b51d215ed8e2"
     }
   ],
   "options": {

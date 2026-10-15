@@ -196,6 +196,7 @@
           "id": "ClassifyRange.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 69,
             "column": 12
@@ -280,6 +281,7 @@
           "id": "PipelineStride.02",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 74,
             "column": 12
@@ -289,6 +291,7 @@
           "id": "PipelineStride.03",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 74,
             "column": 12
@@ -401,6 +404,7 @@
           "id": "PoolReady.05",
           "kind": "array_index",
           "detail": "rank=1 bounds=checked layout=row-major",
+          "bounds_check": "statically_valid",
           "source_span": {
             "line": 79,
             "column": 23

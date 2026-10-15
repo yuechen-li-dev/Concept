@@ -1696,7 +1696,11 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		if len(indices) > 1 {
 			kind = "ndarray_index"
 		}
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: fmt.Sprintf("rank=%d bounds=checked layout=row-major", len(indices)), SourceSpan: e.Span})
+		bounds := "zero_le_index_lt_extent"
+		if e.BoundsProven {
+			bounds = "statically_valid"
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: kind, Detail: fmt.Sprintf("rank=%d bounds=checked layout=row-major", len(indices)), BoundsCheck: bounds, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Base, fn, templateInfo)
 		for _, index := range indices {
 			collectExprMIROps(env, index, fn, templateInfo)
@@ -2003,6 +2007,7 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	// Failure-value Drop helpers can call closed generic Drop implementations.
 	// Give them the same forward declarations as ordinary generic bodies.
 	var forwardInstances []*evt1TemplateInstance
+	instanceDeclarations := map[string]string{}
 	for _, instance := range l.env.templateInstances {
 		if !instance.Function.Async && !instance.Function.Comptime {
 			forwardInstances = append(forwardInstances, instance)
@@ -2010,21 +2015,21 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	sort.Slice(forwardInstances, func(i, j int) bool { return forwardInstances[i].Key < forwardInstances[j].Key })
 	for _, instance := range forwardInstances {
-		body.WriteString("static " + evt1CType(instance.Function.ReturnType) + " " + instance.GeneratedSymbol + "(")
+		var declaration strings.Builder
+		declaration.WriteString("static " + evt1CType(instance.Function.ReturnType) + " " + instance.GeneratedSymbol + "(")
 		for i, param := range instance.Function.Params {
 			if i != 0 {
-				body.WriteString(", ")
+				declaration.WriteString(", ")
 			}
-			body.WriteString(evt1CType(param.Type) + " " + evt1CParamName(param.Name))
+			declaration.WriteString(evt1CType(param.Type) + " " + evt1CParamName(param.Name))
 		}
 		if len(instance.Function.Params) == 0 {
-			body.WriteString("void")
+			declaration.WriteString("void")
 		}
-		body.WriteString(");\n")
+		declaration.WriteString(");\n")
+		instanceDeclarations[instance.GeneratedSymbol] = declaration.String()
 	}
-	if len(forwardInstances) > 0 {
-		body.WriteByte('\n')
-	}
+	instanceDeclarationOffset := body.Len()
 	for _, failureType := range failureTypes {
 		_, legacy := evt1IsResultVoidErrorType(l.env, failureType)
 		if !legacy || canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -2043,6 +2048,10 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	body.WriteString(l.interfaceWitnessDefinitions())
 	body.WriteString(l.callableDefinitions())
+	instanceDefinitionOffset := body.Len()
+	instanceBodies := map[string]string{}
+	asyncInstances := map[string]bool{}
+	var instanceOrder []string
 	for _, templateDecl := range l.module.Templates {
 		var instances []*evt1TemplateInstance
 		for _, instance := range l.env.templateInstances {
@@ -2054,8 +2063,11 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 			return instances[i].TypeIdentity < instances[j].TypeIdentity
 		})
 		for _, instance := range instances {
-			body.WriteString(l.templateInstanceBody(instance))
-			body.WriteByte('\n')
+			instanceBodies[instance.GeneratedSymbol] = l.templateInstanceBody(instance)
+			instanceOrder = append(instanceOrder, instance.GeneratedSymbol)
+			if instance.Function.Async {
+				asyncInstances[instance.GeneratedSymbol] = true
+			}
 		}
 	}
 	for _, sym := range symbols {
@@ -2066,6 +2078,23 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 	}
 	headerText := strings.TrimRight(header.String(), "\n") + "\n"
 	rawBody := body.String()
+	liveInstances := evt1LiveTemplateBodies(rawBody, instanceBodies, asyncInstances)
+	var declarations, definitions strings.Builder
+	for _, instance := range forwardInstances {
+		if liveInstances[instance.GeneratedSymbol] {
+			declarations.WriteString(instanceDeclarations[instance.GeneratedSymbol])
+		}
+	}
+	if declarations.Len() > 0 {
+		declarations.WriteByte('\n')
+	}
+	for _, symbol := range instanceOrder {
+		if liveInstances[symbol] {
+			definitions.WriteString(instanceBodies[symbol])
+			definitions.WriteByte('\n')
+		}
+	}
+	rawBody = rawBody[:instanceDeclarationOffset] + declarations.String() + rawBody[instanceDeclarationOffset:instanceDefinitionOffset] + definitions.String() + rawBody[instanceDefinitionOffset:]
 	integerSupport := evt1DefinedIntegerArithmeticHelpers(l.symbolBase, rawBody)
 	var support strings.Builder
 	if strings.Contains(rawBody, "strlen(") && !strings.Contains(rawBody, "#include <string.h>") {
