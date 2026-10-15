@@ -4,6 +4,8 @@ The unchanged external port at `../SMlib_Concept/phase1` is the regression
 baseline: 239 cases and 478 Normal/Verify differential comparisons. Original
 numerical algorithms, C++ oracle, attribution, and known-defect records remain
 unchanged. Evidence logs are under ignored `artifacts/smlib-hardening`.
+See [the qualification report](SMLIB-HARDENING-VALIDATION.md) for reproduction,
+commit boundaries, final regression results, and measured limitations.
 
 ## Pass A: callback correctness
 
