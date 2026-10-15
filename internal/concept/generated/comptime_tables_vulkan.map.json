@@ -443,37 +443,7 @@
   "schema": "concept-evt1-source-map.v1",
   "semantic_facts": [
     {
-      "id": "fact-0d13cfe678c97c00",
-      "kind": "StaticExtent",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "parameters": [
-        2
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromLayout",
-      "evidence": {
-        "extent": 2,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "exact one-dimensional inline array extent"
-      },
-      "source_span": {
-        "line": 17,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-1ca00342ce929e35",
+      "id": "fact-049f9438037180df",
       "kind": "NoAllocation",
       "subjects": [
         {
@@ -496,18 +466,18 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 17,
-        "column": 5
+        "line": 27,
+        "column": 10
       }
     },
     {
-      "id": "fact-325b7b78ff021f51",
-      "kind": "Bounded",
+      "id": "fact-1f89ca4af93dd8cc",
+      "kind": "NoAllocation",
       "subjects": [
         {
           "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
         }
       ],
       "outcome": "proven",
@@ -524,12 +494,40 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 17,
-        "column": 5
+        "line": 27,
+        "column": 10
       }
     },
     {
-      "id": "fact-77509b28a77998be",
+      "id": "fact-22ea73bbbdafb7e0",
+      "kind": "Shape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-239a1fca641fe5b0",
       "kind": "Shape",
       "subjects": [
         {
@@ -552,12 +550,12 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 17,
-        "column": 5
+        "line": 27,
+        "column": 10
       }
     },
     {
-      "id": "fact-796276eb6944c417",
+      "id": "fact-33095480bef29279",
       "kind": "Rank",
       "subjects": [
         {
@@ -583,12 +581,534 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 17,
-        "column": 5
+        "line": 27,
+        "column": 10
       }
     },
     {
-      "id": "fact-83f66aa0405b729d",
+      "id": "fact-36ea16589fcdddef",
+      "kind": "Rank",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        1
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-3a068aaaf3936151",
+      "kind": "Shape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-3bb98997a721d2e9",
+      "kind": "Bounded",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-4af5da637e9e6967",
+      "kind": "FixedShape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-7a1ef075da05e955",
+      "kind": "StaticExtent",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "parameters": [
+        3
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromLayout",
+      "evidence": {
+        "extent": 3,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "exact one-dimensional inline array extent"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-7ac10e43ff6ae330",
+      "kind": "Contiguous",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-8102c55afd13545d",
+      "kind": "Bounded",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-84587fd45009d063",
+      "kind": "StaticExtent",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        2
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromLayout",
+      "evidence": {
+        "extent": 2,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "exact one-dimensional inline array extent"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-8d2c488904b0654f",
+      "kind": "Aligned",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "parameters": [
+        64
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-8fae8a1261440baa",
+      "kind": "Contiguous",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-a379310204f72883",
+      "kind": "NoAllocation",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-a86825448c870efc",
+      "kind": "FixedShape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-aeeb4a50b3d3eea8",
+      "kind": "Contiguous",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-b6f44a8b654a023c",
+      "kind": "StaticExtent",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        2
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromLayout",
+      "evidence": {
+        "extent": 2,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "exact one-dimensional inline array extent"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-c4edc33aed3abfb0",
+      "kind": "Rank",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "DescriptorBinding\u003carray\u003e[3]",
+          "type": "DescriptorBinding\u003carray\u003e[3]"
+        }
+      ],
+      "parameters": [
+        1
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 3,
+            "expression": "3"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 20,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-cdabba425336116b",
+      "kind": "Bounded",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-d759b6ee1d4a54f7",
+      "kind": "FixedShape",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-dc9ee2a607866d9d",
+      "kind": "Aligned",
+      "subjects": [
+        {
+          "kind": "type",
+          "name": "int\u003carray\u003e[2]\u003carray\u003e[2]",
+          "type": "int\u003carray\u003e[2]\u003carray\u003e[2]"
+        }
+      ],
+      "parameters": [
+        64
+      ],
+      "outcome": "proven",
+      "origin": "DerivedFromType",
+      "evidence": {
+        "alignment": 64,
+        "rank": 1,
+        "shape": [
+          {
+            "extent": 2,
+            "expression": "2"
+          }
+        ],
+        "detail": "contiguous row-major storage type"
+      },
+      "source_span": {
+        "line": 27,
+        "column": 10
+      }
+    },
+    {
+      "id": "fact-e84cdea7b1f011dd",
       "kind": "Aligned",
       "subjects": [
         {
@@ -614,64 +1134,8 @@
         "detail": "contiguous row-major storage type"
       },
       "source_span": {
-        "line": 17,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-b1ce52d11792127a",
-      "kind": "FixedShape",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 17,
-        "column": 5
-      }
-    },
-    {
-      "id": "fact-b441037908ffec0f",
-      "kind": "Contiguous",
-      "subjects": [
-        {
-          "kind": "type",
-          "name": "int\u003carray\u003e[2]",
-          "type": "int\u003carray\u003e[2]"
-        }
-      ],
-      "outcome": "proven",
-      "origin": "DerivedFromType",
-      "evidence": {
-        "alignment": 64,
-        "rank": 1,
-        "shape": [
-          {
-            "extent": 2,
-            "expression": "2"
-          }
-        ],
-        "detail": "contiguous row-major storage type"
-      },
-      "source_span": {
-        "line": 17,
-        "column": 5
+        "line": 27,
+        "column": 10
       }
     }
   ],

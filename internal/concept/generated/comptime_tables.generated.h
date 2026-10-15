@@ -23,6 +23,10 @@ typedef struct concept_transition {
 
 typedef struct { int32_t data[2]; } concept_array_2_int;
 
+typedef struct { int32_t data[3]; } concept_array_3_int;
+
+typedef struct { concept_array_2_int data[3]; } concept_array_3_array_2_int;
+
 typedef struct concept_retry_summary {
   concept_array_2_int values;
 } concept_retry_summary;

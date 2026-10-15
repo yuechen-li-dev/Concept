@@ -224,6 +224,19 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			}
 		}
 	}
+	visitComptimeStorage := func(block Block) {
+		// A runtime expression may materialize a module comptime aggregate
+		// directly (not through a typed local). Its compound literal needs the
+		// same storage declaration as an ordinary array value. Walk concrete
+		// bodies only; unused compile-time tables remain erased.
+		evt1WalkTypedBlock(block, func(expr Expr) {
+			if name, ok := expr.(*NameExpr); ok {
+				if value, exists := env.comptimeValues[name.Name]; exists {
+					add(value.Type)
+				}
+			}
+		})
+	}
 	var visitBlock func(Block)
 	visitBlock = func(block Block) {
 		for _, statement := range block.Statements {
@@ -269,6 +282,7 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			add(param.Type)
 		}
 		if fn.Body != nil {
+			visitComptimeStorage(*fn.Body)
 			visitBlock(*fn.Body)
 		}
 	}
@@ -285,6 +299,7 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			add(param.Type)
 		}
 		if fn.Body != nil {
+			visitComptimeStorage(*fn.Body)
 			visitBlock(*fn.Body)
 		}
 	}
@@ -298,6 +313,7 @@ func evt1CollectStorageTypes(module Module, env *semanticEnv) []Type {
 			}
 			for _, state := range machine.States {
 				if state.Body != nil {
+					visitComptimeStorage(*state.Body)
 					visitBlock(*state.Body)
 				}
 			}

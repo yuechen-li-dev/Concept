@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "comptime_tables.generated.h",
-      "sha256": "75aed5ae38a4169f7f35a22ac563bdfad343311496651c1aae759ae0f670a384"
+      "sha256": "8bf49616edfb47baebda0259d86b5aa62e85ce5f11ebd348d3ce901506a0b27c"
     },
     {
       "path": "comptime_tables.generated.c",
@@ -11,11 +11,11 @@
     },
     {
       "path": "comptime_tables.mir.json",
-      "sha256": "cb6a692d96d1f70ccada5fbb17f0943c7b5c2efb800825b3147ebfd7c1515be0"
+      "sha256": "1c8a694f009f55e48c2ce535ed4b635b33ec9558a91eb47b537ad87f45afb931"
     },
     {
       "path": "comptime_tables.map.json",
-      "sha256": "b8d20bca047e0a77d57de0f5ec259d8322431acec25f9730e25f235f4c417c7b"
+      "sha256": "6e7dae2dccbd28b135f81eebf96de72d838301a6e7a402fca365d11dc43ce789"
     }
   ],
   "options": {

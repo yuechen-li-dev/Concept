@@ -15,6 +15,10 @@ typedef struct concept_descriptor_binding {
 
 typedef struct { int32_t data[2]; } concept_array_2_int;
 
+typedef struct { concept_descriptor_binding data[3]; } concept_array_3_descriptor_binding;
+
+typedef struct { concept_array_2_int data[2]; } concept_array_2_array_2_int;
+
 typedef struct concept_binding_summary {
   concept_array_2_int slots;
 } concept_binding_summary;
