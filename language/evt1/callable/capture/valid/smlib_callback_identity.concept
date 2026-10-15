@@ -1,0 +1,17 @@
+profile Core;
+enum Failure { Failed }
+Result<int, Failure> Apply(callback<int -> int> action, int x) { return Result::Ok(action(x)); }
+int Main()
+{
+ int offset = 10;
+ const auto outer = callback(int x) with(offset) { int local = x + offset; return local; };
+ int result = Apply(ref outer, 1)!;
+ { int offset = 100;
+   const auto outer = callback(int x) with(offset) { return x + offset; };
+   result += Apply(ref outer, 2)!;
+ }
+ const auto other = callback(int x) { return x * 2; };
+ result += Apply(ref other, 3)!;
+ for (i in 0 .. 2) { result += Apply(ref other, i)!; }
+ return result;
+}

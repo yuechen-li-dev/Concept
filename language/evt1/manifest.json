@@ -2,7 +2,7 @@
   "schema": "concept-evt1-semantic-corpus-v1",
   "compiler_id": "concept-evt1-stage0-go",
   "totals": {
-    "valid": 440,
+    "valid": 444,
     "static_invalid": 357,
     "runtime_negative": 15,
     "compatibility": 5,
@@ -39,7 +39,7 @@
     { "subsystem": "Async", "path": "async/basic", "valid": 23, "static_invalid": 6, "runtime_negative": ["async_stack_overflow.concept", "async_result_before_completion.concept"], "historical_milestones": ["R5f"] },
     { "subsystem": "Async control flow", "path": "async/control-flow", "valid": 23, "static_invalid": 5, "runtime_negative": [], "historical_milestones": ["R5g"] },
     { "subsystem": "Async interfaces", "path": "async/interface", "valid": 19, "static_invalid": 10, "runtime_negative": [], "historical_milestones": ["R5h"] },
-    { "subsystem": "Callable capture", "path": "callable/capture", "valid": 20, "static_invalid": 12, "runtime_negative": [], "historical_milestones": ["R5i"] },
+    { "subsystem": "Callable capture", "path": "callable/capture", "valid": 24, "static_invalid": 12, "runtime_negative": [], "historical_milestones": ["R5i"] },
     { "subsystem": "Callable types", "path": "callable/types", "valid": 18, "static_invalid": 8, "runtime_negative": [], "historical_milestones": ["R5j"] },
     { "subsystem": "Cross-domain composition", "path": "composition", "valid": 3, "static_invalid": 0, "runtime_negative": [], "historical_milestones": ["R5k"] },
     { "subsystem": "Generic concept requirements", "path": "generic-requirements", "valid": 3, "static_invalid": 3, "runtime_negative": [], "historical_milestones": ["R6o"] },

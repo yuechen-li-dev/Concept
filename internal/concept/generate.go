@@ -4069,8 +4069,8 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		return "", "/* bind_requires_target */", Type{}
 	case *RefExpr:
 		if e.CallbackErase && e.CallbackType != nil {
-			prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
-			return prelude, fmt.Sprintf("(%s){ .environment = (void*)&(%s), .invoke = &%s }", evt1CallbackCName(*e.CallbackType), target, evt1CallbackAdapterCName(targetType.CallableID, *e.CallbackType)), *e.CallbackType
+			prelude, target, _, _ := f.lowerLValue(e.Value, indent)
+			return prelude, fmt.Sprintf("(%s){ .environment = (void*)&(%s), .invoke = &%s }", evt1CallbackCName(*e.CallbackType), target, evt1CallbackAdapterCName(e.CallbackCallable, *e.CallbackType)), *e.CallbackType
 		}
 		prelude, target, targetType, _ := f.lowerLValue(e.Value, indent)
 		if e.DynInterface != "" {

@@ -121,15 +121,19 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 
 	requiresMutable, consumes := evt1CallableBodyEffects(expr.Body, expr.Captures)
 	expr.RequiresMutable, expr.Consumes = requiresMutable, consumes
-	result, err := evt1CallableResultType(env, captureScope, expr.Body, templateInfo)
-	if err != nil {
+	// Infer at return sites in the ordinary statement checker, after preceding
+	// local declarations have been bound. Ownership is checked exactly once.
+	var result Type
+	captureScope.returnInference = &result
+	inferred := Type{Name: "auto", Kind: TypeInferred, Span: expr.Span}
+	captureScope.returnType = inferred
+	if err := validateBlock(env, captureScope, inferred, expr.Body, templateInfo, false); err != nil {
 		return Type{}, err
+	}
+	if result.Name == "" {
+		result = Type{Name: "void", Kind: TypeBuiltin, Span: expr.Span}
 	}
 	expr.ResultType = result
-	captureScope.returnType = result
-	if err := validateBlock(env, captureScope, result, expr.Body, templateInfo, false); err != nil {
-		return Type{}, err
-	}
 	params := make([]Type, 0, len(expr.Params))
 	for _, param := range expr.Params {
 		params = append(params, evt1CanonicalType(env, param.Type))
@@ -139,33 +143,6 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 
 func evt1CaptureCarriesProvenance(capture CaptureBinding) bool {
 	return capture.Kind == CaptureRef || capture.Kind == CaptureRefConst || capture.Type.isBorrowLike() || capture.Type.Kind == TypeDyn || evt1IsSpanType(capture.Type) || evt1IsTensorType(capture.Type)
-}
-
-func evt1CallableResultType(env *semanticEnv, scope *evt1Scope, block Block, templateInfo *evt1TemplateInfo) (Type, error) {
-	var value Expr
-	var find func(Block)
-	find = func(current Block) {
-		for _, stmt := range current.Statements {
-			switch s := stmt.(type) {
-			case *ReturnStmt:
-				if value == nil && s.Value != nil {
-					value = s.Value
-				}
-			case *IfStmt:
-				find(s.Then)
-				if s.Else != nil {
-					find(*s.Else)
-				}
-			case *Block:
-				find(*s)
-			}
-		}
-	}
-	find(block)
-	if value == nil {
-		return Type{Name: "void", Kind: TypeBuiltin, Span: block.Span}, nil
-	}
-	return validateExpr(env, evt1CloneScope(scope), value, templateInfo, false)
 }
 
 func evt1CallableBodyEffects(block Block, captures []CaptureBinding) (bool, bool) {
@@ -294,6 +271,8 @@ func evt1ValidateCallbackErasure(env *semanticEnv, scope *evt1Scope, expr Expr, 
 		return Type{}, evt1Diagnostic("CALLABLE_CONST_MUTATING_INVOKE", "mutable callable cannot be erased through readonly storage", ref.Span)
 	}
 	ref.CallbackErase, ref.CallbackType = true, &expected
+	ref.CallbackCallable = concrete.CallableID
+	ref.CallbackEnvironment = concrete.CallableID + "#environment"
 	return expected, nil
 }
 
@@ -427,79 +406,21 @@ func evt1CArgsSuffix(args []string) string {
 }
 
 func evt1ModuleCallables(module Module) []*CallableExpr {
-	var out []*CallableExpr
-	var visitExpr func(Expr)
-	var visitBlock func(Block)
-	visitExpr = func(expr Expr) {
-		switch e := expr.(type) {
-		case *CallableExpr:
-			out = append(out, e)
-			for _, capture := range e.Captures {
-				if capture.Source != nil {
-					visitExpr(capture.Source)
-				}
-			}
-		case *CallExpr:
-			for _, arg := range e.Args {
-				visitExpr(arg)
-			}
-		case *BinaryExpr:
-			visitExpr(e.Left)
-			visitExpr(e.Right)
-		case *UnaryExpr:
-			visitExpr(e.Value)
-		case *MoveExpr:
-			visitExpr(e.Value)
-		case *RefExpr:
-			visitExpr(e.Value)
-		case *FieldExpr:
-			visitExpr(e.Receiver)
-		case *IndexExpr:
-			visitExpr(e.Base)
-			for _, index := range evt1StorageIndices(e) {
-				visitExpr(index)
-			}
-		case *ParenExpr:
-			visitExpr(e.Value)
-		}
-	}
-	visitBlock = func(block Block) {
-		for _, stmt := range block.Statements {
-			switch s := stmt.(type) {
-			case *VarDecl:
-				visitExpr(s.Value)
-			case *AssignStmt:
-				visitExpr(s.Target)
-				visitExpr(s.Value)
-			case *ReturnStmt:
-				if s.Value != nil {
-					visitExpr(s.Value)
-				}
-			case *ExprStmt:
-				visitExpr(s.Value)
-			case *IfStmt:
-				visitExpr(s.Condition)
-				visitBlock(s.Then)
-				if s.Else != nil {
-					visitBlock(*s.Else)
-				}
-			case *WhileStmt:
-				visitExpr(s.Condition)
-				visitBlock(s.Body)
-				if s.Else != nil {
-					visitBlock(*s.Else)
-				}
-			case *Block:
-				visitBlock(*s)
-			}
-		}
-	}
+	seen := map[string]*CallableExpr{}
 	for _, fn := range module.Functions {
 		if fn.Body != nil {
-			visitBlock(*fn.Body)
+			evt1WalkTypedBlock(*fn.Body, func(e Expr) {
+				if c, ok := e.(*CallableExpr); ok {
+					seen[c.Identity] = c
+				}
+			})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Ordinal < out[j].Ordinal })
+	out := make([]*CallableExpr, 0, len(seen))
+	for _, c := range seen {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Identity < out[j].Identity })
 	return out
 }
 
@@ -554,27 +475,18 @@ func evt1ModuleCallbackTypes(module Module) []Type {
 
 func evt1ModuleCallbackWitnesses(module Module) []MIRCallbackWitness {
 	seen := map[string]MIRCallbackWitness{}
-	callables := evt1ModuleCallables(module)
 	for _, fn := range module.Functions {
-		if fn.Body == nil {
-			continue
-		}
-		var refs []*RefExpr
-		evt1VisitCallbackErasures(*fn.Body, &refs)
-		for _, ref := range refs {
-			if ref.CallbackType == nil {
-				continue
-			}
-			name := ref.Value.(*NameExpr).Name
-			for _, callable := range callables {
-				if !evt1BlockBindsCallable(*fn.Body, name, callable) {
-					continue
+		if fn.Body != nil {
+			evt1WalkTypedBlock(*fn.Body, func(e Expr) {
+				ref, ok := e.(*RefExpr)
+				if !ok || !ref.CallbackErase || ref.CallbackType == nil || ref.CallbackCallable == "" {
+					return
 				}
 				callback := *ref.CallbackType
-				id := callable.Identity + "#callback-witness#" + digest([]byte(callback.String()))[:12]
-				seen[id] = MIRCallbackWitness{ID: id, ConcreteCallable: callable.Identity, Signature: callback, Adapter: evt1CallbackAdapterCName(callable.Identity, callback), Environment: callable.EnvironmentID, NoAllocation: true}
-				break
-			}
+				id := ref.CallbackCallable + "#callback-witness#" + digest([]byte(callback.String()))[:12]
+				seen[id] = MIRCallbackWitness{ID: id, ConcreteCallable: ref.CallbackCallable, Signature: callback,
+					Adapter: evt1CallbackAdapterCName(ref.CallbackCallable, callback), Environment: ref.CallbackEnvironment, NoAllocation: true}
+			})
 		}
 	}
 	ids := make([]string, 0, len(seen))
@@ -654,39 +566,21 @@ func (l *lowering) callableDefinitions() string {
 		b.WriteString(lower.lowerBlock(callable.Body, 1))
 		b.WriteString("}\n\n")
 	}
-	for _, fn := range l.module.Functions {
-		if fn.Body == nil {
-			continue
+	for _, witness := range evt1ModuleCallbackWitnesses(l.module) {
+		callback := witness.Signature
+		b.WriteString(fmt.Sprintf("static %s %s(void *raw", evt1CType(*callback.CallableResult), evt1CallbackAdapterCName(witness.ConcreteCallable, callback)))
+		for i, param := range callback.CallableParams {
+			b.WriteString(fmt.Sprintf(", %s arg%d", evt1CType(param), i))
 		}
-		var refs []*RefExpr
-		evt1VisitCallbackErasures(*fn.Body, &refs)
-		for _, ref := range refs {
-			name := ref.Value.(*NameExpr).Name
-			var concrete *CallableExpr
-			for _, candidate := range evt1ModuleCallables(l.module) {
-				if candidate.Identity != "" && evt1BlockBindsCallable(*fn.Body, name, candidate) {
-					concrete = candidate
-					break
-				}
-			}
-			if concrete == nil || ref.CallbackType == nil {
-				continue
-			}
-			callback := *ref.CallbackType
-			b.WriteString(fmt.Sprintf("static %s %s(void *raw", evt1CType(*callback.CallableResult), evt1CallbackAdapterCName(concrete.Identity, callback)))
-			for i, param := range callback.CallableParams {
-				b.WriteString(fmt.Sprintf(", %s arg%d", evt1CType(param), i))
-			}
-			b.WriteString(") {\n  ")
-			if callback.CallableResult.Name != "void" {
-				b.WriteString("return ")
-			}
-			b.WriteString(evt1CallableInvokeCName(concrete.Identity) + "((" + evt1CallableEnvCName(concrete.Identity) + "*)raw")
-			for i := range callback.CallableParams {
-				b.WriteString(fmt.Sprintf(", arg%d", i))
-			}
-			b.WriteString(");\n}\n\n")
+		b.WriteString(") {\n  ")
+		if callback.CallableResult.Name != "void" {
+			b.WriteString("return ")
 		}
+		b.WriteString(evt1CallableInvokeCName(witness.ConcreteCallable) + "((" + evt1CallableEnvCName(witness.ConcreteCallable) + "*)raw")
+		for i := range callback.CallableParams {
+			b.WriteString(fmt.Sprintf(", arg%d", i))
+		}
+		b.WriteString(");\n}\n\n")
 	}
 	return b.String()
 }
@@ -722,48 +616,4 @@ func (f *evt1FunctionLowerer) lowerCallableLiteral(expr *CallableExpr, indent in
 		t.CallableParams = append(t.CallableParams, param.Type)
 	}
 	return b.String(), "(" + evt1CallableEnvCName(expr.Identity) + "){ " + strings.Join(fields, ", ") + " }", t
-}
-
-func evt1VisitCallbackErasures(block Block, out *[]*RefExpr) {
-	var visitExpr func(Expr)
-	visitExpr = func(expr Expr) {
-		switch e := expr.(type) {
-		case *RefExpr:
-			if e.CallbackErase {
-				*out = append(*out, e)
-			}
-		case *CallExpr:
-			for _, arg := range e.Args {
-				visitExpr(arg)
-			}
-		}
-	}
-	for _, stmt := range block.Statements {
-		switch s := stmt.(type) {
-		case *VarDecl:
-			visitExpr(s.Value)
-		case *ExprStmt:
-			visitExpr(s.Value)
-		case *ReturnStmt:
-			if s.Value != nil {
-				visitExpr(s.Value)
-			}
-		case *IfStmt:
-			evt1VisitCallbackErasures(s.Then, out)
-			if s.Else != nil {
-				evt1VisitCallbackErasures(*s.Else, out)
-			}
-		case *Block:
-			evt1VisitCallbackErasures(*s, out)
-		}
-	}
-}
-
-func evt1BlockBindsCallable(block Block, name string, callable *CallableExpr) bool {
-	for _, stmt := range block.Statements {
-		if decl, ok := stmt.(*VarDecl); ok && decl.Name == name && decl.Value == callable {
-			return true
-		}
-	}
-	return false
 }

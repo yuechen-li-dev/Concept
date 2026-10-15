@@ -1,0 +1,10 @@
+profile Core;
+enum Failure { Failed }
+Result<int, Failure> Apply(callback<int -> int> action) { return Result::Error(Failure::Failed); }
+int Main()
+{
+    const auto increment = callback(int x) { return x + 1; };
+    Assert.Error(Apply(ref increment), "first erasure");
+    Assert.Error(Apply(ref increment), "second erasure");
+    return 0;
+}

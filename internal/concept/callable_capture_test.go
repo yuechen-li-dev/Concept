@@ -51,7 +51,7 @@ func generateCallableCaptureOutputs(t *testing.T, name string) (Module, Outputs)
 func TestCallableCaptureCorpusConformance(t *testing.T) {
 	valid, _ := filepath.Glob(filepath.Join("..", "..", "language", "evt1", "callable", "capture", "valid", "*.concept"))
 	invalid, _ := filepath.Glob(filepath.Join("..", "..", "language", "evt1", "callable", "capture", "invalid", "*.concept"))
-	if len(valid) != 20 || len(invalid) != 12 {
+	if len(valid) != 24 || len(invalid) != 12 {
 		t.Fatalf("R5i corpus count drift: valid=%d invalid=%d", len(valid), len(invalid))
 	}
 	for _, path := range valid {

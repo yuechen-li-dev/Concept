@@ -1183,16 +1183,18 @@ func (*MoveExpr) evt1Expr()        {}
 func (e *MoveExpr) exprSpan() Span { return e.Span }
 
 type RefExpr struct {
-	Value         Expr   `json:"value"`
-	Const         bool   `json:"const,omitempty"`
-	DynInterface  string `json:"dyn_interface,omitempty"`
-	DynConcrete   Type   `json:"dyn_concrete,omitempty"`
-	DynProvenance string `json:"dyn_provenance,omitempty"`
-	DynScoped     bool   `json:"dyn_scoped,omitempty"`
-	WitnessID     string `json:"witness_id,omitempty"`
-	CallbackErase bool   `json:"callback_erase,omitempty"`
-	CallbackType  *Type  `json:"callback_type,omitempty"`
-	Span          Span   `json:"span"`
+	Value               Expr   `json:"value"`
+	Const               bool   `json:"const,omitempty"`
+	DynInterface        string `json:"dyn_interface,omitempty"`
+	DynConcrete         Type   `json:"dyn_concrete,omitempty"`
+	DynProvenance       string `json:"dyn_provenance,omitempty"`
+	DynScoped           bool   `json:"dyn_scoped,omitempty"`
+	WitnessID           string `json:"witness_id,omitempty"`
+	CallbackErase       bool   `json:"callback_erase,omitempty"`
+	CallbackCallable    string `json:"callback_callable,omitempty"`
+	CallbackEnvironment string `json:"callback_environment,omitempty"`
+	CallbackType        *Type  `json:"callback_type,omitempty"`
+	Span                Span   `json:"span"`
 }
 
 func (*RefExpr) evt1Expr()        {}

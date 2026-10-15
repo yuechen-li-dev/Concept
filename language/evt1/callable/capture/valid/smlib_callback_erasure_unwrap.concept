@@ -1,0 +1,9 @@
+profile Core;
+enum Failure { Failed }
+Result<int, Failure> Apply(callback<int -> int> action, int value) { return Result::Ok(action(value)); }
+int Main()
+{
+    const auto increment = callback(int x) { return x + 1; };
+    int value = Apply(ref increment, 1)!;
+    return value;
+}

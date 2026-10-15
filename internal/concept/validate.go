@@ -15,6 +15,7 @@ type evt1Scope struct {
 	values              map[string]evt1ValueBinding
 	depth               int
 	returnType          Type
+	returnInference     *Type
 	tryHandlers         map[string]Type
 	transitionTargets   map[string]bool
 	inAutomataState     bool
@@ -112,6 +113,7 @@ func newEVT1Scope(parent *evt1Scope) *evt1Scope {
 	s := &evt1Scope{parent: parent, values: map[string]evt1ValueBinding{}, depth: depth}
 	if parent != nil {
 		s.returnType = parent.returnType
+		s.returnInference = parent.returnInference
 		s.staticExpansion = parent.staticExpansion
 		s.context = parent.context
 		s.tryHandlers = parent.tryHandlers
@@ -447,6 +449,7 @@ func evt1CloneScope(scope *evt1Scope) *evt1Scope {
 	}
 	out := newEVT1Scope(evt1CloneScope(scope.parent))
 	out.returnType = scope.returnType
+	out.returnInference = scope.returnInference
 	out.staticExpansion = scope.staticExpansion
 	out.tryHandlers = scope.tryHandlers
 	out.transitionTargets = scope.transitionTargets
@@ -2459,16 +2462,36 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 				}
 			}
 		case *ReturnStmt:
-			if s.Value == nil {
-				if returnType.Name != "void" {
-					if local.inAsync {
-						return evt1Diagnostic("ASYNC_NEUTRAL_VALUE_MISMATCH", fmt.Sprintf("value-bearing async function requires a %s completion value", returnType.String()), s.Span)
+			expectedReturn := returnType
+			var inferredValue Type
+			var inferenceErr error
+			if returnType.Kind == TypeInferred && local.returnInference != nil {
+				expectedReturn = *local.returnInference
+				if expectedReturn.Name == "" {
+					inferredValue = Type{Name: "void", Kind: TypeBuiltin, Span: s.Span}
+					if s.Value != nil {
+						inferredValue, inferenceErr = validateExpr(env, local, s.Value, templateInfo, inComptimeFn)
+						if inferenceErr != nil {
+							return inferenceErr
+						}
 					}
-					return evt1Diagnostic("CV4022", fmt.Sprintf("return requires a %s value", returnType.String()), s.Span)
+					expectedReturn = inferredValue
+					*local.returnInference = expectedReturn
+				}
+			}
+			if s.Value == nil {
+				if expectedReturn.Name != "void" {
+					if local.inAsync {
+						return evt1Diagnostic("ASYNC_NEUTRAL_VALUE_MISMATCH", fmt.Sprintf("value-bearing async function requires a %s completion value", expectedReturn.String()), s.Span)
+					}
+					return evt1Diagnostic("CV4022", fmt.Sprintf("return requires a %s value", expectedReturn.String()), s.Span)
 				}
 				continue
 			}
-			valueType, err := validateExprAgainstExpected(env, local, s.Value, returnType, templateInfo, inComptimeFn)
+			valueType, err := inferredValue, inferenceErr
+			if inferredValue.Name == "" {
+				valueType, err = validateExprAgainstExpected(env, local, s.Value, expectedReturn, templateInfo, inComptimeFn)
+			}
 			if err != nil {
 				return err
 			}
@@ -2476,10 +2499,10 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 			if templateInfo != nil {
 				typeParam = templateInfo.Decl.TypeParam
 			}
-			if !evt1TypesCompatible(env, returnType, valueType, typeParam) {
-				return evt1Diagnostic("CV4116", fmt.Sprintf("expression result type mismatch: expected %s but got %s", returnType.String(), valueType.String()), s.Value.exprSpan())
+			if !evt1TypesCompatible(env, expectedReturn, valueType, typeParam) {
+				return evt1Diagnostic("CV4116", fmt.Sprintf("expression result type mismatch: expected %s but got %s", expectedReturn.String(), valueType.String()), s.Value.exprSpan())
 			}
-			if returnType.isBorrowLike() {
+			if expectedReturn.isBorrowLike() {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped {
 					if evt1IsCallResultExpr(s.Value) {
@@ -2491,7 +2514,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("CV4511", "reference return would escape local storage", s.Value.exprSpan())
 				}
 			}
-			if evt1IsRefStructType(env, returnType) {
+			if evt1IsRefStructType(env, expectedReturn) {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped {
 					if evt1IsCallResultExpr(s.Value) {
@@ -2503,26 +2526,26 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("CV4521", "ref struct return would escape referenced local storage", s.Value.exprSpan())
 				}
 			}
-			if returnType.Kind == TypeAsync {
+			if expectedReturn.Kind == TypeAsync {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped || provenance.Kind == evt1ProvenanceLocal {
 					return evt1Diagnostic("DYN_ASYNC_RECEIVER_LIFETIME_INVALID", "Async operation cannot escape the lifetime of its dyn receiver", s.Value.exprSpan())
 				}
 			}
-			if returnType.Kind == TypeCallable || returnType.Kind == TypeCallback {
+			if expectedReturn.Kind == TypeCallable || expectedReturn.Kind == TypeCallback {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				concreteStatic := valueType.Kind == TypeCallable && valueType.CallableProvenance == string(evt1ProvenanceStatic) && !valueType.Scoped
 				if !concreteStatic && (provenance.Scoped || provenance.Kind == evt1ProvenanceLocal) {
 					return evt1Diagnostic("CALLABLE_CAPTURE_LIFETIME_INVALID", "callable cannot escape its captured environment lifetime", s.Value.exprSpan())
 				}
 			}
-			if valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, returnType); valueFacts != nil && valueFacts.RegionOrigin != "" {
+			if valueFacts := evt1SemanticFactsForExpr(env, local, s.Value, expectedReturn); valueFacts != nil && valueFacts.RegionOrigin != "" {
 				if valueFacts.Provenance.Scoped || valueFacts.Provenance.Kind == evt1ProvenanceLocal {
 					return evt1Diagnostic("SEMANTIC_REGION_LIFETIME_ESCAPE", "semantic region value cannot escape the lifetime of its backing storage", s.Value.exprSpan())
 				}
 			}
-			if !evt1TypeCopyable(env, returnType) && !evt1CanTransferInitialize(env, returnType, s.Value) {
-				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", returnType.String()), s.Value.exprSpan())
+			if !evt1TypeCopyable(env, expectedReturn) && !evt1CanTransferInitialize(env, expectedReturn, s.Value) {
+				return evt1Diagnostic("CV4506", fmt.Sprintf("return of non-copyable type %s requires an explicit move", expectedReturn.String()), s.Value.exprSpan())
 			}
 		case *ExprStmt:
 			valueType, err := validateExpr(env, local, s.Value, templateInfo, inComptimeFn)

@@ -1,0 +1,12 @@
+profile Core;
+struct Point { double x; }
+int Main()
+{
+    const auto make = callback(double x)
+    {
+        Point local = Point{x};
+        return Point{local.x};
+    };
+    Point value = make(1.0);
+    return 0;
+}
