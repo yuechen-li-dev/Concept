@@ -66,3 +66,13 @@ must refine FixedShape/RuntimeShape queries rather than fall back to the unshape
 descriptor type. New regressions check imported generic assertions, fixed/runtime
 shape positives and opposite-shape negatives. No semantic requirement is weakened
 to turn an Unknown proof into acceptance.
+
+Safety follow-up qualification passed at `ddf7a8c`: full Go tests (cmd/concept
+28.155s, internal/concept 332.716s, profile/vulkan 0.427s), vet, strict native
+Normal/Verify, and the unchanged frozen Phase 1 corpus. The consumer retains
+eleven Proven assertion records per policy, including open/closed callback
+projections, and the CLI's verbose/JSON lifetime explanation. Missing alias
+intervals and external allocation summaries reject as Unknown. Five experimental
+facts and three compatibility facts pass per policy. The separate consumer tag
+`phase1a-safety-qualified` retains final paired measurements and all proof evidence;
+the original Phase 1 and initial Phase 1a tags remain unchanged.
