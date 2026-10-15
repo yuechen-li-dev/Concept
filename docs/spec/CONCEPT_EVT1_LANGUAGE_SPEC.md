@@ -13,7 +13,28 @@ for trivial instantiations. Generic `[[repr(C)]] record struct` declarations are
 each closed plain-data instance establishes C value/layout legality. Generic identity
 and artifact transport are structural. Unsupported `unsafe`/`imported` type modifiers
 and conflicting/repeated qualifiers reject; unsafe asm and module imports remain.
-Named aggregate fields evaluate in source expression order. Defaults are unsupported.
+Named aggregate fields evaluate in source expression order and are assigned by field
+identity, including local construction. Named fields must be complete, unique, and
+known. Approved SMLib hardening: explicit `T{}` zero-constructs a complete plain
+aggregate only when every field recursively admits scalar numeric/bool or fixed
+rank-one array zero construction. Owned/borrowed fields, Drop-bearing, ref,
+immovable, class, table, bits, attributed/default-initializer fields, and other
+non-defaultable types reject with `AGGREGATE_ZERO_UNAVAILABLE`. No implicit local
+initialization, user constructor, or partially live aggregate is introduced.
+
+Expected floating representation propagates through uncommitted literal arithmetic
+and conditional branches. Names, casts, and calls remain precision boundaries;
+explicit binary32/binary64 values never implicitly promote. Constant evaluation
+preserves the bound literal representation. Standard.Math provides float and double
+scalar overloads through matching C11/libm signatures; transcendental results are
+host-libm dependent, not promised bit-identical across platforms.
+
+Unqualified value-query names (`Magnitude`, `Len`, `Rank`, `Shape`, `HardMax`,
+`ArgMax`, `Confidence`) are fallback builtins. Lexical callable bindings and resolved
+ordinary declarations/imports take precedence. Namespace-qualified functions use
+ordinary namespace resolution. The `compiler` receiver retains its existing
+compile-time observation policy; it does not acquire new runtime aliases. Structured
+storage and machine operations retain their existing type-directed semantic laws.
 
 Status: R5 language-core semantics frozen for R6 tooling
 
@@ -1446,14 +1467,14 @@ Vulkan reconciliation (VK5); each spelling is rejected with a `REMOVED_*`
 diagnostic that names its replacement. Effects are ordinary data: declare an
 enum of effects, push them to a `Standard.Collection.Outbox`, and carry them
 out with an ordinary function that matches exhaustively over the enum. There
-is no general effect system (see §22 for step machines with input).
+is no general effect system (see Â§22 for step machines with input).
 
 **Profiles.** `profile Vulkan;` has Core semantics and adds no builtins. It
 automates Vulkan setup: `import Vulkan;` (libraries/Vulkan) is implied, and
 `concept test` compiles and links the Vulkan runtime behind the library's C
 boundary: the GPU-free test device by default, or the loader-backed runtime
 with `CONCEPT_VULKAN_RUNTIME=device` (headers and library from `VULKAN_SDK`).
-Vulkan object handles are ordinary `extern "C" handle` declarations (§21).
+Vulkan object handles are ordinary `extern "C" handle` declarations (Â§21).
 
 ## 24. Testing
 

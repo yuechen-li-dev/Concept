@@ -1,7 +1,7 @@
 module Standard.Math;
 profile Core;
 
-// C11 single-precision primitives. Concept's Core numeric profile exposes float.
+// C11 binary32 and binary64 primitives; transcendental results follow target libm.
 extern "C" float fabsf(float value);
 extern "C" float sqrtf(float value);
 extern "C" float powf(float base, float exponent);
@@ -74,3 +74,47 @@ float Atan2(float y, float x) { return atan2f(y, x); }
 bool IsNaN(float value) { return value != value; }
 bool IsInf(float value) { return value != 0.0 and value + value == value; }
 bool IsFinite(float value) { return not IsNaN(value) and not IsInf(value); }
+
+// Binary64 overloads preserve precision through the native boundary.
+extern "C" double fabs(double value);
+extern "C" double sqrt(double value);
+extern "C" double pow(double base, double exponent);
+extern "C" double exp(double value);
+extern "C" double log(double value);
+extern "C" double log2(double value);
+extern "C" double log10(double value);
+extern "C" double floor(double value);
+extern "C" double ceil(double value);
+extern "C" double round(double value);
+extern "C" double trunc(double value);
+extern "C" double sin(double value);
+extern "C" double cos(double value);
+extern "C" double tan(double value);
+extern "C" double asin(double value);
+extern "C" double acos(double value);
+extern "C" double atan(double value);
+extern "C" double atan2(double y, double x);
+double Abs(double value) { return fabs(value); }
+double Min(double left, double right) { return if (left < right) left else right; }
+double Max(double left, double right) { return if (left > right) left else right; }
+double Clamp(double value, double lower, double upper) { return Min(Max(value, lower), upper); }
+double Sqrt(double value) { return sqrt(value); }
+double Pow(double base, double exponent) { return pow(base, exponent); }
+double Exp(double value) { return exp(value); }
+double Log(double value) { return log(value); }
+double Log2(double value) { return log2(value); }
+double Log10(double value) { return log10(value); }
+double Floor(double value) { return floor(value); }
+double Ceil(double value) { return ceil(value); }
+double Round(double value) { return round(value); }
+double Trunc(double value) { return trunc(value); }
+double Sin(double value) { return sin(value); }
+double Cos(double value) { return cos(value); }
+double Tan(double value) { return tan(value); }
+double Asin(double value) { return asin(value); }
+double Acos(double value) { return acos(value); }
+double Atan(double value) { return atan(value); }
+double Atan2(double y, double x) { return atan2(y, x); }
+bool IsNaN(double value) { return value != value; }
+bool IsInf(double value) { return value != 0.0 and value + value == value; }
+bool IsFinite(double value) { return not IsNaN(value) and not IsInf(value); }

@@ -2696,6 +2696,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
 	restore := evt1EnterValidationContext(scope, templateInfo, inComptimeFn)
 	defer restore()
+	if err := evt1ContextualFloatTree(expr, expected); err != nil {
+		return Type{}, err
+	}
 	if contextual, err := evt1ContextualComptimeInteger(env, expr, expected); err != nil {
 		return Type{}, err
 	} else if contextual {
@@ -3980,7 +3983,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				return validateObservationCall(env, scope, e, templateInfo, inComptimeFn)
 			}
 		}
-		if e.Callee == "Magnitude" {
+		if e.Callee == "Magnitude" && evt1ValueIntrinsicInScope(env, scope, e) {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("QUANTITY_MAGNITUDE_INVALID", "Magnitude expects one unit-bearing numeric value", e.Span)
 			}
@@ -4254,7 +4257,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if e.Callee == "Tensor" {
 			return Type{}, evt1Diagnostic("CV4611", "Tensor(source) requires an explicit tensor<T, Rank> destination type", e.Span)
 		}
-		if e.Callee == "HardMax" || e.Callee == "ArgMax" || e.Callee == "Confidence" {
+		if (e.Callee == "HardMax" || e.Callee == "ArgMax" || e.Callee == "Confidence") && evt1ValueIntrinsicInScope(env, scope, e) {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("INFERENCE_QUERY_INVALID", fmt.Sprintf("%s requires exactly one Inference argument", e.Callee), e.Span)
 			}
@@ -4278,7 +4281,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		if e.Callee == evt1SpanMutableName || e.Callee == evt1SpanReadonlyName || e.Callee == "Subspan" || e.Callee == "AsBytes" {
 			return validateSpanCall(env, scope, e, nil, templateInfo, inComptimeFn)
 		}
-		if e.Callee == "Len" {
+		if e.Callee == "Len" && evt1ValueIntrinsicInScope(env, scope, e) {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("CV4234", fmt.Sprintf("Len expects exactly one argument, got %d", len(e.Args)), e.Span)
 			}
@@ -4292,7 +4295,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			out, _ := evt1BuiltinType("int", e.Span)
 			return out, nil
 		}
-		if e.Callee == "Rank" {
+		if e.Callee == "Rank" && evt1ValueIntrinsicInScope(env, scope, e) {
 			if len(e.Args) != 1 {
 				return Type{}, evt1Diagnostic("CV4551", fmt.Sprintf("Rank expects exactly one argument, got %d", len(e.Args)), e.Span)
 			}
@@ -4306,7 +4309,7 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 			out, _ := evt1BuiltinType("int", e.Span)
 			return out, nil
 		}
-		if e.Callee == "Shape" {
+		if e.Callee == "Shape" && evt1ValueIntrinsicInScope(env, scope, e) {
 			if len(e.Args) != 2 {
 				return Type{}, evt1Diagnostic("CV4552", fmt.Sprintf("Shape expects storage and dimension arguments, got %d argument(s)", len(e.Args)), e.Span)
 			}
@@ -4335,6 +4338,15 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		if _, exists := env.comptimeFunctions[e.Callee]; exists && !inComptimeFn {
 			return Type{}, evt1Diagnostic("CV4210", fmt.Sprintf("comptime function %s cannot be called from runtime code", e.Callee), e.Span)
+		}
+		// A unique declaration supplies parameter context before literals are
+		// defaulted or range-checked. Overload scoring retains its existing law.
+		if candidates := env.functions[e.Callee]; len(candidates) == 1 && len(candidates[0].Params) == len(e.Args) {
+			for i, arg := range e.Args {
+				if err := evt1ContextualFloatTree(arg, candidates[0].Params[i].Type); err != nil {
+					return Type{}, err
+				}
+			}
 		}
 		argTypes := make([]Type, 0, len(e.Args))
 		for _, arg := range e.Args {
@@ -4754,6 +4766,24 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		} else if contextual {
 			leftType = rightType.valueType()
 		}
+		if evt1IsFloating(leftType) && evt1FloatLiteralArithmetic(e.Right) {
+			if err := evt1ContextualFloatTree(e.Right, leftType); err != nil {
+				return Type{}, err
+			}
+			rightType, err = validateExpr(env, scope, e.Right, templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+		}
+		if evt1IsFloating(rightType) && evt1FloatLiteralArithmetic(e.Left) {
+			if err := evt1ContextualFloatTree(e.Left, rightType); err != nil {
+				return Type{}, err
+			}
+			leftType, err = validateExpr(env, scope, e.Left, templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+		}
 		// A literal has no unit independently; in a binary expression its
 		// quantity is supplied by the other operand when the representations
 		// agree. This makes `bytes + 1` explicit in representation but safe in
@@ -5081,6 +5111,11 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		}
 		return evt1CanonicalType(env, evt1FailureSuccessType(operand)), nil
 	case *StructConstructExpr:
+		if len(e.Args) == 0 && len(e.ArgNames) == 0 {
+			if err := evt1ExpandEmptyAggregate(env, scope, e); err != nil {
+				return Type{}, err
+			}
+		}
 		return validateStructConstructExpr(env, scope, *e, templateInfo, inComptimeFn)
 	case *WithExpr:
 		return validateWithExpr(env, scope, *e, templateInfo, inComptimeFn)
@@ -5129,6 +5164,19 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 	if paramType.Kind == TypeCallback {
 		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, evt1ValidationIsComptime(scope))
 		return err
+	}
+	if evt1IsFloating(paramType) {
+		if err := evt1ContextualFloatTree(arg, paramType); err != nil {
+			return err
+		}
+		switch arg.(type) {
+		case *IfExpr, *BinaryExpr, *ParenExpr:
+			actual, err := validateExprAgainstExpected(env, scope, arg, paramType, templateInfo, evt1ValidationIsComptime(scope))
+			if err != nil {
+				return err
+			}
+			argType = actual
+		}
 	}
 	typeParam := ""
 	if templateInfo != nil {

@@ -23,7 +23,24 @@ func TestStandardMathGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := evt1SemanticSymbolBase(module)
-	call := func(name string) string { return evt1FunctionSymbol(base, name) }
+	env, err := analyzeModule(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func(name string) string {
+		switch name {
+		case "Abs", "Min", "Max", "Clamp":
+			return evt1FunctionSymbol(base, name)
+		}
+		for _, fn := range module.Functions {
+			if fn.Name == name && len(fn.Params) > 0 && fn.Params[0].Type.Name == "float" {
+				return evt1FunctionSymbolForDecl(base, env, fn)
+			}
+		}
+		t.Fatalf("missing float math overload %s", name)
+		return ""
+	}
+
 	harness := "#include <math.h>\n#include \"math.generated.h\"\nint main(void) {\n" +
 		"if (" + call("Abs") + "__int(-7) != 7 || " + call("Min") + "__int_int(2, 3) != 2 || " + call("Max") + "__int_int(2, 3) != 3 || " + call("Clamp") + "__int_int_int(8, 1, 5) != 5) return 11;\n" +
 		"if (" + call("Abs") + "__float(-2.0f) != 2.0f || " + call("Min") + "__float_float(2.0f, 3.0f) != 2.0f || " + call("Max") + "__float_float(2.0f, 3.0f) != 3.0f || " + call("Clamp") + "__float_float_float(8.0f, 1.0f, 5.0f) != 5.0f) return 12;\n" +
@@ -62,12 +79,24 @@ func TestStandardMathGeneration(t *testing.T) {
 	}
 	var assertions strings.Builder
 	assertions.WriteString(string(source))
+	for _, name := range []string{"Sqrt", "Exp", "Log", "Log2", "Log10", "Floor", "Ceil", "Round", "Trunc", "Sin", "Cos", "Tan", "Asin", "Acos", "Atan", "IsFinite", "IsInf", "IsNaN", "Pow", "Atan2"} {
+		result := "float"
+		if strings.HasPrefix(name, "Is") {
+			result = "bool"
+		}
+		params, args := "float x", "x"
+		if name == "Pow" || name == "Atan2" {
+			params = "float x, float y"
+			args = "x, y"
+		}
+		assertions.WriteString("\n" + result + " Proof" + name + "(" + params + ") { return " + name + "(" + args + "); }\n")
+	}
 	assertions.WriteString("\nint ProveMath() {\n")
 	for _, name := range []string{"Abs", "Min", "Max", "Clamp", "Sqrt", "Pow", "Exp", "Log", "Log2", "Log10", "Floor", "Ceil", "Round", "Trunc", "Sin", "Cos", "Tan", "Asin", "Acos", "Atan", "Atan2", "IsFinite", "IsInf", "IsNaN"} {
 		if name == "Abs" || name == "Min" || name == "Max" || name == "Clamp" {
 			continue // overloaded subjects require a typed disambiguation in this assertion syntax
 		}
-		assertions.WriteString("Assert.Concept<NoAllocation>(" + name + ", \"math primitive does not allocate\");\n")
+		assertions.WriteString("Assert.Concept<NoAllocation>(Proof" + name + ", \"math primitive does not allocate\");\n")
 	}
 	assertions.WriteString("return 0; }\n")
 	if _, err := Parse(path, assertions.String()); err != nil {

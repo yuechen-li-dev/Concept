@@ -1,9 +1,9 @@
 package concept
 
-// These exact C11 float signatures have compiler-known, allocation-free effects.
+// These exact C11 floating signatures have compiler-known, allocation-free effects.
 // Other extern declarations remain unknown to the effect system.
 func evt1KnownC11MathPrimitive(fn FunctionDecl) bool {
-	if fn.ExternABI != "C" || fn.ReturnType.Name != "float" || fn.Body != nil {
+	if fn.ExternABI != "C" || (fn.ReturnType.Name != "float" && fn.ReturnType.Name != "double") || fn.Body != nil || fn.ReturnType.Ownership != "" || fn.ReturnType.Quantity != nil {
 		return false
 	}
 	arities := map[string]int{
@@ -12,12 +12,16 @@ func evt1KnownC11MathPrimitive(fn FunctionDecl) bool {
 		"sinf": 1, "cosf": 1, "tanf": 1, "asinf": 1, "acosf": 1,
 		"atanf": 1, "powf": 2, "atan2f": 2,
 	}
-	count, ok := arities[fn.Name]
+	name := fn.Name
+	if fn.ReturnType.Name == "double" {
+		name += "f"
+	}
+	count, ok := arities[name]
 	if !ok || len(fn.Params) != count {
 		return false
 	}
 	for _, param := range fn.Params {
-		if param.Type.Name != "float" || param.Type.Ownership != "" || param.Type.Quantity != nil {
+		if param.Type.Name != fn.ReturnType.Name || param.Type.Ownership != "" || param.Type.Quantity != nil {
 			return false
 		}
 	}

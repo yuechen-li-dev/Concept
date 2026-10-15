@@ -1,0 +1,40 @@
+module Standard.SMLibNumerics.Tests;
+profile Core;
+import Standard.Math;
+record struct Inner { double value; bool enabled; }
+record struct Sample { Inner inner; double[3] values; }
+double Accept(double x) { return x; }
+double DoubleLog(double x) { return Log(x); }
+[[fact]]
+void ContextAndCompleteAggregateInitialization()
+{
+ double conditional = if (true) -1.0 else 1.0;
+ double arithmetic = (1.0e100 + 1.0e99) / 1.0e100;
+ double argument = Accept(if (true) 1.0e100 else 2.0e100);
+ Assert.True(conditional == -1.0 and arithmetic > 1.09 and arithmetic < 1.11 and argument == 1.0e100, "double context reaches literal branches and arithmetic");
+ Sample zero = Sample{};
+ Assert.True(zero.inner.value == 0.0 and not zero.inner.enabled and zero.values[2] == 0.0, "empty construction initializes every plain field");
+ Sample named = Sample{values = [1.0, 2.0, 3.0], inner = Inner{enabled = true, value = 4.0}};
+ Assert.True(named.inner.value == 4.0 and named.values[2] == 3.0, "named initialization follows field identity rather than position");
+}
+[[fact]]
+void Binary64MathKeepsPrecisionAndClassifiesEdges()
+{
+ double one = 1.0;
+ double tinyIncrement = 1.0000000000000002;
+ Assert.True(Log(tinyIncrement) > 0.0, "double input does not round through float before libm");
+ double zero = 0.0;
+ double negativeZero = -0.0;
+ double infinity = Exp(1000.0 as double);
+ double nan = Sqrt(-one);
+ Assert.True(IsFinite(zero) and IsFinite(negativeZero) and IsInf(infinity) and IsInf(-infinity) and IsNaN(nan), "classification includes both zero signs infinities and NaN");
+ Assert.True(not IsFinite(nan) and not IsFinite(infinity), "nonfinite values are excluded");
+ Assert.True(IsInf(one / negativeZero) and one / negativeZero < zero, "negative zero sign survives double operations");
+ Assert.True(Abs(negativeZero) == zero and one / Abs(negativeZero) > zero, "double fabs clears a negative zero sign");
+ Assert.True(IsNaN(Log(-one)) and IsNaN(Acos(2.0 as double)), "domain errors retain native NaN behavior");
+ Assert.True(Sqrt(9.0 as double) == 3.0 and Pow(2.0 as double, 3.0 as double) == 8.0, "binary64 root and power operations");
+ Assert.True(Abs(Sin(one)) < one and Cos(zero) == one and Tan(zero) == zero and Asin(zero) == zero and Atan(zero) == zero and Atan2(zero, one) == zero, "binary64 transcendental overloads execute");
+ Assert.True(Log2(8.0 as double) == 3.0 and Log10(100.0 as double) == 2.0, "binary64 logarithm overloads execute");
+ Assert.True(Floor(2.8 as double) == 2.0 and Ceil(2.2 as double) == 3.0 and Round(2.5 as double) == 3.0 and Trunc(-2.8 as double) == -2.0, "binary64 rounding functions execute");
+ Assert.Concept<NoAllocation>(DoubleLog, "binary64 native primitives retain known allocation-free effects");
+}

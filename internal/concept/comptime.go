@@ -306,7 +306,10 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		}
 		return Value{Kind: ValueInt, Type: t, IntValue: int(value)}, nil
 	case *FloatLiteral:
-		t, _ := evt1BuiltinType("float", e.Span)
+		t := e.ResolvedType
+		if t.Name == "" {
+			t, _ = evt1BuiltinType("float", e.Span)
+		}
 		if expected != nil && evt1IsFloating(*expected) {
 			t = expected.valueType()
 		}
@@ -529,7 +532,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		if evt1IsObservationCall(e) {
 			return evt1EvalObservation(state, scope, e)
 		}
-		if e.Callee == "Magnitude" && len(e.Args) == 1 {
+		if e.Callee == "Magnitude" && len(e.Args) == 1 && evt1ImplicitValueIntrinsic(state.env, e) {
 			value, err := evt1EvalExpr(state, scope, e.Args[0])
 			if err != nil {
 				return Value{}, err
@@ -543,7 +546,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 		if e.Callee == "Tensor" && len(e.Args) == 1 {
 			return evt1EvalExpr(state, scope, e.Args[0])
 		}
-		if e.Callee == "Len" {
+		if e.Callee == "Len" && evt1ImplicitValueIntrinsic(state.env, e) {
 			if len(e.Args) != 1 {
 				return Value{}, evt1Diagnostic("CV4234", fmt.Sprintf("Len expects exactly one argument, got %d", len(e.Args)), e.Span)
 			}
@@ -557,7 +560,7 @@ func evt1EvalExprTyped(state *evt1ComptimeState, scope *evt1EvalScope, expr Expr
 			t, _ := evt1BuiltinType("int", e.Span)
 			return Value{Kind: ValueInt, Type: t, IntValue: len(value.Elements)}, nil
 		}
-		if e.Callee == "Rank" || e.Callee == "Shape" {
+		if (e.Callee == "Rank" || e.Callee == "Shape") && evt1ImplicitValueIntrinsic(state.env, e) {
 			value, err := evt1EvalExpr(state, scope, e.Args[0])
 			if err != nil {
 				return Value{}, err

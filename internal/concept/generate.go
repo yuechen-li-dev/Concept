@@ -1589,11 +1589,11 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			if len(e.Args) >= 2 {
 				detail = exprLabel(e.Args[0]) + "." + exprLabel(e.Args[1])
 			}
-		} else if e.Callee == "Len" {
+		} else if e.Callee == "Len" && evt1ImplicitValueIntrinsic(env, e) {
 			kind = "array_len"
-		} else if e.Callee == "Rank" {
+		} else if e.Callee == "Rank" && evt1ImplicitValueIntrinsic(env, e) {
 			kind = "rank_query"
-		} else if e.Callee == "Shape" {
+		} else if e.Callee == "Shape" && evt1ImplicitValueIntrinsic(env, e) {
 			kind = "shape_query"
 		}
 		if templateInfo != nil {
@@ -3441,17 +3441,25 @@ func evt1BlockEndsInReturn(block Block) bool {
 func (f *evt1FunctionLowerer) lowerLocalStructConstruct(targetType Type, name string, construct StructConstructExpr, indent int) string {
 	structDecl := f.l.env.structs[targetType.Name]
 	var b strings.Builder
-	var temps []string
+	temps := make([]string, len(structDecl.Fields))
+	fieldIndex := map[string]int{}
+	for i, field := range structDecl.Fields {
+		fieldIndex[field.Name] = i
+	}
 	for i, arg := range construct.Args {
-		fieldType := structDecl.Fields[i].Type
-		if resolved, ok := f.l.env.fieldSets[targetType.Name][structDecl.Fields[i].Name]; ok {
+		index := i
+		if len(construct.ArgNames) != 0 {
+			index = fieldIndex[construct.ArgNames[i]]
+		}
+		fieldType := structDecl.Fields[index].Type
+		if resolved, ok := f.l.env.fieldSets[targetType.Name][structDecl.Fields[index].Name]; ok {
 			fieldType = resolved
 		}
 		prelude, expr, argType := f.lowerExprExpected(arg, fieldType, indent)
 		b.WriteString(prelude)
-		temp := f.nextTemp(fmt.Sprintf("init_%d", i+1))
+		temp := f.nextTemp(fmt.Sprintf("init_%d", index+1))
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, expr))
-		temps = append(temps, temp)
+		temps[index] = temp
 	}
 	cName := f.bindName(name, targetType)
 	b.WriteString(ind(indent) + fmt.Sprintf("%s %s;\n", evt1CType(targetType), cName))
@@ -4384,7 +4392,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.Intrinsic == "span_as_bytes" {
 			return f.lowerSpanAsBytes(e, indent)
 		}
-		if e.Callee == "Len" || e.Callee == "Rank" || e.Callee == "Shape" {
+		if (e.Callee == "Len" || e.Callee == "Rank" || e.Callee == "Shape") && evt1ImplicitValueIntrinsic(f.l.env, e) {
 			if e.Callee == "Len" && len(e.Args) == 1 {
 				if spanType, err := validateExpr(f.l.env, f.typeScope(), e.Args[0], nil, false); err == nil && evt1IsSpanType(spanType) {
 					prelude, value, _ := f.lowerExpr(e.Args[0], indent)

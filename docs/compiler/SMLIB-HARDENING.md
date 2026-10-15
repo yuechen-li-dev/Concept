@@ -26,3 +26,30 @@ in Normal and Verify, check deterministic artifacts, and verify one adapter per
 semantic identity. The unchanged external port's three native facts pass in
 both modes. No loop escape, C-style loop, automata, scheduler, or runtime frame
 semantics were changed.
+
+## Pass B: numerical ergonomics
+
+Expected float representation reaches literal arithmetic and conditionals without
+converting typed leaves. Unique parameter declarations supply context before
+literal range checking. Compile-time evaluation now honors resolved floating
+representations. Binary64 Standard.Math overloads call the corresponding double
+C11 operations; known allocation-free effects require exact, dimensionless native
+signatures. Numeric domain and nonfinite cases execute through the actual library.
+
+Unqualified value-query builtins are fallback names; ordinary declarations,
+imports, namespace-qualified functions, and lexical callables retain identity in
+semantic analysis, MIR classification, constant evaluation, and C emission.
+Structured storage/machine operations and compiler observations keep their laws.
+
+Named-field construction already checked completeness and duplicates. Its local
+lowering now uses field identity while retaining source evaluation order. Explicit
+T{} zero construction is restricted to complete recursively defaultable plain
+data, using ordinary typed aggregate initialization. Owners, borrows, Drop-bearing
+values, class/ref/immovable/table/bits aggregates, attributed/default-initializer
+fields, and unsupported storage reject. General default expressions, per-field
+omission/defaults, constructors, and implicit initialization remain deferred.
+
+Native Standard numerical facts cover double precision, positive/negative zero,
+infinities, NaNs, domain results, primitive operations, typed context, named/zero
+construction, and NoAllocation. Negative tests retain mixed-precision and lifetime
+rejection. New semantics are documented explicitly in the language specification.
