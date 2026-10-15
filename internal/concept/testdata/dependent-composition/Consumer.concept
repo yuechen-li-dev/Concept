@@ -10,10 +10,10 @@ void Drop(owned Token item) { Observed(item.id); }
 double Weight(ref const Token item) { return item.id as double; }
 comptime usize Dimension = 3u;
 double Main() {
-    Values<Dimension> backing = Values<Dimension>{[1.0 ...]};
+    Values<Dimension> backing = Values<Dimension>{NumericalStorage<double<array>[Dimension * 2u]>{[1.0 ...]}};
     Values<Dimension> produced = MakeValues<Dimension>();
-    if (produced.data[0] != 1.0) { return -1.0; }
-    tensor<double,1> view = Tensor(backing.data);
+    if (produced.backing.data[0] != 1.0) { return -1.0; }
+    tensor<double,1> view = Tensor(backing.backing.data);
     Assert.Concept<FixedShape>(view, "closed comptime extent survives field projection");
     owned Token first = Token{1};
     owned Token second = Token{2};

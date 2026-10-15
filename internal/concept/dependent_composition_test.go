@@ -25,7 +25,7 @@ int main(void) {
 
 func dependentCompositionSource(t *testing.T, name string) string {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "language", "evt1", "dependent-composition", filepath.FromSlash(name)))
+	body, err := os.ReadFile(filepath.Join("testdata", "dependent-composition", filepath.FromSlash(name)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,14 +106,15 @@ func TestDependentGenericCompositionRejections(t *testing.T) {
 		{"copy owned field", strings.Replace(dependentCompositionProvider, "move item, Values", "item, Values", 1), "CV4501", true},
 		{"wrong field dimension", strings.Replace(dependentCompositionProvider, "move item, Values<N>{", "move item, Values<2>{", 1), "CV4107", true},
 		{"type as value", strings.Replace(dependentCompositionProvider, "move item, Values<N>{", "move item, Values<T>{", 1), "GENERIC_NON_TYPE_ARGUMENT_INVALID", true},
-		{"missing record operation", strings.Replace(dependentCompositionProvider, "template <usize M> double Head(ref const Values<M> values) { return values.data[0]; }", "", 1), "CV4153", true},
+		{"missing record operation", strings.Replace(dependentCompositionProvider, "template <usize M> double Head(ref const Values<M> values) { return values.backing.data[0]; }", "", 1), "CV4153", true},
 		{"runtime dimension", strings.Replace(strings.Replace(dependentCompositionConsumer, "comptime usize Dimension = 3u;", "", 1), "double Main() {", "double Main() { usize Dimension = 3u;", 1), "GENERIC_NON_TYPE_ARGUMENT_INVALID", false},
 		{"missing evaluator", strings.Replace(dependentCompositionConsumer, "double Weight(ref const Token item) { return item.id as double; }", "", 1), "CV4154", false},
 		{"wrong evaluator precision", strings.Replace(dependentCompositionConsumer, "double Weight(ref const Token item) { return item.id as double; }", "float Weight(ref const Token item) { return 1.0; }", 1), "CV4156", false},
 		{"zero dimension", strings.Replace(dependentCompositionConsumer, "Compute<Token,1>", "Compute<Token,0>", 1), "CV4207", false},
 		{"move then read", strings.Replace(dependentCompositionConsumer, "Compute<Token,2>(move second)", "Compute<Token,2>(move first)", 1), "CV4504", false},
 		{"copy workspace", strings.Replace(dependentCompositionProvider, "tensor<double,1> values =", "Workspace<T,N> copy = work; tensor<double,1> values =", 1), "CV4133", true},
-		{"escaping field view", strings.Replace(strings.Replace(dependentCompositionProvider, "double Compute(owned T item)", "tensor<double,1> Compute(owned T item)", 1), "return work.values.data[(N as int) - 1] + Weight(ref const work.resource) + (Len(work.values.data) as double) + Head(ref const work.values) - 2.0;", "return values;", 1), "CV4521", true},
+		{"dependent shape is not runtime", strings.Replace(dependentCompositionProvider, "Assert.Concept<Contiguous>(values", "Assert.Concept<RuntimeShape>(values", 1), "CONCEPT_ASSERT_UNKNOWN", true},
+		{"escaping field view", strings.Replace(strings.Replace(dependentCompositionProvider, "double Compute(owned T item)", "tensor<double,1> Compute(owned T item)", 1), "return work.values.backing.data[(N as int) - 1] + Weight(ref const work.resource) + (Len(work.values.backing.data) as double) + Head(ref const work.values) - 2.0;", "return values;", 1), "CV4521", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,6 +135,27 @@ func TestDependentGenericCompositionRejections(t *testing.T) {
 				t.Fatalf("got %v; want %s", err, tc.code)
 			}
 		})
+	}
+}
+
+func TestDependentGenericSubstitutionIsSimultaneous(t *testing.T) {
+	parameter := Type{Name: "A", Kind: TypeConceptParam}
+	n := Type{Name: "N", Kind: TypeTemplateValue}
+	m := Type{Name: "M", Kind: TypeTemplateValue}
+	storage := Type{Kind: TypeArray, ArrayElem: &parameter, Shape: []StorageDimension{{Runtime: true, Dependencies: []Type{n, m}, Expr: &BinaryExpr{Op: "+", Left: &NameExpr{Name: "N"}, Right: &NameExpr{Name: "M"}}}}}
+	closed := evt1SubstituteBindings(storage, map[string]Type{
+		"A": {Name: "B", Kind: TypeConceptParam}, "B": {Name: "int", Kind: TypeBuiltin},
+		"N": m, "M": {Name: "3", Kind: TypeTemplateValue},
+	})
+	if closed.ArrayElem.Name != "B" || len(closed.Shape[0].Dependencies) != 1 || closed.Shape[0].Dependencies[0].Name != "M" {
+		t.Fatalf("captured simultaneous bindings: %+v", closed)
+	}
+	expr := closed.Shape[0].Expr.(*BinaryExpr)
+	if expr.Left.(*NameExpr).Name != "M" || expr.Right.(*IntLiteral).Magnitude != 3 {
+		t.Fatalf("extent substitution disagrees: %+v", expr)
+	}
+	if storage.ArrayElem.Name != "A" || storage.Shape[0].Dependencies[0].Name != "N" {
+		t.Fatal("substitution mutated the open type")
 	}
 }
 

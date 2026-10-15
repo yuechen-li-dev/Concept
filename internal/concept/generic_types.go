@@ -67,6 +67,13 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 			application.TypeArgs[i] = resolved
 		}
 		if decl.Parameters[i].Kind == "type" {
+			if arg.Kind == TypeTemplateValue {
+				return Type{}, evt1Diagnostic("GENERIC_ARGUMENT_KIND", "type template parameter requires a type", arg.Span)
+			}
+			if evt1TypeContainsConceptParameter(arg) {
+				parts[i] = arg.String()
+				continue
+			}
 			resolved, err := evt1ResolveType(env, nil, arg)
 			if err != nil {
 				return Type{}, err
@@ -127,14 +134,9 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	instance := evt1CloneStructDecl(decl.Struct)
 	instance.Name = identity
 	instance.Application = metadata
+	bindings := evt1TemplateBindings(decl.Parameters, application.TypeArgs)
 	for i := range instance.Fields {
-		fieldType := instance.Fields[i].Type
-		for j, param := range decl.Parameters {
-			if param.Kind == "type" {
-				fieldType = evt1SubstituteType(fieldType, param.Name, application.TypeArgs[j])
-			}
-		}
-		fieldType = evt1SubstituteGenericValueExtents(fieldType, decl.Parameters, application.TypeArgs)
+		fieldType := evt1SubstituteBindings(instance.Fields[i].Type, bindings)
 		resolved, err := evt1ResolveType(env, nil, fieldType)
 		if err != nil {
 			return Type{}, err
@@ -147,25 +149,16 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 	}
 	for i := range instance.Methods {
 		method := instance.Methods[i]
-		for j, param := range decl.Parameters {
-			method.ReturnType = evt1SubstituteType(method.ReturnType, param.Name, application.TypeArgs[j])
-			for k := range method.Params {
-				method.Params[k].Type = evt1SubstituteType(method.Params[k].Type, param.Name, application.TypeArgs[j])
-			}
-			if method.Body != nil {
-				body, err := evt1SubstituteBlock(*method.Body, param.Name, application.TypeArgs[j])
-				if err != nil {
-					return Type{}, err
-				}
-				method.Body = &body
-			}
-		}
-		// Non-type parameters can occur anywhere a method type can occur, not
-		// only in the aggregate's fields. Close array extents and nested generic
-		// arguments before registering the concrete method overload.
-		method.ReturnType = evt1SubstituteGenericValueExtents(method.ReturnType, decl.Parameters, application.TypeArgs)
+		method.ReturnType = evt1SubstituteBindings(method.ReturnType, bindings)
 		for k := range method.Params {
-			method.Params[k].Type = evt1SubstituteGenericValueExtents(method.Params[k].Type, decl.Parameters, application.TypeArgs)
+			method.Params[k].Type = evt1SubstituteBindings(method.Params[k].Type, bindings)
+		}
+		if method.Body != nil {
+			body, err := evt1SubstituteBlockBindings(*method.Body, bindings)
+			if err != nil {
+				return Type{}, err
+			}
+			method.Body = &body
 		}
 		method.MethodOf = identity
 		for k := range method.Params {
@@ -219,12 +212,13 @@ func evt1InstantiateGenericType(env *semanticEnv, application Type) (Type, error
 // Value arguments use the same structural substitution as type arguments.
 // This preserves symbolic-to-symbolic bindings (Capacity -> N), not just literals.
 func evt1SubstituteGenericValueExtents(t Type, params []GenericParameter, args []Type) Type {
-	for i, parameter := range params {
-		if parameter.Kind == "value" {
-			t = evt1SubstituteType(t, parameter.Name, args[i])
+	bindings := map[string]Type{}
+	for i, param := range params {
+		if param.Kind == "value" {
+			bindings[param.Name] = args[i]
 		}
 	}
-	return t
+	return evt1SubstituteBindings(t, bindings)
 }
 
 func evt1AppliedConcreteType(source Type, identity string, application *GenericApplication) Type {
@@ -249,13 +243,9 @@ func evt1StructView(env *semanticEnv, t Type) (StructDecl, bool) {
 	}
 	decl := evt1CloneStructDecl(generic.Struct)
 	decl.Name = base.String()
+	bindings := evt1TemplateBindings(generic.Parameters, application.TypeArgs)
 	for i := range decl.Fields {
-		for j, parameter := range generic.Parameters {
-			if parameter.Kind == "type" {
-				decl.Fields[i].Type = evt1SubstituteType(decl.Fields[i].Type, parameter.Name, application.TypeArgs[j])
-			}
-		}
-		decl.Fields[i].Type = evt1SubstituteGenericValueExtents(decl.Fields[i].Type, generic.Parameters, application.TypeArgs)
+		decl.Fields[i].Type = evt1SubstituteBindings(decl.Fields[i].Type, bindings)
 	}
 	return decl, true
 }

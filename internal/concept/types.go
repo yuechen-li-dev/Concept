@@ -2,6 +2,7 @@ package concept
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -46,10 +47,11 @@ const (
 )
 
 type StorageDimension struct {
-	Extent     int    `json:"extent,omitempty"`
-	Runtime    bool   `json:"runtime,omitempty"`
-	Expression string `json:"expression"`
-	Expr       Expr   `json:"-"`
+	Extent       int    `json:"extent,omitempty"`
+	Runtime      bool   `json:"runtime,omitempty"`
+	Dependencies []Type `json:"dependencies,omitempty"`
+	Expression   string `json:"expression"`
+	Expr         Expr   `json:"-"`
 }
 
 type Type struct {
@@ -204,7 +206,7 @@ func (t Type) Equal(other Type) bool {
 		return false
 	}
 	for i := range t.Shape {
-		if t.Shape[i].String() != other.Shape[i].String() {
+		if t.Shape[i].String() != other.Shape[i].String() || !slices.EqualFunc(t.Shape[i].Dependencies, other.Shape[i].Dependencies, func(a, b Type) bool { return a.Equal(b) }) {
 			return false
 		}
 	}

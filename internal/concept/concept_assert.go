@@ -424,6 +424,11 @@ func evt1RefineValueFact(goal string, parameters []int, binding evt1ValueBinding
 		facts := binding.tensorFacts
 		switch SemanticFactKind(goal) {
 		case FactFixedShape, FactRuntimeShape:
+			for _, dimension := range facts.Shape {
+				if len(dimension.Dependencies) != 0 {
+					return fallback
+				}
+			}
 			if facts.Rank > 0 && len(facts.Shape) == facts.Rank {
 				fixed := true
 				for _, dimension := range facts.Shape {

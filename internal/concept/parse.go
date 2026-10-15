@@ -2722,7 +2722,7 @@ typeSuffix:
 		}
 		shape := make([]StorageDimension, 0, len(dimensions))
 		for _, dimension := range dimensions {
-			shape = append(shape, StorageDimension{Expr: dimension})
+			shape = append(shape, StorageDimension{Expr: dimension, Dependencies: p.storageDependencies(dimension)})
 		}
 		t = Type{
 			Name:        elem.String() + "[]",
@@ -3519,7 +3519,7 @@ func (p *parser) parseVarDecl() (Statement, error) {
 			if err != nil {
 				return nil, err
 			}
-			shape = append(shape, StorageDimension{Expr: dimension})
+			shape = append(shape, StorageDimension{Expr: dimension, Dependencies: p.storageDependencies(dimension)})
 			if p.peekLexeme() != "," {
 				break
 			}
@@ -5035,4 +5035,17 @@ func (p *parser) parseGuardedMatchStmt(start Span) (Statement, error) {
 		rest = &Block{Statements: []Statement{result}, Span: arms[i].span}
 	}
 	return result, nil
+}
+
+// Record lexical binders structurally even before semantic extent evaluation.
+func (p *parser) storageDependencies(expr Expr) []Type {
+	var parameters []GenericParameter
+	for name := range p.templateTypeParams {
+		parameters = append(parameters, GenericParameter{Name: name, Kind: "type"})
+	}
+	for name := range p.templateValueParams {
+		parameters = append(parameters, GenericParameter{Name: name, Kind: "value"})
+	}
+	dependencies, _ := evt1StaticExpressionDependencies(nil, expr, &evt1TemplateInfo{Decl: TemplateDecl{Parameters: parameters}})
+	return dependencies
 }

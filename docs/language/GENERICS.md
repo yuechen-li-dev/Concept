@@ -102,7 +102,7 @@ constructor nodes retain the resolved type for emission. Display names are not
 parsed to reconstruct generic identity in code generation. This correction adds
 no new generic syntax, runtime state, allocation, or implicit numeric conversion.
 
-The combined specimen is under `language/evt1/dependent-composition`; its native
+The combined specimen is under `internal/concept/testdata/dependent-composition`; its native
 regression checks imported constrained workspaces with field-backed tensors,
 computed extents, two owned resource types, dimensions 1/2/3/8/16, and exactly-once
 cleanup in Normal and Verify, including a second module artifact import.

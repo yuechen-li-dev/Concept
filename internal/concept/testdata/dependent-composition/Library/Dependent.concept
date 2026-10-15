@@ -1,22 +1,23 @@
 module Library.Dependent;
 profile Core;
 concept Weighted<T> { requires double Weight(ref const T item); }
-template <usize Capacity> struct Values { double<array>[Capacity * 2u] data; }
+template <typename Storage> struct NumericalStorage { Storage data; }
+template <usize Capacity> struct Values { NumericalStorage<double<array>[Capacity * 2u]> backing; }
 concept Numerical<T, B> {
     requires Weighted<T>;
     requires double Head(ref const B values);
 }
-template <usize M> double Head(ref const Values<M> values) { return values.data[0]; }
-template <usize N> Values<N> MakeValues() { return Values<N>{[1.0 ...]}; }
+template <usize M> double Head(ref const Values<M> values) { return values.backing.data[0]; }
+template <usize N> Values<N> MakeValues() { return Values<N>{NumericalStorage<double<array>[N * 2u]>{[1.0 ...]}}; }
 template <typename T, usize Capacity> requires Weighted<T> struct Workspace { owned T resource; Values<Capacity> values; }
 template <typename T, usize N> requires Numerical<T, Values<N>>
 double Compute(owned T item) {
     static_assert(N > 0u, "positive dimension");
-    Workspace<T,N> work = Workspace<T,N>{move item, Values<N>{[0.0 ...]}};
-    tensor<double,1> values = Tensor(work.values.data);
+    Workspace<T,N> work = Workspace<T,N>{move item, Values<N>{NumericalStorage<double<array>[N * 2u]>{[0.0 ...]}}};
+    tensor<double,1> values = Tensor(work.values.backing.data);
     Assert.Concept<Contiguous>(values, "field storage is contiguous");
     Assert.Concept<NoCopy>(values, "tensor view borrows the workspace field");
     Assert.Concept<NoOwnershipTransfer>(values, "resource stays in workspace");
     values[i] = values[i] + 2.0;
-    return work.values.data[(N as int) - 1] + Weight(ref const work.resource) + (Len(work.values.data) as double) + Head(ref const work.values) - 2.0;
+    return work.values.backing.data[(N as int) - 1] + Weight(ref const work.resource) + (Len(work.values.backing.data) as double) + Head(ref const work.values) - 2.0;
 }

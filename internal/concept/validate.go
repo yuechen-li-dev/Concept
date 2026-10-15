@@ -68,6 +68,7 @@ type evt1ValueBinding struct {
 	objectState      evt1StorageState
 	storageStates    map[string]evt1StorageState
 	comptime         bool
+	templateValue    bool
 	hasValue         bool
 	value            Value
 	instanceAutomata string
@@ -1168,7 +1169,7 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		scope := evt1ModuleScope(env)
 		for _, parameter := range templateDecl.Parameters {
 			if parameter.Kind == "value" {
-				scope.declare(parameter.Name, evt1ValueBinding{t: parameter.ValueType, mutable: false, state: evt1StorageInitialized})
+				scope.declare(parameter.Name, evt1ValueBinding{t: parameter.ValueType, mutable: false, state: evt1StorageInitialized, templateValue: true})
 			}
 		}
 		resolvedReturn, err := evt1ResolveType(env, scope, templateDecl.ReturnType)
@@ -3173,7 +3174,7 @@ func evt1ResolveType(env *semanticEnv, scope *evt1Scope, t Type) (Type, error) {
 			if extentType.Name != "int" && extentType.Name != "usize" {
 				return Type{}, evt1Diagnostic("CV4221", "runtime storage extent must be int or usize", expr.exprSpan())
 			}
-			resolvedShape = append(resolvedShape, StorageDimension{Runtime: true, Expression: evt1ExprIdentity(expr), Expr: expr})
+			resolvedShape = append(resolvedShape, StorageDimension{Runtime: true, Dependencies: evt1StorageExpressionDependencies(scope, expr), Expression: evt1ExprIdentity(expr), Expr: expr})
 		}
 		kind := t.StorageKind
 		if kind == "" {
@@ -7791,6 +7792,36 @@ func evt1TypeDependsOnParam(t Type, typeParam string) bool {
 	if t.ArrayElem != nil && evt1TypeDependsOnParam(*t.ArrayElem, typeParam) {
 		return true
 	}
+	depends := false
+	inspect := func(expr Expr) {
+		evt1WalkTypedExpr(expr, func(e Expr) {
+			if name, ok := e.(*NameExpr); ok && name.Name == typeParam {
+				depends = true
+			}
+			if call, ok := e.(*TemplateCallExpr); ok {
+				if evt1TypeDependsOnParam(call.TypeArg, typeParam) {
+					depends = true
+				}
+				for _, arg := range call.TypeArgs {
+					if evt1TypeDependsOnParam(arg, typeParam) {
+						depends = true
+					}
+				}
+			}
+		})
+	}
+	inspect(t.ArrayLengthExpr)
+	for _, dimension := range t.Shape {
+		for _, dependency := range dimension.Dependencies {
+			if evt1TypeDependsOnParam(dependency, typeParam) {
+				return true
+			}
+		}
+		inspect(dimension.Expr)
+	}
+	if depends {
+		return true
+	}
 	for _, arg := range t.TypeArgs {
 		if evt1TypeDependsOnParam(arg, typeParam) {
 			return true
@@ -7823,7 +7854,7 @@ func evt1SymbolicTypeEqual(a Type, b Type, typeParam string) bool {
 	}
 	if a.ArrayElem != nil {
 		return a.ArrayLength == b.ArrayLength && a.StorageKind == b.StorageKind && slices.EqualFunc(a.Shape, b.Shape, func(left, right StorageDimension) bool {
-			return left.Extent == right.Extent && left.Runtime == right.Runtime && left.Expression == right.Expression
+			return left.Extent == right.Extent && left.Runtime == right.Runtime && slices.EqualFunc(left.Dependencies, right.Dependencies, func(a, b Type) bool { return a.Equal(b) }) && left.Expression == right.Expression
 		}) && evt1SymbolicTypeEqual(*a.ArrayElem, *b.ArrayElem, typeParam)
 	}
 	if a.Name != b.Name || a.Kind != b.Kind || a.Ownership != b.Ownership || a.Const != b.Const || a.Imported != b.Imported || a.Unsafe != b.Unsafe || len(a.TypeArgs) != len(b.TypeArgs) || (a.Quantity == nil) != (b.Quantity == nil) {
@@ -7978,10 +8009,7 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 		}
 	}
 	closeType := func(t Type) Type {
-		for i, param := range params {
-			t = evt1SubstituteType(t, param.Name, args[i])
-		}
-		return evt1SubstituteGenericValueExtents(t, params, args)
+		return evt1SubstituteBindings(t, evt1TemplateBindings(params, args))
 	}
 	if len(call.Args) != len(callee.Params) {
 		return Type{}, evt1Diagnostic("CV4106", fmt.Sprintf("wrong call payload count for %s: expected %d but got %d", call.Callee, len(callee.Params), len(call.Args)), call.Span)
@@ -8355,21 +8383,12 @@ func evt1InstantiateTemplateFunction(templateDecl TemplateDecl, concreteType Typ
 }
 
 func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters []GenericParameter, concreteArgs []Type) (FunctionDecl, error) {
-	body := *templateDecl.Body
-	var err error
-	for i := range parameters {
-		body, err = evt1SubstituteBlock(body, parameters[i].Name, concreteArgs[i])
-		if err != nil {
-			return FunctionDecl{}, err
-		}
+	bindings := evt1TemplateBindings(parameters, concreteArgs)
+	body, err := evt1SubstituteBlockBindings(*templateDecl.Body, bindings)
+	if err != nil {
+		return FunctionDecl{}, err
 	}
-	returnType := templateDecl.ReturnType
-	for i, parameter := range parameters {
-		if parameter.Kind == "type" {
-			returnType = evt1SubstituteType(returnType, parameter.Name, concreteArgs[i])
-		}
-	}
-	returnType = evt1SubstituteGenericValueExtents(returnType, parameters, concreteArgs)
+	returnType := evt1SubstituteBindings(templateDecl.ReturnType, bindings)
 	fn := FunctionDecl{
 		Comptime:       templateDecl.Comptime,
 		RecursionBound: templateDecl.RecursionBound,
@@ -8380,13 +8399,7 @@ func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters [
 		Body:           &body,
 	}
 	for _, param := range templateDecl.Params {
-		paramType := param.Type
-		for i, parameter := range parameters {
-			if parameter.Kind == "type" {
-				paramType = evt1SubstituteType(paramType, parameter.Name, concreteArgs[i])
-			}
-		}
-		paramType = evt1SubstituteGenericValueExtents(paramType, parameters, concreteArgs)
+		paramType := evt1SubstituteBindings(param.Type, bindings)
 		fn.Params = append(fn.Params, Param{
 			Type: paramType,
 			Name: param.Name,
@@ -8397,9 +8410,13 @@ func evt1InstantiateTemplateFunctionArgs(templateDecl TemplateDecl, parameters [
 }
 
 func evt1SubstituteBlock(block Block, typeParam string, concreteType Type) (Block, error) {
+	return evt1SubstituteBlockBindings(block, map[string]Type{typeParam: concreteType})
+}
+
+func evt1SubstituteBlockBindings(block Block, bindings map[string]Type) (Block, error) {
 	out := Block{Span: block.Span}
 	for _, stmt := range block.Statements {
-		sub, err := evt1SubstituteStatement(stmt, typeParam, concreteType)
+		sub, err := evt1SubstituteStatementBindings(stmt, bindings)
 		if err != nil {
 			return Block{}, err
 		}
@@ -8409,18 +8426,22 @@ func evt1SubstituteBlock(block Block, typeParam string, concreteType Type) (Bloc
 }
 
 func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type) (Statement, error) {
+	return evt1SubstituteStatementBindings(stmt, map[string]Type{typeParam: concreteType})
+}
+
+func evt1SubstituteStatementBindings(stmt Statement, bindings map[string]Type) (Statement, error) {
 	switch s := stmt.(type) {
 	case *VarDecl:
 		var value Expr
 		if s.Value != nil {
 			var err error
-			value, err = evt1SubstituteExpr(s.Value, typeParam, concreteType)
+			value, err = evt1SubstituteExprBindings(s.Value, bindings)
 			if err != nil {
 				return nil, err
 			}
 		}
 		out := *s
-		out.Type, out.Value = evt1SubstituteType(s.Type, typeParam, concreteType), value
+		out.Type, out.Value = evt1SubstituteBindings(s.Type, bindings), value
 		if literal, ok := s.Value.(*CallableExpr); ok && s.Type.Kind == TypeCallable && s.Type.CallableID == literal.Identity {
 			// The open body's inferred literal type belongs to that open
 			// environment. Rebind it in the closed lexical function identity.
@@ -8430,11 +8451,11 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 	case *InstanceDecl:
 		return &InstanceDecl{AutomataName: s.AutomataName, Name: s.Name, Span: s.Span}, nil
 	case *AssignStmt:
-		target, err := evt1SubstituteExpr(s.Target, typeParam, concreteType)
+		target, err := evt1SubstituteExprBindings(s.Target, bindings)
 		if err != nil {
 			return nil, err
 		}
-		value, err := evt1SubstituteExpr(s.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(s.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
@@ -8443,63 +8464,63 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		if s.Value == nil {
 			return &ReturnStmt{Span: s.Span}, nil
 		}
-		value, err := evt1SubstituteExpr(s.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(s.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &ReturnStmt{Value: value, Span: s.Span}, nil
 	case *ExprStmt:
-		value, err := evt1SubstituteExpr(s.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(s.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &ExprStmt{Value: value, Discard: s.Discard, Span: s.Span}, nil
 	case *AssertStmt:
-		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		condition, err := evt1SubstituteExprBindings(s.Condition, bindings)
 		if err != nil {
 			return nil, err
 		}
 		var reason Expr
 		if s.Reason != nil {
-			if reason, err = evt1SubstituteExpr(s.Reason, typeParam, concreteType); err != nil {
+			if reason, err = evt1SubstituteExprBindings(s.Reason, bindings); err != nil {
 				return nil, err
 			}
 		}
 		return &AssertStmt{Condition: condition, Reason: reason, Span: s.Span}, nil
 	case *StaticAssertStmt:
-		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		condition, err := evt1SubstituteExprBindings(s.Condition, bindings)
 		if err != nil {
 			return nil, err
 		}
 		var message Expr
 		if s.Message != nil {
-			if message, err = evt1SubstituteExpr(s.Message, typeParam, concreteType); err != nil {
+			if message, err = evt1SubstituteExprBindings(s.Message, bindings); err != nil {
 				return nil, err
 			}
 		}
 		return &StaticAssertStmt{Condition: condition, Message: message, Span: s.Span}, nil
 	case *TryStmt:
-		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		body, err := evt1SubstituteBlockBindings(s.Body, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &TryStmt{Body: body, Span: s.Span}
 		for _, arm := range s.Except {
-			armBody, err := evt1SubstituteBlock(arm.Body, typeParam, concreteType)
+			armBody, err := evt1SubstituteBlockBindings(arm.Body, bindings)
 			if err != nil {
 				return nil, err
 			}
-			out.Except = append(out.Except, ExceptArm{ErrorType: evt1SubstituteType(arm.ErrorType, typeParam, concreteType), Binding: arm.Binding, Body: armBody, Span: arm.Span})
+			out.Except = append(out.Except, ExceptArm{ErrorType: evt1SubstituteBindings(arm.ErrorType, bindings), Binding: arm.Binding, Body: armBody, Span: arm.Span})
 		}
 		return out, nil
 	case *MatchStmt:
-		subject, err := evt1SubstituteExpr(s.Subject, typeParam, concreteType)
+		subject, err := evt1SubstituteExprBindings(s.Subject, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &MatchStmt{Subject: subject, Span: s.Span}
 		for _, arm := range s.Arms {
-			block, err := evt1SubstituteBlock(arm.Block, typeParam, concreteType)
+			block, err := evt1SubstituteBlockBindings(arm.Block, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8507,23 +8528,23 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		}
 		return out, nil
 	case *Block:
-		block, err := evt1SubstituteBlock(*s, typeParam, concreteType)
+		block, err := evt1SubstituteBlockBindings(*s, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &block, nil
 	case *IfStmt:
-		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		condition, err := evt1SubstituteExprBindings(s.Condition, bindings)
 		if err != nil {
 			return nil, err
 		}
-		thenBlock, err := evt1SubstituteBlock(s.Then, typeParam, concreteType)
+		thenBlock, err := evt1SubstituteBlockBindings(s.Then, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &IfStmt{Comptime: s.Comptime, Condition: condition, Then: thenBlock, Span: s.Span}
 		if s.Else != nil {
-			elseBlock, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
+			elseBlock, err := evt1SubstituteBlockBindings(*s.Else, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8531,24 +8552,24 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		}
 		return out, nil
 	case *WhileStmt:
-		condition, err := evt1SubstituteExpr(s.Condition, typeParam, concreteType)
+		condition, err := evt1SubstituteExprBindings(s.Condition, bindings)
 		if err != nil {
 			return nil, err
 		}
-		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		body, err := evt1SubstituteBlockBindings(s.Body, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &WhileStmt{Condition: condition, Body: body, Span: s.Span}
 		if s.Bound != nil {
-			bound, err := evt1SubstituteExpr(s.Bound, typeParam, concreteType)
+			bound, err := evt1SubstituteExprBindings(s.Bound, bindings)
 			if err != nil {
 				return nil, err
 			}
 			out.Bound = bound
 		}
 		if s.Else != nil {
-			exhausted, err := evt1SubstituteBlock(*s.Else, typeParam, concreteType)
+			exhausted, err := evt1SubstituteBlockBindings(*s.Else, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8556,23 +8577,23 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 		}
 		return out, nil
 	case *ForeachStmt:
-		source, err := evt1SubstituteExpr(s.Source, typeParam, concreteType)
+		source, err := evt1SubstituteExprBindings(s.Source, bindings)
 		if err != nil {
 			return nil, err
 		}
-		body, err := evt1SubstituteBlock(s.Body, typeParam, concreteType)
+		body, err := evt1SubstituteBlockBindings(s.Body, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &ForeachStmt{
 			Comptime:     s.Comptime,
-			ItemType:     evt1SubstituteType(s.ItemType, typeParam, concreteType),
+			ItemType:     evt1SubstituteBindings(s.ItemType, bindings),
 			ItemName:     s.ItemName,
 			Source:       source,
 			Body:         body,
-			SourceType:   evt1SubstituteType(s.SourceType, typeParam, concreteType),
-			IteratorType: evt1SubstituteType(s.IteratorType, typeParam, concreteType),
-			ElementType:  evt1SubstituteType(s.ElementType, typeParam, concreteType),
+			SourceType:   evt1SubstituteBindings(s.SourceType, bindings),
+			IteratorType: evt1SubstituteBindings(s.IteratorType, bindings),
+			ElementType:  evt1SubstituteBindings(s.ElementType, bindings),
 			SourceKind:   s.SourceKind,
 			Span:         s.Span,
 		}, nil
@@ -8582,55 +8603,59 @@ func evt1SubstituteStatement(stmt Statement, typeParam string, concreteType Type
 }
 
 func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, error) {
+	return evt1SubstituteExprBindings(expr, map[string]Type{typeParam: concreteType})
+}
+
+func evt1SubstituteExprBindings(expr Expr, bindings map[string]Type) (Expr, error) {
 	switch e := expr.(type) {
 	case *ComptimeValueExpr:
 		out := *e
 		return &out, nil
 	case *InterpretExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
-		return &InterpretExpr{Value: value, Target: evt1SubstituteType(e.Target, typeParam, concreteType), Span: e.Span}, nil
+		return &InterpretExpr{Value: value, Target: evt1SubstituteBindings(e.Target, bindings), Span: e.Span}, nil
 	case *CastExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
-		return &CastExpr{Value: value, Target: evt1SubstituteType(e.Target, typeParam, concreteType), Span: e.Span}, nil
+		return &CastExpr{Value: value, Target: evt1SubstituteBindings(e.Target, bindings), Span: e.Span}, nil
 	case *AwaitExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
-		return &AwaitExpr{Value: value, ResultType: evt1SubstituteType(e.ResultType, typeParam, concreteType), Span: e.Span}, nil
+		return &AwaitExpr{Value: value, ResultType: evt1SubstituteBindings(e.ResultType, bindings), Span: e.Span}, nil
 	case *FailureExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		var remap Expr
 		if e.Else != nil {
-			remap, err = evt1SubstituteExpr(e.Else, typeParam, concreteType)
+			remap, err = evt1SubstituteExprBindings(e.Else, bindings)
 			if err != nil {
 				return nil, err
 			}
 		}
-		return &FailureExpr{Value: value, Else: remap, Op: e.Op, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
+		return &FailureExpr{Value: value, Else: remap, Op: e.Op, ResolvedType: evt1SubstituteBindings(e.ResolvedType, bindings), Span: e.Span}, nil
 	case *ParenExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &ParenExpr{Value: value, Span: e.Span}, nil
 	case *UnaryExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &UnaryExpr{Op: e.Op, Value: value, Span: e.Span}, nil
 	case *NameExpr:
-		if e.Name == typeParam && concreteType.Kind == TypeTemplateValue {
+		if concreteType, bound := bindings[e.Name]; bound && concreteType.Kind == TypeTemplateValue {
 			if isIdentifier(concreteType.Name) {
 				return &NameExpr{Name: concreteType.Name, Span: e.Span}, nil
 			}
@@ -8646,13 +8671,13 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *IntLiteral:
 		return &IntLiteral{Magnitude: e.Magnitude, Negative: e.Negative, Lexeme: e.Lexeme, ResolvedType: e.ResolvedType, Span: e.Span}, nil
 	case *FloatLiteral:
-		return &FloatLiteral{Value: e.Value, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}, nil
+		return &FloatLiteral{Value: e.Value, ResolvedType: evt1SubstituteBindings(e.ResolvedType, bindings), Span: e.Span}, nil
 	case *StringLiteral:
 		return &StringLiteral{Value: e.Value, Span: e.Span}, nil
 	case *BoolLiteral:
 		return &BoolLiteral{Value: e.Value, Span: e.Span}, nil
 	case *FieldExpr:
-		receiver, err := evt1SubstituteExpr(e.Receiver, typeParam, concreteType)
+		receiver, err := evt1SubstituteExprBindings(e.Receiver, bindings)
 		if err != nil {
 			return nil, err
 		}
@@ -8660,14 +8685,14 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *CallExpr:
 		out := &CallExpr{Callee: e.Callee, Member: e.Member, DynDispatch: e.DynDispatch, DynInterface: e.DynInterface, WitnessID: e.WitnessID, ConceptGoal: e.ConceptGoal, ConceptParameters: append([]int(nil), e.ConceptParameters...), Span: e.Span}
 		if e.Receiver != nil {
-			receiver, err := evt1SubstituteExpr(e.Receiver, typeParam, concreteType)
+			receiver, err := evt1SubstituteExprBindings(e.Receiver, bindings)
 			if err != nil {
 				return nil, err
 			}
 			out.Receiver = receiver
 		}
 		for _, arg := range e.Args {
-			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
+			sub, err := evt1SubstituteExprBindings(arg, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8676,12 +8701,12 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		return out, nil
 	case *TemplateCallExpr:
 		{
-			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteType(e.TypeArg, typeParam, concreteType), Span: e.Span}
+			out := &TemplateCallExpr{Callee: e.Callee, TypeArg: evt1SubstituteBindings(e.TypeArg, bindings), Span: e.Span}
 			for _, typeArg := range e.TypeArgs {
-				out.TypeArgs = append(out.TypeArgs, evt1SubstituteType(typeArg, typeParam, concreteType))
+				out.TypeArgs = append(out.TypeArgs, evt1SubstituteBindings(typeArg, bindings))
 			}
 			for _, arg := range e.Args {
-				sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
+				sub, err := evt1SubstituteExprBindings(arg, bindings)
 				if err != nil {
 					return nil, err
 				}
@@ -8690,19 +8715,19 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			return out, nil
 		}
 	case *BinaryExpr:
-		left, err := evt1SubstituteExpr(e.Left, typeParam, concreteType)
+		left, err := evt1SubstituteExprBindings(e.Left, bindings)
 		if err != nil {
 			return nil, err
 		}
-		right, err := evt1SubstituteExpr(e.Right, typeParam, concreteType)
+		right, err := evt1SubstituteExprBindings(e.Right, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &BinaryExpr{Op: e.Op, Left: left, Right: right, Span: e.Span}, nil
 	case *ConstructExpr:
-		out := &ConstructExpr{EnumName: e.EnumName, VariantName: e.VariantName, ResolvedType: evt1SubstituteType(e.ResolvedType, typeParam, concreteType), Span: e.Span}
+		out := &ConstructExpr{EnumName: e.EnumName, VariantName: e.VariantName, ResolvedType: evt1SubstituteBindings(e.ResolvedType, bindings), Span: e.Span}
 		for _, arg := range e.Args {
-			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
+			sub, err := evt1SubstituteExprBindings(arg, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8710,21 +8735,21 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return out, nil
 	case *StructConstructExpr:
-		structType := evt1SubstituteType(e.StructType, typeParam, concreteType)
+		structType := evt1SubstituteBindings(e.StructType, bindings)
 		structName := e.StructName
 		if structType.Name != "" {
 			structName = structType.String()
 		}
 		out := &StructConstructExpr{StructName: structName, StructType: structType, ArgNames: append([]string(nil), e.ArgNames...), Span: e.Span}
 		if e.GeneratedFields != nil {
-			statement, err := evt1SubstituteStatement(e.GeneratedFields, typeParam, concreteType)
+			statement, err := evt1SubstituteStatementBindings(e.GeneratedFields, bindings)
 			if err != nil {
 				return nil, err
 			}
 			out.GeneratedFields = statement.(*ForeachStmt)
 		}
 		for _, arg := range e.Args {
-			sub, err := evt1SubstituteExpr(arg, typeParam, concreteType)
+			sub, err := evt1SubstituteExprBindings(arg, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8732,13 +8757,13 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return out, nil
 	case *WithExpr:
-		base, err := evt1SubstituteExpr(e.Base, typeParam, concreteType)
+		base, err := evt1SubstituteExprBindings(e.Base, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &WithExpr{Base: base, Span: e.Span}
 		for _, update := range e.Updates {
-			value, err := evt1SubstituteExpr(update.Value, typeParam, concreteType)
+			value, err := evt1SubstituteExprBindings(update.Value, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8746,33 +8771,33 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return out, nil
 	case *MoveExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &MoveExpr{Value: value, Span: e.Span}, nil
 	case *BindExpr:
-		source, err := evt1SubstituteExpr(e.Source, typeParam, concreteType)
+		source, err := evt1SubstituteExprBindings(e.Source, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &BindExpr{Source: source, Span: e.Span}, nil
 	case *RefExpr:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &RefExpr{Value: value, Const: e.Const, DynInterface: e.DynInterface, DynConcrete: e.DynConcrete, DynProvenance: e.DynProvenance, DynScoped: e.DynScoped, WitnessID: e.WitnessID, Span: e.Span}, nil
 	case *CallableExpr:
-		out := &CallableExpr{Identity: e.Identity, EnvironmentID: e.EnvironmentID, ResultType: evt1SubstituteType(e.ResultType, typeParam, concreteType), RequiresMutable: e.RequiresMutable, Consumes: e.Consumes, Ordinal: e.Ordinal, Span: e.Span}
+		out := &CallableExpr{Identity: e.Identity, EnvironmentID: e.EnvironmentID, ResultType: evt1SubstituteBindings(e.ResultType, bindings), RequiresMutable: e.RequiresMutable, Consumes: e.Consumes, Ordinal: e.Ordinal, Span: e.Span}
 		for _, parameter := range e.Params {
-			parameter.Type = evt1SubstituteType(parameter.Type, typeParam, concreteType)
+			parameter.Type = evt1SubstituteBindings(parameter.Type, bindings)
 			out.Params = append(out.Params, parameter)
 		}
 		for _, capture := range e.Captures {
-			capture.Type = evt1SubstituteType(capture.Type, typeParam, concreteType)
+			capture.Type = evt1SubstituteBindings(capture.Type, bindings)
 			if capture.Source != nil {
-				source, err := evt1SubstituteExpr(capture.Source, typeParam, concreteType)
+				source, err := evt1SubstituteExprBindings(capture.Source, bindings)
 				if err != nil {
 					return nil, err
 				}
@@ -8780,7 +8805,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 			}
 			out.Captures = append(out.Captures, capture)
 		}
-		body, err := evt1SubstituteBlock(e.Body, typeParam, concreteType)
+		body, err := evt1SubstituteBlockBindings(e.Body, bindings)
 		if err != nil {
 			return nil, err
 		}
@@ -8789,7 +8814,7 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 	case *ArrayLiteralExpr:
 		out := &ArrayLiteralExpr{Span: e.Span}
 		for _, element := range e.Elements {
-			value, err := evt1SubstituteExpr(element, typeParam, concreteType)
+			value, err := evt1SubstituteExprBindings(element, bindings)
 			if err != nil {
 				return nil, err
 			}
@@ -8797,20 +8822,20 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		}
 		return out, nil
 	case *RepeatInitializer:
-		value, err := evt1SubstituteExpr(e.Value, typeParam, concreteType)
+		value, err := evt1SubstituteExprBindings(e.Value, bindings)
 		if err != nil {
 			return nil, err
 		}
 		out := &RepeatInitializer{Value: value, ResolvedCount: e.ResolvedCount, FillRemainder: e.FillRemainder, Span: e.Span}
 		if e.Count != nil {
-			out.Count, err = evt1SubstituteExpr(e.Count, typeParam, concreteType)
+			out.Count, err = evt1SubstituteExprBindings(e.Count, bindings)
 			if err != nil {
 				return nil, err
 			}
 		}
 		return out, nil
 	case *IndexExpr:
-		base, err := evt1SubstituteExpr(e.Base, typeParam, concreteType)
+		base, err := evt1SubstituteExprBindings(e.Base, bindings)
 		if err != nil {
 			return nil, err
 		}
@@ -8818,45 +8843,45 @@ func evt1SubstituteExpr(expr Expr, typeParam string, concreteType Type) (Expr, e
 		out.Base = base
 		out.Indices = nil
 		if e.Index != nil {
-			out.Index, err = evt1SubstituteExpr(e.Index, typeParam, concreteType)
+			out.Index, err = evt1SubstituteExprBindings(e.Index, bindings)
 			if err != nil {
 				return nil, err
 			}
 		}
 		for _, index := range e.Indices {
-			value, err := evt1SubstituteExpr(index, typeParam, concreteType)
+			value, err := evt1SubstituteExprBindings(index, bindings)
 			if err != nil {
 				return nil, err
 			}
 			out.Indices = append(out.Indices, value)
 		}
 		if e.SpanElementType != nil {
-			element := evt1SubstituteType(*e.SpanElementType, typeParam, concreteType)
+			element := evt1SubstituteBindings(*e.SpanElementType, bindings)
 			out.SpanElementType = &element
 		}
 		return &out, nil
 	case *IfExpr:
-		condition, err := evt1SubstituteExpr(e.Condition, typeParam, concreteType)
+		condition, err := evt1SubstituteExprBindings(e.Condition, bindings)
 		if err != nil {
 			return nil, err
 		}
-		thenValue, err := evt1SubstituteExpr(e.Then, typeParam, concreteType)
+		thenValue, err := evt1SubstituteExprBindings(e.Then, bindings)
 		if err != nil {
 			return nil, err
 		}
-		elseValue, err := evt1SubstituteExpr(e.Else, typeParam, concreteType)
+		elseValue, err := evt1SubstituteExprBindings(e.Else, bindings)
 		if err != nil {
 			return nil, err
 		}
 		return &IfExpr{Condition: condition, Then: thenValue, Else: elseValue, Span: e.Span}, nil
 	case *MatchExpr:
-		subject, err := evt1SubstituteExpr(e.Subject, typeParam, concreteType)
+		subject, err := evt1SubstituteExprBindings(e.Subject, bindings)
 		if err != nil {
 			return nil, err
 		}
-		out := &MatchExpr{Subject: subject, ExpectedType: evt1SubstituteType(e.ExpectedType, typeParam, concreteType), Span: e.Span}
+		out := &MatchExpr{Subject: subject, ExpectedType: evt1SubstituteBindings(e.ExpectedType, bindings), Span: e.Span}
 		for _, arm := range e.Arms {
-			value, err := evt1SubstituteExpr(arm.Value, typeParam, concreteType)
+			value, err := evt1SubstituteExprBindings(arm.Value, bindings)
 			if err != nil {
 				return nil, err
 			}

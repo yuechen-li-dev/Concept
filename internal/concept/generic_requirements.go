@@ -47,40 +47,6 @@ func evt1ConceptBindings(decl ConceptDecl, arguments []Type) (map[string]Type, b
 	return bindings, true
 }
 
-func evt1SubstituteBindings(t Type, bindings map[string]Type) Type {
-	if argument, ok := bindings[t.Name]; ok && t.PointerTo == nil && t.ArrayElem == nil && len(t.TypeArgs) == 0 && len(t.CallableParams) == 0 && t.CallableResult == nil {
-		out := argument
-		out.Ownership = t.Ownership
-		out.Const = t.Const
-		out.Scoped = t.Scoped
-		out.Imported = t.Imported
-		out.Unsafe = t.Unsafe
-		out.Span = t.Span
-		return out
-	}
-	if t.PointerTo != nil {
-		base := evt1SubstituteBindings(*t.PointerTo, bindings)
-		t.PointerTo = &base
-	}
-	if t.ArrayElem != nil {
-		element := evt1SubstituteBindings(*t.ArrayElem, bindings)
-		t.ArrayElem = &element
-	}
-	t.TypeArgs = append([]Type(nil), t.TypeArgs...)
-	for i := range t.TypeArgs {
-		t.TypeArgs[i] = evt1SubstituteBindings(t.TypeArgs[i], bindings)
-	}
-	t.CallableParams = append([]Type(nil), t.CallableParams...)
-	for i := range t.CallableParams {
-		t.CallableParams[i] = evt1SubstituteBindings(t.CallableParams[i], bindings)
-	}
-	if t.CallableResult != nil {
-		result := evt1SubstituteBindings(*t.CallableResult, bindings)
-		t.CallableResult = &result
-	}
-	return t
-}
-
 func evt1SubstituteRequirementBindings(requirement OperationRequirement, bindings map[string]Type) OperationRequirement {
 	out := requirement
 	out.ReturnType = evt1SubstituteBindings(requirement.ReturnType, bindings)

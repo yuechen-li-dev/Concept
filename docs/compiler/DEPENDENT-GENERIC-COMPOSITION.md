@@ -10,7 +10,7 @@ existing type algebra and closed generic identity metadata.
 | Boundary | Authority |
 | --- | --- |
 | Parsing and open checking | Lexically bound value parameters are `TypeTemplateValue` leaves; type parameters remain `TypeConceptParam`. Applications retain ordered children. Arity and argument kinds are checked before an open application is returned. |
-| Substitution | `evt1SubstituteType` traverses both type and value children, including symbolic-to-symbolic renaming and extent-expression operands. The former separate integer-only extent substitution delegates to it. |
+| Substitution | `evt1SubstituteType` delegates to simultaneous `evt1SubstituteBindings` for both type and value children, including symbolic-to-symbolic renaming and extent-expression operands. The former separate integer-only extent substitution delegates to it. |
 | Instantiation | Closed arguments normalize before cache lookup. Existing `GenericApplication` stores declaration/module identity and ordered arguments; no open instance is cached. |
 | Local construction | Semantic validation retains the resolved `StructType` and name on the actual constructor node. Direct initialization compares semantic types. |
 | Field projection | `evt1StructView` projects the same application structure. Expression/place checking resolves projected fields in the active scope, without writing scope-specific results into shared field maps. Diagnostics use sorted field names. |
@@ -19,15 +19,18 @@ existing type algebra and closed generic identity metadata.
 | Emission | C lowering consumes the constructor's semantically resolved type. A named comptime argument no longer leaves a stale display spelling that indexes a missing struct declaration. |
 
 Analysis detaches argument lists before normalizing them, so separate concrete
-instances do not rewrite shared open declarations. Open storage dimensions may
-remain unresolved during checking; concrete field resolution evaluates them
-before C11 emission. This is not runtime-shaped owning storage or a VLA facility.
+instances do not rewrite shared open declarations. Unresolved storage dimensions retain a canonical set of bound Type nodes as
+dependencies. The static-control dependency authority supplies the same evidence;
+substitution closes or renames those nodes simultaneously. Closed-type checks
+reject remaining dependencies. Raw storage uses the same fixed-after-substitution
+rule as arrays, while tensor shape proofs remain Unknown for open extents.
+Concrete field resolution evaluates the dimensions before C11 emission. This is not runtime-shaped owning storage or a VLA facility.
 
 ## Combined regression
 
-`language/evt1/dependent-composition/Library/Dependent.concept` defines a required
+`internal/concept/testdata/dependent-composition/Library/Dependent.concept` defines a required
 binary64 evaluator operation, a `Values<Capacity>` record with `Capacity * 2u`
-backing extent, a constrained `Workspace<T, Capacity>` with an owned resource,
+backing extent nested inside `NumericalStorage<Backing>`, a constrained `Workspace<T, Capacity>` with an owned resource,
 a function returning `Values<N>`, and a relational `Numerical<T, Values<N>>`
 requirement whose Head operation is supplied by a generic function. Dependency
 detection and inference retain symbolic value arguments as well as type arguments. The
@@ -41,10 +44,11 @@ The consumer uses two resource types, a named comptime dimension, dimensions
 check the result and each individual resource's destruction count. The consumer
 is exported and imported by a third module, which executes the same checks.
 
-Eleven negative mutations of this same program cover copying an owned field,
+Twelve negative mutations of this same program cover copying an owned field,
 copying the complete workspace, use after move, escaping a field-backed view,
 missing and wrong-precision evaluator operations, a missing generic operation
-on the numerical record, type-as-value arguments,
+on the numerical record, a rejected RuntimeShape claim on dependent backing,
+type-as-value arguments,
 runtime dimensions, a mismatched nested dimension and zero dimensions.
 
 The regression also checks deterministic open artifacts and all five generated

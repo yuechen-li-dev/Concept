@@ -25,6 +25,17 @@ func evt1StorageHasRuntimeShape(t Type) bool {
 	return false
 }
 
+// A dependent extent is unresolved while checking the open declaration, but is
+// not an arbitrary runtime dimension. Keep that evidence in the type tree so
+// nested applications and artifact consumers cannot mistake it for a closed 0.
+func evt1StorageExpressionDependencies(scope *evt1Scope, expr Expr) []Type {
+	dependencies, err := evt1StaticExpressionDependencies(scope, expr, scope.context.Template)
+	if err != nil {
+		return nil
+	}
+	return dependencies
+}
+
 // A symbolic extent in an open template denotes fixed storage after value
 // substitution. Ordinary runtime extents still require explicit storage.
 func evt1StorageShapeDependsOnlyOnGenericValues(t Type, params []GenericParameter) bool {
@@ -32,7 +43,7 @@ func evt1StorageShapeDependsOnlyOnGenericValues(t Type, params []GenericParamete
 		return false
 	}
 	for _, dimension := range t.Shape {
-		if !dimension.Runtime {
+		if !dimension.Runtime || len(dimension.Dependencies) != 0 {
 			continue
 		}
 		name, ok := dimension.Expr.(*NameExpr)

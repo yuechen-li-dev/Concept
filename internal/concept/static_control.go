@@ -3,6 +3,7 @@ package concept
 import (
 	"fmt"
 	"reflect"
+	"sort"
 )
 
 // Static control uses the ordinary evaluator and rewrites into ordinary blocks
@@ -148,13 +149,23 @@ func evt1BlockHasStaticControl(block Block) bool {
 // Inspect structural operands before deferring an open layout query. Otherwise
 // a runtime name following an unresolved T could escape the evaluator's error.
 func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1TemplateInfo) (bool, error) {
-	parameters := map[string]bool{}
+	dependencies, err := evt1StaticExpressionDependencies(scope, expr, template)
+	return len(dependencies) != 0, err
+}
+
+// The same dependency nodes feed static-control deferral and storage types.
+func evt1StaticExpressionDependencies(scope *evt1Scope, expr Expr, template *evt1TemplateInfo) ([]Type, error) {
+	parameters := map[string]Type{}
 	if template != nil {
 		for _, p := range template.Decl.Parameters {
-			parameters[p.Name] = true
+			kind := TypeConceptParam
+			if p.Kind == "value" {
+				kind = TypeTemplateValue
+			}
+			parameters[p.Name] = Type{Name: p.Name, Kind: kind}
 		}
 	}
-	dependent := false
+	dependencies := map[string]Type{}
 	visited := map[string]bool{}
 	var walk func(reflect.Value) error
 	walk = func(v reflect.Value) error {
@@ -164,11 +175,15 @@ func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1Te
 		if v.CanInterface() {
 			switch e := v.Interface().(type) {
 			case *NameExpr:
-				if parameters[e.Name] {
-					dependent = true
+				if parameter, known := parameters[e.Name]; known {
+					dependencies[e.Name] = parameter
 					return nil
 				}
 				if binding, ok := scope.lookup(e.Name); ok {
+					if binding.templateValue {
+						dependencies[e.Name] = Type{Name: e.Name, Kind: TypeTemplateValue}
+						return nil
+					}
 					if !binding.comptime {
 						return evt1Diagnostic("CV4200", fmt.Sprintf("runtime name %s is unavailable in comptime evaluation", e.Name), e.Span)
 					}
@@ -179,8 +194,10 @@ func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1Te
 				}
 				return nil
 			case Type:
-				if parameters[e.Name] {
-					dependent = true
+				if parameter, known := parameters[e.Name]; known {
+					dependencies[e.Name] = parameter
+				} else if e.Kind == TypeConceptParam || (e.Kind == TypeTemplateValue && isIdentifier(e.Name)) {
+					dependencies[e.Name] = Type{Name: e.Name, Kind: e.Kind}
 				}
 			}
 		}
@@ -205,5 +222,17 @@ func evt1StaticControlDependencies(scope *evt1Scope, expr Expr, template *evt1Te
 		return nil
 	}
 	err := walk(reflect.ValueOf(expr))
-	return dependent, err
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for name := range dependencies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var result []Type
+	for _, name := range names {
+		result = append(result, dependencies[name])
+	}
+	return evt1CanonicalTypeDependencies(result), nil
 }

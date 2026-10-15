@@ -68,7 +68,7 @@ func evt1ValidateRawStorageCall(env *semanticEnv, scope *evt1Scope, call *CallEx
 	if backing.StorageKind != StorageRaw || !backing.isReference() || backing.ArrayElem == nil {
 		return Type{}, true, evt1Diagnostic("RAW_STORAGE_ARGUMENTS", call.Callee+" requires ref T<raw>[Capacity]", call.Args[0].exprSpan())
 	}
-	if evt1StorageHasRuntimeShape(backing) {
+	if evt1StorageHasRuntimeShape(backing) && (templateInfo == nil || !evt1StorageShapeDependsOnlyOnGenericValues(backing, templateInfo.Decl.Parameters)) {
 		return Type{}, true, evt1Diagnostic("RAW_STORAGE_SHAPE", "raw storage requires fixed capacity", call.Span)
 	}
 	element := evt1CanonicalType(env, *backing.ArrayElem)
