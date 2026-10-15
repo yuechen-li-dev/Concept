@@ -42,3 +42,12 @@ Two limitations are retained as consumer reproductions rather than patched aroun
 The consumer report records qualification, code/stack inspection, paired timing,
 and feature selection. `go test -count=1 ./...` and `go vet ./...` are the full
 compiler qualification commands; frozen Zig suites are deliberately skipped.
+
+Final qualification on Windows AMD64 passed at `6dc97b2`: full Go tests
+(`internal/concept` 329.022s), vet, focused native regressions, and the unchanged
+external Phase 1 corpus in Normal/Verify. Each of the five consumer candidates
+passes 239 cases / 478 comparisons, with exact historical numerical-report parity.
+The selected executable also passes all 239 cases from an executable-only directory.
+Nine paired benchmark rounds show a small-system gain and a roughly 2% 16-variable
+regression; the consumer report retains dispersion, increased code/stack costs,
+tensor equivalence, and the higher cost of explicit stepping.
