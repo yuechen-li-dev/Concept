@@ -1,8 +1,8 @@
 package concept
 
 // Closed template functions have translation-unit-local linkage. Validation
-// can materialize instances while checking imported open bodies or compile-time
-// queries which never become runtime calls. Keep only the transitive closure
+// can materialize imported instances whose calls subsequently fold to constants
+// and never become runtime calls. Keep only the transitive closure
 // referenced by emitted runtime support and ordinary function bodies. This is
 // C-backend symbol liveness, not a semantic proof or a validation shortcut.
 // Scan identifiers conservatively (including comments and literals): an extra

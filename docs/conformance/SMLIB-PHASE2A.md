@@ -19,8 +19,8 @@ remain frozen there by SHA-256.
   is recomputed during validation and never trusted from a module artifact.
   Dynamic indices, tensor indices and span indices retain checks.
 * C emission computes a conservative identifier dependency closure for private
-  closed template definitions. Imported open-body validation can materialize
-  closed instances that no emitted runtime operation references. Their C
+  closed template definitions. Validation can materialize imported closed
+  instances whose calls subsequently fold to constants. Their C
   declarations and bodies are omitted, while validation, semantic MIR, ordinary
   exported functions, and runtime transitive dependencies remain intact.
   Async instances remain roots because they own several generated entry names.

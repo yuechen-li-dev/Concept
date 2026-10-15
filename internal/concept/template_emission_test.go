@@ -10,12 +10,12 @@ func TestImportedQueryOnlyTemplateBodiesAreNotEmitted(t *testing.T) {
 	const library = `module QueryLibrary; profile Core;
 template <typename T> T Leaf(T value) { return value; }
 template <typename T> T Outer(T value) { return Leaf<T>(value); }
-template <typename T> double QueryOnly(T value) { return Outer<double>(1.0); }
 `
 	artifact := buildSemanticArtifact(t, "QueryLibrary.concept", library, nil)
 	const source = `module QueryConsumer; profile Core;
 import QueryLibrary;
 int Main(int value) { return Outer<int>(value); }
+double Folded() { return Outer<double>(1.0); }
 `
 	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
 		module, err := ParseWithSemanticModules("queries.concept", source, map[string][]byte{"QueryLibrary": artifact})
@@ -27,6 +27,10 @@ int Main(int value) { return Outer<int>(value); }
 			t.Fatal(err)
 		}
 		body := moduleOutput(t, outputs, ".generated.c")
+		mir := moduleOutput(t, outputs, ".mir.json")
+		if !strings.Contains(mir, "concept_template_outer__double") || !strings.Contains(mir, "concept_template_leaf__double") {
+			t.Fatal("folded-call specimen must actually materialize the instances before emission")
+		}
 		for _, symbol := range []string{"concept_template_outer__int", "concept_template_leaf__int"} {
 			if !strings.Contains(body, symbol+"(") {
 				t.Fatalf("runtime transitive dependency lost: %s\n%s", symbol, body)
