@@ -5,6 +5,26 @@ import (
 	"strings"
 )
 
+// Only the builtin range constructor establishes a known unit step. A named
+// range or a runtime magnitude keeps the overflow-safe general advance.
+func evt1UnitStepRange(expr Expr) bool {
+	if paren, ok := expr.(*ParenExpr); ok {
+		return evt1UnitStepRange(paren.Value)
+	}
+	rangeExpr, ok := expr.(*BinaryExpr)
+	if !ok || rangeExpr.ResolvedType.Kind != TypeRange {
+		return false
+	}
+	if rangeExpr.Op == ".." {
+		return true
+	}
+	if rangeExpr.Op == "step" || rangeExpr.Op == "descend" {
+		step, ok := rangeExpr.Right.(*IntLiteral)
+		return ok && !step.Negative && step.Magnitude == 1
+	}
+	return false
+}
+
 func evt1RangeType(element Type, span Span) Type {
 	return Type{Name: "Range", Kind: TypeRange, TypeArgs: []Type{element.valueType()}, Span: span}
 }

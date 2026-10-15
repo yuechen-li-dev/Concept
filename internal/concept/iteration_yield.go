@@ -126,7 +126,6 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 	}
 	if stmt.SourceKind == "range" {
 		cursor := f.nextTemp("range_cursor")
-		distance := f.nextTemp("range_remaining")
 		condition := fmt.Sprintf("(%s.descending ? %s > %s.end : %s < %s.end)", sourceName, cursor, sourceName, cursor, sourceName)
 		b += ind(indent+1) + fmt.Sprintf("%s %s = %s.start; /* inline counted iterator */\n", evt1CType(stmt.ElementType), cursor, sourceName)
 		b += ind(indent+1) + fmt.Sprintf("while (%s) {\n", condition)
@@ -134,8 +133,16 @@ func (f *evt1FunctionLowerer) lowerForeachStmt(stmt ForeachStmt, indent int) str
 		itemName := f.bindName(stmt.ItemName, stmt.ItemType)
 		b += ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(stmt.ItemType), itemName, cursor)
 		b += ind(indent+2) + fmt.Sprintf("(void)%s;\n", itemName)
-		b += ind(indent+2) + fmt.Sprintf("uint64_t %s = %s.descending ? (uint64_t)%s - (uint64_t)%s.end : (uint64_t)%s.end - (uint64_t)%s;\n", distance, sourceName, cursor, sourceName, sourceName, cursor)
-		b += ind(indent+2) + fmt.Sprintf("%s = (uint64_t)%s.step >= %s ? %s.end : (%s.descending ? %s - %s.step : %s + %s.step);\n", cursor, sourceName, distance, sourceName, sourceName, cursor, sourceName, cursor, sourceName)
+		if evt1UnitStepRange(stmt.Source) {
+			// The half-open loop condition proves cursor < end (or cursor >
+			// end when descending). A unit advance therefore stays representable
+			// and cannot overshoot end, for signed and unsigned element types.
+			b += ind(indent+2) + fmt.Sprintf("%s = %s.descending ? %s - 1 : %s + 1; /* unit step stays within endpoint */\n", cursor, sourceName, cursor, cursor)
+		} else {
+			distance := f.nextTemp("range_remaining")
+			b += ind(indent+2) + fmt.Sprintf("uint64_t %s = %s.descending ? (uint64_t)%s - (uint64_t)%s.end : (uint64_t)%s.end - (uint64_t)%s;\n", distance, sourceName, cursor, sourceName, sourceName, cursor)
+			b += ind(indent+2) + fmt.Sprintf("%s = (uint64_t)%s.step >= %s ? %s.end : (%s.descending ? %s - %s.step : %s + %s.step);\n", cursor, sourceName, distance, sourceName, sourceName, cursor, sourceName, cursor, sourceName)
+		}
 		b += f.lowerBlock(stmt.Body, indent+2)
 		b += f.lowerCurrentScopeDrops(indent + 2)
 		f.popScope()
