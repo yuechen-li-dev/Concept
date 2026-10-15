@@ -152,14 +152,20 @@ type TestRunOptions struct {
 }
 
 func DiscoverTests(root string) (TestManifest, error) {
-	return discoverTests(root, nil, nil)
+	return discoverTests(root, nil, nil, nil)
+}
+
+// DiscoverTestsWithModuleRoots adds explicitly supplied dependency roots to the
+// selection's anchored source roots. Imports remain exact path mappings.
+func DiscoverTestsWithModuleRoots(root string, roots []string) (TestManifest, error) {
+	return discoverTests(root, nil, nil, roots)
 }
 
 func DiscoverTestsWithNativeABI(root string, artifacts map[string][]byte, identity NativeABIIdentity) (TestManifest, error) {
-	return discoverTests(root, artifacts, &identity)
+	return discoverTests(root, artifacts, &identity, nil)
 }
 
-func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentity *NativeABIIdentity) (TestManifest, error) {
+func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentity *NativeABIIdentity, extraRoots []string) (TestManifest, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return TestManifest{}, err
@@ -204,7 +210,7 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 		if readErr != nil {
 			return TestManifest{}, readErr
 		}
-		moduleRoots := evt1TestModuleRoots(projectRoot, filepath.Dir(path))
+		moduleRoots := append(evt1TestModuleRoots(projectRoot, filepath.Dir(path)), extraRoots...)
 		var module Module
 		var parseErr error
 		if nativeIdentity != nil {

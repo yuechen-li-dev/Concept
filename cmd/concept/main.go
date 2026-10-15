@@ -17,11 +17,11 @@ import (
 const usage = `Concept EVT1 Stage 0 / Go
 
 Usage:
-  concept check <file>
+  concept check <file> [--source-modules] [--module-root <dir>]
   concept lint <file-or-project> [--verify]
   concept format <file-or-project> [--check]
   concept build-module <file>
-  concept emit-c <file> [--verify]
+  concept emit-c <file> [--verify] [--out-dir <dir>] [--source-modules] [--module-root <dir>]
   concept mir <file> [--verify]
   concept lir <file>
   concept machineir <file>
@@ -35,7 +35,7 @@ Usage:
   concept explain <file> --must-use <symbol> [--json] [--verbose]
   concept reflect <file>
   concept generated <file> [symbol]
-  concept test [path-or-filter] [--filter text] [--list] [--verbose] [--verify]
+  concept test [path-or-filter] [--filter text] [--list] [--verbose] [--verify] [--module-root <dir>]
   concept package build <name>
   concept package test <name>
   concept package graph <name>
@@ -151,24 +151,36 @@ func main() {
 		runVulkanBindCommand(os.Args[2:])
 		return
 	}
-	verify := len(os.Args) == 4 && os.Args[3] == "--verify"
-	if len(os.Args) != 3 && !verify {
+	if len(os.Args) < 3 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
-
 	command, sourcePath := os.Args[1], os.Args[2]
-	if verify && command != "plan" && command != "emit-c" && command != "mir" {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
+	options, err := parseCompileOptions(command, os.Args[3:])
+	if err != nil {
+		fail(err)
 	}
+	verify := options.verify
 	body, err := os.ReadFile(sourcePath)
 	if err != nil {
 		fail(err)
 	}
-	roots := semanticModuleRoots(sourcePath)
+	roots := append(semanticModuleRoots(sourcePath), options.moduleRoots...)
 	if command == "build-module" {
-		output, err := concept.CompileSemanticModuleWithRoots(filepath.ToSlash(sourcePath), string(body), roots)
+		var output []byte
+		if options.sourceModules {
+			imports, importErr := concept.SemanticModuleImports(filepath.ToSlash(sourcePath), string(body))
+			if importErr != nil {
+				fail(importErr)
+			}
+			artifacts, buildErr := concept.BuildSemanticModuleArtifactsFromSources(roots, imports)
+			if buildErr != nil {
+				fail(buildErr)
+			}
+			output, err = concept.CompileSemanticModule(filepath.ToSlash(sourcePath), string(body), artifacts)
+		} else {
+			output, err = concept.CompileSemanticModuleWithRoots(filepath.ToSlash(sourcePath), string(body), roots)
+		}
 		if err != nil {
 			fail(err)
 		}
@@ -178,6 +190,8 @@ func main() {
 	var module concept.Module
 	if concept.UsesVulkanProfile(filepath.ToSlash(sourcePath), string(body)) {
 		module, err = concept.ParseWithModuleRootsForProfile(filepath.ToSlash(sourcePath), string(body), roots)
+	} else if options.sourceModules {
+		module, err = concept.ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), roots)
 	} else {
 		module, err = concept.ParseWithSemanticModuleRoots(filepath.ToSlash(sourcePath), string(body), roots)
 	}
@@ -248,6 +262,13 @@ func main() {
 		outputs, err := concept.GenerateForTargetWithPolicy(module, body, concept.GenericC11Target(), policy)
 		if err != nil {
 			fail(err)
+		}
+		if options.outputDir != "" {
+			if err := concept.Write(options.outputDir, outputs); err != nil {
+				fail(err)
+			}
+			fmt.Printf("%s: wrote complete artifacts to %s\n", sourcePath, options.outputDir)
+			return
 		}
 		suffix := ".generated.c"
 		if command == "mir" {
@@ -625,6 +646,7 @@ func runGeneratedCommand(args []string) {
 }
 
 func runTestCommand(args []string) {
+	var moduleRoots []string
 	root, filter, list, verbose, verify := ".", "", false, false, false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -637,6 +659,12 @@ func runTestCommand(args []string) {
 			verbose = true
 		case "--verify":
 			verify = true
+		case "--module-root":
+			if i+1 >= len(args) {
+				fail(fmt.Errorf("--module-root requires a directory"))
+			}
+			i++
+			moduleRoots = append(moduleRoots, args[i])
 		case "--filter":
 			if i+1 >= len(args) {
 				fmt.Fprint(os.Stderr, testUsage)
@@ -655,7 +683,7 @@ func runTestCommand(args []string) {
 			}
 		}
 	}
-	manifest, err := concept.DiscoverTests(root)
+	manifest, err := concept.DiscoverTestsWithModuleRoots(root, moduleRoots)
 	if err != nil {
 		fail(err)
 	}

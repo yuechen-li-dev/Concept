@@ -386,16 +386,7 @@ func SemanticModuleImports(path, source string) ([]string, error) {
 // Multiple matches are rejected instead of selecting by root order.
 func ResolveSemanticModuleArtifacts(roots []string, imports []string) (map[string][]byte, error) {
 	artifacts := map[string][]byte{}
-	uniqueRoots := make([]string, 0, len(roots))
-	seenRoots := map[string]bool{}
-	for _, root := range roots {
-		root = filepath.Clean(root)
-		if !seenRoots[root] {
-			seenRoots[root] = true
-			uniqueRoots = append(uniqueRoots, root)
-		}
-	}
-	roots = uniqueRoots
+	roots = evt1NormalizeModuleRoots(roots)
 	queued := append([]string{}, imports...)
 	sort.Strings(queued)
 	for len(queued) != 0 {
@@ -479,6 +470,7 @@ func BuildSemanticModuleArtifactsFromSources(roots []string, imports []string) (
 // (already built, e.g. a native companion) and compiles the rest against
 // them, with `identity` when native ABI evidence is involved.
 func buildSemanticModuleArtifactsFromSources(roots []string, imports []string, preset map[string][]byte, identity *NativeABIIdentity) (map[string][]byte, error) {
+	roots = evt1NormalizeModuleRoots(roots)
 	artifacts := map[string][]byte{}
 	states := map[string]int{}
 	for name, body := range preset {

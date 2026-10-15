@@ -53,3 +53,17 @@ Native Standard numerical facts cover double precision, positive/negative zero,
 infinities, NaNs, domain results, primitive operations, typed context, named/zero
 construction, and NoAllocation. Negative tests retain mixed-precision and lifetime
 rejection. New semantics are documented explicitly in the language specification.
+
+## Pass C: artifact and module tooling
+
+`emit-c --out-dir` saves the existing complete deterministic output set while
+retaining stdout-only use. `--module-root` and explicit `--source-modules` align
+checking, source-built emission, and test dependency resolution without implicit
+declaration discovery. Physical aliases of roots are normalized consistently by
+source and artifact loaders; distinct identities still conflict. Package and
+native-companion manifests retain ownership of their dependency/ABI graphs.
+See ../tooling/SMLIB-ARTIFACTS-AND-MODULES.md for precise mode and path rules.
+
+The separate yield-return RFC recommends deferral. No implementation, prototype,
+break/continue, C-style for, state-machine change, hidden frame, or scheduling
+mechanism is included. See ../design/SMLIB-YIELD-RETURN-RFC.md.
