@@ -36,6 +36,13 @@ ordinary namespace resolution. The `compiler` receiver retains its existing
 compile-time observation policy; it does not acquire new runtime aliases. Structured
 storage and machine operations retain their existing type-directed semantic laws.
 
+Erased callback pairs borrow concrete environment storage. Static owned captures
+do not make a borrow of a local environment static. Erased callbacks are lifetime-
+bound in Option/Result storage and captures; a pair may be forwarded from a borrowed
+parameter but cannot escape a local environment. Unwrapping or forwarding an already
+erased pair requires no new erasure adapter. These are applications of existing
+lexical lifetime laws, not owning erased callbacks or hidden allocation.
+
 Status: R5 language-core semantics frozen for R6 tooling
 
 This document defines the authority categories and the smallest currently
@@ -1467,14 +1474,14 @@ Vulkan reconciliation (VK5); each spelling is rejected with a `REMOVED_*`
 diagnostic that names its replacement. Effects are ordinary data: declare an
 enum of effects, push them to a `Standard.Collection.Outbox`, and carry them
 out with an ordinary function that matches exhaustively over the enum. There
-is no general effect system (see Â§22 for step machines with input).
+is no general effect system (see Ã‚Â§22 for step machines with input).
 
 **Profiles.** `profile Vulkan;` has Core semantics and adds no builtins. It
 automates Vulkan setup: `import Vulkan;` (libraries/Vulkan) is implied, and
 `concept test` compiles and links the Vulkan runtime behind the library's C
 boundary: the GPU-free test device by default, or the loader-backed runtime
 with `CONCEPT_VULKAN_RUNTIME=device` (headers and library from `VULKAN_SDK`).
-Vulkan object handles are ordinary `extern "C" handle` declarations (Â§21).
+Vulkan object handles are ordinary `extern "C" handle` declarations (Ã‚Â§21).
 
 ## 24. Testing
 

@@ -479,7 +479,7 @@ func evt1ProjectCallableLifetime(env *semanticEnv, graph *ProofGraph, root, goal
 	}
 	for _, capture := range callable.Captures {
 		captureOutcome := FactProven
-		if strings.HasPrefix(capture.Provenance, string(evt1ProvenanceLocal)) && evt1CaptureCarriesProvenance(capture) {
+		if strings.HasPrefix(capture.Provenance, string(evt1ProvenanceLocal)) && evt1CaptureCarriesProvenance(env, capture) {
 			captureOutcome = FactDisproven
 			outcome = FactDisproven
 		} else if strings.HasPrefix(capture.Provenance, string(evt1ProvenanceUnknown)) {

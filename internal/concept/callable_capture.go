@@ -46,14 +46,14 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 				return Type{}, evt1Diagnostic("CALLABLE_CAPTURE_COPY_NONCOPYABLE", fmt.Sprintf("capture initializer for %s has non-copyable type %s", capture.Name, t.String()), capture.Span)
 			}
 			provenance := evt1ExprProvenance(env, outer, capture.Source)
-			if !t.isBorrowLike() && t.Kind != TypeDyn && !evt1IsSpanType(t) && !evt1IsTensorType(t) {
+			if !t.isBorrowLike() && t.Kind != TypeDyn && !evt1IsRefStructType(env, t) && !evt1IsSpanType(t) && !evt1IsTensorType(t) {
 				provenance = evt1LifetimeProvenance{Kind: evt1ProvenanceStatic}
 			}
 			capture.Type, capture.Mutable, capture.Provenance = evt1CanonicalType(env, t), true, string(provenance.Kind)
 			if provenance.Scoped {
 				capture.Provenance += ":scoped"
 			}
-			if evt1CaptureCarriesProvenance(*capture) && (provenance.Kind == evt1ProvenanceLocal || (overall.Kind != evt1ProvenanceLocal && provenance.Kind == evt1ProvenanceParameter)) {
+			if evt1CaptureCarriesProvenance(env, *capture) && (provenance.Kind == evt1ProvenanceLocal || (overall.Kind != evt1ProvenanceLocal && provenance.Kind == evt1ProvenanceParameter)) {
 				overall = provenance
 			}
 			captureScope.declare(capture.Name, evt1ValueBinding{t: capture.Type, mutable: true, state: evt1StorageInitialized, provenance: provenance, valueFacts: transportSemanticValueFacts(evt1SemanticFactsForExpr(env, outer, capture.Source, t), FactTransformCapture, exprLabel(capture.Source), expr.EnvironmentID+"."+capture.Name, string(capture.Kind))})
@@ -100,7 +100,7 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 		default:
 			return Type{}, evt1Diagnostic("CALLABLE_CAPTURE_INVALID", "unknown callable capture kind", capture.Span)
 		}
-		if evt1CaptureCarriesProvenance(*capture) && (provenance.Kind == evt1ProvenanceLocal || (overall.Kind != evt1ProvenanceLocal && provenance.Kind == evt1ProvenanceParameter)) {
+		if evt1CaptureCarriesProvenance(env, *capture) && (provenance.Kind == evt1ProvenanceLocal || (overall.Kind != evt1ProvenanceLocal && provenance.Kind == evt1ProvenanceParameter)) {
 			overall = provenance
 		}
 	}
@@ -141,8 +141,8 @@ func evt1ValidateCallableExpr(env *semanticEnv, outer *evt1Scope, expr *Callable
 	return Type{Name: expr.Identity, Kind: TypeCallable, CallableParams: params, CallableResult: &expr.ResultType, CallableID: expr.Identity, CallableMutable: requiresMutable, CallableConsumes: consumes, CallableCopyable: copyable, CallableHasDrop: hasDrop, CallableProvenance: string(overall.Kind), Scoped: overall.Scoped, Span: expr.Span}, nil
 }
 
-func evt1CaptureCarriesProvenance(capture CaptureBinding) bool {
-	return capture.Kind == CaptureRef || capture.Kind == CaptureRefConst || capture.Type.isBorrowLike() || capture.Type.Kind == TypeDyn || evt1IsSpanType(capture.Type) || evt1IsTensorType(capture.Type)
+func evt1CaptureCarriesProvenance(env *semanticEnv, capture CaptureBinding) bool {
+	return capture.Kind == CaptureRef || capture.Kind == CaptureRefConst || capture.Type.isBorrowLike() || capture.Type.Kind == TypeDyn || evt1IsRefStructType(env, capture.Type) || evt1IsSpanType(capture.Type) || evt1IsTensorType(capture.Type)
 }
 
 func evt1CallableBodyEffects(block Block, captures []CaptureBinding) (bool, bool) {
@@ -245,6 +245,18 @@ func evt1ValidateCallbackErasure(env *semanticEnv, scope *evt1Scope, expr Expr, 
 	}
 	ref, ok := expr.(*RefExpr)
 	if !ok {
+		// A typed expression can already produce a non-owning callback pair
+		// (for example Result unwrap or forwarding). It needs no new adapter.
+		actual, err := validateExpr(env, scope, expr, templateInfo, inComptimeFn)
+		if err != nil {
+			return Type{}, err
+		}
+		if actual.Kind == TypeCallback {
+			if !evt1TypesCompatible(env, expected, actual, "") {
+				return Type{}, evt1Diagnostic("CALLBACK_SIGNATURE_MISMATCH", "erased callback expression signature does not match", expr.exprSpan())
+			}
+			return expected, nil
+		}
 		return Type{}, evt1Diagnostic("CALLBACK_REQUIRES_EXPLICIT_BORROW", "erased callback construction requires `ref concreteCallable`", expr.exprSpan())
 	}
 	name, ok := ref.Value.(*NameExpr)
@@ -513,22 +525,18 @@ func evt1ModuleCallbackWitnesses(module Module) []MIRCallbackWitness {
 	return out
 }
 
-func (l *lowering) erasedCallbackDeclarations() string {
+func evt1ErasedCallbackDeclaration(callback Type) string {
 	var b strings.Builder
-	for _, callback := range evt1ModuleCallbackTypes(l.module) {
-		b.WriteString("typedef struct { void *environment; ")
-		b.WriteString(evt1CType(*callback.CallableResult) + " (*invoke)(void *environment")
-		for i, param := range callback.CallableParams {
-			b.WriteString(fmt.Sprintf(", %s arg%d", evt1CType(param), i))
-		}
-		b.WriteString("); } " + evt1CallbackCName(callback) + ";\n\n")
+	b.WriteString("typedef struct { void *environment; " + evt1CType(*callback.CallableResult) + " (*invoke)(void *environment")
+	for i, param := range callback.CallableParams {
+		b.WriteString(fmt.Sprintf(", %s arg%d", evt1CType(param), i))
 	}
+	b.WriteString("); } " + evt1CallbackCName(callback) + ";\n\n")
 	return b.String()
 }
 
 func (l *lowering) callableDeclarations() string {
 	var b strings.Builder
-	b.WriteString(l.erasedCallbackDeclarations())
 	for _, callable := range evt1ModuleCallables(l.module) {
 		b.WriteString(l.callableDeclaration(callable))
 	}

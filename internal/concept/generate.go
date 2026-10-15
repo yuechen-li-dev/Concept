@@ -1932,7 +1932,6 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		header.WriteString(evt1TensorDeclarations(tensorTypes))
 		header.WriteString(l.semanticViewDeclarations())
 		header.WriteString(l.interfaceWitnessDeclarations())
-		header.WriteString(l.erasedCallbackDeclarations())
 	}
 	if len(l.module.TypeAliases) == 0 {
 		// Semantic view descriptors must be complete before an ordinary or
@@ -2122,6 +2121,7 @@ type evt1RuntimeHeaderDecl struct {
 }
 
 func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDecls []evt1RuntimeTypeDecl, storageTypes, viewTypes, failureTypes []Type, canonicalFailureTypes map[string]bool) error {
+	callbackTypes := evt1ModuleCallbackTypes(l.module)
 	knownNamed := make(map[string]bool, len(typeDecls))
 	knownCallable := map[string]bool{}
 	knownStorage := make(map[string]bool, len(storageTypes))
@@ -2147,6 +2147,9 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 
 	var typeDeps func(Type) []string
 	typeDeps = func(t Type) []string {
+		if t.Kind == TypeCallback {
+			return []string{"erased:" + evt1CallbackCName(t)}
+		}
 		if t.Kind == TypeCallable && knownCallable[t.CallableID] {
 			return []string{"callable:" + t.CallableID}
 		}
@@ -2228,6 +2231,17 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 			}
 			return evt1FailureTypeDecl(current)
 		}})
+	}
+	// Erased callback pairs are ordinary type nodes too. In particular a
+	// Result/aggregate payload must see its callback descriptor first.
+	for _, callback := range callbackTypes {
+		current := callback
+		var deps []string
+		for _, param := range callback.CallableParams {
+			deps = append(deps, typeDeps(param)...)
+		}
+		deps = append(deps, typeDeps(*callback.CallableResult)...)
+		decls = append(decls, evt1RuntimeHeaderDecl{key: "erased:" + evt1CallbackCName(callback), deps: deps, emit: func() string { return evt1ErasedCallbackDeclaration(current) }})
 	}
 	if len(l.module.TypeAliases) > 0 {
 		for _, callable := range evt1ModuleCallables(l.module) {

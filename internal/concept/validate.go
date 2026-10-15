@@ -2514,7 +2514,7 @@ func validateBlock(env *semanticEnv, scope *evt1Scope, returnType Type, block Bl
 					return evt1Diagnostic("CV4511", "reference return would escape local storage", s.Value.exprSpan())
 				}
 			}
-			if evt1IsRefStructType(env, expectedReturn) {
+			if expectedReturn.Kind != TypeCallback && evt1IsRefStructType(env, expectedReturn) {
 				provenance := evt1ExprProvenance(env, local, s.Value)
 				if provenance.Scoped {
 					if evt1IsCallResultExpr(s.Value) {
@@ -5578,7 +5578,7 @@ func validateStructConstructExpr(env *semanticEnv, scope *evt1Scope, expr Struct
 }
 
 func evt1IsRefStructType(env *semanticEnv, t Type) bool {
-	if evt1IsSpanType(t) || evt1IsTensorType(t) {
+	if evt1IsSpanType(t) || evt1IsTensorType(t) || t.Kind == TypeCallback {
 		return true
 	}
 	if evt1IsFailureType(t) {
@@ -5777,7 +5777,7 @@ func evt1DeriveExprResultProvenance(env *semanticEnv, expr Expr, bindings map[st
 	case *CallableExpr:
 		var parts []evt1ResultProvenanceSummary
 		for _, capture := range e.Captures {
-			if evt1CaptureCarriesProvenance(capture) {
+			if evt1CaptureCarriesProvenance(env, capture) {
 				if summary, ok := bindings[capture.Name]; ok {
 					parts = append(parts, summary)
 				}
@@ -5879,7 +5879,7 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			// Copy/move captures of ordinary values are owned by the generated
 			// environment. Only borrow-carrying captures constrain the callable
 			// value's lifetime.
-			if !evt1CaptureCarriesProvenance(capture) {
+			if !evt1CaptureCarriesProvenance(env, capture) {
 				continue
 			}
 			if binding, ok := scope.lookup(capture.Name); ok {
@@ -5910,6 +5910,21 @@ func evt1ExprProvenance(env *semanticEnv, scope *evt1Scope, expr Expr) evt1Lifet
 			return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: scope.depth}
 		}
 	case *RefExpr:
+		if e.CallbackErase {
+			if name, ok := e.Value.(*NameExpr); ok {
+				for owner := scope; owner != nil; owner = owner.parent {
+					if binding, ok := owner.values[name.Name]; ok {
+						if binding.t.isBorrowLike() {
+							return binding.provenance
+						}
+						// Erasure borrows storage of the concrete environment,
+						// even when all values owned by that environment are static.
+						return evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: owner.depth}
+					}
+				}
+			}
+		}
+
 		if lvalue, err := validateAssignable(env, scope, e.Value, nil); err == nil {
 			if binding, ok := scope.lookup(lvalue.path.Root); ok {
 				if binding.provenance.Kind != "" {

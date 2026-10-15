@@ -81,3 +81,34 @@ func TestSMLibCallbackInferenceRetainsSafety(t *testing.T) {
 		}
 	}
 }
+
+func TestSMLibErasedCallbackResultLifetimes(t *testing.T) {
+	const prefix = `profile Core; enum Failure { Failed } `
+	for _, body := range []string{
+		`Result<callback<int -> int>,Failure> Make(){const auto c=callback(int x){return x+1;};return Result::Ok(ref c);}`,
+		`Result<callback<int -> int>,Failure> Make(){const auto c=callback(int x){return x+1;};Result<callback<int -> int>,Failure> result=Result::Ok(ref c);return result;}`,
+		`callback<int -> int> Make(){const auto c=callback(int x){return x+1;};callback<int -> int> result=ref c;return result;}`,
+		`int Apply(callback<int -> int> c){return c(1);} int Main(){const auto c=callback(bool x){return 1;};int a=Apply(ref c);return a+Apply(ref c);}`,
+	} {
+		if _, err := Parse("smlib_callback_lifetime_invalid.concept", prefix+body); err == nil {
+			t.Fatal("unsafe/mismatched erased callback accepted: " + body)
+		}
+	}
+	const source = `profile Core;
+ enum Failure { Failed }
+ Result<callback<int -> int>,Failure> Forward(callback<int -> int> c){return Result::Ok(c);}
+ int Main(){int offset=7;const auto c=callback(int x) with(offset){return x+offset;};Result<callback<int -> int>,Failure> result=Forward(ref c);callback<int -> int> borrowed=result!;return borrowed(2);}`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := Parse("smlib_callback_lifetime.concept", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertR8cStrictC11(t, outputs, "smlib_callback_lifetime.generated.c")
+		runFoundationNativeHarness(t, outputs, "callback_lifetime_harness.c", `#include "smlib_callback_lifetime.generated.h"
+int main(void){return concept_smlib_callback_lifetime_main()==9 ? 0:1;}`)
+	}
+}

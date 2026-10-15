@@ -67,3 +67,18 @@ See ../tooling/SMLIB-ARTIFACTS-AND-MODULES.md for precise mode and path rules.
 The separate yield-return RFC recommends deferral. No implementation, prototype,
 break/continue, C-style for, state-machine change, hidden frame, or scheduling
 mechanism is included. See ../design/SMLIB-YIELD-RETURN-RFC.md.
+
+## Additional closure lifetime regression
+
+A negative Result-payload test exposed a pre-existing erased-callback escape:
+`return Result::Ok(ref localCallable)` could be admitted. Erasure now borrows
+concrete environment storage even when its captured values have static provenance.
+Erased callback pairs participate in the existing lifetime-bound type rules,
+including Result/Option propagation and captured borrowed values. Forwarding a
+borrowed parameter remains valid and executes in both policies; local-environment
+escapes reject. Already-erased typed expressions (including Result unwrap) reuse
+their callback pair and do not manufacture another adapter.
+
+Callback descriptor types now participate in the existing runtime header dependency
+graph, so Result/aggregate fields see the required descriptor before use. This
+fixes valid forwarding without C declaration-order workarounds or runtime machinery.
