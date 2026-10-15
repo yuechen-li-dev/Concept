@@ -426,30 +426,27 @@ func evt1ModuleCallables(module Module) []*CallableExpr {
 
 func evt1ModuleCallbackTypes(module Module) []Type {
 	seen := map[string]Type{}
-	add := func(t Type) {
+	var add func(Type)
+	add = func(t Type) {
 		if t.Kind == TypeCallback {
 			seen[t.String()] = t
 		}
+		if t.ArrayElem != nil {
+			add(*t.ArrayElem)
+		}
+		for _, arg := range t.TypeArgs {
+			add(arg)
+		}
+		for _, arg := range t.CallableParams {
+			add(arg)
+		}
+		if t.CallableResult != nil {
+			add(*t.CallableResult)
+		}
 	}
-	var visitBlock func(Block)
-	visitBlock = func(block Block) {
-		for _, stmt := range block.Statements {
-			switch s := stmt.(type) {
-			case *VarDecl:
-				add(s.Type)
-			case *IfStmt:
-				visitBlock(s.Then)
-				if s.Else != nil {
-					visitBlock(*s.Else)
-				}
-			case *WhileStmt:
-				visitBlock(s.Body)
-				if s.Else != nil {
-					visitBlock(*s.Else)
-				}
-			case *Block:
-				visitBlock(*s)
-			}
+	for _, decl := range module.Structs {
+		for _, field := range decl.Fields {
+			add(field.Type)
 		}
 	}
 	for _, fn := range module.Functions {
@@ -458,10 +455,25 @@ func evt1ModuleCallbackTypes(module Module) []Type {
 			add(param.Type)
 		}
 		if fn.Body != nil {
-			visitBlock(*fn.Body)
+			evt1WalkTypedBlock(*fn.Body, func(e Expr) {
+				switch value := e.(type) {
+				case *RefExpr:
+					if value.CallbackType != nil {
+						add(*value.CallbackType)
+					}
+				case *CallableExpr:
+					add(value.ResultType)
+					for _, param := range value.Params {
+						add(param.Type)
+					}
+					for _, capture := range value.Captures {
+						add(capture.Type)
+					}
+				}
+			})
 		}
 	}
-	var keys []string
+	keys := make([]string, 0, len(seen))
 	for key := range seen {
 		keys = append(keys, key)
 	}

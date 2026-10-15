@@ -59,6 +59,9 @@ func evt1WalkTypedExpr(expr Expr, visit func(Expr)) {
 		args(e.Args)
 	case *ArrayLiteralExpr:
 		args(e.Elements)
+	case *RepeatInitializer:
+		walk(e.Value)
+		walk(e.Count)
 	case *WithExpr:
 		walk(e.Base)
 		for _, field := range e.Updates {

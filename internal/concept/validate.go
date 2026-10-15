@@ -5165,7 +5165,7 @@ func validateCallArgument(env *semanticEnv, scope *evt1Scope, paramType Type, ar
 		_, err := evt1ValidateCallbackErasure(env, scope, arg, paramType, templateInfo, evt1ValidationIsComptime(scope))
 		return err
 	}
-	if evt1IsFloating(paramType) {
+	if evt1IsFloating(paramType) && !evt1TypesCompatible(env, paramType, argType, "") {
 		if err := evt1ContextualFloatTree(arg, paramType); err != nil {
 			return err
 		}

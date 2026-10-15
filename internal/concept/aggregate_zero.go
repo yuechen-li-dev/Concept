@@ -11,6 +11,10 @@ func evt1ExpandEmptyAggregate(env *semanticEnv, scope *evt1Scope, e *StructConst
 			return err
 		}
 	}
+	// Non-aggregate construction keeps its existing unknown-struct diagnostic.
+	if _, ok := evt1StructView(env, t); !ok {
+		return nil
+	}
 	value, err := evt1ZeroInitializer(env, t, map[string]bool{}, e.Span)
 	if err != nil {
 		return err

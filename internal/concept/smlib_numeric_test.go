@@ -80,3 +80,27 @@ int main(void){return concept_smlib_shadow_main()==20 && concept_smlib_shadow_us
 		t.Fatal("double libm signature missing")
 	}
 }
+
+func TestSMLibNumericArgumentEvaluatesOwnershipOnce(t *testing.T) {
+	const source = `profile Core;
+ extern "C" void Observed(int id);
+ struct Resource { int id; }
+ void Drop(owned Resource r) { Observed(r.id); }
+ bool Consume(owned Resource r) { return r.id==1; }
+ double Accept(double x) {return x;}
+ int Main(){owned Resource r=Resource{1};double x=Accept(if(Consume(move r)) 1.0 else 2.0);return if(x==1.0) 0 else 1;}`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := Parse("smlib_numeric_owner.concept", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertR8cStrictC11(t, outputs, "smlib_numeric_owner.generated.c")
+		runFoundationNativeHarness(t, outputs, "numeric_owner_harness.c", `#include "smlib_numeric_owner.generated.h"
+static int drops=0;void Observed(int id){drops+=id;}
+int main(void){return concept_smlib_numeric_owner_main()==0 && drops==1 ? 0:1;}`)
+	}
+}
