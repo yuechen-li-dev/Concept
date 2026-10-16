@@ -54,3 +54,9 @@ contraction, division, shifts and modular narrow/unsigned semantics are untouche
 The planner records IntegerArithmeticPlan decisions, consumed by exact operation
 identity. Regression tests exercise bounded signed intervals and preserve
 potential-overflow helpers and terminal failure order.
+
+Adversarial identity tests also cover overloaded functions with colliding
+operation ordinals and expanded array accesses sharing a source position.
+Ordinary lowerers select their plan by declaration provenance, not source name;
+ambiguous source-position queries conservatively retain the runtime check.
+Native negative cases exercise both boundaries in Normal and Verify.

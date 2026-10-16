@@ -3114,7 +3114,15 @@ func newEVT1FunctionLowerer(l *lowering, fn FunctionDecl, symbol string, private
 	}
 	var plan *FunctionPlan
 	if l.plan != nil {
-		plan = l.plan.Function(fn.Name)
+		// Source names are not identities: overloads and methods can have
+		// identical operation ordinals but different proofs.
+		identity := evt1FunctionProvenanceKey(fn)
+		for i, candidate := range l.mir.Functions {
+			if candidate.DeclarationIdentity == identity && i < len(l.plan.Functions) {
+				plan = &l.plan.Functions[i]
+				break
+			}
+		}
 	}
 	return &evt1FunctionLowerer{l: l, fn: fn, plan: plan, symbol: symbol, private: private, scope: scope, ownedOrder: ownedOrder, liveOwners: liveOwners}
 }

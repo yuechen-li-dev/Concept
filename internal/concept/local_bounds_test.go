@@ -263,6 +263,8 @@ int Other(ReadOnlySpan<int> v,Choice c){return match(c){Choice::First=>Cell<1>(v
 
 func TestLocalBoundsPreservesFirstFailure(t *testing.T) {
 	cases := []struct{ name, body, extra, call, reason string }{
+		{"overload identity", `int Read(Span<int> v,int i){if(Len(v)<4 or i<0 or i>=4){return 0;}return v[i];} int Read(ReadOnlySpan<int> v,int i){if(Len(v)<4 or i<0 or i>=4){return 0;}return v[i+4];} int Run(ReadOnlySpan<int> v){return Read(v,0);}`, "", `concept_local_bounds_run((concept_readonly_span_int){a,4})`, "Concept span index out of bounds"},
+		{"expanded array position", `template<usize N> int Mixed(ref const int<array>[4] v,int i){int total=0;comptime for(k in 0..2){total+=v[if(k==0) 0 else i];}return total;} int Run(){int<array>[4] v=[1,2,3,4];return Mixed<2>(ref const v,4);}`, "", `concept_local_bounds_run()`, "Concept array index out of bounds"},
 		{"short workspace", `int Run(ReadOnlySpan<int> v){ReadOnlySpan<int> s=Subspan(v,0,4);return s[3];}`, "", `concept_local_bounds_run((concept_readonly_span_int){a,1})`, "Concept span bounds out of range"},
 		{"lower endpoint", `int Run(ReadOnlySpan<int> v,int i){if(i<0 or i>=4){return 0;}int first=v[i];return first+v[3];}`, "", `concept_local_bounds_run((concept_readonly_span_int){a,1},0)`, "Concept span index out of bounds"},
 		{"overflow before bounds", `int Run(ReadOnlySpan<int> v){int j=2147483647;return v[j+1];}`, "", `concept_local_bounds_run((concept_readonly_span_int){a,4})`, "int32 addition overflow"},

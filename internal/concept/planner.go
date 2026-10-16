@@ -1275,10 +1275,14 @@ func (p *FunctionPlan) Strategy(operation string) (string, bool) {
 	return "", false
 }
 func (p *FunctionPlan) StrategyAt(operation string, span Span) (string, bool) {
+	strategy, found := "", false
 	for _, d := range p.Decisions {
 		if d.Operation == operation && d.SourceSpan == span {
-			return d.Strategy, true
+			if found && strategy != d.Strategy {
+				return "", false
+			}
+			strategy, found = d.Strategy, true
 		}
 	}
-	return p.Strategy(operation)
+	return strategy, found
 }
