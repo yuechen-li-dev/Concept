@@ -1316,6 +1316,8 @@ func (*RepeatInitializer) evt1Expr()        {}
 func (e *RepeatInitializer) exprSpan() Span { return e.Span }
 
 type IndexExpr struct {
+	LocalBounds       *LocalBoundsProof `json:"-"`
+	BoundsOperationID string            `json:"-"`
 	// Recomputed by validation; never accepted as artifact-owned authority.
 	BoundsProven     bool     `json:"-"`
 	Base             Expr     `json:"base"`
@@ -1844,6 +1846,7 @@ type MIRCleanup struct {
 }
 
 type MIROperation struct {
+	LocalBounds          *LocalBoundsProof   `json:"local_bounds,omitempty"`
 	ID                   string              `json:"id"`
 	Kind                 string              `json:"kind"`
 	Type                 string              `json:"type,omitempty"`
@@ -1901,6 +1904,7 @@ type MIRAsmOperand struct {
 }
 
 type semanticEnv struct {
+	collectingMIR           bool
 	options                 evt1AnalysisOptions
 	innateAuthority         bool
 	handles                 map[string]HandleDecl

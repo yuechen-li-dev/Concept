@@ -386,6 +386,7 @@ type LoweringPlan struct {
 	Profile               string                     `json:"profile"`
 	Policy                CompilationPolicy          `json:"compilation_policy"`
 	Functions             []FunctionPlan             `json:"functions"`
+	Instances             []FunctionPlan             `json:"instances,omitempty"`
 	Aggregates            []AggregatePlan            `json:"aggregate_plans,omitempty"`
 	Automata              []AutomataPlan             `json:"automata_plans,omitempty"`
 	ConcreteCallableTypes []ConcreteCallableTypePlan `json:"concrete_callable_types,omitempty"`
@@ -440,6 +441,9 @@ func PlanModule(module *MIR, facts *SemanticFactSet, target TargetCapabilities, 
 			}
 		}
 		plan.Functions = append(plan.Functions, fp)
+	}
+	for _, instance := range module.Instances {
+		plan.Instances = append(plan.Instances, planFunction(plannableInstance(instance), *facts, target, policy))
 	}
 	plan.Aggregates = planAggregates(module)
 	plan.Automata = planAutomata(module)
@@ -522,10 +526,11 @@ func loweringPlanIdentity(plan *LoweringPlan) string {
 		Profile               string
 		Policy                CompilationPolicy
 		Functions             []FunctionPlan
+		Instances             []FunctionPlan `json:",omitempty"`
 		Aggregates            []AggregatePlan
 		Automata              []AutomataPlan
 		ConcreteCallableTypes []ConcreteCallableTypePlan
-	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Aggregates, plan.Automata, plan.ConcreteCallableTypes})
+	}{plan.MIRIdentity, plan.Target, plan.Profile, plan.Policy, plan.Functions, plan.Instances, plan.Aggregates, plan.Automata, plan.ConcreteCallableTypes})
 	return "plan-" + digest(identityInput)[:16]
 }
 
@@ -676,6 +681,10 @@ func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPol
 			d.Strategy, d.Certainty, d.RuntimeGuards = "StaticEliminated", DecisionSelected, nil
 		}
 		d.Evidence = evidenceForSubject(facts, op.RegionID, FactBounded)
+		if op.LocalBounds != nil {
+			d.Evidence.Claims = append(d.Evidence.Claims, "OperationLocalIndexInterval", "DominatingCheckedViewLength")
+			d.Evidence.Detail = "compiler-derived local interval is within the unchanged view length at this exact operation"
+		}
 	case "span_subregion":
 		d.Category, d.Strategy, d.Certainty = "BoundsPlan", "HoistedRuntime", DecisionRequired
 		d.RuntimeGuards = []string{op.BoundsCheck}
@@ -982,6 +991,16 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 	if len(plan.Functions) != len(mir.Functions) {
 		return fail("PLAN_ARTIFACT_INVALID", "lowering plan does not cover every MIR function")
 	}
+	if len(plan.Instances) != len(mir.Instances) {
+		return fail("PLAN_ARTIFACT_INVALID", "lowering plan does not cover every closed MIR instance")
+	}
+	for i, instance := range mir.Instances {
+		expected, _ := json.Marshal(planFunction(plannableInstance(instance), *facts, plan.Target, plan.Policy))
+		actual, _ := json.Marshal(plan.Instances[i])
+		if string(expected) != string(actual) {
+			return fail("PLAN_ARTIFACT_INVALID", "closed instance plan differs from its exact typed MIR operations")
+		}
+	}
 	if len(plan.ConcreteCallableTypes) != len(mir.TypeAliases) {
 		return fail("PLAN_CALLABLE_TYPE_INVALID", "lowering plan does not cover every exact callable alias")
 	}
@@ -1221,6 +1240,19 @@ func (p *LoweringPlan) Function(name string) *FunctionPlan {
 	for i := range p.Functions {
 		if p.Functions[i].Function == name {
 			return &p.Functions[i]
+		}
+	}
+	return nil
+}
+
+func plannableInstance(instance MIRInstance) MIRFunction {
+	return MIRFunction{Name: instance.ID, ReturnType: instance.ReturnType, Params: instance.Params, Operations: instance.Operations, SourceSpan: instance.SourceSpan, Async: instance.Async}
+}
+
+func (p *LoweringPlan) Instance(identity string) *FunctionPlan {
+	for i := range p.Instances {
+		if p.Instances[i].Function == identity {
+			return &p.Instances[i]
 		}
 	}
 	return nil

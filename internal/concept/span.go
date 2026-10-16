@@ -686,7 +686,16 @@ func (f *evt1FunctionLowerer) lowerSpanIndex(index *IndexExpr, indent int) (stri
 	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), baseName, baseValue))
 	out.WriteString(indexPrelude)
 	out.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1IndexCType(indexType), indexName, indexValue))
-	if f.plannedStrategy("span_index", "PerAccessRuntime") == "PerAccessRuntime" {
+	strategy := "PerAccessRuntime"
+	if f.plan != nil {
+		for _, decision := range f.plan.Decisions {
+			if decision.Operation == "span_index" && decision.MIRID == index.BoundsOperationID {
+				strategy = decision.Strategy
+				break
+			}
+		}
+	}
+	if strategy != "StaticEliminated" {
 		if f.l.verify {
 			helper, cast := evt1IndexVerifyCall(indexType)
 			out.WriteString(ind(indent) + fmt.Sprintf("if (%s) { %s(%q, %q, %d, %d, (%s)%s, %s.length); }\n", evt1IndexGuard(indexName, baseName+".length", indexType), helper, "Concept span index out of bounds", f.l.module.Path, index.Span.Line, index.Span.Column, cast, indexName, baseName))

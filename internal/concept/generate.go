@@ -160,6 +160,10 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 }
 
 func buildMIR(module Module, env *semanticEnv) MIR {
+	evt1ProveLocalBounds(module, env)
+	previousCollection := env.collectingMIR
+	env.collectingMIR = true
+	defer func() { env.collectingMIR = previousCollection }()
 	mir := MIR{
 		Schema:        "concept-evt1-mir.v1",
 		Module:        module.Path,
@@ -650,6 +654,26 @@ func evt1AutomataStorageProvenance(t Type) string {
 }
 
 func evt1ValidateMIR(mir MIR) error {
+	checkLocalProofs := func(ops []MIROperation) error {
+		for _, op := range ops {
+			if proof := op.LocalBounds; proof != nil {
+				if op.Kind != "span_index" || op.BoundsCheck != "statically_valid" || proof.Origin != "LocalCheckedControlFlow" || proof.IndexMin < 0 || proof.IndexMax < proof.IndexMin || proof.IndexMax >= proof.LengthMin {
+					return evt1Diagnostic("CV4649", "operation-local bounds proof is incomplete or contradictory", op.SourceSpan)
+				}
+			}
+		}
+		return nil
+	}
+	for _, fn := range mir.Functions {
+		if err := checkLocalProofs(fn.Operations); err != nil {
+			return err
+		}
+	}
+	for _, instance := range mir.Instances {
+		if err := checkLocalProofs(instance.Operations); err != nil {
+			return err
+		}
+	}
 	seenAliases := map[string]bool{}
 	for _, alias := range mir.TypeAliases {
 		if alias.Name == "" || seenAliases[alias.Name] || alias.ExactType.Kind != TypeCallable || alias.CallableIdentity == "" || alias.EnvironmentIdentity == "" || alias.EnvironmentAlignment < 1 || !alias.Unevaluated || alias.Storage != "Inline" || alias.Dispatch != "DirectCallable" || !alias.NoAllocation {
@@ -1680,11 +1704,18 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			return
 		}
 		if e.SpanIndex {
+			if env.collectingMIR {
+				e.BoundsOperationID = id
+			}
+			bounds := "zero_le_index_lt_length"
+			if e.LocalBounds != nil {
+				bounds = "statically_valid"
+			}
 			provenance := e.ProvenanceKind
 			if e.ProvenanceScoped {
 				provenance += ":scoped"
 			}
-			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "span_index", ElementType: e.SpanElementType, RegionID: e.RegionID, Length: e.LengthExpression, Alignment: e.SpanAlignment, Mutability: e.SpanMutability, Provenance: provenance, Contiguous: true, BoundsCheck: "zero_le_index_lt_length", NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
+			fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "span_index", ElementType: e.SpanElementType, RegionID: e.RegionID, Length: e.LengthExpression, Alignment: e.SpanAlignment, Mutability: e.SpanMutability, Provenance: provenance, Contiguous: true, BoundsCheck: bounds, LocalBounds: e.LocalBounds, NoCopy: true, NoAllocation: true, NoOwnershipTransfer: true, SameBackingRegion: true, SourceSpan: e.Span})
 			collectExprMIROps(env, e.Base, fn, templateInfo)
 			for _, index := range evt1StorageIndices(e) {
 				collectExprMIROps(env, index, fn, templateInfo)
@@ -3011,6 +3042,9 @@ func (l *lowering) templateInstanceBody(instance *evt1TemplateInstance) string {
 		return b.String()
 	}
 	lower := newEVT1FunctionLowerer(l, instance.Function, instance.GeneratedSymbol, true)
+	if l.plan != nil {
+		lower.plan = l.plan.Instance(instance.Key)
+	}
 	lower.closedTemplate = true
 	return lower.lower()
 }

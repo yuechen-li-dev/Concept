@@ -1,0 +1,32 @@
+# Phase 2c local checked bounds
+
+The typed semantic-body pass derives operation-local int32 intervals and view
+length lower bounds before MIR collection. It recognizes checked subview
+construction, dominating length/index guards, successful earlier accesses and
+bounded unit-step ranges. Branch joins keep only common facts. Loop writes,
+view reassignment, address exposure, captures and unsupported statements are
+conservative boundaries. Narrow/unsigned mutable values are not interpreted as
+int32 arithmetic. Floating arithmetic is untouched.
+
+The proof states `0 <= index_min <= index_max < length_min` at one operation.
+A successful runtime-dependent access establishes length above the LOWER index
+endpoint, never the upper endpoint. Refining a condition does not re-execute its
+accesses or authorize removing the check that established its own postcondition.
+Proof fields are compiler-owned and absent from imported syntax serialization.
+
+Closed MIR instances now receive separate planner entries keyed by semantic
+instance identity. Span emission consumes the exact MIR operation decision:
+source positions alone are insufficient after static expansion. Normal removes
+only selected proven guards; Verify retains every observation guard. Evaluation
+order, existing integer checks and first-failure diagnostics are retained.
+
+Tests include imported generic artifacts, deterministic policies, strict C11,
+runtime indices, loop-carried mutations, aliased/escaped descriptors, short
+workspaces, integer overflow and mixed static/runtime accesses at one source
+position. Native negative tests execute the terminal paths. The separate span
+reference ABI regression fixes descriptor references lowering as values.
+
+The analysis has no C representation. LIR can reuse these proof obligations
+when it supports spans and double; the present Go LIR subset rejects those
+types. This milestone does not claim native geometry execution or no-alias facts.
+Measurements and frozen-source qualification live in SMlib_Concept/phase2c.
