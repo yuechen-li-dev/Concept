@@ -30,3 +30,18 @@ The analysis has no C representation. LIR can reuse these proof obligations
 when it supports spans and double; the present Go LIR subset rejects those
 types. This milestone does not claim native geometry execution or no-alias facts.
 Measurements and frozen-source qualification live in SMlib_Concept/phase2c.
+
+A second bounded pass propagates minimum span lengths into private closed
+instances only when every direct call site is accounted for. It starts at
+zero and performs at most four pessimistic rounds. Missing/unmodeled call sites
+contribute zero; protocol witnesses, captures, erased calls, struct methods and
+automata disable this inference. The parameter minima recorded in MIR are entry
+facts, not no-alias promises or invariants across descriptor mutation. Exposed
+descriptors are excluded from local reuse.
+
+Straight-line integer helper summaries use exact int parameters, checked
+arithmetic, local declarations and return expressions. They cannot read globals,
+execute loops, summarize foreign code or discard side effects. Runtime calls
+are retained. This permits an admitted output size to reach a private helper
+without duplicating its checks. Native tests cover a guarded caller and a short
+input; adding any unknown caller restores the callee's runtime check.

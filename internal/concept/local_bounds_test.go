@@ -203,6 +203,64 @@ int main(void){int32_t a[4]={1,2,3,4};return concept_bound_use_run((concept_read
 	}
 }
 
+func TestLocalBoundsPrivateCallersAndIntegerHelperSummary(t *testing.T) {
+	for _, extra := range []string{"", `int Unknown(ReadOnlySpan<int> v){return Cell<1>(v);}`} {
+		source := `module LocalBounds; profile Core;
+int Count(int p){int n=p+1;return n*2;}
+template<usize N> int Cell(ReadOnlySpan<int> v){return v[3];}
+template<usize N> int Outer(ReadOnlySpan<int> v){return Cell<N>(v);}
+int Run(ReadOnlySpan<int> v){if(Len(v)<Count(1)){return 0;}return Outer<1>(v);}
+` + extra
+		for _, verify := range []bool{false, true} {
+			out, mir := localBoundsOutputs(t, source, verify)
+			p, c := spanProofCounts(mir)
+			if extra == "" {
+				if p != 1 || c != 0 {
+					t.Fatalf("private propagation=%d/%d", p, c)
+				}
+			} else if p != 0 || c != 1 {
+				t.Fatalf("unknown caller=%d/%d", p, c)
+			}
+			for _, instance := range mir.Instances {
+				if instance.TemplateName == "Cell" && extra == "" && instance.ParameterLengthMinima["v"] != 4 {
+					t.Fatal("missing parameter proof")
+				}
+			}
+			runFoundationNativeHarness(t, out, "calls.c", `#include "local_bounds.generated.h"
+int main(void){int32_t a[4]={1,2,3,4};return concept_local_bounds_run((concept_readonly_span_int){a,4})==4 && concept_local_bounds_run((concept_readonly_span_int){a,1})==0?0:1;}`)
+		}
+	}
+}
+
+func TestLocalBoundsDoesNotSummarizeOpaqueOrOverflowingHelpers(t *testing.T) {
+	for _, helper := range []string{
+		`extern "C" void Effect();int Count(int p){Effect();return 4;}`,
+		`int Count(int p){return p+2147483647;}`,
+	} {
+		source := `module LocalBounds;profile Core;` + helper + `
+template<usize N> int Cell(ReadOnlySpan<int> v){return v[3];}
+int Run(ReadOnlySpan<int> v){if(Len(v)<Count(1)){return 0;}return Cell<1>(v);}`
+		_, mir := localBoundsOutputs(t, source, false)
+		p, c := spanProofCounts(mir)
+		if p != 0 || c != 1 {
+			t.Fatalf("unsound helper summary=%d/%d", p, c)
+		}
+	}
+}
+
+func TestLocalBoundsUnmodeledCallEdgeKeepsPrivateGuard(t *testing.T) {
+	source := `module LocalBounds;profile Core;
+enum Choice {First,Second,}
+template<usize N> int Cell(ReadOnlySpan<int> v){return v[3];}
+int Known(ReadOnlySpan<int> v){return Cell<1>(Subspan(v,0,4));}
+int Other(ReadOnlySpan<int> v,Choice c){return match(c){Choice::First=>Cell<1>(v),Choice::Second=>0,};}`
+	_, mir := localBoundsOutputs(t, source, false)
+	p, c := spanProofCounts(mir)
+	if p != 0 || c != 1 {
+		t.Fatalf("incomplete call-set authorized proof=%d/%d", p, c)
+	}
+}
+
 func TestLocalBoundsPreservesFirstFailure(t *testing.T) {
 	cases := []struct{ name, body, extra, call, reason string }{
 		{"short workspace", `int Run(ReadOnlySpan<int> v){ReadOnlySpan<int> s=Subspan(v,0,4);return s[3];}`, "", `concept_local_bounds_run((concept_readonly_span_int){a,1})`, "Concept span bounds out of range"},

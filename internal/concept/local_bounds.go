@@ -2,7 +2,6 @@ package concept
 
 import (
 	"math"
-	"sort"
 )
 
 // LocalBoundsProof is an operation-local proof over checked source values.
@@ -40,31 +39,23 @@ func (s localBoundsState) clone() localBoundsState {
 type localBoundsAnalysis struct {
 	// A scalar/view whose address occurs anywhere in the function is not
 	// tracked. This also handles a later opaque call through an escaped ref.
-	exposed map[string]bool
-	env     *semanticEnv
+	exposed   map[string]bool
+	env       *semanticEnv
+	calls     *localBoundsCalls
+	summaries map[string]bool
 }
 
 // evt1ProveLocalBounds runs on validated, closed typed bodies, before MIR
 // collection or backend selection. Unknown constructs never grant a proof.
 func evt1ProveLocalBounds(module Module, env *semanticEnv) {
-	for _, fn := range module.Functions {
-		proveFunctionLocalBounds(fn, env)
-	}
-	keys := make([]string, 0, len(env.templateInstances))
-	for key := range env.templateInstances {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		proveFunctionLocalBounds(env.templateInstances[key].Function, env)
-	}
+	inferLocalBounds(module, env)
 }
 
-func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv) {
+func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv, inputs []int64, calls *localBoundsCalls) {
 	if fn.Body == nil || fn.Comptime || fn.Async {
 		return
 	}
-	a := localBoundsAnalysis{exposed: map[string]bool{}, env: env}
+	a := localBoundsAnalysis{exposed: map[string]bool{}, env: env, calls: calls}
 	evt1WalkTypedBlock(*fn.Body, func(expr Expr) {
 		if index, ok := expr.(*IndexExpr); ok {
 			index.LocalBounds = nil
@@ -87,13 +78,16 @@ func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv) {
 		}
 	})
 	state := localBoundsState{}
-	for _, p := range fn.Params {
+	for i, p := range fn.Params {
 		v := localValue{t: p.Type}
 		if p.Type.Name == "int" && !p.Type.isReference() {
 			v.integer, v.intKnown = localInt32, true
 		}
 		if evt1IsSpanType(p.Type) && !p.Type.isReference() {
 			v.lengthHeld = true
+			if i < len(inputs) {
+				v.lengthMin = inputs[i]
+			}
 		}
 		state[p.Name] = v
 	}
@@ -132,6 +126,19 @@ func (a *localBoundsAnalysis) value(e Expr, s localBoundsState) localValue {
 	case *BinaryExpr:
 		if e.ResolvedType.Name == "int" {
 			return localArithmetic(e.Op, a.value(e.Left, s), a.value(e.Right, s))
+		}
+	case *CallExpr:
+		args := make([]localValue, len(e.Args))
+		for i, arg := range e.Args {
+			args[i] = a.value(arg, s)
+		}
+		return a.constantCall(e, args)
+	case *IfExpr:
+		if condition, known := a.constantBool(e.Condition, s); known {
+			if condition {
+				return a.value(e.Then, s)
+			}
+			return a.value(e.Else, s)
 		}
 	}
 	return localValue{}
@@ -281,10 +288,14 @@ func (a *localBoundsAnalysis) expr(e Expr, s localBoundsState) localValue {
 				return localValue{lengthMin: int64(evt1StorageElementCount(args[0].t)), lengthHeld: true}
 			}
 		}
+		a.calls.record(e, args)
+		return a.constantCall(e, args)
 	case *TemplateCallExpr:
-		for _, arg := range e.Args {
-			a.expr(arg, s)
+		args := make([]localValue, len(e.Args))
+		for i, arg := range e.Args {
+			args[i] = a.expr(arg, s)
 		}
+		a.calls.record(e, args)
 	case *IfExpr:
 		a.expr(e.Condition, s)
 		x, y := s.clone(), s.clone()

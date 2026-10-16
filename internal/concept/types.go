@@ -1634,20 +1634,21 @@ type MIRTemplate struct {
 }
 
 type MIRInstance struct {
-	ID                  string                  `json:"id"`
-	TemplateName        string                  `json:"template_name"`
-	ConcreteType        Type                    `json:"concrete_type"`
-	Arguments           []Type                  `json:"arguments,omitempty"`
-	GeneratedSymbol     string                  `json:"generated_symbol"`
-	ConstraintConcept   string                  `json:"constraint_concept"`
-	Closure             []MIRClosureEntry       `json:"closure,omitempty"`
-	RequirementBindings []MIRRequirementBinding `json:"requirement_bindings,omitempty"`
-	ReturnType          Type                    `json:"return_type"`
-	Async               *MIRAsyncFunction       `json:"async,omitempty"`
-	Params              []MIRName               `json:"params,omitempty"`
-	Operations          []MIROperation          `json:"operations,omitempty"`
-	InvocationSpans     []Span                  `json:"invocation_spans,omitempty"`
-	SourceSpan          Span                    `json:"source_span"`
+	ParameterLengthMinima map[string]int64        `json:"parameter_length_minima,omitempty"`
+	ID                    string                  `json:"id"`
+	TemplateName          string                  `json:"template_name"`
+	ConcreteType          Type                    `json:"concrete_type"`
+	Arguments             []Type                  `json:"arguments,omitempty"`
+	GeneratedSymbol       string                  `json:"generated_symbol"`
+	ConstraintConcept     string                  `json:"constraint_concept"`
+	Closure               []MIRClosureEntry       `json:"closure,omitempty"`
+	RequirementBindings   []MIRRequirementBinding `json:"requirement_bindings,omitempty"`
+	ReturnType            Type                    `json:"return_type"`
+	Async                 *MIRAsyncFunction       `json:"async,omitempty"`
+	Params                []MIRName               `json:"params,omitempty"`
+	Operations            []MIROperation          `json:"operations,omitempty"`
+	InvocationSpans       []Span                  `json:"invocation_spans,omitempty"`
+	SourceSpan            Span                    `json:"source_span"`
 }
 
 type MIRFunction struct {
@@ -1905,6 +1906,7 @@ type MIRAsmOperand struct {
 
 type semanticEnv struct {
 	collectingMIR           bool
+	localSpanInputs         map[string][]int64
 	options                 evt1AnalysisOptions
 	innateAuthority         bool
 	handles                 map[string]HandleDecl

@@ -528,6 +528,14 @@ func buildMIR(module Module, env *semanticEnv) MIR {
 				InvocationSpans:   append([]Span{}, instance.InvocationSpans...),
 				SourceSpan:        instance.SourceSpan,
 			}
+			for i, length := range env.localSpanInputs[instance.Key] {
+				if length > 0 {
+					if mirInstance.ParameterLengthMinima == nil {
+						mirInstance.ParameterLengthMinima = map[string]int64{}
+					}
+					mirInstance.ParameterLengthMinima[instance.Function.Params[i].Name] = length
+				}
+			}
 			if len(instance.ConcreteArgs) > 1 {
 				mirInstance.Arguments = append([]Type{}, instance.ConcreteArgs...)
 			}
