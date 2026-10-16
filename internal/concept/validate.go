@@ -4505,6 +4505,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				}
 			}
 		}
+		if err := evt1CloseScopedTemplateValueArguments(env, scope, e); err != nil {
+			return Type{}, err
+		}
 		if templateInfo != nil {
 			return evt1ValidateOpenNestedTemplateCall(env, scope, e, templateInfo)
 		}
