@@ -8238,7 +8238,7 @@ func instantiateTemplateArgs(env *semanticEnv, templateName string, concreteArgs
 		return nil, err
 	}
 	instFn.ReturnType = resolvedReturn
-	scope := newEVT1Scope(nil)
+	scope := evt1ModuleScope(env)
 	scope.returnType = instFn.ReturnType
 	scope.inAsync = instFn.Async
 	scope.functionName = templateName

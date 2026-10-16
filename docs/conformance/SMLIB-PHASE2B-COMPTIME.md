@@ -22,6 +22,12 @@ The existing non-negative, bounded integer and parameter-type range checks
 remain authoritative. Runtime shadows cannot fall through to module constants.
 There is no grammar addition, fuel increase, or geometry-specific compiler path.
 
+A second regression covered closed runtime template bodies reading imported
+module comptime tables. Their validation scope now uses `evt1ModuleScope`, as
+ordinary and open functions already do, before adding runtime parameters.
+`TestClosedImportedTemplateRetainsModuleComptimeConstants` executes a table read
+and preserves static out-of-bounds rejection in Normal and Verify.
+
 `TestStaticIterationItemClosesImportedTemplateValue` covers artifact-only imports,
 local and module constants, dependent and literal iteration bounds, deterministic
 Normal/Verify output and strict-C11 native execution.

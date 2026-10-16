@@ -55,3 +55,34 @@ func TestScopedTemplateValueRejectsRuntimeAndInvalidInteger(t *testing.T) {
 		}
 	}
 }
+
+func TestClosedImportedTemplateRetainsModuleComptimeConstants(t *testing.T) {
+	const library = `module StaticTable; profile Core;
+comptime int<array>[4] Coefficients = [1,3,3,1];
+template <usize N> int Read(int index) { return Coefficients[index] + (N as int); }
+`
+	artifact := buildSemanticArtifact(t, "StaticTable.concept", library, nil)
+	const source = `module StaticTableUse; profile Core; import StaticTable;
+int Main(int index) {return Read<2>(index);}`
+	for _, policy := range []CompilationPolicy{ConservativeCompilationPolicy(), VerifyCompilationPolicy()} {
+		module, err := ParseWithSemanticModules("table_use.concept", source, map[string][]byte{"StaticTable": artifact})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs, err := GenerateForTargetWithPolicy(module, []byte(source), GenericC11Target(), policy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertR8cStrictC11(t, outputs, "table_use.generated.c")
+		runFoundationNativeHarness(t, outputs, "table.c", `#include "table_use.generated.h"
+int main(void) {return concept_static_table_use_main(1)==5 ? 0 : 1;}`)
+	}
+	if _, err := ParseWithSemanticModules("bad_table.concept", `profile Core; import StaticTable; int Main(){return Read<2>(4);}`, map[string][]byte{"StaticTable": artifact}); err != nil {
+		// The index is a runtime function parameter, so admission is valid and
+		// its per-access runtime guard remains. Constant direct OOB is tested below.
+		t.Fatal(err)
+	}
+	if _, err := Parse("bad_literal.concept", `profile Core; comptime int<array>[2] T=[1,2]; template <usize N> int Bad(){return T[2];} int Main(){return Bad<1>();}`); diagnosticCode(err) != "CV4233" {
+		t.Fatalf("closed generic constant array must still reject static OOB: %v", err)
+	}
+}
