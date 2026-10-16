@@ -637,12 +637,9 @@ func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPol
 	switch op.Kind {
 	case "binary":
 		if op.IntegerRange != nil {
-			d.Category, d.Strategy, d.Certainty = "IntegerArithmeticPlan", "CheckedArithmetic", DecisionRequired
-			d.RuntimeGuards = []string{"result_in_integer_range"}
-			d.Evidence = PlanningEvidence{Claims: []string{"OperationLocalIntegerInterval"}, Detail: "all operands and the checked source result fit int at this exact operation"}
-			if !policy.Verify {
-				d.Strategy, d.Certainty, d.RuntimeGuards = "ProvenInRange", DecisionSelected, nil
-			}
+			// This refines representation of the same Direct semantic operation;
+			// it does not invent a different arithmetic instruction or identity.
+			d.Evidence = PlanningEvidence{Claims: []string{"OperationLocalIntegerInterval"}, Detail: "all operands and the checked source result fit int at this exact operation; Verify retains checked representation"}
 		}
 	case "machine_intrinsic", "machine_asm":
 		d.Category, d.Strategy, d.Certainty = "MachineOperationPlan", "RetainOrderedTargetHelper", DecisionRequired
@@ -1075,6 +1072,11 @@ func ValidateLoweringPlan(mir *MIR, facts *SemanticFactSet, plan *LoweringPlan) 
 			op, ok := ops[d.MIRID]
 			if !ok {
 				return fail("PLAN_UNSUPPORTED_MIR", "planning decision references unknown MIR operation "+d.MIRID)
+			}
+			for _, claim := range d.Evidence.Claims {
+				if claim == "OperationLocalIntegerInterval" && op.IntegerRange == nil {
+					return fail("PLAN_REQUIRED_FACT_MISSING", "arithmetic representation requires an operation-local interval")
+				}
 			}
 			if (d.Strategy == "PerAccessRuntime" || d.Strategy == "HoistedRuntime") && len(d.RuntimeGuards) == 0 {
 				return fail("PLAN_RUNTIME_GUARD_MISSING", "bounds plan removed a required runtime guard")

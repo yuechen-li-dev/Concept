@@ -4134,10 +4134,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			return leftPrelude + rightPrelude, fmt.Sprintf("((%s)((((double)(%s) %s (double)(%s)) * %d.0) / %d.0))", evt1CType(resultType), left, e.Op, right, e.UnitScaleNumerator, e.UnitScaleDenominator), resultType
 		}
 		if resultType.Name == "int" {
-			if f.plan != nil {
+			if f.plan != nil && !f.l.verify {
 				for _, d := range f.plan.Decisions {
-					if d.MIRID == e.OperationID && d.Operation == "binary" && d.Strategy == "ProvenInRange" {
-						return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, e.Op, right), resultType
+					if d.MIRID == e.OperationID && d.Operation == "binary" && d.Strategy == "Direct" {
+						for _, claim := range d.Evidence.Claims {
+							if claim == "OperationLocalIntegerInterval" {
+								return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, e.Op, right), resultType
+							}
+						}
 					}
 				}
 			}

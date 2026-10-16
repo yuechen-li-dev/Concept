@@ -51,8 +51,8 @@ intervals now select direct defined arithmetic in Normal. The proof includes
 all intermediate checked operations: possible overflow remains on the original
 helper path. Verify keeps checked arithmetic. Source floating-point operations,
 contraction, division, shifts and modular narrow/unsigned semantics are untouched.
-The planner records IntegerArithmeticPlan decisions, consumed by exact operation
-identity. Regression tests exercise bounded signed intervals and preserve
+The planner retains ExpressionPlan/Direct identity and records operation-local
+proof evidence, consumed by exact operation identity. Regression tests exercise bounded signed intervals and preserve
 potential-overflow helpers and terminal failure order.
 
 Adversarial identity tests also cover overloaded functions with colliding
@@ -60,3 +60,7 @@ operation ordinals and expanded array accesses sharing a source position.
 Ordinary lowerers select their plan by declaration provenance, not source name;
 ambiguous source-position queries conservatively retain the runtime check.
 Native negative cases exercise both boundaries in Normal and Verify.
+
+The frozen MachineIR bridge exposed an unnecessary planner-label change during
+full qualification. Keeping Direct identity and optional proof evidence preserves
+the frozen wire payload without changing native instructions or its codec.
