@@ -2810,6 +2810,13 @@ func evt1CType(t Type) string {
 		return evt1TensorCName(t)
 	}
 	if evt1IsSpanType(t) {
+		if t.isReference() || t.isBorrow() {
+			base := evt1SpanCName(t)
+			if t.Const {
+				return "const " + base + "*"
+			}
+			return base + "*"
+		}
 		return evt1SpanCName(t)
 	}
 	if t.isReference() && (t.Kind == TypeLayout || t.Kind == TypeStream) {
