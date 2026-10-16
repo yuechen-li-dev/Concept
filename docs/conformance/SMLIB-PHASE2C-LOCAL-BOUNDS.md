@@ -45,3 +45,12 @@ execute loops, summarize foreign code or discard side effects. Runtime calls
 are retained. This permits an admitted output size to reach a private helper
 without duplicating its checks. Native tests cover a guarded caller and a short
 input; adding any unknown caller restores the callee's runtime check.
+
+Integer `+`, `-` and `*` with operation-local proven int32 operand/result
+intervals now select direct defined arithmetic in Normal. The proof includes
+all intermediate checked operations: possible overflow remains on the original
+helper path. Verify keeps checked arithmetic. Source floating-point operations,
+contraction, division, shifts and modular narrow/unsigned semantics are untouched.
+The planner records IntegerArithmeticPlan decisions, consumed by exact operation
+identity. Regression tests exercise bounded signed intervals and preserve
+potential-overflow helpers and terminal failure order.

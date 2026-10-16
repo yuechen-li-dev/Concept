@@ -664,6 +664,11 @@ func evt1AutomataStorageProvenance(t Type) string {
 func evt1ValidateMIR(mir MIR) error {
 	checkLocalProofs := func(ops []MIROperation) error {
 		for _, op := range ops {
+			if proof := op.IntegerRange; proof != nil {
+				if op.Kind != "binary" || (op.Detail != "+" && op.Detail != "-" && op.Detail != "*") || proof.Type != "int" || proof.Min < -2147483648 || proof.Max > 2147483647 || proof.Min > proof.Max {
+					return evt1Diagnostic("CV4649", "integer interval proof is incomplete or contradictory", op.SourceSpan)
+				}
+			}
 			if proof := op.LocalBounds; proof != nil {
 				if op.Kind != "span_index" || op.BoundsCheck != "statically_valid" || proof.Origin != "LocalCheckedControlFlow" || proof.IndexMin < 0 || proof.IndexMax < proof.IndexMin || proof.IndexMax >= proof.LengthMin {
 					return evt1Diagnostic("CV4649", "operation-local bounds proof is incomplete or contradictory", op.SourceSpan)
@@ -1760,7 +1765,10 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 		if e.UnitScaleDenominator != 0 {
 			detail = fmt.Sprintf("%s; exact dimensionless scale %d/%d", e.Op, e.UnitScaleNumerator, e.UnitScaleDenominator)
 		}
-		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: detail, SourceSpan: e.Span})
+		if env.collectingMIR {
+			e.OperationID = id
+		}
+		fn.Operations = append(fn.Operations, MIROperation{ID: id, Kind: "binary", Detail: detail, IntegerRange: e.IntegerRange, SourceSpan: e.Span})
 		collectExprMIROps(env, e.Left, fn, templateInfo)
 		collectExprMIROps(env, e.Right, fn, templateInfo)
 	case *UnaryExpr:
@@ -4118,6 +4126,13 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			return leftPrelude + rightPrelude, fmt.Sprintf("((%s)((((double)(%s) %s (double)(%s)) * %d.0) / %d.0))", evt1CType(resultType), left, e.Op, right, e.UnitScaleNumerator, e.UnitScaleDenominator), resultType
 		}
 		if resultType.Name == "int" {
+			if f.plan != nil {
+				for _, d := range f.plan.Decisions {
+					if d.MIRID == e.OperationID && d.Operation == "binary" && d.Strategy == "ProvenInRange" {
+						return leftPrelude + rightPrelude, fmt.Sprintf("(%s %s %s)", left, e.Op, right), resultType
+					}
+				}
+			}
 			switch e.Op {
 			case "+":
 				return leftPrelude + rightPrelude, fmt.Sprintf("%s(%s, %s, %d, %d)", evt1IntegerHelperName(f.l.symbolBase, "i32_add"), left, right, e.Span.Line, e.Span.Column), resultType

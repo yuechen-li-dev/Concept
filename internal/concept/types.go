@@ -1154,14 +1154,16 @@ func (*TemplateCallExpr) evt1Expr()        {}
 func (e *TemplateCallExpr) exprSpan() Span { return e.Span }
 
 type BinaryExpr struct {
-	Op                   string          `json:"op"`
-	Left                 Expr            `json:"left"`
-	Right                Expr            `json:"right"`
-	UnitScaleNumerator   int             `json:"unit_scale_numerator,omitempty"`
-	UnitScaleDenominator int             `json:"unit_scale_denominator,omitempty"`
-	Tensor               *TensorSemantic `json:"tensor,omitempty"`
-	ResolvedType         Type            `json:"resolved_type,omitempty"`
-	Span                 Span            `json:"span"`
+	IntegerRange         *LocalIntegerProof `json:"-"`
+	OperationID          string             `json:"-"`
+	Op                   string             `json:"op"`
+	Left                 Expr               `json:"left"`
+	Right                Expr               `json:"right"`
+	UnitScaleNumerator   int                `json:"unit_scale_numerator,omitempty"`
+	UnitScaleDenominator int                `json:"unit_scale_denominator,omitempty"`
+	Tensor               *TensorSemantic    `json:"tensor,omitempty"`
+	ResolvedType         Type               `json:"resolved_type,omitempty"`
+	Span                 Span               `json:"span"`
 }
 
 func (*BinaryExpr) evt1Expr()        {}
@@ -1847,6 +1849,7 @@ type MIRCleanup struct {
 }
 
 type MIROperation struct {
+	IntegerRange         *LocalIntegerProof  `json:"integer_range,omitempty"`
 	LocalBounds          *LocalBoundsProof   `json:"local_bounds,omitempty"`
 	ID                   string              `json:"id"`
 	Kind                 string              `json:"kind"`

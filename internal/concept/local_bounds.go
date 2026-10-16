@@ -14,6 +14,12 @@ type LocalBoundsProof struct {
 	Origin    string `json:"origin"`
 }
 
+type LocalIntegerProof struct {
+	Min  int64  `json:"min"`
+	Max  int64  `json:"max"`
+	Type string `json:"type"`
+}
+
 type localInterval struct{ lo, hi int64 }
 
 var localInt32 = localInterval{math.MinInt32, math.MaxInt32}
@@ -57,6 +63,10 @@ func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv, inputs []int64,
 	}
 	a := localBoundsAnalysis{exposed: map[string]bool{}, env: env, calls: calls}
 	evt1WalkTypedBlock(*fn.Body, func(expr Expr) {
+		if binary, ok := expr.(*BinaryExpr); ok {
+			binary.IntegerRange = nil
+			binary.OperationID = ""
+		}
 		if index, ok := expr.(*IndexExpr); ok {
 			index.LocalBounds = nil
 			index.BoundsOperationID = ""
@@ -251,7 +261,11 @@ func (a *localBoundsAnalysis) expr(e Expr, s localBoundsState) localValue {
 		right := a.expr(e.Right, s)
 		// Float arithmetic is never folded/reassociated by this analysis.
 		if e.ResolvedType.Name == "int" {
-			return localArithmetic(e.Op, left, right)
+			v := localArithmetic(e.Op, left, right)
+			if v.intKnown && e.UnitScaleDenominator == 0 {
+				e.IntegerRange = &LocalIntegerProof{v.integer.lo, v.integer.hi, "int"}
+			}
+			return v
 		}
 	case *IndexExpr:
 		base := a.expr(e.Base, s)
@@ -280,7 +294,7 @@ func (a *localBoundsAnalysis) expr(e Expr, s localBoundsState) localValue {
 		if e.Intrinsic == "span_subregion" && len(args) == 3 && args[2].intKnown {
 			return localValue{lengthMin: max(0, args[2].integer.lo), lengthHeld: true}
 		}
-		if e.SpanElementType != nil {
+		if e.SpanElementType != nil && (e.Intrinsic == "span_from_region" || e.Intrinsic == "span_to_readonly" || e.Intrinsic == "span_as_bytes") {
 			if len(args) == 1 && args[0].lengthHeld {
 				return localValue{lengthMin: args[0].lengthMin, lengthHeld: true}
 			}

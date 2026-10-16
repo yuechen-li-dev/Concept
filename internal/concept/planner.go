@@ -635,6 +635,15 @@ func planFunction(fn MIRFunction, facts SemanticFactSet, target TargetCapabiliti
 func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPolicy) PlanningDecision {
 	d := PlanningDecision{MIRID: op.ID, Category: "CallPlan", Operation: op.Kind, Strategy: "Direct", Certainty: DecisionSelected, Evidence: PlanningEvidence{Detail: "ordinary MIR operation preserves semantic order"}, SourceSpan: op.SourceSpan}
 	switch op.Kind {
+	case "binary":
+		if op.IntegerRange != nil {
+			d.Category, d.Strategy, d.Certainty = "IntegerArithmeticPlan", "CheckedArithmetic", DecisionRequired
+			d.RuntimeGuards = []string{"result_in_integer_range"}
+			d.Evidence = PlanningEvidence{Claims: []string{"OperationLocalIntegerInterval"}, Detail: "all operands and the checked source result fit int at this exact operation"}
+			if !policy.Verify {
+				d.Strategy, d.Certainty, d.RuntimeGuards = "ProvenInRange", DecisionSelected, nil
+			}
+		}
 	case "machine_intrinsic", "machine_asm":
 		d.Category, d.Strategy, d.Certainty = "MachineOperationPlan", "RetainOrderedTargetHelper", DecisionRequired
 		d.Evidence = PlanningEvidence{Claims: []string{"ArchitectureQualified", "NoAllocation"}, Detail: "machine operation remains an explicit architecture-specific helper call"}
