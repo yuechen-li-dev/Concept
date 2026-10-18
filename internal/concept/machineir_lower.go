@@ -11,6 +11,12 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	// Frozen CMIRAMD3/4 have no typed aggregate layout, object derivation,
+	// copy eligibility or result-storage contract. Never erase that evidence
+	// by treating a small record as an integer or an object address as a scalar.
+	if len(lir.Aggregates) != 0 {
+		return MachineModule{}, fmt.Errorf("MIR_AGGREGATE_REQUIRES_CMIRAMD5 %s: checked record layouts and typed object operations require a versioned aggregate bridge", lir.Aggregates[0].Name)
+	}
 	// Select the virtual scalar contract before any legacy physical projection.
 	for _, f := range lir.Functions {
 		hasFloat := func(t LIRType) bool {

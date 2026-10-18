@@ -199,8 +199,10 @@ int main(void){if(negatives())return 1;concept_readonly_span_byte a={artifact0,s
 func TestEVT2f3UnsupportedScalarPlanningInput(t *testing.T) {
 	for _, tc := range []struct{ name, want string }{
 		{"float16", "EVT2_UNSUPPORTED_FLOAT_REPRESENTATION binary16"},
-		{"packed_vector", "EVT2_UNSUPPORTED_TYPE Float4"},
-		{"aggregate", "EVT2_UNSUPPORTED_TYPE FloatingPair"},
+		// These source fixtures are records, including the SIMD-shaped name.
+		// EVT2g retains their layouts but still rejects native scalar admission.
+		{"packed_vector", "MIR_AGGREGATE_REQUIRES_CMIRAMD5 Float4"},
+		{"aggregate", "MIR_AGGREGATE_REQUIRES_CMIRAMD5 FloatingPair"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := "../../language/evt2f/invalid/" + tc.name + ".concept"

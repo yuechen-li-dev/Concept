@@ -4787,8 +4787,16 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		b.WriteString(basePrelude)
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), resultTemp, baseExpr))
 		bitsDecl := f.l.env.structs[baseType.Name]
+		structDecl, _ := evt1StructView(f.l.env, baseType)
 		for _, update := range e.Updates {
-			valuePrelude, valueExpr, _ := f.lowerExpr(update.Value, indent)
+			fieldType := Type{}
+			for _, field := range structDecl.Fields {
+				if field.Name == update.Name {
+					fieldType = field.Type
+					break
+				}
+			}
+			valuePrelude, valueExpr, _ := f.lowerExprExpected(update.Value, fieldType, indent)
 			b.WriteString(valuePrelude)
 			if bit, ok := evt1BitField(bitsDecl, update.Name); ok {
 				valueTemp := f.nextTemp("bit_value")

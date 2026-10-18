@@ -45,6 +45,7 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		return LIRModule{}, err
 	}
 	out := LIRModule{PlanID: plan.PlanID, SemanticFacts: append([]MIRSemanticFact(nil), mir.SemanticFacts...)}
+	aggregates := &lirAggregateTypes{env: env, known: map[string]LIRType{}, visiting: map[string]bool{}}
 	sort.Slice(out.SemanticFacts, func(i, j int) bool { return out.SemanticFacts[i].ID < out.SemanticFacts[j].ID })
 	for _, automata := range mir.Automata {
 		generated, err := lowerAutomataToLIR(automata, env)
@@ -61,7 +62,7 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		if plan.Functions[i].Function != fn.Name {
 			return LIRModule{}, fmt.Errorf("EVT2_PLAN_MISMATCH %s", fn.Name)
 		}
-		b := &lirBuilder{mir: fn, plan: plan.Functions[i], env: env, current: 0, names: map[string]lirBinding{}}
+		b := &lirBuilder{mir: fn, plan: plan.Functions[i], env: env, aggregates: aggregates, current: 0, names: map[string]lirBinding{}}
 		b.fn = LIRFunction{Identity: fn.DeclarationIdentity, Name: fn.Name, Source: fn.SourceSpan}
 		for _, fact := range mir.SemanticFacts {
 			for _, subject := range fact.Subjects {
@@ -75,13 +76,13 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		if b.fn.Identity == "" {
 			return LIRModule{}, fmt.Errorf("EVT2_MIR_IDENTITY_MISSING %s", fn.Name)
 		}
-		b.fn.Result, err = lirType(fn.ReturnType)
+		b.fn.Result, err = b.lowerType(fn.ReturnType)
 		if err != nil {
 			return LIRModule{}, fmt.Errorf("%s: %w", fn.Name, err)
 		}
 		b.newBlock()
 		for _, p := range fn.Params {
-			t, e := lirType(p.Type)
+			t, e := b.lowerType(p.Type)
 			if e != nil {
 				return LIRModule{}, fmt.Errorf("%s: %w", fn.Name, e)
 			}
@@ -91,6 +92,13 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 				b.fn.Params = append(b.fn.Params, LIRValue{ID: id, Type: t})
 				b.fn.Slots[s].ParamValue = id
 				b.names[p.Name] = lirBinding{slot: s, typ: p.Type, array: true}
+			} else if lirAggregateType(t) {
+				id := b.value()
+				b.fn.Params = append(b.fn.Params, LIRValue{ID: id, Type: t})
+				s := b.slot(p.Name, p.Type)
+				b.fn.Slots[s].Readonly = p.Type.Const
+				b.emit(LIRInstruction{Op: "initialize_slot", Result: -1, Type: t, Args: []int{id}, Slot: s, Source: fn.SourceSpan})
+				b.names[p.Name] = lirBinding{slot: s, typ: p.Type, local: true}
 			} else {
 				id := b.value()
 				b.fn.Params = append(b.fn.Params, LIRValue{ID: id, Type: t})
@@ -111,6 +119,7 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		}
 		out.Functions = append(out.Functions, b.fn)
 	}
+	out.Aggregates = aggregates.layouts
 	if err := VerifyLIR(out); err != nil {
 		return LIRModule{}, err
 	}
@@ -118,6 +127,9 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 }
 
 func lirType(t Type) (LIRType, error) {
+	if t.isBorrowLike() || t.isOwned() || t.PointerTo != nil {
+		return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_AUTHORITY %s", t.String())
+	}
 	if t.Kind == TypeArray && t.ArrayElem != nil && t.ArrayLength > 0 {
 		el, e := lirType(*t.ArrayElem)
 		if e != nil {
@@ -171,6 +183,7 @@ type lirBuilder struct {
 	mir           MIRFunction
 	plan          FunctionPlan
 	env           *semanticEnv
+	aggregates    *lirAggregateTypes
 	fn            LIRFunction
 	current       int
 	nextValue     int
@@ -201,10 +214,10 @@ func (b *lirBuilder) emit(in LIRInstruction) int {
 }
 func (b *lirBuilder) slot(name string, t Type) int {
 	id := len(b.fn.Slots)
-	lt, _ := lirType(t)
+	lt, _ := b.lowerType(t)
 	s := LIRSlot{ID: id, Name: name, Type: lt, ParamValue: -1}
 	if t.Kind == TypeArray && t.ArrayElem != nil {
-		s.Element, _ = lirType(*t.ArrayElem)
+		s.Element, _ = b.lowerType(*t.ArrayElem)
 		s.Extent = t.ArrayLength
 	}
 	b.fn.Slots = append(b.fn.Slots, s)
@@ -243,20 +256,47 @@ func (b *lirBuilder) statement(stmt Statement) error {
 		if s.Type.Kind == TypeArray {
 			return fmt.Errorf("EVT2_UNSUPPORTED_LOCAL_ARRAY at %d:%d", s.Span.Line, s.Span.Column)
 		}
+		lt, err := b.lowerType(s.Type)
+		if err != nil {
+			return err
+		}
 		slot := b.slot(s.Name, s.Type)
+		b.fn.Slots[slot].Readonly = s.Const || s.Type.Const
 		b.names[s.Name] = lirBinding{slot: slot, typ: s.Type, local: true}
 		if s.Value != nil {
 			v, t, e := b.expr(s.Value)
 			if e != nil {
 				return e
 			}
-			lt, _ := lirType(s.Type)
 			if t != lt {
 				return fmt.Errorf("EVT2_TYPE_MISMATCH local %s", s.Name)
 			}
-			b.emit(LIRInstruction{Op: "store_slot", Result: -1, Type: lt, Args: []int{v}, Slot: slot, Source: s.Span})
+			op := "store_slot"
+			if lirAggregateType(lt) {
+				op = "initialize_slot"
+			}
+			b.emit(LIRInstruction{Op: op, Result: -1, Type: lt, Args: []int{v}, Slot: slot, Source: s.Span})
 		}
 	case *AssignStmt:
+		if field, ok := s.Target.(*FieldExpr); ok && b.machine == nil {
+			if s.CompoundOp != "" {
+				return fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_COMPOUND_ASSIGN")
+			}
+			addr, target, err := b.objectAddress(field)
+			if err != nil {
+				return err
+			}
+			v, actual, err := b.expr(s.Value)
+			if err != nil {
+				return err
+			}
+			expected, err := b.lowerType(target)
+			if err != nil || actual != expected {
+				return fmt.Errorf("EVT2_TYPE_MISMATCH object field %s", field.Field)
+			}
+			b.emit(LIRInstruction{Op: "store", Result: -1, Type: expected, Args: []int{addr, v}, Slot: -1, Source: s.Span})
+			return nil
+		}
 		if field, ok := s.Target.(*FieldExpr); ok && b.machine != nil {
 			if s.CompoundOp != "" {
 				return fmt.Errorf("EVT2_UNSUPPORTED_MACHINE_COMPOUND_ASSIGN at %d:%d", s.Span.Line, s.Span.Column)
@@ -291,7 +331,7 @@ func (b *lirBuilder) statement(stmt Statement) error {
 			if e != nil {
 				return e
 			}
-			lt, _ := lirType(binding.typ)
+			lt, _ := b.lowerType(binding.typ)
 			if lt != t {
 				return fmt.Errorf("EVT2_TYPE_MISMATCH assign")
 			}
@@ -524,7 +564,7 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		if target == nil || target.Body == nil || target.ExternABI != "" || target.Async || len(target.Params) != len(e.Args) {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_TARGET %s at %d:%d", e.Callee, e.Span.Line, e.Span.Column)
 		}
-		resultType, err := lirType(target.ReturnType)
+		resultType, err := b.lowerType(target.ReturnType)
 		if err != nil {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %w", e.Callee, err)
 		}
@@ -535,14 +575,14 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			if err != nil {
 				return 0, "", err
 			}
-			expected, err := lirType(target.Params[i].Type)
-			if err != nil || !lirCallScalar(expected) || actual != expected {
+			expected, err := b.lowerType(target.Params[i].Type)
+			if err != nil || (!lirCallScalar(expected) && !lirAggregateType(expected)) || actual != expected {
 				return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_ARGUMENT %s arg=%d", e.Callee, i)
 			}
 			args = append(args, v)
 			argTypes = append(argTypes, expected)
 		}
-		if resultType != "void" && !lirCallScalar(resultType) {
+		if resultType != "void" && !lirCallScalar(resultType) && !lirAggregateType(resultType) {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %s", e.Callee, resultType)
 		}
 		result := 0
@@ -565,7 +605,7 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		if v.array {
 			return 0, "", fmt.Errorf("EVT2_ARRAY_VALUE %s", e.Name)
 		}
-		t, _ := lirType(v.typ)
+		t, _ := b.lowerType(v.typ)
 		if v.local {
 			return b.emit(LIRInstruction{Op: "load_slot", Result: 0, Type: t, Slot: v.slot, Source: e.Span}), t, nil
 		}
@@ -621,7 +661,15 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		return b.emit(LIRInstruction{Op: "load", Result: 0, Type: t, Args: []int{addr}, Slot: -1, Source: e.Span}), t, nil
 	case *FieldExpr:
 		if b.machine == nil {
-			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T", expr)
+			addr, sourceType, err := b.objectAddress(e)
+			if err != nil {
+				return 0, "", err
+			}
+			t, err := b.lowerType(sourceType)
+			if err != nil {
+				return 0, "", err
+			}
+			return b.emit(LIRInstruction{Op: "load", Result: 0, Type: t, Args: []int{addr}, Slot: -1, Source: e.Span}), t, nil
 		}
 		id, err := b.machineFieldID(e)
 		if err != nil {
@@ -629,6 +677,10 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		v, typ := b.loadMachineField(id, e.Span)
 		return v, typ, nil
+	case *StructConstructExpr:
+		return b.recordConstruction(e)
+	case *WithExpr:
+		return b.recordWith(e)
 	default:
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	}
@@ -647,7 +699,7 @@ func lirFloatLiteral(t LIRType, value float64) string {
 func (b *lirBuilder) indexAddress(e *IndexExpr) (int, LIRType, error) {
 	base, ok := e.Base.(*NameExpr)
 	if !ok {
-		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_INDEX_BASE")
+		return b.objectIndexAddress(e)
 	}
 	binding, ok := b.names[base.Name]
 	if !ok || !binding.array {

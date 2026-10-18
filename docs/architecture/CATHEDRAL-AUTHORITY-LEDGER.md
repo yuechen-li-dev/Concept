@@ -155,3 +155,19 @@ entry alignment, volatile XMM clobbers and observable void calls. Controlled
 foreign stubs are test-only RW-stage integration, not production linkage.
 External/indirect/variadic/aggregate calls, XMM6–XMM15 allocation, object output
 and unwind remain deferred. See [EVT2f5 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
+
+## EVT2g checked aggregate input authority
+
+| Changed surface | R9c classification | Authority and replacement condition |
+| --- | --- | --- |
+| `lir_aggregate.go`, aggregate additions in `lir_lower.go` | SHARED checked input / BOOTSTRAP_ONLY MIR-to-LIR construction | Existing checked types, geometry, copyability and places supply the snapshot and typed operations; migrates with the frontend/LIR producer, not into a second native engine |
+| `lir.go`, `lir_aggregate_verify.go` | BOOTSTRAP_ONLY producer consistency/lifetime checks | Validate layout identity, complete initialization, bounded typed locations and immutable authority; future Concept bridge independently validates transported evidence |
+| `machineir_lower.go` aggregate gate | BOOTSTRAP_ONLY contract admission | Frozen scalar contracts cannot encode objects; replace the named stop only after a new checked Concept schema and generated codecs exist |
+| `generate.go` expected field type for `with` replacements | BOOTSTRAP_ONLY portable C path correctness | Reuse existing contextual initializer lowering; preserve the durable C seed path |
+| `lir_aggregate_test.go`, EVT2g fixtures | INDEPENDENT_ORACLE / qualification | Source C11 values/geometry, malformed input, semantic artifacts and deterministic LIR; no native aggregate/ABI claim |
+
+All native aggregate layout consumption, address realization, copying,
+references, stack placement and Win64 aggregate classification remain
+NOT_YET_QUALIFIED and Cathedral-owned. No production Go native aggregate
+classifier, frame planner, copier or encoder was introduced. The checked LIR
+snapshot is not a new competing source-language type/layout model.

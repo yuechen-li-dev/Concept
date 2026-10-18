@@ -11,6 +11,7 @@ import (
 type LIRModule struct {
 	PlanID        string
 	SemanticFacts []MIRSemanticFact
+	Aggregates    []LIRAggregateLayout // Checked source layout snapshots; never native storage plans.
 	Functions     []LIRFunction
 }
 type LIRType string
@@ -24,7 +25,8 @@ type LIRSlot struct {
 	Type       LIRType
 	Element    LIRType
 	Extent     int
-	ParamValue int // -1 unless bound to an aggregate parameter
+	ParamValue int  // -1 unless bound to an aggregate parameter
+	Readonly   bool // source const place; distinct from record-field immutability
 	Facts      []string
 }
 type LIRInstruction struct {
@@ -40,8 +42,11 @@ type LIRInstruction struct {
 	Literal     string
 	Extent      int
 	Stride      int
-	FrameField  int // -1 unless this is a caller-owned machine-frame address
-	FrameOffset int // fixed byte displacement for frame or pointer-index address
+	FrameField  int     // -1 unless this is a caller-owned machine-frame address
+	FrameOffset int     // fixed byte displacement for frame or pointer-index address
+	Aggregate   LIRType // checked enclosing layout for field_address
+	Member      int     // declaration-order field ordinal, only for field_address
+	Members     []int   // declaration-order ordinals in source evaluation order, for record_with
 	Source      Span
 	Decision    string
 	Facts       []string
@@ -130,6 +135,15 @@ func (m LIRModule) String() string {
 	for _, fact := range m.SemanticFacts {
 		fmt.Fprintf(&out, "fact %s %s %s\n", fact.ID, fact.Kind, fact.Outcome)
 	}
+	for _, layout := range m.Aggregates {
+		fmt.Fprintf(&out, "aggregate %s %s identity=%q kind=%s repr=%s size=%d align=%d\n", layout.Type, layout.Name, layout.Identity, layout.Kind, layout.Representation, layout.Size, layout.Alignment)
+		for i, field := range layout.Fields {
+			fmt.Fprintf(&out, "  member %d %s: %s offset=%d size=%d align=%d\n", i, field.Name, field.Type, field.Offset, field.Size, field.Alignment)
+			if field.Readonly {
+				fmt.Fprint(&out, "    readonly\n")
+			}
+		}
+	}
 	for i, f := range m.Functions {
 		if i != 0 || m.PlanID != "" || len(m.SemanticFacts) > 0 {
 			out.WriteByte('\n')
@@ -167,6 +181,9 @@ func (m LIRModule) String() string {
 			fmt.Fprintf(&out, "  decision %s\n", decision)
 		}
 		for _, s := range f.Slots {
+			if s.Readonly {
+				fmt.Fprint(&out, "  readonly\n")
+			}
 			if s.Extent > 0 {
 				fmt.Fprintf(&out, "  s%d %s: [%d]%s", s.ID, s.Name, s.Extent, s.Element)
 				if s.ParamValue >= 0 {
@@ -213,6 +230,12 @@ func (m LIRModule) String() string {
 				if in.Op == "index_address" && in.FrameOffset != 0 {
 					fmt.Fprintf(&out, " offset=%d", in.FrameOffset)
 				}
+				if in.Op == "field_address" {
+					fmt.Fprintf(&out, " layout=%s member=%d offset=%d", in.Aggregate, in.Member, in.FrameOffset)
+				}
+				if in.Op == "record_with" {
+					fmt.Fprintf(&out, " members=%v", in.Members)
+				}
 				if in.Op == "frame_field_address" || in.Op == "activation_address" {
 					fmt.Fprintf(&out, " field=%d offset=%d", in.FrameField, in.FrameOffset)
 				}
@@ -245,6 +268,10 @@ func (m LIRModule) String() string {
 // VerifyLIR rejects malformed lowering before any later MachineIR consumer.
 // Non-parameter values are block-local; cross-block state goes through slots.
 func VerifyLIR(m LIRModule) error {
+	layouts, err := verifyLIRAggregateLayouts(m.Aggregates)
+	if err != nil {
+		return err
+	}
 	facts := map[string]bool{}
 	for _, fact := range m.SemanticFacts {
 		if fact.ID == "" || facts[fact.ID] {
@@ -339,6 +366,51 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "record_with":
+					layout, ok := layouts[in.Type]
+					if !ok || layout.Kind != "record" || in.Result < 0 || in.Slot != -1 || len(in.Args) != len(in.Members)+1 || argType(0) != in.Type {
+						return fmt.Errorf("LIR_BAD_RECORD_WITH b%d", b.ID)
+					}
+					seen := map[int]bool{}
+					for i, member := range in.Members {
+						if member < 0 || member >= len(layout.Fields) || seen[member] || argType(i+1) != layout.Fields[member].Type {
+							return fmt.Errorf("LIR_BAD_RECORD_WITH_MEMBER b%d", b.ID)
+						}
+						seen[member] = true
+					}
+				case "make_aggregate":
+					layout, ok := layouts[in.Type]
+					if !ok || in.Result < 0 || in.Slot != -1 || len(in.Args) != len(layout.Fields) {
+						return fmt.Errorf("LIR_BAD_RECORD_INIT b%d", b.ID)
+					}
+					for i, field := range layout.Fields {
+						if argType(i) != field.Type {
+							return fmt.Errorf("LIR_BAD_RECORD_MEMBER b%d member=%d", b.ID, i)
+						}
+					}
+				case "make_array":
+					element, extent, ok := lirArrayValue(in.Type)
+					if !ok || in.Result < 0 || in.Slot != -1 || extent > lirAggregateMaxElements || len(in.Args) != extent {
+						return fmt.Errorf("LIR_BAD_ARRAY_INIT b%d", b.ID)
+					}
+					for i := range in.Args {
+						if argType(i) != element {
+							return fmt.Errorf("LIR_BAD_ARRAY_ELEMENT b%d element=%d", b.ID, i)
+						}
+					}
+				case "slot_address":
+					if !hasSlot || s.Extent != 0 || !lirAggregateType(s.Type) || in.Result < 0 || len(in.Args) != 0 || in.Type != lirPointer(s.Type) {
+						return fmt.Errorf("LIR_BAD_OBJECT_ADDRESS b%d", b.ID)
+					}
+				case "field_address":
+					layout, ok := layouts[in.Aggregate]
+					if !ok || in.Member < 0 || in.Member >= len(layout.Fields) || in.Result < 0 || in.Slot != -1 || len(in.Args) != 1 || argType(0) != lirPointer(in.Aggregate) {
+						return fmt.Errorf("LIR_BAD_FIELD_ADDRESS b%d", b.ID)
+					}
+					field := layout.Fields[in.Member]
+					if in.Type != lirPointer(field.Type) || in.FrameOffset != field.Offset {
+						return fmt.Errorf("LIR_BAD_FIELD_OFFSET b%d", b.ID)
+					}
 				case "call":
 					target, ok := functions[in.CallTarget]
 					if !ok || target.Name != in.Callee || in.CallABI != "win64" || in.Slot != -1 || len(in.Args) != len(target.Params) || len(in.ArgTypes) != len(in.Args) || in.Type != target.Result {
@@ -348,16 +420,16 @@ func VerifyLIR(m LIRModule) error {
 						if in.Result >= 0 {
 							return fmt.Errorf("LIR_BAD_CALL_RESULT b%d", b.ID)
 						}
-					} else if in.Result < 0 || !lirCallScalar(in.Type) {
+					} else if in.Result < 0 || !lirCallValue(in.Type, layouts) {
 						return fmt.Errorf("LIR_BAD_CALL_RESULT b%d", b.ID)
 					}
 					for i, arg := range in.Args {
-						if !lirCallScalar(in.ArgTypes[i]) || in.ArgTypes[i] != known[arg] || in.ArgTypes[i] != target.Params[i].Type {
+						if !lirCallValue(in.ArgTypes[i], layouts) || in.ArgTypes[i] != known[arg] || in.ArgTypes[i] != target.Params[i].Type {
 							return fmt.Errorf("LIR_BAD_CALL_ARGUMENT b%d arg=%d", b.ID, i)
 						}
 					}
 				case "const":
-					if in.Result < 0 || len(in.Args) != 0 || in.Literal == "" {
+					if in.Result < 0 || len(in.Args) != 0 || in.Literal == "" || !lirCallScalar(in.Type) {
 						return fmt.Errorf("LIR_BAD_CONST b%d", b.ID)
 					}
 					if lirFloating(in.Type) && !lirFloatLiteralValid(in.Type, in.Literal) {
@@ -387,9 +459,12 @@ func VerifyLIR(m LIRModule) error {
 					if !hasSlot || s.Extent > 0 || in.Type != s.Type || len(in.Args) != 0 || in.Result < 0 {
 						return fmt.Errorf("LIR_BAD_SLOT_LOAD b%d", b.ID)
 					}
-				case "store_slot":
+				case "initialize_slot", "store_slot":
 					if !hasSlot || s.Extent > 0 || in.Result >= 0 || len(in.Args) != 1 || argType(0) != s.Type {
 						return fmt.Errorf("LIR_BAD_SLOT_STORE b%d", b.ID)
+					}
+					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) {
+						return fmt.Errorf("LIR_BAD_OBJECT_INIT b%d", b.ID)
 					}
 				case "checked_add", "checked_sub", "checked_mul", "add", "sub", "mul":
 					if in.Result < 0 || len(in.Args) != 2 || argType(0) != in.Type || argType(1) != in.Type || !lirInteger(in.Type) {
@@ -462,6 +537,9 @@ func VerifyLIR(m LIRModule) error {
 			}
 		}
 		if err := verifyLIRMachineEffects(f); err != nil {
+			return err
+		}
+		if err := verifyLIRAggregateFunction(f, layouts); err != nil {
 			return err
 		}
 	}

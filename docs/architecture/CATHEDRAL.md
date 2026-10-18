@@ -221,3 +221,17 @@ not provide production external linkage. Indirect/variadic/aggregate calls,
 nonvolatile XMM allocation, SIMD/AVX, binary16, numeric conversions, object output
 and unwind/SEH remain outside this qualification. See the
 [EVT2f5 evidence](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
+
+## EVT2g checked aggregate input
+
+Stage-0 now constructs target-independent typed aggregate LIR from the existing
+checked layout/copyability/place contracts. Numeric structs, immutable records,
+nested fields, fixed scalar array fields, complete locals, typed value copies,
+aggregate calls/results and immutable `record_with` intent retain their evidence.
+Record projections remain readonly; mutable fixtures use ordinary structs.
+
+This is input progression, not native aggregate qualification. CMIRAMD3/4 remain
+frozen, and aggregate input stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5` before
+scalar projection. A new checked Concept bridge and Cathedral-owned object,
+copy, reference, frame and Win64 aggregate ABI realization remain required.
+No native algorithm moved into Go. See [EVT2g conformance](../conformance/EVT2G-CONFORMANCE.md).

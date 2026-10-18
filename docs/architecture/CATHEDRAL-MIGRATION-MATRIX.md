@@ -100,3 +100,18 @@ remains checked input/transport, bootstrap host and diagnostics. No Go mixed-cal
 backend was introduced. CMIRAMD3/4 remain frozen; external linkage,
 indirect/variadic/aggregate calls, XMM6-XMM15 allocation and additional targets
 remain separate work.
+
+## EVT2g aggregate input progression
+
+| Capability | Current authority/state | Next switch condition |
+| --- | --- | --- |
+| Source aggregate layout/copyability/place semantics | Existing checked Stage-0 frontend; retained without a second type model | Future frontend migration only |
+| Typed aggregate LIR and immutable `with` | Stage-0 checked MIR/LIR construction; qualified bounded input | New checked aggregate bridge must preserve layout, object and copy/update intent |
+| Complete local initialization / derived locations | Stage-0 producer verifier; bounded, nonescaping value-object evidence | Concept artifact validator independently admits transported lifetime/provenance evidence |
+| Aggregate MachineIR artifact | NOT_YET_QUALIFIED; CMIRAMD3/4 frozen | Checked Concept schema plus generated codecs/readers and artifact-only malformed-input tests |
+| Native aggregate memory/copy/reference/ABI | NOT_YET_QUALIFIED; Cathedral intended owner | Ordinary Concept implementation, native execution, independent Win64 ABI probes |
+
+The normal aggregate path stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5`, including
+small and unused aggregate locals. Existing scalar native qualification is
+unchanged. C bootstrap `with` array replacements use the existing expected-type
+initializer seam; this is portable C seed correctness, not native copy policy.
