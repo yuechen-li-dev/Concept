@@ -2,16 +2,26 @@ package concept
 
 import (
 	"math"
+	"strconv"
 )
 
 // LocalBoundsProof is an operation-local proof over checked source values.
 // It has no target representation, and is never imported as authority. A view
 // length is a value, not a claim that its backing memory is independent.
 type LocalBoundsProof struct {
-	IndexMin  int64  `json:"index_min"`
-	IndexMax  int64  `json:"index_max"`
-	LengthMin int64  `json:"length_min"`
-	Origin    string `json:"origin"`
+	IndexMin  int64                   `json:"index_min"`
+	IndexMax  int64                   `json:"index_max"`
+	LengthMin int64                   `json:"length_min"`
+	Origin    string                  `json:"origin"`
+	Range     *CountedSpanBoundsProof `json:"counted_span_range,omitempty"`
+}
+
+// CountedSpanBoundsProof relates an induction value to a snapshot of a span
+// descriptor's length. It says nothing about the independence of its backing.
+type CountedSpanBoundsProof struct {
+	View     string `json:"view"`
+	Index    string `json:"index"`
+	Snapshot string `json:"snapshot"`
 }
 
 type LocalIntegerProof struct {
@@ -25,11 +35,13 @@ type localInterval struct{ lo, hi int64 }
 var localInt32 = localInterval{math.MinInt32, math.MaxInt32}
 
 type localValue struct {
-	t          Type
-	integer    localInterval
-	intKnown   bool
-	lengthMin  int64
-	lengthHeld bool
+	t           Type
+	integer     localInterval
+	intKnown    bool
+	lengthMin   int64
+	lengthHeld  bool
+	lengthID    string
+	belowLength string
 }
 
 type localBoundsState map[string]localValue
@@ -45,10 +57,19 @@ func (s localBoundsState) clone() localBoundsState {
 type localBoundsAnalysis struct {
 	// A scalar/view whose address occurs anywhere in the function is not
 	// tracked. This also handles a later opaque call through an escaped ref.
-	exposed   map[string]bool
-	env       *semanticEnv
-	calls     *localBoundsCalls
-	summaries map[string]bool
+	exposed    map[string]bool
+	env        *semanticEnv
+	calls      *localBoundsCalls
+	summaries  map[string]bool
+	nextLength int
+}
+
+func (a *localBoundsAnalysis) snapshot(name string, v localValue) localValue {
+	if v.lengthHeld {
+		a.nextLength++
+		v.lengthID = name + "#" + strconv.Itoa(a.nextLength)
+	}
+	return v
 }
 
 // evt1ProveLocalBounds runs on validated, closed typed bodies, before MIR
@@ -79,6 +100,11 @@ func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv, inputs []int64,
 		if closure, ok := expr.(*CallableExpr); ok {
 			// Captures can retain a mutable reference without RefExpr syntax.
 			for _, capture := range closure.Captures {
+				if capture.Source == nil {
+					// Shorthand `with (ref view)` names its source directly;
+					// only explicit capture initializers carry a Source AST.
+					a.exposed[capture.Name] = true
+				}
 				evt1WalkTypedExpr(capture.Source, func(e Expr) {
 					if name, ok := e.(*NameExpr); ok {
 						a.exposed[name.Name] = true
@@ -99,7 +125,7 @@ func proveFunctionLocalBounds(fn FunctionDecl, env *semanticEnv, inputs []int64,
 				v.lengthMin = inputs[i]
 			}
 		}
-		state[p.Name] = v
+		state[p.Name] = a.snapshot(p.Name, v)
 	}
 	a.block(*fn.Body, state)
 }
@@ -168,6 +194,12 @@ func localJoin(a, b localBoundsState) localBoundsState {
 		}
 		x.lengthHeld = x.lengthHeld && y.lengthHeld
 		x.lengthMin = min(x.lengthMin, y.lengthMin)
+		if x.lengthID != y.lengthID {
+			x.lengthID = ""
+		}
+		if x.belowLength != y.belowLength {
+			x.belowLength = ""
+		}
 		out[name] = x
 	}
 	return out
@@ -177,6 +209,7 @@ func (a *localBoundsAnalysis) get(s localBoundsState, name string) localValue {
 	v := s[name]
 	if a.exposed[name] {
 		v.intKnown, v.lengthHeld = false, false
+		v.lengthID, v.belowLength = "", ""
 	}
 	return v
 }
@@ -279,7 +312,11 @@ func (a *localBoundsAnalysis) expr(e Expr, s localBoundsState) localValue {
 		i := a.expr(indices[0], s)
 		if name, ok := e.Base.(*NameExpr); ok && e.SpanIndex && base.lengthHeld && i.intKnown && i.integer.lo >= 0 {
 			if i.integer.hi < base.lengthMin {
-				e.LocalBounds = &LocalBoundsProof{i.integer.lo, i.integer.hi, base.lengthMin, "LocalCheckedControlFlow"}
+				e.LocalBounds = &LocalBoundsProof{IndexMin: i.integer.lo, IndexMax: i.integer.hi, LengthMin: base.lengthMin, Origin: "LocalCheckedControlFlow"}
+			} else if base.lengthID != "" && i.belowLength == base.lengthID {
+				if index, ok := indices[0].(*NameExpr); ok {
+					e.LocalBounds = &LocalBoundsProof{Origin: "CountedSpanRange", Range: &CountedSpanBoundsProof{View: name.Name, Index: index.Name, Snapshot: base.lengthID}}
+				}
 			}
 			// A successful index proves length > the *lower* endpoint, not
 			// the upper endpoint of a runtime-dependent interval.
@@ -421,6 +458,7 @@ func localForgetWrites(b Block, s localBoundsState) {
 			if n, ok := v.Target.(*NameExpr); ok {
 				x := s[n.Name]
 				x.intKnown, x.lengthHeld = false, false
+				x.lengthID, x.belowLength = "", ""
 				s[n.Name] = x
 			}
 		case *IfStmt:
@@ -438,6 +476,7 @@ func localForgetWrites(b Block, s localBoundsState) {
 		default:
 			for name, v := range s {
 				v.intKnown, v.lengthHeld = false, false
+				v.lengthID, v.belowLength = "", ""
 				s[name] = v
 			}
 		}
@@ -460,7 +499,7 @@ func (a *localBoundsAnalysis) block(b Block, s localBoundsState) localBoundsStat
 			}
 			declared[v.Name] = true
 			x.t = v.Type
-			s[v.Name] = x
+			s[v.Name] = a.snapshot(v.Name, x)
 		case *AssignStmt:
 			a.expr(v.Target, s)
 			x := a.expr(v.Value, s)
@@ -473,7 +512,7 @@ func (a *localBoundsAnalysis) block(b Block, s localBoundsState) localBoundsStat
 				if old.t.Name != "int" {
 					x.intKnown = false
 				}
-				s[n.Name] = x
+				s[n.Name] = a.snapshot(n.Name, x)
 			}
 		case *ExprStmt:
 			a.expr(v.Value, s)
@@ -514,6 +553,20 @@ func (a *localBoundsAnalysis) block(b Block, s localBoundsState) localBoundsStat
 			if ok && rangeExpr.Op == ".." && lo.intKnown && hi.intKnown && lo.integer.lo < hi.integer.hi {
 				item.integer, item.intKnown = localInterval{lo.integer.lo, hi.integer.hi - 1}, true
 			}
+			// The range upper bound is evaluated once by foreach semantics.
+			// A descriptor assigned anywhere in the body lost its snapshot above.
+			// Escaped descriptors/captured values are never tracked by get.
+			if ok && rangeExpr.Op == ".." && lo.intKnown && lo.integer.lo >= 0 && v.ElementType.Name == "int" {
+				if query, ok := rangeExpr.Right.(*CallExpr); ok && query.Callee == "Len" && !query.Member && len(query.Args) == 1 && evt1ImplicitValueIntrinsic(a.env, query) {
+					if name, ok := query.Args[0].(*NameExpr); ok {
+						view := a.get(child, name.Name)
+						if view.lengthHeld && view.lengthID != "" {
+							item.integer, item.intKnown = localInterval{lo.integer.lo, math.MaxInt32 - 1}, true
+							item.belowLength = view.lengthID
+						}
+					}
+				}
+			}
 			child[v.ItemName] = item
 			a.block(v.Body, child)
 		case *WhileStmt:
@@ -539,6 +592,7 @@ func (a *localBoundsAnalysis) block(b Block, s localBoundsState) localBoundsStat
 			// No speculative facts cross an unmodeled statement.
 			for name, x := range s {
 				x.intKnown, x.lengthHeld = false, false
+				x.lengthID, x.belowLength = "", ""
 				s[name] = x
 			}
 		}

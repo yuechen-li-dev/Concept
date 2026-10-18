@@ -670,7 +670,11 @@ func evt1ValidateMIR(mir MIR) error {
 				}
 			}
 			if proof := op.LocalBounds; proof != nil {
-				if op.Kind != "span_index" || op.BoundsCheck != "statically_valid" || proof.Origin != "LocalCheckedControlFlow" || proof.IndexMin < 0 || proof.IndexMax < proof.IndexMin || proof.IndexMax >= proof.LengthMin {
+				valid := proof.Range == nil && proof.Origin == "LocalCheckedControlFlow" && proof.IndexMin >= 0 && proof.IndexMax >= proof.IndexMin && proof.IndexMax < proof.LengthMin
+				if r := proof.Range; r != nil {
+					valid = proof.Origin == "CountedSpanRange" && r.View != "" && r.Index != "" && strings.HasPrefix(r.Snapshot, r.View+"#")
+				}
+				if op.Kind != "span_index" || op.BoundsCheck != "statically_valid" || !valid {
 					return evt1Diagnostic("CV4649", "operation-local bounds proof is incomplete or contradictory", op.SourceSpan)
 				}
 			}

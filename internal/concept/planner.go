@@ -688,8 +688,13 @@ func planOperation(op MIROperation, facts SemanticFactSet, policy CompilationPol
 		}
 		d.Evidence = evidenceForSubject(facts, op.RegionID, FactBounded)
 		if op.LocalBounds != nil {
-			d.Evidence.Claims = append(d.Evidence.Claims, "OperationLocalIndexInterval", "DominatingCheckedViewLength")
-			d.Evidence.Detail = "compiler-derived local interval is within the unchanged view length at this exact operation"
+			if op.LocalBounds.Range != nil {
+				d.Evidence.Claims = append(d.Evidence.Claims, "CountedSpanRange", "UnchangedLengthSnapshot")
+				d.Evidence.Detail = "ascending nonnegative induction is below the same unescaped descriptor length snapshot"
+			} else {
+				d.Evidence.Claims = append(d.Evidence.Claims, "OperationLocalIndexInterval", "DominatingCheckedViewLength")
+				d.Evidence.Detail = "compiler-derived local interval is within the unchanged view length at this exact operation"
+			}
 		}
 	case "span_subregion":
 		d.Category, d.Strategy, d.Certainty = "BoundsPlan", "HoistedRuntime", DecisionRequired
