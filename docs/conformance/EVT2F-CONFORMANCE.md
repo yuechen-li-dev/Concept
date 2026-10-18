@@ -463,3 +463,177 @@ and negative source specimens are checked by dedicated tests outside that
 manifest. SSE encoding, constant materialization, nonvolatile XMM saves, SIMD,
 aggregates, varargs, external/indirect calls and native float execution remain
 unqualified. EVT2f4 was not begun.
+
+
+## EVT2f4 — Scalar SSE2 native arithmetic
+
+The EVT2f1–f3 sections above are historical qualification records. The new
+no-call CMIRAMD4 path emits executable scalar SSE2 through Concept `EmitModule`.
+Call-bearing scalar modules now return `AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION`
+before output/image mutation. EVT2f5 was not started.
+
+### Baseline and authority
+
+At the user's direction, the implementation uses the latest optimization
+baseline `9d57d649b0edca082c0af6f15b9827a05ef363e1`, rather than reverting the
+NURBS/SMLIB-related changes to the originally requested EVT2f3 commit
+`6f03274541fcb9a6426c99b04dfbae3e0bf21233`. That latest branch lacked the EVT2f
+prerequisites. Their changes reconciled cleanly onto it and are preserved in
+checkpoint `aef7824adfd720f00bfdad28e882077879c8d7fa`. Compiler identity remains
+`concept-evt1-stage0-go`. CMIRAMD3 and CMIRAMD4 schemas/codecs/metadata are unchanged
+from EVT2f3. No SSE selection or encoding was added to Go.
+
+| Changed code | Classification |
+| --- | --- |
+| `AMD64.concept` SSE selection, operand admission, encoders, constants, compare lowering, entry/return, module emission | Concept authoritative |
+| Existing allocator and Win64ABI policy | Retained Concept authority; no allocator rewrite |
+| `nativeTemporaryCount` and native-frame qualifier | Derived bounded frame request; existing finalizer owns every offset |
+| `cmd/concept/amd64.go` | Bootstrap diagnostic presentation; calls the Concept native-frame qualifier |
+| CLI boundary tests and `machineir_scalar_test.go` | Regression/orchestration oracle updates |
+| `scalar_sse_encoding_test.go` | Independent C11/native/byte/ABI-entry oracle and executable-memory host |
+| Restored EVT2f1–f3 Go files | Checked-input/transport prerequisites, reconciled with latest optimization work |
+
+### Instruction selection and destructive destinations
+
+Selection uses exhaustive semantic opcode and exact representation cases:
+
+| Operation | float32 bytes before ModRM | float64 bytes before ModRM |
+| --- | --- | --- |
+| MOV load/register copy | F3 0F 10 | F2 0F 10 |
+| MOV store | F3 0F 11 | F2 0F 11 |
+| ADD | F3 0F 58 | F2 0F 58 |
+| SUB | F3 0F 5C | F2 0F 5C |
+| MUL | F3 0F 59 | F2 0F 59 |
+| DIV | F3 0F 5E | F2 0F 5E |
+| UCOMI | 0F 2E | 66 0F 2E |
+
+REX follows mandatory prefixes and precedes 0F. Register/register,
+register/RSP-memory and RSP-memory/register forms use typed operands. Indexed
+floating storage first computes an admitted GPR address with LEA, then uses the
+scalar load/store form at that address. Encoder-only high-XMM extension is byte
+qualified (`F2 45 0F 58 C1` for ADDSD XMM8,XMM9); allocation still reserves
+XMM6..XMM15. No AVX, packed arithmetic, FMA or nonvolatile XMM saves were added.
+
+Three-address operations borrow XMM5 with an explicit save of its scalar bits,
+compute in that register, copy/store the result into its validated allocation,
+and restore XMM5 unless it is the result's assigned location. An operand already
+in XMM5 is read from its saved storage. RAX is likewise saved/restored except
+when it is the bool result. This handles destination/right-source overlap for
+SUB and DIV without changing allocation decisions or destroying live values.
+All actions consume the existing frame's resolved slot offsets.
+
+Native no-call frames request four existing generalized eight-byte move-temp
+slots. These initially capture the first four incoming argument positions, then
+serve as scratch for XMM5, RAX and comparison parity materialization. Stack
+parameters use post-prologue RSP plus finalized frame bytes plus the Win64 entry
+stack argument offset. Floats use positional XMM0..XMM3; GPR parameters use the
+existing ordinal table. Floating returns use XMM0; bool returns are normalized
+GPR values. This qualifies directly invoked entrypoints, including array
+pointer/index/value entry, without implementing generated floating call sites.
+
+### Constants, negation and strict semantics
+
+Constants are materialized as deterministic immediate bits: MOV EAX/ RAX with
+four/eight little-endian literal bytes, followed by MOVD/MOVQ to XMM. The Concept
+encoder decodes the admitted fixed lowercase hexadecimal literal directly,
+without decimal conversion, process addresses or a literal pool. Therefore
+constant-pool identities, alignment and relocations are not applicable. Branch
+fixups remain bounded and are patched before the image becomes finalized and
+before the host publishes RX memory. Failed emission is never executable output.
+
+Negation uses MOVD/MOVQ to RAX, BTC at bit 31/63, and MOVD/MOVQ back. It does not
+subtract from zero or use packed XOR. Signed zero, infinities and NaN payload bits
+apart from the sign are preserved. Tests pin both negation sequences and execute
+positive/negative zero and payload-bearing quiet NaNs.
+
+No fast-math, reassociation, contraction, FMA or zero canonicalization is enabled.
+Operation order follows admitted MachineIR. Native operations use the host's
+MXCSR state; qualification assumes the ordinary default, masked exceptions,
+round-to-nearest-even and gradual underflow. No floating environment/exception
+subsystem was introduced. Arithmetic NaN payload propagation is not claimed to
+be bit-identical across C compilers or processors: exceptional arithmetic is
+checked by NaN category, otherwise by exact bits. Constant/copy/negation cases
+check exact payloads. Explicit numeric conversions remain unsupported. Quantity
+interpretation is a checked upstream zero-op; native identity cases preserve -0.
+
+### Comparisons and FLAGS
+
+UCOMISS/UCOMISD is consumed by adjacent bool materialization:
+
+| Relation | Boolean construction |
+| --- | --- |
+| == | SETE AND SETNP |
+| != | SETNE OR SETP |
+| < | SETB AND SETNP |
+| <= | SETBE AND SETNP |
+| > | SETA |
+| >= | SETAE |
+
+SETP/SETNP uses saved volatile RDX; MOV-based save/restore does not change FLAGS.
+Results are normalized into the assigned bool/GPR location. No XMM bool or
+outstanding floating FLAGS value escapes this atomic semantic operation. Branch
+lowering tests the materialized bool immediately before its conditional branch.
+The existing numbered integer FLAGS/call restrictions remain in force, including
+the EVT2f3 stale-FLAGS negative tests. Full floating calls remain rejected.
+
+### Storage and native evidence
+
+`native_scalar.concept` contains 50 no-call functions. Compiled Concept emits one
+5,332-byte image, then the Windows AMD64 harness uses RW allocation, a complete
+copy, RX protection, instruction-cache flush and correctly typed native
+entrypoints. The independent strict-C11 oracle uses no fast-math and compares:
+
+- Eight scalar arithmetic forms, both noncommutative orders and multi-operation
+  expressions, plus both widths' sign-bit negation.
+- 588 materialized comparisons and 588 comparison/branch cases over seven-value
+  domains: negative finite, +0, -0, positive finite, +/-infinity and payload NaN.
+- Exact float32 `0x3dcccccd` and float64 `0x3ff0000000000001` source constants.
+  Primitive native constant tests additionally check signed zeros, infinities
+  and payload-bearing NaNs as exact bits.
+- Scalar slot loads/stores, typed incoming array loads/stores with stride 4/8,
+  and payload-preserving array stores. Existing checked-index admission remains
+  authoritative; native unsigned extent comparison rejects negative/too-large
+  indices with UD2 rather than bypassing the guard. Invalid traps are not invoked
+  inside the parent test process.
+- Eight simultaneously live float32/float64 parameters, real pressure spills,
+  reloads and arithmetic execution through typed Win64 entrypoints.
+- Quantity interpretation, exact signed zero, and finite/infinite/zero division
+  categories, including zero/zero and infinity/infinity.
+
+Primitive exact bytes pin the twelve requested load/arithmetic/UCOMI forms,
+MOVSS/MOVSD stores, one RSP spill/reload sequence, both negation sequences and
+high-XMM REX. Typed malformed operands reject representation/class/width errors,
+invalid memory form, negative/out-of-range displacement, unsupported operation,
+invalid constant width and insufficient capacity. The shared byte writer now
+also rejects a negative cursor before indexing caller storage; valid integer
+bytes are unchanged. There is no literal pool requiring unresolved-pool tests.
+
+`EmitModule` validates the entire artifact, rejects floating calls before any
+output/image mutation, emits directly into the same caller-owned writer and
+finalizes only after resolving function branches. It does not allocate a second
+native runner or a temporary giant code array. All 100 complete module emissions
+match final bytes, symbol metadata and layout. Normal/Verify match exactly.
+Existing EVT2f3 61-function/100-run planner coverage and EVT2f2 transport/52-invalid
+artifact tests remain qualified. New metadata has PlainData/NoAllocation proofs;
+existing StaticExtent-four register-table proof remains checked.
+
+### Measurements and limits
+
+In one concurrent qualification run, 101 full 50-function emissions took
+19,414 ms Normal and 18,907 ms Verify, including repeated artifact validation,
+allocation and frame realization. The image contains 5,332 bytes. Ten thousand
+selection and low-level encoding calls were below the millisecond timer's
+resolution; immediate constant materialization measured 0–1 ms. The 100,000-call native arithmetic sample was below one millisecond at this
+timer resolution; it must not be interpreted as zero execution cost. These are informational clock()-based
+samples with host/call-loop overhead, not claims of superiority over C/C++.
+
+The qualified subset is scalar float32/float64 no-call arithmetic, comparisons,
+scalar locals, incoming checked indexed floating arrays, pressure spills and
+minimal Win64 entry/return. Locally initialized indexed aggregates, additional GPR operations (including
+integer/bool constants and slots) inside mixed CMIRAMD4 modules, conversions, binary16, SIMD,
+AVX, external/indirect/variadic/aggregate calls, COFF and unwind/SEH are not
+qualified. Pure integer modules retain their frozen CMIRAMD3 path. All generated
+floating calls, internal call chains and actual live-across-call floating
+execution remain EVT2f5 responsibilities, with the precise call boundary above.
+Final validation/identities and updated latest-baseline counts are recorded in
+the convergence ledger. Frozen Zig is skipped because its path was unchanged.

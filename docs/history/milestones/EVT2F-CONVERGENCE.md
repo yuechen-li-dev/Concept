@@ -207,3 +207,110 @@ SSE encoding, native floating execution, SIMD/aggregates/varargs, nonvolatile XM
 save/restore and external/indirect calls remain unqualified. EVT2f4 was not begun.
 
 SUCCESS — EVT2f3 Cathedral XMM allocation and mixed Win64 ABI qualified.
+
+
+## EVT2f4 — Scalar SSE2 native arithmetic (latest optimization baseline)
+
+The user superseded the original baseline request and directed use of latest
+because NURBS/SMLIB optimization work had landed separately. Started with a clean
+`9d57d649b0edca082c0af6f15b9827a05ef363e1`, compiler
+`concept-evt1-stage0-go`. That checkout lacked EVT2f1–f3, so their prerequisites
+from `6f03274541fcb9a6426c99b04dfbae3e0bf21233` were reconciled cleanly with the
+latest changes. Checkpoint `aef7824adfd720f00bfdad28e882077879c8d7fa` preserves that
+integration; no optimization work was reverted. The active checkout is now main.
+
+Isolated baseline full Go qualification passed at both requested history and
+latest: original EVT2f3 compiler 400.246 s / CLI 58.691 s / GPU-free Vulkan
+0.451 s; latest optimization baseline compiler 400.189 s / CLI 27.504 s /
+GPU-free Vulkan 0.452 s. Task-created detached checkouts were removed after their
+processes completed and their clean state was checked; logs were copied to the
+active checkout's ignored `artifacts/evt2f4-*`. Other checkouts were untouched.
+
+Removed blocker: Concept now selects and encodes MOVSS/MOVSD, ADDSS/ADDSD,
+SUBSS/SUBSD, MULSS/MULSD, DIVSS/DIVSD and UCOMISS/UCOMISD. Negation flips bit
+31/63 through MOVD/MOVQ and BTC. Immediate materialization preserves exact IEEE
+bytes without decimal conversion, literal pools or process-specific addresses.
+All six comparisons guard unordered cases correctly; bool results remain GPR.
+Branch fixups resolve before native-image finalization and RW-to-RX publication.
+
+The existing allocator, class pools, reserved XMM6..XMM15 policy and one-frame
+geometry remain authoritative. Native no-call frames request four generalized
+move-temp slots for ordinal entry capture and bounded scratch. XMM5 is explicitly
+borrowed and restored rather than secretly reserved from the allocator. Sources
+remain live under destructive SSE operations, including noncommutative SUB/DIV
+and pressure-spilled sources/results. RAX and parity scratch are preserved unless
+they carry a result. No native floating call pipeline was added.
+
+The real source -> verified LIR -> CMIRAMD4 -> allocation/frame -> Concept SSE2
+-> finalized image -> typed Win64 entrypoint path passes in Normal and Verify.
+The new fixture has 50 no-call functions and produces 5,332 bytes. Independent
+strict-C11 oracles check eight arithmetic forms and multi-operation expressions,
+negation, 588 bool comparisons and 588 branch cases, signed zeros, infinities,
+NaN categories/payload copies, exact constants, scalar locals, checked incoming
+array loads/stores, eight-parameter XMM pressure and quantity interpretation.
+Primitive exact-byte fixtures pin the requested instruction families, store/
+reload, negation and encoder-only high-XMM REX. Malformed typed operands,
+representations, memory/displacements, constant widths and capacity reject.
+A negative writer cursor is now rejected by the shared bounded byte writer.
+
+One hundred complete images match bytes, symbol layout and metadata; Normal and
+Verify match exactly. All 61 EVT2f3 planning functions and 100-run transport,
+allocation/frame/move gates remain checked. CMIRAMD3/4 schemas and generated
+codecs/metadata remain unchanged. Pure integer native modules retain frozen
+CMIRAMD3 bytes. Source oracle, EVT2/EVT2x/EVT2e native paths and the frozen
+pushdown byte oracle pass. Typed PlainData/NoAllocation assertions and the
+existing StaticExtent-four table proof are checked through the real compiler.
+
+New code/test implementation is committed as
+`4af10109b373eade17e6e85baec41ea4a0d56ae2` (EVT2f4: encode scalar SSE2 and execute
+no-call floating images). The following documentation commit records the final
+qualification evidence; its full identity and final tracked-clean status are
+reported at completion.
+
+Final `go test ./... -count=1` passed: compiler 439.248 s, CLI 74.072 s,
+GPU-free Vulkan 0.425 s. This includes latest optimization tests, semantic corpus,
+EVT2/EVT2x/EVT2e native execution, frozen integer bytes, generated-output agreement,
+EVT2f source oracle, all EVT2f3 planning gates and native SSE tests. Final vet
+passed. Focused race including EVT2f3/transport/native passed (137.116 s); final
+native-only race passed (117.325 s). The final native/CLI gate passed (compiler
+62.325 s / CLI 11.762 s), and the strengthened primitive/error/timing gate passed
+again (18.577 s).
+
+Standard 44, DragonGod 23 and Golden 130 passed each in Normal/Verify. The latest
+optimization baseline includes two additional Standard tests beyond the historical
+42; they were retained. The unchanged latest semantic manifest is 444 valid /
+357 static-invalid / 15 runtime-negative / five compatibility / four
+expected-divergence, rather than historical EVT2f3's 440 valid. New EVT2f4 native specimens
+are dedicated qualification files outside that manifest.
+
+Real Concept check passed for the authored backend and native fixture. Canonical
+format check and the real R9d match-preference manifest lint passed without
+findings in Normal/Verify. Typed PlainData/NoAllocation assertions, the existing
+StaticExtent-four proof, 100-run images/plans, malformed artifact/operand gates
+and untouched output/image admission checks passed. Final whitespace/diff checks
+passed. Frozen root and legacy Zig suites were skipped because the frozen Zig
+compiler and its build/test infrastructure were unchanged. Routine optimized
+shared-build reuse remained enabled; opt-in cold-build stress was not run.
+Qualification logs remain under ignored `artifacts/evt2f4-*`.
+
+One concurrent full run failed only `TestNativeSchedulerWorkers` with exit 6:
+the harness requires at least two OS workers to receive work on every trial.
+Its result/step-count assertions did not report a mismatch. The unchanged
+scheduler test passed three isolated runs (14.440 s total), and latest-baseline
+full qualification passed. No scheduler implementation, participation assertion
+or test budget was weakened. The failure log is preserved in
+`artifacts/evt2f4-before-scheduler-rerun-go.log`; the final full rerun is recorded
+above.
+
+Informational measurements are documented in the
+[conformance report](../../conformance/EVT2F-CONFORMANCE.md#evt2f4--scalar-sse2-native-arithmetic).
+Selection/encoding/constant samples and 100,000 native calls use millisecond
+clock() resolution, without a performance threshold or superiority claim.
+Locally initialized indexed aggregates and general integer arithmetic inside
+mixed CMIRAMD4 remain unsupported scalar forms. Call-bearing scalar modules
+stop at `AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION` before output/image mutation.
+Native mixed call chains, external/indirect/variadic/aggregate calls, live-across
+actual floating calls, nonvolatile XMM saves, SIMD/AVX/FMA, binary16, conversions,
+COFF and unwind/SEH remain unqualified. EVT2f5 was not begun.
+
+SUCCESS — EVT2f4 Cathedral scalar SSE2 encoding and native arithmetic qualified.

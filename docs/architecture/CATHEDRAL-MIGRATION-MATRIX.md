@@ -68,11 +68,21 @@ prerequisite recorded in EVT2f1 is now qualified. The current bounded transition
 | Physical XMM allocator | Concept authoritative; EVT2f3 qualified | Admitted virtual class/value identities | Later optimization/nonvolatile qualification |
 | Mixed positional Win64 ABI and XMM clobbers | Concept authoritative; EVT2f3 qualified | Ordered checked types; presentation host | SSE realization and later runtime ABI oracle |
 | Float spills and native frame integration | Concept authoritative; EVT2f3 qualified | Typed semantic locals | Encode already qualified actions in later slice |
-| SSE2 encoding | Pending Cathedral | Semantic float operations and exact bits | Later selection/byte oracles |
-| Native float execution | Not yet qualified | C source oracle remains independent | Real native/C execution parity after encoder qualification |
+| Scalar SSE2 encoding | Concept authoritative; EVT2f4 qualified | Semantic scalar ops and exact bits | Later unsupported forms/optimizations only |
+| No-call native float execution | Concept authoritative; EVT2f4 qualified | Existing Win64 RW-to-RX host and independent strict C11 oracle | EVT2f5 for generated floating calls |
 
 The normal backend validates CMIRAMD4, derives and qualifies XMM allocation,
 mixed Win64 calls, preservation, moves and one concrete frame, then stops at
 `AMD64_UNSUPPORTED_SSE_ENCODING`. Go retains no physical floating algorithm.
 The 100-run Normal/Verify plans and independent byte-stack replay qualify planning;
 they do not establish native floating execution. CMIRAMD3/4 remain frozen.
+
+
+EVT2f4 advances the no-call CMIRAMD4 path through real SSE2 encoding and native
+Win64 execution. The current stop for call-bearing modules is
+`AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION`. Immediate exact-bit constants require no
+pool or process-address relocation. Existing allocation and seven-region frame
+geometry remain authoritative; derived scratch uses four generalized temporary
+slots. Source/transport/byte/native oracles qualify the bounded arithmetic,
+comparison, scalar-local, incoming-array and pressure subset. Earlier SSE-stop
+statements above describe EVT2f3 history; no production Go SSE path exists.

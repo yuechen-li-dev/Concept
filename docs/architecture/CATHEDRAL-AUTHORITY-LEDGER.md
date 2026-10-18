@@ -23,7 +23,7 @@ second contract author.
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
 | Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call and EVT2f width-specific floating input contracts qualified; later Concept transformation parity |
 | Scalar floating/XMM allocation, ABI and frames | Cathedral AMD64/Win64ABI | Independent byte-stack replay and strict C11 source oracle | Stage-0 produces checked floating LIR/CMIRAMD4 and hosts compiled Concept | CONCEPT_AUTHORITATIVE | EVT2f3 qualifies XMM0..XMM5, mixed positional ABI, typed spills/moves and one frame; normal path reaches AMD64_UNSUPPORTED_SSE_ENCODING |
-| SSE encoding and native floating execution | Pending Cathedral | Source oracle and abstract call simulator only | No Go floating native algorithm | NOT_YET_QUALIFIED | No floating machine bytes or native execution claim |
+| Scalar SSE2 encoding and no-call native execution | Cathedral AMD64 | Independent strict C11/native and exact-byte oracles | Stage-0 checked input and executable-memory host | CONCEPT_AUTHORITATIVE | EVT2f4 qualifies arithmetic/comparisons/constants/slots/incoming arrays/pressure; mixed calls stop at AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION |
 | CMIRAMD4 scalar/XMM contract | Concept BridgeSchema4 | Exact generated codec agreement and 52 malformed artifacts | Generated Go transport; checked LIR projection/verifier | CONCEPT_AUTHORITATIVE | Virtual class, exact representation, IEEE bits, semantic operations and ordered calls qualified in EVT2f2; no physical XMM identities |
 | MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
@@ -116,3 +116,14 @@ BOOTSTRAP_ONLY presentation and INDEPENDENT_ORACLE tests. The current stop is
 `AMD64_UNSUPPORTED_SSE_ENCODING`; native floating execution remains
 NOT_YET_QUALIFIED. Earlier EVT2f2 statements above describe that historical state.
 See [EVT2f3 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f3--xmm-allocation-mixed-win64-abi-and-floating-frames).
+
+
+EVT2f4 qualifies Concept-owned scalar SSE2 selection, encoding, immediate IEEE
+constant materialization, sign-bit negation and unordered-aware comparisons.
+Native entry/return, one-frame scratch, locals, incoming checked indexed arrays,
+pressure spills and deterministic no-call images are qualified in Normal/Verify.
+Go retains checked transport, presentation, RW-to-RX orchestration and independent
+oracles. CMIRAMD3/4 remain unchanged; the latest SMLIB/NURBS optimization baseline
+is preserved. Earlier SSE-stop statements describe EVT2f3 history. The current
+remaining floating call boundary is `AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION`.
+No generated mixed floating calls or live-across actual calls are qualified.
