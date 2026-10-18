@@ -127,3 +127,8 @@ oracles. CMIRAMD3/4 remain unchanged; the latest SMLIB/NURBS optimization baseli
 is preserved. Earlier SSE-stop statements describe EVT2f3 history. The current
 remaining floating call boundary is `AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION`.
 No generated mixed floating calls or live-across actual calls are qualified.
+
+The AMD64 implementation is organized into ordinary `AMD64.*.concept` modules
+for model, analysis, frame realization and encoding, with `AMD64.concept`
+retaining the public emission entry point. This organizational split preserves
+the existing authority and contracts; see the [backend source map](../../libraries/Standard/Backend/README.md).

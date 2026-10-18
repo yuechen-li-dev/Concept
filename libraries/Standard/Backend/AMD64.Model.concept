@@ -1,0 +1,421 @@
+module Standard.Backend.AMD64.Model;
+profile Core;
+import Standard.Backend.BridgeValidate4;
+import Standard.Backend.BridgeValidate;
+import Standard.Backend.Win64ABI;
+import Standard.Semantic.Vocabulary;
+
+record struct MachineOperand
+{
+    OperandKind kind;
+    int id;
+    int width;
+    int base;
+    int baseSlot;
+    int index;
+    int scale;
+    int displacement;
+    BridgeText literal;
+    BridgeText region;
+    bool signedValue;
+}
+struct ProjectedCall
+{
+    BridgeText target;
+    int argumentCount;
+    int[8] values;
+    CallValueType[8] types;
+    CallValueType result;
+}
+ProjectedCall EmptyProjectedCall() {
+    return ProjectedCall {
+        BridgeText{0, 0}, 0,[- 1 ...],[CallValueType::Void ...], CallValueType::Void
+    };
+}
+record struct MachineInstruction
+{
+    Opcode op;
+    MachineOperand destination;
+    MachineOperand source0;
+    MachineOperand source1;
+    int sourceCount;
+    int width;
+    int flagsDef;
+    int flagsUse;
+    Condition condition;
+    int lirBlock;
+    int lirInstruction;
+    int sourceLine;
+    int sourceColumn;
+    ProjectedCall call;
+}
+record struct MachineBlock
+{
+    int id;
+    int lirBlock;
+    int firstInstruction;
+    int instructionCount;
+    Opcode terminator;
+    int trueBlock;
+    int falseBlock;
+    Condition condition;
+    int flagsUse;
+    int sourceLine;
+    int sourceColumn;
+}
+record struct MachineVReg {
+    int id;
+    int width;
+    bool address;
+}
+record struct MachineSlot
+{
+    int id;
+    int size;
+    int alignment;
+    bool incomingIndirect;
+    int baseVReg;
+    BridgeText source;
+}
+record struct MachineArg
+{
+    BridgeText typeName;
+    int index;
+    int width;
+    bool indirect;
+    Register physical;
+    int stackOffset;
+    bool onStack;
+    int virtualReg;
+}
+struct BackendFunction
+{
+    BridgeText identity;
+    BridgeText name;
+    BridgeText result;
+    int frameLocalSize;
+    int frameAlignment;
+    int frameShadowSpace;
+    bool hasCalls;
+    MachineArg[8] args;
+    int argCount;
+    MachineVReg[512] virtualRegs;
+    int virtualRegCount;
+    MachineSlot[64] slots;
+    int slotCount;
+    MachineBlock[128] blocks;
+    int blockCount;
+    MachineInstruction[512] instructions;
+    int instructionCount;
+    bool scalar;
+    ScalarRepresentation[128] scalarTypes;
+    ScalarRepresentation[64] slotTypes;
+    ScalarOpcode[512] scalarOperations;
+    ScalarRepresentation scalarResult;
+    int nativeTemporaryCount;
+}
+MachineOperand EmptyOperand()
+{
+    return MachineOperand {
+        OperandKind::None, 0, 0, - 1, - 1, - 1, 1, 0,
+        BridgeText{0, 0}, BridgeText{0, 0}, false
+    };
+}
+MachineInstruction EmptyInstruction()
+{
+    return MachineInstruction {
+        Opcode::None, EmptyOperand(), EmptyOperand(),
+        EmptyOperand(), 0, 0, - 1, - 1, Condition::None, 0, 0, 0, 0, EmptyProjectedCall()
+    };
+}
+BackendFunction EmptyFunction()
+{
+    return BackendFunction {
+        BridgeText{0, 0}, BridgeText{0, 0}, BridgeText{0, 0},
+        0, 16, 0, false,
+        [MachineArg {
+            BridgeText{0, 0}, 0, 0, false, Register::RAX, 0, false, 0
+        }
+        ...], 0,
+        [MachineVReg{0, 0, false}
+        ...], 0,
+        [MachineSlot {
+            0, 0, 0, false, - 1, BridgeText{0, 0}
+        }
+        ...], 0,
+        [MachineBlock{0, 0, 0, 0, Opcode::None, 0, 0, Condition::None, - 1, 0, 0}
+        ...], 0,
+        [EmptyInstruction() ...], 0, false,[ScalarRepresentation::Void ...],[ScalarRepresentation::Void ...],
+        [ScalarOpcode::Const ...], ScalarRepresentation::Void, 0
+    };
+}
+struct Allocation
+{
+    int[512] start;
+    int[512] end;
+    Register[512] physical;
+    bool[512] assigned;
+    bool[15] usedCalleeSaved;
+    int callCount;
+    int shadowSpaceBytes;
+    int stackArgumentBytes;
+    int temporaryCount;
+    int preservationCount;
+    ScalarLocation[512] scalarLocations;
+    bool[512] spilled;
+}
+Allocation EmptyAllocation()
+{
+    return Allocation {
+        [2147483647 ...],[- 1 ...],[Register::RAX ...],[false ...],[false ...], 0, 0, 0, 0, 0,[GPRLocation(Register::RAX) ...],
+        [false ...]
+    };
+}
+struct LivenessBits {
+    int[17] words;
+}
+struct Liveness
+{
+    // 128 blocks * 17 words of 31 bits: 512 virtual registers per block. The same
+    // fixed-capacity representation serves ordinary and generated functions.
+    LivenessBits[128] use;
+    LivenessBits[128] def;
+    LivenessBits[128] liveIn;
+    LivenessBits[128] liveOut;
+}
+Liveness EmptyLiveness()
+{
+    return Liveness {
+        [LivenessBits{[0 ...]}
+        ...],[LivenessBits{[0 ...]}
+        ...],
+        [LivenessBits{[0 ...]}
+        ...],[LivenessBits{[0 ...]}
+        ...]
+    };
+}
+struct ByteWriter {
+    Span<byte> bytes;
+    int offset;
+}
+record struct BranchFixup {
+    int patchOffset;
+    int targetBlock;
+}
+struct EncodingPlan
+{
+    int[128] blockOffsets;
+    BranchFixup[256] fixups;
+    int fixupCount;
+}
+
+// Scratch storage belongs to the caller; no phase allocates a hidden heap.
+struct EncodingWorkspace
+{
+    Span<int> blockOffsets;
+    Span<BranchFixup> fixups;
+    int fixupCount;
+    Span<CallFixup> calls;
+    int callCount;
+    int functionOrdinal;
+    bool allowCalls;
+}
+enum CallFixupKind {
+    Rel32Call
+}
+record struct CallFixup {
+    CallFixupKind kind;
+    int sourceOrdinal;
+    BridgeText source;
+    BridgeText target;
+    int callOffset;
+    int patchOffset;
+    int displacement;
+    bool resolved;
+}
+record struct NativeSymbol {
+    BridgeText identity;
+    BridgeText name;
+    int ordinal;
+    int offset;
+    int size;
+    int calls;
+}
+enum NativeError {
+    CapacityExceeded, InvalidInput, DuplicateSymbol, UnresolvedSymbol, Rel32OutOfRange, MalformedPatch,
+    UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation,
+    UnsupportedSSEEncoding, ScalarPlanningFailure, RegisterExhausted, InvalidABILocation, UnsupportedABIClass,
+    UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
+    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation
+}
+struct NativeImage {
+    NativeSymbol[128] symbols;
+    int symbolCount;
+    CallFixup[512] fixups;
+    int fixupCount;
+    int byteCount;
+    bool finalized;
+}
+CallFixup EmptyCallFixup() {
+    return CallFixup {
+        CallFixupKind::Rel32Call, - 1, BridgeText{0, 0}, BridgeText{0, 0}, - 1, - 1, 0, false
+    };
+}
+NativeImage EmptyNativeImage() {
+    return NativeImage {
+        [NativeSymbol {
+            BridgeText{0, 0}, BridgeText{0, 0}, - 1, 0, 0, 0
+        }
+        ...], 0,[EmptyCallFixup() ...], 0, 0, false
+    };
+}
+
+// Native stack storage is distinct from persistent automata MachineFrame state.
+enum FrameError {
+    CapacityExceeded, InvalidAlignment, UnsupportedWidth, Overlap, InvalidOffset, UnresolvedSpill, UnresolvedTemporary,
+    InvalidSaveRestore, InvalidActions, InvalidInput
+}
+enum FrameRegionKind {
+    OutgoingShadow, OutgoingArguments, LocalSlots, SavedRegisters, SpillSlots, MoveTemps, AlignmentPadding
+}
+enum FrameActionKind {
+    Allocate, Save, Restore, Store, Load, Copy, AbstractCall, Release, Return
+}
+enum CallReplayInput {
+    Store, Load, Copy, Call
+}
+// The executable protocol rejects stores after the abstract clobber and a
+// second call. Register/slot semantics remain the replay checker's authority.
+automata CallReplayProtocol with input CallReplayInput {
+    machine Main {
+        state PreCall {
+            on CallReplayInput::Store => PreCall;
+            on CallReplayInput::Load => PreCall;
+            on CallReplayInput::Copy => PreCall;
+            on CallReplayInput::Call => PostCall;
+        }
+        state PostCall {
+            on CallReplayInput::Load => PostCall;
+            on CallReplayInput::Copy => PostCall;
+        }
+    }
+}
+record struct FrameSlot {
+    FrameRegionKind category;
+    int identity;
+    int offset;
+    int size;
+    int alignment;
+}
+record struct FrameRegion {
+    FrameRegionKind category;
+    int offset;
+    int size;
+}
+record struct FrameAction {
+    FrameActionKind kind;
+    Register source;
+    Register destination;
+    int slot;
+    int offset;
+    int width;
+    int value;
+}
+struct CallSiteActions {
+    CallPlan abi;
+    FrameAction[32] actions;
+    int count;
+    int callIndex;
+    ScalarMove[32] scalarActions;
+    int[32] sourceOffsets;
+    int[32] destinationOffsets;
+}
+FrameAction EmptyFrameAction() {
+    return FrameAction {
+        FrameActionKind::Copy, Register::RAX, Register::RAX, - 1, - 1, 0, - 1
+    };
+}
+CallSiteActions EmptyCallSiteActions() {
+    return CallSiteActions {
+        EmptyCallPlan(),[EmptyFrameAction() ...], 0, - 1,[ScalarMove {
+            GPRLocation(Register::RAX), GPRLocation(Register::RAX), ScalarRepresentation::Void
+        }
+        ...],[- 1 ...],[- 1 ...]
+    };
+}
+struct FinalizedFrame
+{
+    int byteCount;
+    int[64] slotOffsets;
+    int unalignedSize;
+    int padding;
+    FrameSlot[512] slots;
+    int slotCount;
+    FrameRegion[7] regions;
+    int[512] spillSlots;
+    int[15] saveSlots;
+    int[4] tempSlots;
+    int[4] outgoingSlots;
+    FrameAction[10] prologue;
+    int prologueCount;
+    FrameAction[10] epilogue;
+    int epilogueCount;
+    int returnCount;
+    int[128] returnBlocks;
+    ScalarRepresentation[512] representations;
+}
+FinalizedFrame EmptyFinalizedFrame() {
+    return FinalizedFrame {
+        0,[- 1 ...], 0, 0,[FrameSlot{FrameRegionKind::LocalSlots, - 1, 0, 0, 1}
+        ...], 0,
+        [FrameRegion{FrameRegionKind::OutgoingShadow, 0, 0}
+        ...],[- 1 ...],[- 1 ...],[- 1 ...],[- 1 ...],
+        [EmptyFrameAction() ...], 0,[EmptyFrameAction() ...], 0, 0,[- 1 ...],[ScalarRepresentation::Void ...]
+    };
+}
+EncodingPlan EmptyEncodingPlan()
+{
+    return EncodingPlan {
+        [- 1 ...],[BranchFixup{0, 0}
+        ...], 0
+    };
+}
+
+
+
+// Derived scalar SSE2 encoding. No physical or byte state enters CMIRAMD4.
+enum SSEError {
+    UnsupportedRepresentation, UnsupportedOperation, InvalidOperand, RepresentationMismatch, InvalidDisplacement,
+    BufferFull
+}
+record struct ScalarSSESelection {
+    int prefix;
+    int opcode;
+}
+
+// A memory operand refers to finalized post-prologue RSP storage. The offset
+// is supplied by the frame owner; the encoder does not allocate a stack slot.
+record struct ScalarSSEOperand {
+    bool memory;
+    ScalarLocation location;
+    ScalarRepresentation representation;
+    int offset;
+    int width;
+}
+
+
+ScalarSSEOperand ScalarRegisterOperand(XMMRegister register, ScalarRepresentation type) {
+    return ScalarSSEOperand{false, XMMLocation(register), type, - 1, ScalarWidth(type)};
+}
+ScalarSSEOperand ScalarStackOperand(int offset, ScalarRepresentation type) {
+    return ScalarSSEOperand {
+        true, StorageLocation(ScalarLocationKind::Temporary, 0, type), type, offset, ScalarWidth(type)
+    };
+}
+MachineOperand ScalarAddressMemory(int base, int index, int stride) {
+    return MachineOperand {
+        OperandKind::Memory, - 1, 8, base, - 1, index, stride, 0, BridgeText{0, 0}, BridgeText {
+            0, 0
+        }, false
+    };
+}

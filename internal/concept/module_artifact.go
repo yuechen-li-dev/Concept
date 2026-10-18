@@ -421,7 +421,15 @@ func ResolveSemanticModuleArtifacts(roots []string, imports []string) (map[strin
 		if artifact.ModuleIdentity != name {
 			return nil, fmt.Errorf("MODULE_IDENTITY_MISMATCH: import %s resolved artifact %s", name, artifact.ModuleIdentity)
 		}
+		artifactRoot := strings.TrimSuffix(matches[0], relative)
+		sources := evt1ModuleSourceMatches([]string{artifactRoot}, name)
+		if len(sources) > 1 {
+			return nil, fmt.Errorf("MODULE_IDENTITY_DUPLICATE: %s resolves to %s", name, strings.Join(sources, ", "))
+		}
 		sourcePath := strings.TrimSuffix(matches[0], ".concept-module.json") + ".concept"
+		if len(sources) == 1 {
+			sourcePath = sources[0]
+		}
 		if source, err := os.ReadFile(sourcePath); err == nil && digest(source) != artifact.SourceSHA256 {
 			return nil, fmt.Errorf("MODULE_ARTIFACT_STALE: %s changed; rebuild %s", filepath.ToSlash(sourcePath), filepath.ToSlash(matches[0]))
 		}
@@ -486,19 +494,7 @@ func buildSemanticModuleArtifactsFromSources(roots []string, imports []string, p
 			return nil
 		}
 		states[name] = 1
-		relative := filepath.FromSlash(strings.ReplaceAll(name, ".", "/") + ".concept")
-		var matches []string
-		seen := map[string]bool{}
-		for _, root := range roots {
-			candidate := filepath.Clean(filepath.Join(root, relative))
-			if seen[candidate] {
-				continue
-			}
-			seen[candidate] = true
-			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-				matches = append(matches, candidate)
-			}
-		}
+		matches := evt1ModuleSourceMatches(roots, name)
 		if len(matches) == 0 {
 			return fmt.Errorf("MODULE_IMPORT_MISSING: no module source for %s under test roots", name)
 		}

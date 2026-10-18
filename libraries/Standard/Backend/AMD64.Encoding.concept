@@ -1,0 +1,940 @@
+module Standard.Backend.AMD64.Encoding;
+profile Core;
+import Standard.Backend.AMD64.Frame;
+
+Result<int, NativeError> CallDisplacement(uint64 target, uint64 call) {
+    uint64 limit = 18446744073709551610;
+    if (call > limit) { return Result::Error(NativeError::Rel32OutOfRange); }
+    uint64 after = call + 5;
+    if (target >= after) {
+        uint64 magnitude = target - after;
+        if (magnitude > 2147483647) { return Result::Error(NativeError::Rel32OutOfRange); }
+        return Result::Ok(magnitude as int);
+    }
+    uint64 magnitude = after - target;
+    if (magnitude > 2147483648) { return Result::Error(NativeError::Rel32OutOfRange); }
+    if (magnitude == 2147483648) { return Result::Ok(- 2147483648); }
+    return Result::Ok(-(magnitude as int));
+}
+Result<void, BackendError> WriteCallPlaceholder(ref ByteWriter writer, ref EncodingWorkspace workspace,
+BridgeText source, BridgeText target) {
+    if (not workspace.allowCalls) {
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
+    if (workspace.callCount >= Len(workspace.calls)) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    int site = writer.offset;
+    WriteByte(ref writer, 232) ?;
+    WriteI32LE(ref writer, 0) ?;
+    workspace.calls[workspace.callCount] = CallFixup {
+        CallFixupKind::Rel32Call, workspace.functionOrdinal, source, target, site, site + 1, 0, false
+    };
+    workspace.callCount += 1;
+    return Result::Ok();
+}
+
+// Fixed RSP addressing, independent of logical local slot IDs. This realizes
+// only admitted frame actions and incoming stack descriptors.
+Result<void, BackendError> WriteRSPReg(ref ByteWriter writer, bool load, Register physical, int offset,
+int width) {
+    if (offset < 0 or not ScalarStorageWidth(width)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    int code = RegisterEncoding(physical);
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, code, 4) ?;
+    }
+    int opcode = 137;
+    if (load) {
+        opcode = 139;
+    }
+    if (width == 1) {
+        opcode -= 1;
+    }
+    WriteByte(ref writer, opcode) ?;
+    if (offset <= 127) {
+        WriteByte(ref writer, 64 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteByte(ref writer, offset) ?;
+    }
+    else {
+        WriteByte(ref writer, 128 +(code % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteI32LE(ref writer, offset) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> EmitFrameAction(ref ByteWriter writer, FrameAction action) {
+    return match (action.kind) {
+        FrameActionKind::Allocate => WriteStackAdjustment(ref writer, true, action.offset),
+        FrameActionKind::Release => WriteStackAdjustment(ref writer, false, action.offset),
+        FrameActionKind::Save => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Restore => WriteRSPReg(ref writer, true, action.destination, action.offset,
+        action.width),
+        FrameActionKind::Store => WriteRSPReg(ref writer, false, action.source, action.offset, action.width),
+        FrameActionKind::Load => WriteRSPReg(ref writer, true, action.destination, action.offset, action.width),
+        FrameActionKind::Copy => EmitFrameCopy(ref writer, action),
+        FrameActionKind::AbstractCall => Result::Error(BackendError::UnsupportedCallLowering),
+        FrameActionKind::Return => WriteByte(ref writer, 195),
+    };
+}
+Result<void, BackendError> EmitFrameCopy(ref ByteWriter writer, FrameAction action) {
+    int opcode = 137;
+    if (action.width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, action.destination, action.source, action.width);
+}
+Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
+{
+    if (value < 0 or value > 255 or writer.offset < 0 or writer.offset >= Len(writer.bytes))
+    { return Result::Error(BackendError::BufferFull); }
+    writer.bytes[writer.offset] = value as byte;
+    writer.offset = writer.offset + 1;
+    return Result::Ok();
+}
+Result<void, BackendError> WriteI32LE(ref ByteWriter writer, int value)
+{
+    int remaining = value;
+    for (i in 0 .. 4)
+    {
+        int digit = remaining % 256;
+        if (digit < 0) {
+            digit = digit + 256;
+        }
+        WriteByte(ref writer, digit) ?;
+        remaining =(remaining - digit) / 256;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> PatchI32LE(ref ByteWriter writer, int offset, int value)
+{
+    if (offset < 0 or offset > writer.offset - 4)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    int saved = writer.offset;
+    writer.offset = offset;
+    WriteI32LE(ref writer, value) ?;
+    writer.offset = saved;
+    return Result::Ok();
+}
+Result<Register, BackendError> RegisterFromID(int id)
+{
+    return match (id)
+    {
+        0 => Result::Ok(Register::RAX),
+        1 => Result::Ok(Register::RBX),
+        2 => Result::Ok(Register::RCX),
+        3 => Result::Ok(Register::RDX),
+        4 => Result::Ok(Register::RSI),
+        5 => Result::Ok(Register::RDI),
+        6 => Result::Ok(Register::RBP),
+        7 => Result::Ok(Register::RSP),
+        8 => Result::Ok(Register::R8),
+        9 => Result::Ok(Register::R9),
+        10 => Result::Ok(Register::R10),
+        11 => Result::Ok(Register::R11),
+        12 => Result::Ok(Register::R12),
+        13 => Result::Ok(Register::R13),
+        14 => Result::Ok(Register::R14),
+        15 => Result::Ok(Register::R15),
+        _ => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+int RegisterEncoding(Register reg)
+{
+    return match (reg)
+    {
+        Register::RAX => 0,
+        Register::RCX => 1,
+        Register::RDX => 2,
+        Register::RBX => 3,
+        Register::RSP => 4,
+        Register::RBP => 5,
+        Register::RSI => 6,
+        Register::RDI => 7,
+        Register::R8 => 8,
+        Register::R9 => 9,
+        Register::R10 => 10,
+        Register::R11 => 11,
+        Register::R12 => 12,
+        Register::R13 => 13,
+        Register::R14 => 14,
+        Register::R15 => 15,
+    };
+}
+Result<Register, BackendError> ResolveRegister(
+ref const Allocation allocation, MachineOperand operand)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        if (operand.id < 0 or operand.id >= 512 or not allocation.assigned[operand.id])
+        { return Result::Error(BackendError::BridgeInvalid); }
+        return Result::Ok(allocation.physical[operand.id]);
+    }
+    if (operand.kind == OperandKind::Physical)
+    { return RegisterFromID(operand.id); }
+    return Result::Error(BackendError::UnsupportedInstruction);
+}
+Result<void, BackendError> WriteRex(
+ref ByteWriter writer, bool wide, int regCode, int rmCode)
+{
+    int rex = 64;
+    if (wide) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (rmCode >= 8) {
+        rex = rex + 1;
+    }
+    if (rex != 64) {
+        WriteByte(ref writer, rex) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteRegReg(
+ref ByteWriter writer, int opcode, Register rm, Register reg, int width)
+{
+    if (width != 1 and width != 2 and width != 4 and width != 8)
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int rmCode = RegisterEncoding(rm);
+    int regCode = RegisterEncoding(reg);
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
+    if (width == 1 and regCode < 8 and rmCode < 8 and(regCode >= 4 or rmCode >= 4)) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, width == 8, regCode, rmCode) ?;
+    }
+    WriteByte(ref writer, opcode) ?;
+    WriteByte(ref writer, 192 +(regCode % 8) * 8 + rmCode % 8) ?;
+    return Result::Ok();
+}
+int ScaleBits(int scale)
+{
+    if (scale == 1) { return 0; }
+    if (scale == 2) { return 1; }
+    if (scale == 4) { return 2; }
+    if (scale == 8) { return 3; }
+    return - 1;
+}
+Result<void, BackendError> WriteMemoryReg(
+ref ByteWriter writer, ref const Allocation allocation,
+int opcode, Register reg, MachineOperand memory, int width)
+{
+    if (memory.kind != OperandKind::Memory or memory.base < 0 or
+    memory.baseSlot >= 0 or(width != 1 and width != 4 and width != 8))
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    if (memory.base >= 512 or not allocation.assigned[memory.base])
+    { return Result::Error(BackendError::BridgeInvalid); }
+    int base = RegisterEncoding(allocation.physical[memory.base]);
+    int index = - 1;
+    if (memory.index >= 0)
+    {
+        if (memory.index >= 512 or not allocation.assigned[memory.index])
+        { return Result::Error(BackendError::BridgeInvalid); }
+        index = RegisterEncoding(allocation.physical[memory.index]);
+        if (index == 4) { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int scale = ScaleBits(memory.scale);
+    if (scale < 0) { return Result::Error(BackendError::InvalidEncoding); }
+    int regCode = RegisterEncoding(reg);
+    int rex = 64;
+    if (width == 8) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (index >= 8) {
+        rex = rex + 2;
+    }
+    if (base >= 8) {
+        rex = rex + 1;
+    }
+    if (rex != 64 or(width == 1 and regCode >= 4 and regCode < 8)) {
+        WriteByte(ref writer, rex) ?;
+    }
+    WriteByte(ref writer, opcode) ?;
+    int mode = 0;
+    if (memory.displacement != 0 or base % 8 == 5)
+    {
+        if (memory.displacement >= - 128 and memory.displacement <= 127)
+        {
+            mode = 1;
+        }
+        else {
+            mode = 2;
+        }
+    }
+    bool sib = index >= 0 or base % 8 == 4;
+    int rm = base % 8;
+    if (sib) {
+        rm = 4;
+    }
+    WriteByte(ref writer, mode * 64 +(regCode % 8) * 8 + rm) ?;
+    if (sib)
+    {
+        int indexField = 4;
+        if (index >= 0) {
+            indexField = index % 8;
+        }
+        WriteByte(ref writer, scale * 64 + indexField * 8 + base % 8) ?;
+    }
+    if (mode == 1)
+    {
+        int displacement = memory.displacement % 256;
+        if (displacement < 0) {
+            displacement = displacement + 256;
+        }
+        WriteByte(ref writer, displacement) ?;
+    }
+    if (mode == 2) {
+        WriteI32LE(ref writer, memory.displacement) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteStackReg(
+ref ByteWriter writer, ref const FinalizedFrame frame,
+int opcode, Register reg, MachineOperand slot, int width)
+{
+    if (slot.kind != OperandKind::Slot or slot.id < 0 or slot.id >= 64 or
+    frame.slotOffsets[slot.id] < 0 or(width != 4 and width != 8))
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int displacement = frame.slotOffsets[slot.id];
+    int regCode = RegisterEncoding(reg);
+    int rex = 64;
+    if (width == 8) {
+        rex = rex + 8;
+    }
+    if (regCode >= 8) {
+        rex = rex + 4;
+    }
+    if (rex != 64) {
+        WriteByte(ref writer, rex) ?;
+    }
+    WriteByte(ref writer, opcode) ?;
+    if (displacement <= 127)
+    {
+        WriteByte(ref writer, 64 +(regCode % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteByte(ref writer, displacement) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 128 +(regCode % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        WriteI32LE(ref writer, displacement) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteStackAdjustment(ref ByteWriter writer, bool subtract, int bytes)
+{
+    if (bytes == 0) { return Result::Ok(); }
+    if (bytes < 0) { return Result::Error(BackendError::InvalidEncoding); }
+    WriteByte(ref writer, 72) ?;
+    if (bytes <= 127)
+    {
+        WriteByte(ref writer, 131) ?;
+        if (subtract) {
+            WriteByte(ref writer, 236) ?;
+        }
+        else {
+            WriteByte(ref writer, 196) ?;
+        }
+        WriteByte(ref writer, bytes) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 129) ?;
+        if (subtract) {
+            WriteByte(ref writer, 236) ?;
+        }
+        else {
+            WriteByte(ref writer, 196) ?;
+        }
+        WriteI32LE(ref writer, bytes) ?;
+    }
+    return Result::Ok();
+}
+Result<int, BackendError> ParseI32Literal(
+ref const BridgeReader reader, BridgeText text)
+{
+    if (text.length == 0 or text.length > 11)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    int index = text.offset;
+    int end = text.offset + text.length;
+    bool negative = reader.data[index] == 45;
+    if (negative) {
+        index = index + 1;
+    }
+    if (index == end) { return Result::Error(BackendError::InvalidEncoding); }
+    int value = 0;
+    while (index < end) bounded(11)
+    {
+        int digit = reader.data[index] as int;
+        if (digit < 48 or digit > 57)
+        { return Result::Error(BackendError::InvalidEncoding); }
+        digit = digit - 48;
+        if (negative)
+        {
+            if (value < - 214748364 or
+            (value == - 214748364 and digit > 8))
+            { return Result::Error(BackendError::InvalidEncoding); }
+            value = value * 10 - digit;
+        }
+        else
+        {
+            if (value >(2147483647 - digit) / 10)
+            { return Result::Error(BackendError::InvalidEncoding); }
+            value = value * 10 + digit;
+        }
+        index = index + 1;
+    }
+    return Result::Ok(value);
+}
+Result<void, BackendError> WriteMovImmediate(
+ref ByteWriter writer, Register destination, int value, int width)
+{
+    if (width != 1 and width != 4)
+    { return Result::Error(BackendError::UnsupportedInstruction); }
+    int code = RegisterEncoding(destination);
+    if (width == 1 and code >= 4 and code < 8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, false, 0, code) ?;
+    }
+    if (width == 1)
+    {
+        if (value < - 128 or value > 255)
+        { return Result::Error(BackendError::InvalidEncoding); }
+        WriteByte(ref writer, 176 + code % 8) ?;
+        if (value < 0) {
+            value = value + 256;
+        }
+        WriteByte(ref writer, value) ?;
+    }
+    else
+    {
+        WriteByte(ref writer, 184 + code % 8) ?;
+        WriteI32LE(ref writer, value) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteCompareImmediate(
+ref ByteWriter writer, Register left, int value, int width)
+{
+    if (width != 4) { return Result::Error(BackendError::UnsupportedInstruction); }
+    int code = RegisterEncoding(left);
+    WriteRex(ref writer, false, 7, code) ?;
+    WriteByte(ref writer, 129) ?;
+    WriteByte(ref writer, 192 + 7 * 8 + code % 8) ?;
+    WriteI32LE(ref writer, value) ?;
+    return Result::Ok();
+}
+int ConditionEncoding(Condition condition)
+{
+    return match (condition)
+    {
+        Condition::None => - 1,
+        Condition::Equal => 4,
+        Condition::NotEqual => 5,
+        Condition::Less => 12,
+        Condition::LessEqual => 14,
+        Condition::Greater => 15,
+        Condition::GreaterEqual => 13,
+        Condition::Below => 2,
+        Condition::BelowEqual => 6,
+        Condition::Above => 7,
+        Condition::AboveEqual => 3,
+        Condition::Overflow => 0,
+        Condition::Carry => 2,
+    };
+}
+Result<void, BackendError> AddFixup(
+ref ByteWriter writer, ref EncodingPlan plan, int target)
+{
+    if (target < 0 or target >= 128 or plan.fixupCount >= 256)
+    { return Result::Error(BackendError::InvalidEncoding); }
+    plan.fixups[plan.fixupCount] = BranchFixup{writer.offset, target};
+    plan.fixupCount = plan.fixupCount + 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
+Result<void, BackendError> AddWorkspaceFixup(
+ref ByteWriter writer, ref EncodingWorkspace workspace, int target)
+{
+    if (target < 0 or target >= Len(workspace.blockOffsets))
+    { return Result::Error(BackendError::InvalidEncoding); }
+    if (workspace.fixupCount >= Len(workspace.fixups))
+    { return Result::Error(BackendError::CapacityExceeded); }
+    workspace.fixups[workspace.fixupCount] = BranchFixup{writer.offset, target};
+    workspace.fixupCount += 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
+Result<ScalarSSESelection, SSEError> SelectScalarSSE(ScalarOpcode operation, ScalarRepresentation representation) {
+    int prefix = 0;
+    match (representation) {
+        ScalarRepresentation::Float32 => {
+            prefix = 243;
+        }
+        ScalarRepresentation::Float64 => {
+            prefix = 242;
+        }
+        ScalarRepresentation::Void => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::Bool => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I8 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U8 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I16 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U16 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I32 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U32 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I64 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U64 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::Address => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+    }
+    int opcode = 0;
+    match (operation) {
+        ScalarOpcode::Load => {
+            opcode = 16;
+        }
+        ScalarOpcode::Store => {
+            opcode = 17;
+        }
+        ScalarOpcode::FloatAdd => {
+            opcode = 88;
+        }
+        ScalarOpcode::FloatSub => {
+            opcode = 92;
+        }
+        ScalarOpcode::FloatMul => {
+            opcode = 89;
+        }
+        ScalarOpcode::FloatDiv => {
+            opcode = 94;
+        }
+        ScalarOpcode::FloatEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatNotEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatLess => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatLessEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatGreater => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::Const => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::FloatConst => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::LoadSlot => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::StoreSlot => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(SSEError::UnsupportedOperation);
+        }
+        ScalarOpcode::CheckIndex => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedAdd => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedSub => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedMul => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Add => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Sub => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Mul => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Equal => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::NotEqual => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Less => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::LessEqual => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Greater => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::GreaterEqual => {
+            return Result::Error(SSEError::UnsupportedOperation);
+        }
+        ScalarOpcode::FloatNeg => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Call => { return Result::Error(SSEError::UnsupportedOperation); }
+    }
+    if (opcode == 46) {
+        prefix = 0;
+        if (representation == ScalarRepresentation::Float64) {
+            prefix = 102;
+        }
+    }
+    return Result::Ok(ScalarSSESelection{prefix, opcode});
+}
+Result<void, SSEError> ValidateScalarSSEOperand(ScalarSSEOperand operand, ScalarRepresentation representation) {
+    if (operand.representation != representation) {
+        return Result::Error(SSEError::RepresentationMismatch);
+    }
+    if (operand.width != ScalarWidth(representation)) {
+        return Result::Error(SSEError::RepresentationMismatch);
+    }
+    if (operand.location.registerClass != RegisterClass::XMM) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    if (operand.memory) {
+        if (operand.location.kind == ScalarLocationKind::Physical) {
+            return Result::Error(SSEError::InvalidOperand);
+        }
+        if (operand.offset<0 or operand.offset>2147483639) {
+            return Result::Error(SSEError::InvalidDisplacement);
+        }
+    } else {
+        if (operand.location.kind != ScalarLocationKind::Physical or XMMIndex(operand.location.xmm)<0 or XMMIndex(operand.location.xmm)>15) {
+            return Result::Error(SSEError::InvalidOperand);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, SSEError> EmitScalarSSE(ref ByteWriter writer, ScalarOpcode operation, ScalarRepresentation representation,
+ScalarSSEOperand destination, ScalarSSEOperand source) {
+    ScalarSSESelection selection = SelectScalarSSE(operation, representation) ?;
+    ValidateScalarSSEOperand(destination, representation) ?;
+    ValidateScalarSSEOperand(source, representation) ?;
+    if (destination.memory and operation != ScalarOpcode::Store) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    if (operation == ScalarOpcode::Store and(not destination.memory or source.memory)) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    bool memory = source.memory;
+    int offset = source.offset;
+    int reg = XMMIndex(destination.location.xmm);
+    int rm = XMMIndex(source.location.xmm);
+    if (operation == ScalarOpcode::Store) {
+        memory = true;
+        offset = destination.offset;
+        reg = XMMIndex(source.location.xmm);
+    }
+    if (memory) {
+        rm = 4;
+    }
+    int count = 4;
+    if (selection.prefix == 0) {
+        count = 3;
+    }
+    if (reg >= 8 or rm >= 8) {
+        count += 1;
+    }
+    if (memory) {
+        count += 2;
+        if (offset>127) {
+            count += 3;
+        }
+    }
+    if (writer.offset<0 or writer.offset>Len(writer.bytes) - count) {
+        return Result::Error(SSEError::BufferFull);
+    }
+    match (WriteScalarSSEBytes(ref writer, selection, reg, rm, memory, offset)) {
+        Result::Ok => { return Result::Ok(); }
+        Result::Error(error) => { return Result::Error(SSEError::BufferFull); }
+    }
+}
+Result<void, BackendError> WriteScalarSSEBytes(ref ByteWriter writer, ScalarSSESelection selection, int reg,
+int rm, bool memory, int offset) {
+    if (selection.prefix != 0) {
+        WriteByte(ref writer, selection.prefix) ?;
+    }
+    WriteRex(ref writer, false, reg, rm) ?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, selection.opcode) ?;
+    if (memory) {
+        int mode = 64;
+        if (offset>127) {
+            mode = 128;
+        }
+        WriteByte(ref writer, mode +(reg % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        if (offset>127) {
+            WriteI32LE(ref writer, offset) ?;
+        } else {
+            WriteByte(ref writer, offset) ?;
+        }
+    } else {
+        WriteByte(ref writer, 192 +(reg % 8) * 8 + rm % 8) ?;
+    }
+    return Result::Ok();
+}
+
+// UCOMIS{S,D} is immediately consumed here. No intervening instruction may
+// clobber FLAGS. Unordered-aware results are normalized to the existing bool.
+Result<void, BackendError> WriteScalarCompareBool(ref ByteWriter writer, ScalarOpcode operation) {
+    int condition = 0;
+    bool unorderedTrue = false;
+    bool guard = false;
+    match (operation) {
+        ScalarOpcode::FloatEqual => {
+            condition = 148;
+            guard = true;
+        }
+        ScalarOpcode::FloatNotEqual => {
+            condition = 149;
+            guard = true;
+            unorderedTrue = true;
+        }
+        ScalarOpcode::FloatLess => {
+            condition = 146;
+            guard = true;
+        }
+        ScalarOpcode::FloatLessEqual => {
+            condition = 150;
+            guard = true;
+        }
+        ScalarOpcode::FloatGreater => {
+            condition = 151;
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            condition = 147;
+        }
+        ScalarOpcode::Const => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::FloatConst => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::LoadSlot => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::StoreSlot => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Load => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Store => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckIndex => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Add => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Sub => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Mul => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Equal => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::NotEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Less => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::LessEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Greater => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::GreaterEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatDiv => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatNeg => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Call => { return Result::Error(BackendError::UnsupportedInstruction); }
+    }
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, condition) ?;
+    WriteByte(ref writer, 192) ?;
+    if (guard) {
+        int parity = 155;
+        if (unorderedTrue) {
+            parity = 154;
+        }
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, parity) ?;
+        WriteByte(ref writer, 194) ?;
+        int combine = 32;
+        if (unorderedTrue) {
+            combine = 8;
+        }
+        WriteByte(ref writer, combine) ?;
+        WriteByte(ref writer, 208) ?;
+    }
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, 182) ?;
+    WriteByte(ref writer, 192) ?;
+    return Result::Ok();
+}
+void ScalarSSEFacts() {
+    Assert.Concept<PlainData>(ScalarSSEOperand, "derived typed scalar operand");
+    Assert.Concept<NoAllocation>(EmitScalarSSE, "bounded caller-owned byte writer");
+}
+
+
+// Explicit scratch contract: RAX is volatile. These helpers neither allocate
+// registers nor expose source-language numeric conversions.
+Result<void, BackendError> WriteScalarXMMBits(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type,
+bool toXMM) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    int code = XMMIndex(register);
+    WriteByte(ref writer, 102) ?;
+    WriteRex(ref writer, type == ScalarRepresentation::Float64, code, 0) ?;
+    WriteByte(ref writer, 15) ?;
+    int opcode = 126;
+    if (toXMM) {
+        opcode = 110;
+    }
+    WriteByte(ref writer, opcode) ?;
+    WriteByte(ref writer, 192 +(code % 8) * 8) ?;
+    return Result::Ok();
+}
+Result<void, BackendError> WriteScalarNegation(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    WriteScalarXMMBits(ref writer, register, type, false) ?;
+    int bit = 31;
+    if (type == ScalarRepresentation::Float64) {
+        WriteByte(ref writer, 72) ?;
+        bit = 63;
+    }
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, 186) ?;
+    WriteByte(ref writer, 248) ?;
+    WriteByte(ref writer, bit) ?;
+    WriteScalarXMMBits(ref writer, register, type, true) ?;
+    return Result::Ok();
+}
+Result<void, BackendError> WriteScalarConstant(ref ByteWriter writer, ReadOnlySpan<byte> bits, XMMRegister register,
+ScalarRepresentation type) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    int width = ScalarWidth(type);
+    if (Len(bits) != width) { return Result::Error(BackendError::InvalidEncoding); }
+    if (width == 8) {
+        WriteByte(ref writer, 72) ?;
+    }
+    WriteByte(ref writer, 184) ?;
+    for (i in 0 .. width) {
+        WriteByte(ref writer, bits[i] as int) ?;
+    }
+    WriteScalarXMMBits(ref writer, register, type, true) ?;
+    return Result::Ok();
+}
+Result<void, BackendError> WriteSelectedScalar(ref ByteWriter writer, ScalarOpcode operation, ScalarRepresentation type,
+ScalarSSEOperand destination, ScalarSSEOperand source) {
+    return match (EmitScalarSSE(ref writer, operation, type, destination, source)) {
+        Result::Ok => Result::Ok(), Result::Error(error) => Result::Error(ScalarSSEBackendError(error)),
+    };
+}
+
+
+Result<void, BackendError> WriteScalarAddressSSE(ref ByteWriter writer, bool store, ScalarRepresentation type,
+XMMRegister register, Register base) {
+    ScalarOpcode operation = ScalarOpcode::Load;
+    if (store) {
+        operation = ScalarOpcode::Store;
+    }
+    ScalarSSESelection selection = ScalarSSESelection{0, 0};
+    match (SelectScalarSSE(operation, type)) {
+        Result::Ok(value) => {
+            selection = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int code = RegisterEncoding(base);
+    int reg = XMMIndex(register);
+    WriteByte(ref writer, selection.prefix) ?;
+    WriteRex(ref writer, false, reg, code) ?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, selection.opcode) ?;
+    int mode = 0;
+    if (code % 8 == 5) {
+        mode = 64;
+    }
+    WriteByte(ref writer, mode +(reg % 8) * 8 + code % 8) ?;
+    if (code % 8 == 4) {
+        WriteByte(ref writer, 36) ?;
+    }
+    if (mode != 0) {
+        WriteByte(ref writer, 0) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteScalarIndex(ref ByteWriter writer, WireScalarMachineInstruction instruction,
+int index, ref const BackendFunction function, ref const Allocation allocation, ref const FinalizedFrame frame) {
+    if (instruction.Op == ScalarOpcode::CheckIndex) {
+        WriteCompareImmediate(ref writer, allocation.scalarLocations[index].gpr, instruction.Extent,
+        4) ?;
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 130) ?;
+        WriteI32LE(ref writer, 2) ?;
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 11) ?;
+        return Result::Ok();
+    }
+    MachineSlot slot = function.slots[instruction.Slot];
+    Register destination = allocation.scalarLocations[instruction.Result].gpr;
+    int base = slot.baseVReg;
+    if (not slot.incomingIndirect) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    return WriteMemoryReg(ref writer, ref const allocation, 141, destination, ScalarAddressMemory(base,
+    index, instruction.Stride), 8);
+}
+
+
+BackendError ScalarSSEBackendError(SSEError error) {
+    return match (error) {
+        SSEError::BufferFull => BackendError::BufferFull,
+        SSEError::UnsupportedRepresentation => BackendError::UnsupportedInstruction,
+        SSEError::UnsupportedOperation => BackendError::UnsupportedInstruction,
+        SSEError::InvalidOperand => BackendError::InvalidEncoding,
+        SSEError::RepresentationMismatch => BackendError::InvalidEncoding,
+        SSEError::InvalidDisplacement => BackendError::InvalidEncoding,
+    };
+}

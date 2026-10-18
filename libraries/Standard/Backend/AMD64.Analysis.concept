@@ -1,0 +1,1213 @@
+module Standard.Backend.AMD64.Analysis;
+profile Core;
+import Standard.Backend.AMD64.Model;
+
+bool ValidWidth(int width)
+{
+    return width == 1 or width == 2 or width == 4 or width == 8;
+}
+Result<void, BackendError> ValidateOperand(
+ref const BackendFunction function, MachineOperand operand)
+{
+    // Establish bounds before forming the indexed width observation. Result
+    // validation must not depend on short-circuit lowering of an array guard.
+    if (operand.kind == OperandKind::Virtual) {
+        if (operand.id < 0 or operand.id >= function.virtualRegCount) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+    }
+    bool valid = match (operand.kind)
+    {
+        OperandKind::None => true,
+        OperandKind::Block => operand.id >= 0 and operand.id < function.blockCount,
+        OperandKind::Virtual => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < function.virtualRegCount and
+        operand.width == function.virtualRegs[operand.id].width,
+        OperandKind::Physical => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < 16,
+        OperandKind::Slot => ValidWidth(operand.width) and
+        operand.id >= 0 and operand.id < function.slotCount,
+        OperandKind::Immediate => ValidWidth(operand.width) and
+        operand.literal.length > 0,
+        OperandKind::Memory => ValidWidth(operand.width) and
+        operand.baseSlot < function.slotCount and
+        operand.base < function.virtualRegCount and
+        operand.index < function.virtualRegCount and
+        (operand.base >= 0 or operand.baseSlot >= 0 or operand.index < 0) and
+        (operand.scale == 1 or operand.scale == 2 or
+        operand.scale == 4 or operand.scale == 8),
+    };
+    if (not valid) { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok();
+}
+MachineOperand ProjectWireOperand(WireMachineOperand value) {
+    return MachineOperand {
+        value.Kind, value.ID, value.Width, value.Base,
+        value.BaseSlot, value.Index, value.Scale, value.Disp,
+        value.Literal, value.Region, value.Signed
+    };
+}
+
+// This is a semantic projection. Wire order belongs exclusively to ReadWire.
+Result<void, BackendError> ProjectWireFunction(
+ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function) {
+    if (not TextEquals(ref const source, wire.Target, "amd64-windows") or
+    not TextEquals(ref const source, wire.ABI, "win64")) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    function.identity = wire.Identity;
+    function.name = wire.Name;
+    function.result = wire.Result;
+    function.frameLocalSize = wire.Frame.LocalSize;
+    function.frameAlignment = wire.Frame.Alignment;
+    function.frameShadowSpace = wire.Frame.ShadowSpace;
+    function.hasCalls = wire.Frame.HasCalls;
+    function.argCount = wire.Args.count;
+    function.virtualRegCount = wire.VRegs.count;
+    function.slotCount = wire.Slots.count;
+    function.blockCount = wire.Blocks.count;
+    if (function.argCount > Len(function.args) or
+    function.virtualRegCount > Len(function.virtualRegs) or
+    function.slotCount > Len(function.slots) or
+    function.blockCount > Len(function.blocks)) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    BridgeReader reader = BridgeReader{source.data, wire.Args.offset};
+    for (i in 0 .. function.argCount) {
+        WireMachineArg value = ReadWire(ref reader, BridgeType<WireMachineArg>{0}) ?;
+        function.args[i] = MachineArg {
+            value.Type, value.Index, value.Width,
+            value.Indirect, value.Register, value.StackOffset, value.OnStack, value.VReg
+        };
+    }
+    reader.offset = wire.VRegs.offset;
+    for (i in 0 .. function.virtualRegCount) {
+        WireMachineVReg value = ReadWire(ref reader, BridgeType<WireMachineVReg>{0}) ?;
+        function.virtualRegs[i] = MachineVReg{value.ID, value.Width, value.Address};
+    }
+    reader.offset = wire.Slots.offset;
+    for (i in 0 .. function.slotCount) {
+        WireMachineStackSlot value = ReadWire(ref reader, BridgeType<WireMachineStackSlot>{0}) ?;
+        function.slots[i] = MachineSlot {
+            value.ID, value.Size, value.Align,
+            value.IncomingIndirect, value.BaseVReg, value.Source
+        };
+    }
+    reader.offset = wire.Blocks.offset;
+    for (bi in 0 .. function.blockCount) {
+        WireMachineBlock block = ReadWire(ref reader, BridgeType<WireMachineBlock>{0}) ?;
+        int count = block.Instructions.count;
+        if (count > Len(function.instructions) - function.instructionCount) {
+            return Result::Error(BackendError::CapacityExceeded);
+        }
+        int first = function.instructionCount;
+        if (block.Term.Op == Opcode::Jmp or block.Term.Op == Opcode::Jcc) {
+            if (block.Term.True < 0 or block.Term.True >= function.blockCount) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+        if (block.Term.Op == Opcode::Jcc) {
+            if (block.Term.False < 0 or block.Term.False >= function.blockCount) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+        BridgeReader instructions = BridgeReader{source.data, block.Instructions.offset};
+        for (ii in 0 .. count) {
+            WireMachineInstruction value = ReadWire(ref instructions, BridgeType<WireMachineInstruction>{
+                0
+            }) ?;
+            ProjectedCall call = EmptyProjectedCall();
+            if (value.Op == Opcode::Call) {
+                BridgeReader calls = BridgeReader{source.data, value.Calls.offset};
+                WireMachineCall wireCall = ReadWire(ref calls, BridgeType<WireMachineCall>{0}) ?;
+                if (wireCall.Arguments.count > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                call.target = wireCall.Target;
+                call.argumentCount = wireCall.Arguments.count;
+                call.result = wireCall.Result;
+                BridgeReader arguments = BridgeReader {
+                    source.data, wireCall.Arguments.offset
+                };
+                for (ai in 0 .. call.argumentCount) {
+                    WireMachineCallArgument argument = ReadWire(ref arguments, BridgeType<WireMachineCallArgument>{
+                        0
+                    }) ?;
+                    call.values[ai] = argument.Value;
+                    call.types[ai] = argument.Type;
+                }
+            }
+            if (value.Src.count > 2) { return Result::Error(BackendError::BridgeInvalid); }
+            MachineOperand destination = ProjectWireOperand(value.Dst);
+            MachineOperand source0 = EmptyOperand();
+            MachineOperand source1 = EmptyOperand();
+            BridgeReader operands = BridgeReader{source.data, value.Src.offset};
+            if (value.Src.count > 0) {
+                source0 = ProjectWireOperand(ReadWire(ref operands, BridgeType<WireMachineOperand>{
+                    0
+                }) ?);
+            }
+            if (value.Src.count > 1) {
+                source1 = ProjectWireOperand(ReadWire(ref operands, BridgeType<WireMachineOperand>{
+                    0
+                }) ?);
+            }
+            ValidateOperand(ref const function, destination) ?;
+            if (value.Src.count > 0) {
+                ValidateOperand(ref const function, source0) ?;
+            }
+            if (value.Src.count > 1) {
+                ValidateOperand(ref const function, source1) ?;
+            }
+            function.instructions[function.instructionCount] = MachineInstruction {
+                value.Op, destination, source0, source1, value.Src.count,
+                value.Width, value.FlagsDef, value.FlagsUse, value.Cond,
+                value.LIRBlock, value.LIRInstruction, value.Source.Line, value.Source.Column, call
+            };
+            function.instructionCount += 1;
+        }
+        function.blocks[bi] = MachineBlock {
+            block.ID, block.LIRBlock, first, count,
+            block.Term.Op, block.Term.True, block.Term.False, block.Term.Cond,
+            block.Term.FlagsUse, block.Term.Source.Line, block.Term.Source.Column
+        };
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> DecodeFunction(
+ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
+    ValidateMachineBridge(artifact) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadBridgeIdentity(ref reader) ?;
+    WireMachineModule document = ReadWire(ref reader, BridgeType<WireMachineModule>{0}) ?;
+    if (ordinal < 0 or ordinal >= document.Functions.count or reader.offset != Len(artifact)) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BackendFunction selected = EmptyFunction();
+    reader.offset = document.Functions.offset;
+    for (i in 0 .. document.Functions.count) {
+        WireMachineFunction wire = ReadWire(ref reader, BridgeType<WireMachineFunction>{0}) ?;
+        function = EmptyFunction();
+        ProjectWireFunction(ref const reader, wire, ref function) ?;
+        if (i == ordinal) {
+            selected = function;
+        }
+    }
+    function = selected;
+    return Result::Ok();
+}
+string DescribeBackendError(BackendError error)
+{
+    if (error == BackendError::UnsupportedCallLowering) {
+        return "AMD64_CALL_REQUIRES_MODULE_IMAGE: direct calls require complete internal symbol layout";
+    }
+    return "AMD64_BACKEND_ERROR";
+}
+
+// A bounds/overflow check splits one LIR block into several MachineIR blocks.
+// Keep those continuations adjacent before computing linear intervals. Appended
+// checks otherwise create artificial overlapping intervals across unrelated
+// source blocks. This is general layout, independent of automata or frame tags.
+Result<void, BackendError> LayoutLoweredBlocks(ref BackendFunction function)
+{
+    MachineBlock[128] originalBlocks = function.blocks;
+    MachineInstruction[512] originalInstructions = function.instructions;
+    bool[128] seen =[false ...];
+    int[128] remap =[0 ...];
+    int nextBlock = 0;
+    int nextInstruction = 0;
+    for (first in 0 .. function.blockCount)
+    {
+        if (not seen[first])
+        {
+            for (old in first .. function.blockCount)
+            {
+                if (originalBlocks[old].lirBlock == originalBlocks[first].lirBlock)
+                {
+                    seen[old] = true;
+                    MachineBlock block = originalBlocks[old];
+                    remap[old] = nextBlock;
+                    function.blocks[nextBlock] = MachineBlock {
+                        nextBlock, block.lirBlock, nextInstruction, block.instructionCount,
+                        block.terminator, block.trueBlock, block.falseBlock, block.condition,
+                        block.flagsUse, block.sourceLine, block.sourceColumn
+                    };
+                    for (ii in 0 .. block.instructionCount)
+                    {
+                        function.instructions[nextInstruction] = originalInstructions[block.firstInstruction + ii];
+                        nextInstruction = nextInstruction + 1;
+                    }
+                    nextBlock = nextBlock + 1;
+                }
+            }
+        }
+    }
+    if (nextInstruction != function.instructionCount)
+    { return Result::Error(BackendError::BridgeInvalid); }
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        int yes = block.trueBlock;
+        int no = block.falseBlock;
+        if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+        {
+            if (yes < 0 or yes >= function.blockCount)
+            { return Result::Error(BackendError::BridgeInvalid); }
+            yes = remap[yes];
+        }
+        if (block.terminator == Opcode::Jcc)
+        {
+            if (no < 0 or no >= function.blockCount)
+            { return Result::Error(BackendError::BridgeInvalid); }
+            no = remap[no];
+        }
+        function.blocks[bi] = MachineBlock {
+            bi, block.lirBlock, block.firstInstruction, block.instructionCount,
+            block.terminator, yes, no, block.condition,
+            block.flagsUse, block.sourceLine, block.sourceColumn
+        };
+    }
+    return Result::Ok();
+}
+void TouchInterval(ref Allocation allocation, int id, int position)
+{
+    if (position < allocation.start[id]) {
+        allocation.start[id] = position;
+    }
+    if (position > allocation.end[id]) {
+        allocation.end[id] = position;
+    }
+}
+void TouchOperand(ref Allocation allocation, MachineOperand operand, int position)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        TouchInterval(ref allocation, operand.id, position);
+    }
+    if (operand.kind == OperandKind::Memory)
+    {
+        if (operand.base >= 0) {
+            TouchInterval(ref allocation, operand.base, position);
+        }
+        if (operand.index >= 0) {
+            TouchInterval(ref allocation, operand.index, position);
+        }
+    }
+}
+void MarkUse(ref Liveness liveness, int block, int id)
+{
+    int index = id / 31;
+    int bit = 1 <<(id % 31);
+    if ((liveness.def[block].words[index] & bit) == 0) {
+        liveness.use[block].words[index] = liveness.use[block].words[index] | bit;
+    }
+}
+void MarkOperandUse(ref Liveness liveness, int block, MachineOperand operand)
+{
+    if (operand.kind == OperandKind::Virtual)
+    {
+        MarkUse(ref liveness, block, operand.id);
+    }
+    if (operand.kind == OperandKind::Memory)
+    {
+        if (operand.base >= 0) {
+            MarkUse(ref liveness, block, operand.base);
+        }
+        if (operand.index >= 0) {
+            MarkUse(ref liveness, block, operand.index);
+        }
+    }
+}
+Result<void, BackendError> ComputeLiveness(
+ref const BackendFunction function, ref Liveness liveness)
+{
+    if (function.blockCount > 128 or function.virtualRegCount > 512)
+    { return Result::Error(BackendError::CapacityExceeded); }
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        if (block.id != bi) { return Result::Error(BackendError::BridgeInvalid); }
+        for (ii in 0 .. block.instructionCount)
+        {
+            MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.op == Opcode::Call) {
+                if (instruction.call.argumentCount < 0 or instruction.call.argumentCount > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    int id = instruction.call.values[ai];
+                    if (id < 0 or id >= function.virtualRegCount) {
+                        return Result::Error(BackendError::BridgeInvalid);
+                    }
+                    MarkUse(ref liveness, bi, instruction.call.values[ai]);
+                }
+            }
+            if (instruction.sourceCount > 0)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.source0);
+            }
+            if (instruction.sourceCount > 1)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.source1);
+            }
+            if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or
+            instruction.op == Opcode::Imul or instruction.op == Opcode::Umul or
+            instruction.op == Opcode::Store)
+            {
+                MarkOperandUse(ref liveness, bi, instruction.destination);
+            }
+            if (instruction.destination.kind == OperandKind::Virtual)
+            {
+                int id = instruction.destination.id;
+                int index = id / 31;
+                int bit = 1 <<(id % 31);
+                liveness.def[bi].words[index] = liveness.def[bi].words[index] | bit;
+            }
+        }
+    }
+    bool changed = true;
+    for (pass in 0 .. function.blockCount + 1)
+    {
+        changed = false;
+        for (bi in 0 .. function.blockCount)
+        {
+            MachineBlock block = function.blocks[bi];
+            if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+            {
+                if (block.trueBlock < 0 or block.trueBlock >= function.blockCount)
+                { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (block.terminator == Opcode::Jcc and
+            (block.falseBlock < 0 or block.falseBlock >= function.blockCount))
+            { return Result::Error(BackendError::BridgeInvalid); }
+            for (word in 0 ..(function.virtualRegCount + 30) / 31)
+            {
+                int outgoing = 0;
+                if (block.terminator == Opcode::Jmp or block.terminator == Opcode::Jcc)
+                {
+                    outgoing = liveness.liveIn[block.trueBlock].words[word];
+                }
+                if (block.terminator == Opcode::Jcc)
+                {
+                    outgoing = outgoing | liveness.liveIn[block.falseBlock].words[word];
+                }
+                int allBits = 2147483647;
+                int incoming = liveness.use[bi].words[word] |
+                (outgoing &(liveness.def[bi].words[word] ^ allBits));
+                if (outgoing != liveness.liveOut[bi].words[word] or
+                incoming != liveness.liveIn[bi].words[word])
+                {
+                    changed = true;
+                }
+                liveness.liveOut[bi].words[word] = outgoing;
+                liveness.liveIn[bi].words[word] = incoming;
+            }
+        }
+        if (not changed) { return Result::Ok(); }
+    }
+    return Result::Error(BackendError::BridgeInvalid);
+}
+
+// Live-in/out edges extend intervals across branches and loop backedges.
+// The layout order stays deterministic even when the CFG is cyclic.
+Result<void, BackendError> ComputeIntervals(
+ref const BackendFunction function, ref Allocation allocation)
+{
+    Liveness liveness = EmptyLiveness();
+    ComputeLiveness(ref const function, ref liveness) ?;
+    for (bi in 0 .. function.blockCount)
+    {
+        MachineBlock block = function.blocks[bi];
+        for (id in 0 .. function.virtualRegCount)
+        {
+            int index = id / 31;
+            int bit = 1 <<(id % 31);
+            if ((liveness.liveIn[bi].words[index] & bit) != 0)
+            {
+                TouchInterval(ref allocation, id, block.firstInstruction);
+            }
+            if ((liveness.liveOut[bi].words[index] & bit) != 0)
+            {
+                TouchInterval(ref allocation, id,
+                block.firstInstruction + block.instructionCount);
+            }
+        }
+        for (ii in 0 .. block.instructionCount)
+        {
+            int position = block.firstInstruction + ii;
+            MachineInstruction instruction = function.instructions[position];
+            TouchOperand(ref allocation, instruction.destination, position);
+            if (instruction.op == Opcode::Call) {
+                for (ai in 0 .. instruction.call.argumentCount) {
+                    TouchInterval(ref allocation, instruction.call.values[ai], position);
+                }
+            }
+            if (instruction.sourceCount > 0)
+            {
+                TouchOperand(ref allocation, instruction.source0, position);
+            }
+            if (instruction.sourceCount > 1)
+            {
+                TouchOperand(ref allocation, instruction.source1, position);
+            }
+        }
+    }
+    return Result::Ok();
+}
+Register PoolRegister(int ordinal)
+{
+    if (ordinal == 0) { return Register::R10; }
+    if (ordinal == 1) { return Register::R11; }
+    if (ordinal == 2) { return Register::RAX; }
+    if (ordinal == 3) { return Register::R8; }
+    return Register::R9;
+}
+
+// R10/R11/RAX handle the initial ABI copies. R8/R9 become available only
+// after their incoming arguments have been copied, which happens before any
+// later value can require a fourth register. Spills remain explicit failure.
+Result<void, BackendError> AllocateRegisters(
+ref const BackendFunction function, ref Allocation allocation)
+{
+    return AllocateRegistersWithPolicy(ref const function, ref allocation, false);
+}
+Result<void, BackendError> AllocateRegistersWithPolicy(
+ref const BackendFunction function, ref Allocation allocation, bool allowCalleeSaved)
+{
+    if (function.scalar) { return AllocateScalarRegisters(ref const function, ref allocation); }
+    ComputeIntervals(ref const function, ref allocation) ?;
+    // Fixed call uses/defs are derived before assignments. General assignments
+    // remain the qualified pool; call-point moves and preservation are explicit.
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            CallRequest request = RequestForCall(function.instructions[position], position);
+            Result<void, ABIError> checked = PlanWin64Call(ref const request, ref plan);
+            match (checked) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            allocation.callCount += 1;
+            allocation.shadowSpaceBytes = plan.shadowSpaceBytes;
+            if (plan.stackArgumentBytes > allocation.stackArgumentBytes) {
+                allocation.stackArgumentBytes = plan.stackArgumentBytes;
+            }
+        }
+    }
+    for (position in 0 .. function.instructionCount)
+    {
+        for (id in 0 .. function.virtualRegCount)
+        {
+            if (allocation.start[id] == position)
+            {
+                bool found = false;
+                Register choice = Register::R10;
+                int candidateCount = 5;
+                if (allocation.callCount > 0 or allowCalleeSaved) {
+                    candidateCount += Len(Win64Registers().calleeSaved);
+                }
+                for (candidate in 0 .. candidateCount)
+                {
+                    Register physical = Register::RAX;
+                    if (candidate < 5) {
+                        physical = PoolRegister(candidate);
+                    }
+                    else {
+                        physical = Win64Registers().calleeSaved[candidate - 5];
+                    }
+                    bool busy = false;
+                    for (other in 0 .. function.virtualRegCount)
+                    {
+                        if (allocation.assigned[other] and
+                        allocation.physical[other] == physical and
+                        allocation.end[other] > position)
+                        {
+                            busy = true;
+                        }
+                    }
+                    if (not busy and not found)
+                    {
+                        choice = physical;
+                        found = true;
+                    }
+                }
+                if (not found) { return Result::Error(BackendError::RegisterExhausted); }
+                allocation.physical[id] = choice;
+                allocation.assigned[id] = true;
+                if (IsCalleeSaved(choice)) {
+                    allocation.usedCalleeSaved[RegisterIndex(choice)] = true;
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+CallRequest RequestForCall(MachineInstruction instruction, int position) {
+    CallRequest request = EmptyCallRequest();
+    request.target = instruction.call.target;
+    request.instruction = position;
+    request.argumentCount = instruction.call.argumentCount;
+    for (i in 0 .. request.argumentCount) {
+        CallValueType type = instruction.call.types[i];
+        ABIClass category = ABIClass::Integer;
+        if (type == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        int width = CallValueWidth(type);
+        request.arguments[i] = ABIValue {
+            instruction.call.values[i], type, category, width
+        };
+    }
+    request.hasResult = instruction.call.result != CallValueType::Void;
+    if (request.hasResult) {
+        ABIClass category = ABIClass::Integer;
+        if (instruction.call.result == CallValueType::Bool) {
+            category = ABIClass::Bool;
+        }
+        request.result = ABIValue {
+            instruction.destination.id, instruction.call.result, category, instruction.width
+        };
+    }
+    return request;
+}
+void SetLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] |(1 <<(id % 31));
+}
+void ClearLive(ref LivenessBits bits, int id) {
+    bits.words[id / 31] = bits.words[id / 31] &((1 <<(id % 31)) ^ 2147483647);
+}
+void AddLiveOperand(ref LivenessBits bits, MachineOperand operand) {
+    if (operand.kind == OperandKind::Virtual) {
+        SetLive(ref bits, operand.id);
+    }
+    if (operand.kind == OperandKind::Memory) {
+        if (operand.base >= 0) {
+            SetLive(ref bits, operand.base);
+        }
+        if (operand.index >= 0) {
+            SetLive(ref bits, operand.index);
+        }
+    }
+}
+Result<LivenessBits, ABIError> LiveAcrossCall(
+ref const BackendFunction function, ref const Liveness liveness, int position) {
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    if (function.instructions[position].op != Opcode::Call) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        if (position >= block.firstInstruction and position < block.firstInstruction + block.instructionCount) {
+            LivenessBits live = liveness.liveOut[bi];
+            for (back in 0 .. block.instructionCount) {
+                int at = block.firstInstruction + block.instructionCount - 1 - back;
+                MachineInstruction instruction = function.instructions[at];
+                // The call result is born after the call: never preserve it.
+                if (at == position) {
+                    if (instruction.destination.kind == OperandKind::Virtual) {
+                        ClearLive(ref live, instruction.destination.id);
+                    }
+                    return Result::Ok(live);
+                }
+                if (instruction.destination.kind == OperandKind::Virtual) {
+                    ClearLive(ref live, instruction.destination.id);
+                }
+                if (instruction.sourceCount > 0) {
+                    AddLiveOperand(ref live, instruction.source0);
+                }
+                if (instruction.sourceCount > 1) {
+                    AddLiveOperand(ref live, instruction.source1);
+                }
+                if (instruction.op == Opcode::Call) {
+                    for (ai in 0 .. instruction.call.argumentCount) {
+                        SetLive(ref live, instruction.call.values[ai]);
+                    }
+                }
+                if (instruction.op == Opcode::Add or instruction.op == Opcode::Sub or instruction.op == Opcode::Imul or instruction.op == Opcode::Umul or instruction.op == Opcode::Store) {
+                    AddLiveOperand(ref live, instruction.destination);
+                }
+            }
+        }
+    }
+    return Result::Error(ABIError::InvalidPlan);
+}
+Result<void, ABIError> ValidateCallFlags(ref const BackendFunction function) {
+    for (bi in 0 .. function.blockCount) {
+        MachineBlock block = function.blocks[bi];
+        int flags = - 1;
+        for (ii in 0 .. block.instructionCount) {
+            MachineInstruction instruction = function.instructions[block.firstInstruction + ii];
+            if (instruction.flagsUse >= 0 and instruction.flagsUse != flags) {
+                return Result::Error(ABIError::StaleFlags);
+            }
+            if (instruction.op == Opcode::Call) {
+                flags = - 1;
+            }
+            else {
+                if (instruction.flagsDef >= 0) {
+                    flags = instruction.flagsDef;
+                }
+            }
+        }
+        if (block.flagsUse >= 0 and block.flagsUse != flags) {
+            return Result::Error(ABIError::StaleFlags);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> PlanAllocatedCall(
+ref const BackendFunction function, ref const Allocation allocation, ref const Liveness liveness,
+int position, ref CallPlan plan, Span<Preservation> preservation, ref int count) {
+    if (function.scalar) {
+        return PlanScalarAllocatedCall(ref const function, ref const allocation, ref const liveness,
+        position, ref plan, preservation, ref count);
+    }
+    ValidateCallFlags(ref const function) ?;
+    if (position < 0 or position >= function.instructionCount) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    MachineInstruction instruction = function.instructions[position];
+    if (instruction.op != Opcode::Call) { return Result::Error(ABIError::InvalidPlan); }
+    CallRequest request = RequestForCall(instruction, position);
+    PlanWin64Call(ref const request, ref plan) ?;
+    Register[8] sources =[Register::RAX ...];
+    for (i in 0 .. plan.argumentCount) {
+        int id = plan.arguments[i].source.value;
+        if (id < 0 or id >= function.virtualRegCount) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        if (not allocation.assigned[id]) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        sources[i] = allocation.physical[id];
+    }
+    PlanArgumentMoves(ref plan, ref const sources) ?;
+    ValidateArgumentMoves(ref const plan, ref const sources) ?;
+    LivenessBits across = LiveAcrossCall(ref const function, ref const liveness, position) ?;
+    count = 0;
+    for (id in 0 .. function.virtualRegCount) {
+        if ((across.words[id / 31] &(1 <<(id % 31))) != 0) {
+            if (not allocation.assigned[id] or not IsValueRegister(allocation.physical[id])) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+            if (count >= Len(preservation)) {
+                return Result::Error(ABIError::CapacityExceeded);
+            }
+            PreservationClass classification = PreservationClass::OutsideClobbers;
+            if (IsCallerSaved(allocation.physical[id])) {
+                classification = PreservationClass::MustPreserve;
+            }
+            else {
+                if (IsCalleeSaved(allocation.physical[id])) {
+                    classification = PreservationClass::SafeInCalleeSaved;
+                }
+            }
+            preservation[count] = Preservation {
+                id, function.virtualRegs[id].width, function.virtualRegs[id].address,
+                allocation.physical[id], position, allocation.start[id], allocation.end[id], classification,
+                GPRLocation(allocation.physical[id]), ScalarRepresentation::Void
+            };
+            ValidatePreservation(preservation[count]) ?;
+            count += 1;
+        }
+    }
+    return Result::Ok();
+}
+
+// Only one bounded per-call plan and one caller-owned preservation buffer are
+// resident. Summary maxima feed later shared outgoing/frame storage.
+Result<void, BackendError> PlanFunctionCalls(ref const BackendFunction function, ref Allocation allocation) {
+    return match (PlanFunctionCallsChecked(ref const function, ref allocation)) {
+        Result::Ok => Result::Ok(),
+        Result::Error(error) => Result::Error(BackendError::BridgeInvalid),
+    };
+}
+
+// CMIRAMD3 values can exceed CMIRAMD4's 128-value type map. Inspect scalar
+// metadata only after admitting the scalar projection.
+bool AllocatedGPR(ref const BackendFunction function, ref const Allocation allocation, int id) {
+    if (not allocation.assigned[id]) { return false; }
+    if (function.scalar) {
+        return not ScalarFloating(function.scalarTypes[id]) and not allocation.spilled[id];
+    }
+    return true;
+}
+Result<void, ABIError> PlanFunctionCallsChecked(ref const BackendFunction function, ref Allocation allocation) {
+    Liveness liveness = EmptyLiveness();
+    match (ComputeLiveness(ref const function, ref liveness)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(ABIError::InvalidAllocation); }
+    }
+    Preservation[512] storage =[Preservation {
+        0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers, GPRLocation(Register::RAX),
+        ScalarRepresentation::Void
+    }
+    ...];
+    allocation.temporaryCount = 0;
+    allocation.preservationCount = 0;
+    for (i in 0 .. Len(allocation.usedCalleeSaved)) {
+        allocation.usedCalleeSaved[i] = false;
+    }
+    for (id in 0 .. function.virtualRegCount) {
+        if (AllocatedGPR(ref const function, ref const allocation, id) and IsCalleeSaved(allocation.physical[id])) {
+            allocation.usedCalleeSaved[RegisterIndex(allocation.physical[id])] = true;
+        }
+    }
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallPlan plan = EmptyCallPlan();
+            int count = 0;
+            match (PlanAllocatedCall(ref const function, ref const allocation, ref const liveness, position,
+            ref plan, Span(storage), ref count)) {
+                Result::Ok() => { }
+                Result::Error(error) => { return Result::Error(error); }
+            }
+            if (plan.temporaryCount > allocation.temporaryCount) {
+                allocation.temporaryCount = plan.temporaryCount;
+            }
+            for (i in 0 .. count) {
+                if (storage[i].classification == PreservationClass::MustPreserve) {
+                    allocation.preservationCount += 1;
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+string DescribeNativeError(NativeError error) {
+    return match (error) {
+        NativeError::CapacityExceeded => "AMD64_NATIVE_CAPACITY_EXCEEDED",
+        NativeError::InvalidInput => "AMD64_NATIVE_INVALID_INPUT",
+        NativeError::DuplicateSymbol => "AMD64_DUPLICATE_SYMBOL",
+        NativeError::UnresolvedSymbol => "AMD64_UNRESOLVED_SYMBOL",
+        NativeError::Rel32OutOfRange => "AMD64_REL32_OUT_OF_RANGE",
+        NativeError::MalformedPatch => "AMD64_MALFORMED_CALL_PATCH",
+        NativeError::UnresolvedFixup => "AMD64_UNRESOLVED_CALL_FIXUP",
+        NativeError::UnsupportedEncoding => "AMD64_UNSUPPORTED_ENCODING_OR_MEMORY_OPERAND",
+        NativeError::UnsupportedXMMAllocation => "AMD64_UNSUPPORTED_XMM_ALLOCATION",
+        NativeError::UnsupportedSSEEncoding => "AMD64_UNSUPPORTED_SSE_ENCODING",
+        NativeError::ScalarPlanningFailure => "AMD64_SCALAR_PLANNING_FAILURE",
+        NativeError::RegisterExhausted => "AMD64_REGISTER_EXHAUSTED",
+        NativeError::InvalidABILocation => "AMD64_INVALID_ABI_LOCATION",
+        NativeError::UnsupportedABIClass => "AMD64_UNSUPPORTED_ABI_CLASS",
+        NativeError::UnsupportedABIForm => "AMD64_UNSUPPORTED_ABI_FORM",
+        NativeError::UnsupportedABIConvention => "AMD64_UNSUPPORTED_ABI_CONVENTION",
+        NativeError::ReservedXMM => "AMD64_RESERVED_XMM",
+        NativeError::IncompatibleMove => "AMD64_MOVE_INCOMPATIBLE_REPRESENTATION",
+        NativeError::SpillCapacityExceeded => "AMD64_SPILL_CAPACITY_EXCEEDED",
+        NativeError::StaleFlags => "AMD64_STALE_FLAGS",
+        NativeError::UnsupportedFloatCallEmission => "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION",
+        NativeError::UnsupportedScalarOperation => "AMD64_UNSUPPORTED_SCALAR_OPERATION",
+
+        NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
+        NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
+    };
+}
+bool FrameAlignmentValid(int alignment) {
+    return alignment == 1 or alignment == 2 or alignment == 4 or alignment == 8 or alignment == 16;
+}
+int FrameRegionIndex(FrameRegionKind category) {
+    return match (category) {
+        FrameRegionKind::OutgoingShadow => 0,
+        FrameRegionKind::OutgoingArguments => 1,
+        FrameRegionKind::LocalSlots => 2,
+        FrameRegionKind::SavedRegisters => 3,
+        FrameRegionKind::SpillSlots => 4,
+        FrameRegionKind::MoveTemps => 5,
+        FrameRegionKind::AlignmentPadding => 6,
+    };
+}
+
+
+CallValueType LegacyScalarType(ScalarRepresentation type) {
+    return match (type) {
+        ScalarRepresentation::Void => CallValueType::Void, ScalarRepresentation::Bool => CallValueType::Bool,
+        ScalarRepresentation::I8 => CallValueType::I8, ScalarRepresentation::U8 => CallValueType::U8,
+        ScalarRepresentation::I16 => CallValueType::I16, ScalarRepresentation::U16 => CallValueType::U16,
+        ScalarRepresentation::I32 => CallValueType::I32, ScalarRepresentation::U32 => CallValueType::U32,
+        ScalarRepresentation::I64 => CallValueType::I64, ScalarRepresentation::U64 => CallValueType::U64,
+        ScalarRepresentation::Address => CallValueType::U64, ScalarRepresentation::Float32 => CallValueType::Void,
+        ScalarRepresentation::Float64 => CallValueType::Void
+    };
+}
+CallRequest ScalarRequestForCall(ref const BackendFunction function, int position) {
+    MachineInstruction instruction = function.instructions[position];
+    CallRequest request = RequestForCall(instruction, position);
+    request.scalar.enabled = true;
+    for (i in 0 .. request.argumentCount) {
+        int id = instruction.call.values[i];
+        ScalarRepresentation type = function.scalarTypes[id];
+        request.scalar.arguments[i] = type;
+        request.arguments[i] = ABIValue {
+            id, LegacyScalarType(type), ScalarCategory(type), ScalarWidth(type)
+        };
+    }
+    request.scalar.result = ScalarRepresentation::Void;
+    request.hasResult = instruction.destination.kind == OperandKind::Virtual;
+    if (request.hasResult) {
+        int id = instruction.destination.id;
+        ScalarRepresentation type = function.scalarTypes[id];
+        request.scalar.result = type;
+        request.result = ABIValue {
+            id, LegacyScalarType(type), ScalarCategory(type), ScalarWidth(type)
+        };
+    }
+    return request;
+}
+MachineOperand ScalarVirtualOperand(int id, ref const BackendFunction function) {
+    return MachineOperand {
+        OperandKind::Virtual, id, ScalarWidth(function.scalarTypes[id]), - 1, - 1, - 1, 1, 0, BridgeText {
+            0, 0
+        }, BridgeText{0, 0}, false
+    };
+}
+Result<void, BackendError> AppendScalarInstruction(ref BackendFunction function, MachineInstruction instruction,
+ScalarOpcode operation) {
+    if (function.instructionCount >= 512) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    function.scalarOperations[function.instructionCount] = operation;
+    function.instructions[function.instructionCount] = instruction;
+    function.instructionCount += 1;
+    return Result::Ok();
+}
+Result<void, BackendError> DecodeScalarFunction(ReadOnlySpan<byte> artifact, int ordinal, ref BackendFunction function) {
+    ValidateScalarMachineBridge(artifact) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadScalarBridgeIdentity(ref reader) ?;
+    WireScalarMachineModule document = ReadWire(ref reader, BridgeType<WireScalarMachineModule>{
+        0
+    }) ?;
+    if (ordinal<0 or ordinal >= document.Functions.count) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    reader.offset = document.Functions.offset;
+    WireScalarMachineFunction owner = ReadWire(ref reader, BridgeType<WireScalarMachineFunction>{
+        0
+    }) ?;
+    for (i in 0 .. ordinal) {
+        owner = ReadWire(ref reader, BridgeType<WireScalarMachineFunction>{0}) ?;
+    }
+    function = EmptyFunction();
+    function.scalar = true;
+    function.identity = owner.Identity;
+    function.name = owner.Name;
+    function.scalarResult = owner.Result;
+    function.virtualRegCount = owner.VRegs.count;
+    function.slotCount = owner.Slots.count;
+    if (owner.Params.count>8) { return Result::Error(BackendError::CapacityExceeded); }
+    BridgeReader values = BridgeReader{artifact, owner.VRegs.offset};
+    for (i in 0 .. owner.VRegs.count) {
+        WireScalarMachineVReg value = ReadWire(ref values, BridgeType<WireScalarMachineVReg>{0}) ?;
+        function.virtualRegs[i] = MachineVReg{value.ID, value.Width, value.Address};
+        function.scalarTypes[i] = value.Representation;
+    }
+    BridgeReader slots = BridgeReader{artifact, owner.Slots.offset};
+    for (i in 0 .. owner.Slots.count) {
+        WireScalarMachineSlot slot = ReadWire(ref slots, BridgeType<WireScalarMachineSlot>{0}) ?;
+        function.slots[i] = MachineSlot {
+            slot.ID, slot.Size, slot.Align, slot.ParamValue >= 0, slot.ParamValue, slot.Name
+        };
+        function.slotTypes[i] = slot.Representation;
+        if (slot.ParamValue<0) {
+            function.frameLocalSize +=(slot.Align - function.frameLocalSize % slot.Align) % slot.Align;
+            function.frameLocalSize += slot.Size;
+        }
+    }
+    BridgeReader params = BridgeReader{artifact, owner.Params.offset};
+    function.argCount = owner.Params.count;
+    for (i in 0 .. owner.Params.count) {
+        WireScalarMachineParameter param = ReadWire(ref params, BridgeType<WireScalarMachineParameter>{
+            0
+        }) ?;
+        function.args[i] = MachineArg {
+            param.Type, i, ScalarWidth(function.scalarTypes[param.Value]), function.scalarTypes[param.Value] == ScalarRepresentation::Address,
+            Register::RAX, 0, i >= 4, param.Value
+        };
+        MachineInstruction definition = MachineInstruction {
+            Opcode::None, ScalarVirtualOperand(param.Value, ref const function), EmptyOperand(), EmptyOperand(),
+            0, ScalarWidth(function.scalarTypes[param.Value]), - 1, - 1, Condition::None, 0, 0, owner.Source.Line,
+            owner.Source.Column, EmptyProjectedCall()
+        };
+        AppendScalarInstruction(ref function, definition, ScalarOpcode::Const) ?;
+    }
+    BridgeReader blocks = BridgeReader{artifact, owner.Blocks.offset};
+    function.blockCount = owner.Blocks.count;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireScalarMachineBlock block = ReadWire(ref blocks, BridgeType<WireScalarMachineBlock>{
+            0
+        }) ?;
+        int begin = function.instructionCount;
+        if (bi == 0) {
+            begin = 0;
+        }
+        BridgeReader instructions = BridgeReader{artifact, block.Instructions.offset};
+        for (ii in 0 .. block.Instructions.count) {
+            WireScalarMachineInstruction input = ReadWire(ref instructions, BridgeType<WireScalarMachineInstruction>{
+                0
+            }) ?;
+            MachineOperand destination = EmptyOperand();
+            MachineOperand source0 = EmptyOperand();
+            MachineOperand source1 = EmptyOperand();
+            int sourceCount = 0;
+            Opcode opcode = Opcode::None;
+            ProjectedCall projected = EmptyProjectedCall();
+            if (input.Result >= 0) {
+                destination = ScalarVirtualOperand(input.Result, ref const function);
+            }
+            BridgeReader uses = BridgeReader{artifact, input.Args.offset};
+            if (input.Op == ScalarOpcode::Call) {
+                opcode = Opcode::Call;
+                BridgeReader calls = BridgeReader{artifact, input.Calls.offset};
+                WireScalarMachineCall call = ReadWire(ref calls, BridgeType<WireScalarMachineCall>{
+                    0
+                }) ?;
+                projected.target = call.Target;
+                projected.argumentCount = call.Arguments.count;
+                projected.result = LegacyScalarType(call.Result);
+                BridgeReader args = BridgeReader{artifact, call.Arguments.offset};
+                for (ai in 0 .. call.Arguments.count) {
+                    WireScalarMachineCallArgument arg = ReadWire(ref args, BridgeType<WireScalarMachineCallArgument>{
+                        0
+                    }) ?;
+                    projected.values[ai] = arg.Value;
+                    projected.types[ai] = LegacyScalarType(arg.Type);
+                }
+            } else {
+                sourceCount = input.Args.count;
+                if (input.Args.count>0) {
+                    WireScalarValueUse use = ReadWire(ref uses, BridgeType<WireScalarValueUse>{
+                        0
+                    }) ?;
+                    source0 = ScalarVirtualOperand(use.Value, ref const function);
+                }
+                if (input.Args.count>1) {
+                    WireScalarValueUse use = ReadWire(ref uses, BridgeType<WireScalarValueUse>{
+                        0
+                    }) ?;
+                    source1 = ScalarVirtualOperand(use.Value, ref const function);
+                }
+                if (input.Op == ScalarOpcode::IndexAddress) {
+                    if (function.slots[input.Slot].incomingIndirect) {
+                        source1 = ScalarVirtualOperand(function.slots[input.Slot].baseVReg, ref const function);
+                        sourceCount = 2;
+                    }
+                }
+            }
+            MachineInstruction instruction = MachineInstruction {
+                opcode, destination, source0, source1, sourceCount, ScalarWidth(input.Representation),
+                - 1, - 1, Condition::None, bi, ii, input.Source.Line, input.Source.Column, projected
+            };
+            AppendScalarInstruction(ref function, instruction, input.Op) ?;
+        }
+        if (block.Term.Op == ScalarTerminator::Branch or(block.Term.Op == ScalarTerminator::Return and owner.Result != ScalarRepresentation::Void)) {
+            MachineInstruction terminal = MachineInstruction {
+                Opcode::None, EmptyOperand(), ScalarVirtualOperand(block.Term.Value, ref const function),
+                EmptyOperand(), 1, 0, - 1, - 1, Condition::None, bi, - 1, block.Term.Source.Line, block.Term.Source.Column,
+                EmptyProjectedCall()
+            };
+            AppendScalarInstruction(ref function, terminal, ScalarOpcode::Load) ?;
+        }
+        Opcode term = match (block.Term.Op) {
+            ScalarTerminator::Return => Opcode::Ret, ScalarTerminator::Jump => Opcode::Jmp, ScalarTerminator::Branch => Opcode::Jcc
+        };
+        function.blocks[bi] = MachineBlock {
+            bi, bi, begin, function.instructionCount - begin, term, block.Term.True, block.Term.False,
+            Condition::None, - 1, block.Term.Source.Line, block.Term.Source.Column
+        };
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> AddScalarSpill(ref Allocation allocation, int id, int capacity, ScalarRepresentation type) {
+    if (id<0 or id >= 512 or capacity<0 or capacity>512) {
+        return Result::Error(ABIError::InvalidAllocation);
+    }
+    int count = 0;
+    for (i in 0 .. 512) {
+        if (allocation.spilled[i]) {
+            count += 1;
+        }
+    }
+    if (count >= capacity) { return Result::Error(ABIError::SpillCapacityExceeded); }
+    allocation.spilled[id] = true;
+    allocation.assigned[id] = true;
+    allocation.scalarLocations[id] = StorageLocation(ScalarLocationKind::Spill, id, type);
+    return Result::Ok();
+}
+Result<void, BackendError> AllocateScalarRegisters(ref const BackendFunction function, ref Allocation allocation) {
+    if (not function.scalar or function.virtualRegCount>128) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    ComputeIntervals(ref const function, ref allocation) ?;
+    for (i in 0 .. function.argCount) {
+        allocation.start[function.args[i].virtualReg] = 0;
+    }
+    for (position in 0 .. function.instructionCount) {
+        if (function.instructions[position].op == Opcode::Call) {
+            CallRequest request = ScalarRequestForCall(ref const function, position);
+            CallPlan plan = EmptyCallPlan();
+            match (PlanWin64Call(ref const request, ref plan)) {
+                Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+                Result::Ok => { }
+            }
+            allocation.callCount += 1;
+            allocation.shadowSpaceBytes = 32;
+            if (plan.stackArgumentBytes>allocation.stackArgumentBytes) {
+                allocation.stackArgumentBytes = plan.stackArgumentBytes;
+            }
+        }
+    }
+    for (position in 0 .. function.instructionCount) {
+        for (id in 0 .. function.virtualRegCount) {
+            if (allocation.start[id] == position) {
+                bool floating = ScalarFloating(function.scalarTypes[id]);
+                int candidates = 5;
+                if (floating) {
+                    candidates = 6;
+                } else {
+                    if (allocation.callCount>0) {
+                        candidates = 13;
+                    }
+                }
+                bool found = false;
+                ScalarLocation choice = GPRLocation(Register::RAX);
+                for (candidate in 0 .. candidates) {
+                    ScalarLocation location = GPRLocation(Register::RAX);
+                    if (floating) {
+                        location = XMMLocation(Win64XMMRegisters().callerSaved[candidate]);
+                    } else {
+                        if (candidate<5) {
+                            location = GPRLocation(PoolRegister(candidate));
+                        } else {
+                            location = GPRLocation(Win64Registers().calleeSaved[candidate - 5]);
+                        }
+                    }
+                    bool busy = false;
+                    for (other in 0 .. function.virtualRegCount) {
+                        if (allocation.assigned[other] and not allocation.spilled[other] and SameScalarLocation(allocation.scalarLocations[other],
+                        location) and allocation.end[other]>position) {
+                            busy = true;
+                        }
+                    }
+                    if (not busy and not found) {
+                        choice = location;
+                        found = true;
+                    }
+                }
+                if (not found) {
+                    if (not floating) {
+                        return Result::Error(BackendError::RegisterExhausted);
+                    }
+                    match (AddScalarSpill(ref allocation, id, 128, function.scalarTypes[id])) {
+                        Result::Error(error) => {
+                            return Result::Error(BackendError::CapacityExceeded);
+                        }
+                        Result::Ok => { }
+                    }
+                } else {
+                    allocation.assigned[id] = true;
+                    allocation.scalarLocations[id] = choice;
+                    allocation.physical[id] = choice.gpr;
+                    if (not floating and IsCalleeSaved(choice.gpr)) {
+                        allocation.usedCalleeSaved[RegisterIndex(choice.gpr)] = true;
+                    }
+                }
+            }
+        }
+    }
+    match (ValidateScalarAllocation(ref const function, ref const allocation)) {
+        Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        Result::Ok => { }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> ValidateScalarAllocation(ref const BackendFunction function, ref const Allocation allocation) {
+    for (id in 0 .. function.virtualRegCount) {
+        if (not allocation.assigned[id]) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        ScalarLocation location = allocation.scalarLocations[id];
+        ValidateScalarLocation(location, function.scalarTypes[id]) ?;
+        if (allocation.spilled[id] !=(location.kind == ScalarLocationKind::Spill) or(allocation.spilled[id] and location.slot != id)) {
+            return Result::Error(ABIError::InvalidAllocation);
+        }
+        for (other in 0 .. id) {
+            if (not allocation.spilled[id] and not allocation.spilled[other] and SameScalarLocation(location,
+            allocation.scalarLocations[other]) and allocation.start[id]<allocation.end[other] and allocation.start[other]<allocation.end[id]) {
+                return Result::Error(ABIError::InvalidAllocation);
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ABIError> PlanScalarAllocatedCall(ref const BackendFunction function, ref const Allocation allocation,
+ref const Liveness liveness, int position, ref CallPlan plan, Span<Preservation> records, ref int count) {
+    ValidateCallFlags(ref const function) ?;
+    if (position<0 or position >= function.instructionCount or function.instructions[position].op != Opcode::Call) {
+        return Result::Error(ABIError::InvalidPlan);
+    }
+    ValidateScalarAllocation(ref const function, ref const allocation) ?;
+    CallRequest request = ScalarRequestForCall(ref const function, position);
+    PlanWin64Call(ref const request, ref plan) ?;
+    for (i in 0 .. plan.argumentCount) {
+        plan.scalar.sources[i] = allocation.scalarLocations[plan.arguments[i].source.value];
+    }
+    Register[8] legacySources =[Register::RAX ...];
+    PlanArgumentMoves(ref plan, ref const legacySources) ?;
+    LivenessBits across = LiveAcrossCall(ref const function, ref const liveness, position) ?;
+    count = 0;
+    for (id in 0 .. function.virtualRegCount) {
+        if ((across.words[id / 31] &(1 <<(id % 31))) != 0 and not allocation.spilled[id]) {
+            ScalarLocation location = allocation.scalarLocations[id];
+            bool clobbered = location.registerClass == RegisterClass::XMM;
+            if (location.registerClass == RegisterClass::GPR) {
+                clobbered = IsCallerSaved(location.gpr);
+            }
+            PreservationClass classification = PreservationClass::SafeInCalleeSaved;
+            if (clobbered) {
+                classification = PreservationClass::MustPreserve;
+            }
+            if (count >= Len(records)) { return Result::Error(ABIError::CapacityExceeded); }
+            records[count] = Preservation {
+                id, ScalarWidth(function.scalarTypes[id]), function.virtualRegs[id].address, location.gpr,
+                position, allocation.start[id], allocation.end[id], classification, location, function.scalarTypes[id]
+            };
+            ValidatePreservation(records[count]) ?;
+            count += 1;
+        }
+    }
+    return Result::Ok();
+}
+
+
+NativeError ScalarBackendError(BackendError error) {
+    return match (error) {
+        BackendError::CapacityExceeded => NativeError::CapacityExceeded,
+        BackendError::BufferFull => NativeError::CapacityExceeded,
+        BackendError::RegisterExhausted => NativeError::RegisterExhausted,
+        BackendError::BridgeInvalid => NativeError::ScalarPlanningFailure,
+        BackendError::BridgeVersion => NativeError::InvalidInput,
+        BackendError::UnsupportedInstruction => NativeError::UnsupportedScalarOperation,
+        BackendError::InvalidEncoding => NativeError::ScalarPlanningFailure,
+        BackendError::BridgeSchemaMismatch => NativeError::InvalidInput,
+        BackendError::UnsupportedCallLowering => NativeError::ScalarPlanningFailure,
+    };
+}
+
+
+NativeError ScalarNativeABIError(ABIError error) {
+    return match (error) {
+        ABIError::InvalidPlan => NativeError::InvalidABILocation,
+        ABIError::CapacityExceeded => NativeError::CapacityExceeded,
+        ABIError::UnsupportedClass => NativeError::UnsupportedABIClass,
+        ABIError::UnsupportedForm => NativeError::UnsupportedABIForm,
+        ABIError::UnsupportedConvention => NativeError::UnsupportedABIConvention,
+        ABIError::InvalidAllocation => NativeError::InvalidABILocation,
+        ABIError::StaleFlags => NativeError::StaleFlags,
+        ABIError::ReservedXMM => NativeError::ReservedXMM,
+        ABIError::IncompatibleRepresentation => NativeError::IncompatibleMove,
+        ABIError::SpillCapacityExceeded => NativeError::SpillCapacityExceeded,
+    };
+}
