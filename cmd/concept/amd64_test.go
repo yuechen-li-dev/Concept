@@ -70,7 +70,7 @@ func TestEVT2f2CLIContractAndBoundary(t *testing.T) {
 		output, err := exec.Command("go", "run", ".", command, fixture).CombinedOutput()
 		text := string(output)
 		if command == "amd64" {
-			if err == nil || !strings.Contains(text, "AMD64_UNSUPPORTED_SSE_ENCODING") || strings.Contains(text, "native image bytes=") {
+			if err == nil || !strings.Contains(text, "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION") || strings.Contains(text, "native image bytes=") {
 				t.Fatalf("native boundary: %v\n%s", err, text)
 			}
 		} else {
@@ -122,7 +122,7 @@ func TestEVT2e5CLIDebugPlans(t *testing.T) {
 func TestEVT2f3CLIPlanningBoundary(t *testing.T) {
 	output, err := exec.Command("go", "run", ".", "amd64", "../../language/evt2f/valid/planning.concept").CombinedOutput()
 	text := strings.ReplaceAll(string(output), "\r\n", "\n")
-	if err == nil || !strings.Contains(text, "AMD64_UNSUPPORTED_SSE_ENCODING") || strings.Contains(text, "native image bytes=") {
+	if err == nil || !strings.Contains(text, "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION") || strings.Contains(text, "native image bytes=") {
 		t.Fatalf("planning boundary: %v\n%s", err, text)
 	}
 	for _, want := range []string{"fn MixedA scalar planning", "incoming arg0 -> RCX\n  incoming arg1 -> XMM1\n  incoming arg2 -> R8\n  incoming arg3 -> XMM3", "incoming arg0 -> XMM0\n  incoming arg1 -> RDX\n  incoming arg2 -> XMM2\n  incoming arg3 -> R9", "arg4 v4:float64 -> stack[0]", "arg5 v5:float32 -> stack[1]", "arg6 v6:i32 -> stack[2]", "arg7 v7:bool -> stack[3]", "return XMM0 ->", "return void", "xmm-clobbers=XMM0..XMM5", "frame size=104 unaligned=104", "float32 -> [rsp+44] size=4 align=4", "float64 -> [rsp+48] size=8 align=8", "temp[0]", "abstract-call (no SSE bytes)"} {
@@ -132,5 +132,20 @@ func TestEVT2f3CLIPlanningBoundary(t *testing.T) {
 	}
 	if strings.Contains(text, "[rsp-1]") {
 		t.Fatal("physical locations printed as frame offsets")
+	}
+}
+
+func TestEVT2f4CLIEmission(t *testing.T) {
+	output, err := exec.Command("go", "run", ".", "amd64", "../../language/evt2f/valid/native_scalar.concept").CombinedOutput()
+	if err != nil {
+		t.Fatalf("scalar emission: %v\n%s", err, output)
+	}
+	for _, want := range []string{"native image bytes=", "functions=50 calls=0 finalized=1", "fn Add32", "float32 -> XMM", "frame size=40", "temp"} {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("missing %q\n%s", want, output)
+		}
+	}
+	if strings.Contains(string(output), "AMD64_UNSUPPORTED_SSE_ENCODING") {
+		t.Fatal("stale SSE boundary")
 	}
 }

@@ -202,7 +202,7 @@ static int print_scalar_plans(concept_readonly_span_byte source,int ordinal) {
   concept_liveness live=concept_standard__backend__amd64_empty_liveness();
   if(concept_standard__backend__amd64_compute_liveness(&f,&live).tag) return 3;
   concept_finalized_frame frame=concept_standard__backend__amd64_empty_finalized_frame();
-  concept_result_void_frame_error qualified=concept_standard__backend__amd64_qualify_function_frame(&f,&a,&frame);
+  concept_result_void_frame_error qualified=concept_standard__backend__amd64_qualify_scalar_native_frame(&f,&a,&frame);
   if(qualified.tag){printf("%s\n",concept_standard__backend__amd64_describe_frame_error(qualified.payload.error.error));return 4;}
   for(int v=0;v<f.virtualRegCount;v++){printf("  v%d:%s -> ",v,concept_standard__backend__amd64_scalar_type_name(f.scalarTypes.data[v]));print_scalar_location(a.scalarLocations.data[v]);printf(" range=%d..%d\n",a.start.data[v],a.end.data[v]);}
   for(int i=0;i<f.argCount;i++){printf("  incoming arg%d -> ",i);print_scalar_location(concept_standard__backend__amd64_win64scalar_argument(i,f.scalarTypes.data[f.args.data[i].virtualReg]));puts("");}

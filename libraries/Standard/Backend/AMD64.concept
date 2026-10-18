@@ -111,6 +111,7 @@ struct BackendFunction
     ScalarRepresentation[64] slotTypes;
     ScalarOpcode[512] scalarOperations;
     ScalarRepresentation scalarResult;
+    int nativeTemporaryCount;
 }
 MachineOperand EmptyOperand()
 {
@@ -144,7 +145,7 @@ BackendFunction EmptyFunction()
         [MachineBlock{0, 0, 0, 0, Opcode::None, 0, 0, Condition::None, - 1, 0, 0}
         ...], 0,
         [EmptyInstruction() ...], 0, false,[ScalarRepresentation::Void ...],[ScalarRepresentation::Void ...],
-        [ScalarOpcode::Const ...], ScalarRepresentation::Void
+        [ScalarOpcode::Const ...], ScalarRepresentation::Void, 0
     };
 }
 bool ValidWidth(int width)
@@ -1011,7 +1012,7 @@ enum NativeError {
     UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation,
     UnsupportedSSEEncoding, ScalarPlanningFailure, RegisterExhausted, InvalidABILocation, UnsupportedABIClass,
     UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
-    StaleFlags
+    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation
 }
 struct NativeImage {
     NativeSymbol[128] symbols;
@@ -1056,6 +1057,8 @@ string DescribeNativeError(NativeError error) {
         NativeError::IncompatibleMove => "AMD64_MOVE_INCOMPATIBLE_REPRESENTATION",
         NativeError::SpillCapacityExceeded => "AMD64_SPILL_CAPACITY_EXCEEDED",
         NativeError::StaleFlags => "AMD64_STALE_FLAGS",
+        NativeError::UnsupportedFloatCallEmission => "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION",
+        NativeError::UnsupportedScalarOperation => "AMD64_UNSUPPORTED_SCALAR_OPERATION",
 
         NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
         NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
@@ -1353,7 +1356,8 @@ ref const Liveness liveness, ref FinalizedFrame frame) {
     bool[15] saves =[false ...];
     int calls = 0;
     int stackCount = 0;
-    int temps = 0;
+    int temps = function.nativeTemporaryCount;
+    if (temps<0 or temps>4) { return Result::Error(FrameError::CapacityExceeded); }
     Preservation[512] records =[Preservation {
         0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers, GPRLocation(Register::RAX),
         ScalarRepresentation::Void
@@ -2162,7 +2166,7 @@ EncodingPlan EmptyEncodingPlan()
 }
 Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
 {
-    if (value < 0 or value > 255 or writer.offset >= Len(writer.bytes))
+    if (value < 0 or value > 255 or writer.offset < 0 or writer.offset >= Len(writer.bytes))
     { return Result::Error(BackendError::BufferFull); }
     writer.bytes[writer.offset] = value as byte;
     writer.offset = writer.offset + 1;
@@ -3048,7 +3052,7 @@ Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> outp
                     match (QualifyScalarModule(artifact)) {
                         Result::Error(error) => { return Result::Error(error); }
                         Result::Ok => {
-                            return Result::Error(NativeError::UnsupportedSSEEncoding);
+                            return EmitScalarNativeModule(artifact, output, ref image);
                         }
                     }
                 }
@@ -3866,7 +3870,7 @@ NativeError ScalarBackendError(BackendError error) {
         BackendError::RegisterExhausted => NativeError::RegisterExhausted,
         BackendError::BridgeInvalid => NativeError::ScalarPlanningFailure,
         BackendError::BridgeVersion => NativeError::InvalidInput,
-        BackendError::UnsupportedInstruction => NativeError::ScalarPlanningFailure,
+        BackendError::UnsupportedInstruction => NativeError::UnsupportedScalarOperation,
         BackendError::InvalidEncoding => NativeError::ScalarPlanningFailure,
         BackendError::BridgeSchemaMismatch => NativeError::InvalidInput,
         BackendError::UnsupportedCallLowering => NativeError::ScalarPlanningFailure,
@@ -3890,189 +3894,926 @@ NativeError ScalarNativeABIError(ABIError error) {
 
 
 // Derived scalar SSE2 encoding. No physical or byte state enters CMIRAMD4.
-enum SSEError { UnsupportedRepresentation, UnsupportedOperation, InvalidOperand, RepresentationMismatch, InvalidDisplacement, BufferFull }
-record struct ScalarSSESelection { int prefix; int opcode; }
-Result<ScalarSSESelection,SSEError> SelectScalarSSE(ScalarOpcode operation, ScalarRepresentation representation) {
-    int prefix=0;
-    match(representation) {
-        ScalarRepresentation::Float32 => {prefix=243;}
-        ScalarRepresentation::Float64 => {prefix=242;}
-        ScalarRepresentation::Void => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::Bool => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::I8 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::U8 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::I16 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::U16 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::I32 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::U32 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::I64 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::U64 => {return Result::Error(SSEError::UnsupportedRepresentation);}
-        ScalarRepresentation::Address => {return Result::Error(SSEError::UnsupportedRepresentation);}
+enum SSEError {
+    UnsupportedRepresentation, UnsupportedOperation, InvalidOperand, RepresentationMismatch, InvalidDisplacement,
+    BufferFull
+}
+record struct ScalarSSESelection {
+    int prefix;
+    int opcode;
+}
+Result<ScalarSSESelection, SSEError> SelectScalarSSE(ScalarOpcode operation, ScalarRepresentation representation) {
+    int prefix = 0;
+    match (representation) {
+        ScalarRepresentation::Float32 => {
+            prefix = 243;
+        }
+        ScalarRepresentation::Float64 => {
+            prefix = 242;
+        }
+        ScalarRepresentation::Void => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::Bool => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I8 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U8 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I16 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U16 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I32 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U32 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::I64 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::U64 => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
+        ScalarRepresentation::Address => {
+            return Result::Error(SSEError::UnsupportedRepresentation);
+        }
     }
-    int opcode=0;
-    match(operation) {
-        ScalarOpcode::Load => {opcode=16;}
-        ScalarOpcode::Store => {opcode=17;}
-        ScalarOpcode::FloatAdd => {opcode=88;}
-        ScalarOpcode::FloatSub => {opcode=92;}
-        ScalarOpcode::FloatMul => {opcode=89;}
-        ScalarOpcode::FloatDiv => {opcode=94;}
-        ScalarOpcode::FloatEqual => {opcode=46;}
-        ScalarOpcode::FloatNotEqual => {opcode=46;}
-        ScalarOpcode::FloatLess => {opcode=46;}
-        ScalarOpcode::FloatLessEqual => {opcode=46;}
-        ScalarOpcode::FloatGreater => {opcode=46;}
-        ScalarOpcode::FloatGreaterEqual => {opcode=46;}
-        ScalarOpcode::Const => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::FloatConst => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::LoadSlot => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::StoreSlot => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::IndexAddress => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::CheckIndex => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::CheckedAdd => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::CheckedSub => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::CheckedMul => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Add => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Sub => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Mul => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Equal => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::NotEqual => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Less => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::LessEqual => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Greater => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::GreaterEqual => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::FloatNeg => {return Result::Error(SSEError::UnsupportedOperation);}
-        ScalarOpcode::Call => {return Result::Error(SSEError::UnsupportedOperation);}
+    int opcode = 0;
+    match (operation) {
+        ScalarOpcode::Load => {
+            opcode = 16;
+        }
+        ScalarOpcode::Store => {
+            opcode = 17;
+        }
+        ScalarOpcode::FloatAdd => {
+            opcode = 88;
+        }
+        ScalarOpcode::FloatSub => {
+            opcode = 92;
+        }
+        ScalarOpcode::FloatMul => {
+            opcode = 89;
+        }
+        ScalarOpcode::FloatDiv => {
+            opcode = 94;
+        }
+        ScalarOpcode::FloatEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatNotEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatLess => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatLessEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatGreater => {
+            opcode = 46;
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            opcode = 46;
+        }
+        ScalarOpcode::Const => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::FloatConst => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::LoadSlot => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::StoreSlot => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(SSEError::UnsupportedOperation);
+        }
+        ScalarOpcode::CheckIndex => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedAdd => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedSub => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::CheckedMul => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Add => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Sub => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Mul => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Equal => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::NotEqual => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Less => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::LessEqual => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Greater => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::GreaterEqual => {
+            return Result::Error(SSEError::UnsupportedOperation);
+        }
+        ScalarOpcode::FloatNeg => { return Result::Error(SSEError::UnsupportedOperation); }
+        ScalarOpcode::Call => { return Result::Error(SSEError::UnsupportedOperation); }
     }
-    if(opcode==46) {
-        prefix=0;
-        if(representation==ScalarRepresentation::Float64){prefix=102;}
+    if (opcode == 46) {
+        prefix = 0;
+        if (representation == ScalarRepresentation::Float64) {
+            prefix = 102;
+        }
     }
-    return Result::Ok(ScalarSSESelection{prefix,opcode});
+    return Result::Ok(ScalarSSESelection{prefix, opcode});
 }
 // A memory operand refers to finalized post-prologue RSP storage. The offset
 // is supplied by the frame owner; the encoder does not allocate a stack slot.
-record struct ScalarSSEOperand { bool memory; ScalarLocation location; ScalarRepresentation representation; int offset; int width; }
-Result<void,SSEError> ValidateScalarSSEOperand(ScalarSSEOperand operand, ScalarRepresentation representation) {
-    if(operand.representation!=representation){return Result::Error(SSEError::RepresentationMismatch);}
-    if(operand.width!=ScalarWidth(representation)){return Result::Error(SSEError::RepresentationMismatch);}
-    if(operand.location.registerClass!=RegisterClass::XMM){return Result::Error(SSEError::InvalidOperand);}
-    if(operand.memory){
-        if(operand.location.kind==ScalarLocationKind::Physical){return Result::Error(SSEError::InvalidOperand);}
-        if(operand.offset<0 or operand.offset>2147483639){return Result::Error(SSEError::InvalidDisplacement);}
+record struct ScalarSSEOperand {
+    bool memory;
+    ScalarLocation location;
+    ScalarRepresentation representation;
+    int offset;
+    int width;
+}
+Result<void, SSEError> ValidateScalarSSEOperand(ScalarSSEOperand operand, ScalarRepresentation representation) {
+    if (operand.representation != representation) {
+        return Result::Error(SSEError::RepresentationMismatch);
+    }
+    if (operand.width != ScalarWidth(representation)) {
+        return Result::Error(SSEError::RepresentationMismatch);
+    }
+    if (operand.location.registerClass != RegisterClass::XMM) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    if (operand.memory) {
+        if (operand.location.kind == ScalarLocationKind::Physical) {
+            return Result::Error(SSEError::InvalidOperand);
+        }
+        if (operand.offset<0 or operand.offset>2147483639) {
+            return Result::Error(SSEError::InvalidDisplacement);
+        }
     } else {
-        if(operand.location.kind!=ScalarLocationKind::Physical or XMMIndex(operand.location.xmm)<0 or XMMIndex(operand.location.xmm)>15){return Result::Error(SSEError::InvalidOperand);}
+        if (operand.location.kind != ScalarLocationKind::Physical or XMMIndex(operand.location.xmm)<0 or XMMIndex(operand.location.xmm)>15) {
+            return Result::Error(SSEError::InvalidOperand);
+        }
     }
     return Result::Ok();
 }
-Result<void,SSEError> EmitScalarSSE(ref ByteWriter writer, ScalarOpcode operation, ScalarRepresentation representation, ScalarSSEOperand destination, ScalarSSEOperand source) {
-    ScalarSSESelection selection=SelectScalarSSE(operation,representation)?;
-    ValidateScalarSSEOperand(destination,representation)?;
-    ValidateScalarSSEOperand(source,representation)?;
-    if(destination.memory and operation!=ScalarOpcode::Store){return Result::Error(SSEError::InvalidOperand);}
-    if(operation==ScalarOpcode::Store and (not destination.memory or source.memory)){return Result::Error(SSEError::InvalidOperand);}
-    bool memory=source.memory;int offset=source.offset;
-    int reg=XMMIndex(destination.location.xmm);int rm=XMMIndex(source.location.xmm);
-    if(operation==ScalarOpcode::Store){memory=true;offset=destination.offset;reg=XMMIndex(source.location.xmm);}
-    if(memory){rm=4;}
-    int count=4;if(selection.prefix==0){count=3;}
-    if(reg>=8 or rm>=8){count+=1;}
-    if(memory){count+=2;if(offset>127){count+=3;}}
-    if(writer.offset<0 or writer.offset>Len(writer.bytes)-count){return Result::Error(SSEError::BufferFull);}
-    match(WriteScalarSSEBytes(ref writer,selection,reg,rm,memory,offset)){
-        Result::Ok => {return Result::Ok();}
-        Result::Error(error) => {return Result::Error(SSEError::BufferFull);}
+Result<void, SSEError> EmitScalarSSE(ref ByteWriter writer, ScalarOpcode operation, ScalarRepresentation representation,
+ScalarSSEOperand destination, ScalarSSEOperand source) {
+    ScalarSSESelection selection = SelectScalarSSE(operation, representation) ?;
+    ValidateScalarSSEOperand(destination, representation) ?;
+    ValidateScalarSSEOperand(source, representation) ?;
+    if (destination.memory and operation != ScalarOpcode::Store) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    if (operation == ScalarOpcode::Store and(not destination.memory or source.memory)) {
+        return Result::Error(SSEError::InvalidOperand);
+    }
+    bool memory = source.memory;
+    int offset = source.offset;
+    int reg = XMMIndex(destination.location.xmm);
+    int rm = XMMIndex(source.location.xmm);
+    if (operation == ScalarOpcode::Store) {
+        memory = true;
+        offset = destination.offset;
+        reg = XMMIndex(source.location.xmm);
+    }
+    if (memory) {
+        rm = 4;
+    }
+    int count = 4;
+    if (selection.prefix == 0) {
+        count = 3;
+    }
+    if (reg >= 8 or rm >= 8) {
+        count += 1;
+    }
+    if (memory) {
+        count += 2;
+        if (offset>127) {
+            count += 3;
+        }
+    }
+    if (writer.offset<0 or writer.offset>Len(writer.bytes) - count) {
+        return Result::Error(SSEError::BufferFull);
+    }
+    match (WriteScalarSSEBytes(ref writer, selection, reg, rm, memory, offset)) {
+        Result::Ok => { return Result::Ok(); }
+        Result::Error(error) => { return Result::Error(SSEError::BufferFull); }
     }
 }
-Result<void,BackendError> WriteScalarSSEBytes(ref ByteWriter writer, ScalarSSESelection selection, int reg, int rm, bool memory, int offset) {
-    if(selection.prefix!=0){WriteByte(ref writer,selection.prefix)?;}
-    WriteRex(ref writer,false,reg,rm)?;
-    WriteByte(ref writer,15)?;WriteByte(ref writer,selection.opcode)?;
-    if(memory){
-        int mode=64;if(offset>127){mode=128;}
-        WriteByte(ref writer,mode+(reg%8)*8+4)?;WriteByte(ref writer,36)?;
-        if(offset>127){WriteI32LE(ref writer,offset)?;}else{WriteByte(ref writer,offset)?;}
-    }else{WriteByte(ref writer,192+(reg%8)*8+rm%8)?;}
+Result<void, BackendError> WriteScalarSSEBytes(ref ByteWriter writer, ScalarSSESelection selection, int reg,
+int rm, bool memory, int offset) {
+    if (selection.prefix != 0) {
+        WriteByte(ref writer, selection.prefix) ?;
+    }
+    WriteRex(ref writer, false, reg, rm) ?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, selection.opcode) ?;
+    if (memory) {
+        int mode = 64;
+        if (offset>127) {
+            mode = 128;
+        }
+        WriteByte(ref writer, mode +(reg % 8) * 8 + 4) ?;
+        WriteByte(ref writer, 36) ?;
+        if (offset>127) {
+            WriteI32LE(ref writer, offset) ?;
+        } else {
+            WriteByte(ref writer, offset) ?;
+        }
+    } else {
+        WriteByte(ref writer, 192 +(reg % 8) * 8 + rm % 8) ?;
+    }
     return Result::Ok();
 }
 // UCOMIS{S,D} is immediately consumed here. No intervening instruction may
 // clobber FLAGS. Unordered-aware results are normalized to the existing bool.
-Result<void,BackendError> WriteScalarCompareBool(ref ByteWriter writer, ScalarOpcode operation) {
-    int condition=0;bool unorderedTrue=false;bool guard=false;
-    match(operation){
-        ScalarOpcode::FloatEqual => {condition=148;guard=true;}
-        ScalarOpcode::FloatNotEqual => {condition=149;guard=true;unorderedTrue=true;}
-        ScalarOpcode::FloatLess => {condition=146;guard=true;}
-        ScalarOpcode::FloatLessEqual => {condition=150;guard=true;}
-        ScalarOpcode::FloatGreater => {condition=151;}
-        ScalarOpcode::FloatGreaterEqual => {condition=147;}
-        ScalarOpcode::Const => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatConst => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::LoadSlot => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::StoreSlot => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Load => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Store => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::IndexAddress => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::CheckIndex => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::CheckedAdd => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::CheckedSub => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::CheckedMul => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Add => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Sub => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Mul => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Equal => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::NotEqual => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Less => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::LessEqual => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Greater => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::GreaterEqual => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatAdd => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatSub => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatMul => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatDiv => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::FloatNeg => {return Result::Error(BackendError::UnsupportedInstruction);}
-ScalarOpcode::Call => {return Result::Error(BackendError::UnsupportedInstruction);}
+Result<void, BackendError> WriteScalarCompareBool(ref ByteWriter writer, ScalarOpcode operation) {
+    int condition = 0;
+    bool unorderedTrue = false;
+    bool guard = false;
+    match (operation) {
+        ScalarOpcode::FloatEqual => {
+            condition = 148;
+            guard = true;
+        }
+        ScalarOpcode::FloatNotEqual => {
+            condition = 149;
+            guard = true;
+            unorderedTrue = true;
+        }
+        ScalarOpcode::FloatLess => {
+            condition = 146;
+            guard = true;
+        }
+        ScalarOpcode::FloatLessEqual => {
+            condition = 150;
+            guard = true;
+        }
+        ScalarOpcode::FloatGreater => {
+            condition = 151;
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            condition = 147;
+        }
+        ScalarOpcode::Const => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::FloatConst => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::LoadSlot => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::StoreSlot => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Load => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Store => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckIndex => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Add => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Sub => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Mul => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Equal => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::NotEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Less => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::LessEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Greater => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::GreaterEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatDiv => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatNeg => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Call => { return Result::Error(BackendError::UnsupportedInstruction); }
     }
-    WriteByte(ref writer,15)?;WriteByte(ref writer,condition)?;WriteByte(ref writer,192)?;
-    if(guard){
-        int parity=155;if(unorderedTrue){parity=154;}
-        WriteByte(ref writer,15)?;WriteByte(ref writer,parity)?;WriteByte(ref writer,194)?;
-        int combine=32;if(unorderedTrue){combine=8;}
-        WriteByte(ref writer,combine)?;WriteByte(ref writer,208)?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, condition) ?;
+    WriteByte(ref writer, 192) ?;
+    if (guard) {
+        int parity = 155;
+        if (unorderedTrue) {
+            parity = 154;
+        }
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, parity) ?;
+        WriteByte(ref writer, 194) ?;
+        int combine = 32;
+        if (unorderedTrue) {
+            combine = 8;
+        }
+        WriteByte(ref writer, combine) ?;
+        WriteByte(ref writer, 208) ?;
     }
-    WriteByte(ref writer,15)?;WriteByte(ref writer,182)?;WriteByte(ref writer,192)?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, 182) ?;
+    WriteByte(ref writer, 192) ?;
     return Result::Ok();
 }
-void ScalarSSEFacts(){
-    Assert.Concept<PlainData>(ScalarSSEOperand,"derived typed scalar operand");
-    Assert.Concept<NoAllocation>(EmitScalarSSE,"bounded caller-owned byte writer");
+void ScalarSSEFacts() {
+    Assert.Concept<PlainData>(ScalarSSEOperand, "derived typed scalar operand");
+    Assert.Concept<NoAllocation>(EmitScalarSSE, "bounded caller-owned byte writer");
 }
 
 // Explicit scratch contract: RAX is volatile. These helpers neither allocate
 // registers nor expose source-language numeric conversions.
-Result<void,BackendError> WriteScalarXMMBits(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type, bool toXMM) {
-    if(not ScalarFloating(type)){return Result::Error(BackendError::UnsupportedInstruction);}
-    int code=XMMIndex(register);
-    WriteByte(ref writer,102)?;WriteRex(ref writer,type==ScalarRepresentation::Float64,code,0)?;
-    WriteByte(ref writer,15)?;int opcode=126;if(toXMM){opcode=110;}
-    WriteByte(ref writer,opcode)?;WriteByte(ref writer,192+(code%8)*8)?;
+Result<void, BackendError> WriteScalarXMMBits(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type,
+bool toXMM) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    int code = XMMIndex(register);
+    WriteByte(ref writer, 102) ?;
+    WriteRex(ref writer, type == ScalarRepresentation::Float64, code, 0) ?;
+    WriteByte(ref writer, 15) ?;
+    int opcode = 126;
+    if (toXMM) {
+        opcode = 110;
+    }
+    WriteByte(ref writer, opcode) ?;
+    WriteByte(ref writer, 192 +(code % 8) * 8) ?;
     return Result::Ok();
 }
-Result<void,BackendError> WriteScalarNegation(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type) {
-    if(not ScalarFloating(type)){return Result::Error(BackendError::UnsupportedInstruction);}
-    WriteScalarXMMBits(ref writer,register,type,false)?;
-    int bit=31;if(type==ScalarRepresentation::Float64){WriteByte(ref writer,72)?;bit=63;}
-    WriteByte(ref writer,15)?;WriteByte(ref writer,186)?;WriteByte(ref writer,248)?;WriteByte(ref writer,bit)?;
-    WriteScalarXMMBits(ref writer,register,type,true)?;
+Result<void, BackendError> WriteScalarNegation(ref ByteWriter writer, XMMRegister register, ScalarRepresentation type) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    WriteScalarXMMBits(ref writer, register, type, false) ?;
+    int bit = 31;
+    if (type == ScalarRepresentation::Float64) {
+        WriteByte(ref writer, 72) ?;
+        bit = 63;
+    }
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, 186) ?;
+    WriteByte(ref writer, 248) ?;
+    WriteByte(ref writer, bit) ?;
+    WriteScalarXMMBits(ref writer, register, type, true) ?;
     return Result::Ok();
 }
-Result<void,BackendError> WriteScalarConstant(ref ByteWriter writer, ReadOnlySpan<byte> bits, XMMRegister register, ScalarRepresentation type) {
-    if(not ScalarFloating(type)){return Result::Error(BackendError::UnsupportedInstruction);}
-    int width=ScalarWidth(type);
-    if(Len(bits)!=width){return Result::Error(BackendError::InvalidEncoding);}
-    if(width==8){WriteByte(ref writer,72)?;}
-    WriteByte(ref writer,184)?;
-    for(i in 0 .. width){WriteByte(ref writer,bits[i] as int)?;}
-    WriteScalarXMMBits(ref writer,register,type,true)?;
+Result<void, BackendError> WriteScalarConstant(ref ByteWriter writer, ReadOnlySpan<byte> bits, XMMRegister register,
+ScalarRepresentation type) {
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    int width = ScalarWidth(type);
+    if (Len(bits) != width) { return Result::Error(BackendError::InvalidEncoding); }
+    if (width == 8) {
+        WriteByte(ref writer, 72) ?;
+    }
+    WriteByte(ref writer, 184) ?;
+    for (i in 0 .. width) {
+        WriteByte(ref writer, bits[i] as int) ?;
+    }
+    WriteScalarXMMBits(ref writer, register, type, true) ?;
     return Result::Ok();
+}
+
+ScalarSSEOperand ScalarRegisterOperand(XMMRegister register, ScalarRepresentation type) {
+    return ScalarSSEOperand{false, XMMLocation(register), type, - 1, ScalarWidth(type)};
+}
+ScalarSSEOperand ScalarStackOperand(int offset, ScalarRepresentation type) {
+    return ScalarSSEOperand {
+        true, StorageLocation(ScalarLocationKind::Temporary, 0, type), type, offset, ScalarWidth(type)
+    };
+}
+Result<void, BackendError> WriteSelectedScalar(ref ByteWriter writer, ScalarOpcode operation, ScalarRepresentation type,
+ScalarSSEOperand destination, ScalarSSEOperand source) {
+    return match (EmitScalarSSE(ref writer, operation, type, destination, source)) {
+        Result::Ok => Result::Ok(), Result::Error(error) => Result::Error(ScalarSSEBackendError(error)),
+    };
+}
+Result<int, BackendError> NativeScalarTemporary(ref const FinalizedFrame frame, int ordinal) {
+    return match (ResolveFrameSlot(ref const frame, FrameRegionKind::MoveTemps, ordinal)) {
+        Result::Ok(index) => Result::Ok(frame.slots[index].offset), Result::Error(error) => Result::Error(BackendError::InvalidEncoding),
+    };
+}
+// XMM5 is borrowed with an explicit save/restore. It remains a normal allocated
+// volatile register; neither its identity nor the allocator is mutated.
+Result<ScalarSSEOperand, BackendError> NativeScalarSource(int value, ScalarRepresentation type, ref const Allocation allocation,
+ref const FinalizedFrame frame, bool scratchSaved) {
+    ScalarLocation location = allocation.scalarLocations[value];
+    if (location.kind == ScalarLocationKind::Spill) {
+        int index = frame.spillSlots[value];
+        if (index<0) { return Result::Error(BackendError::InvalidEncoding); }
+        return Result::Ok(ScalarStackOperand(frame.slots[index].offset, type));
+    }
+    if (location.registerClass != RegisterClass::XMM) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (scratchSaved and location.xmm == XMMRegister::XMM5) {
+        return Result::Ok(ScalarStackOperand(NativeScalarTemporary(ref const frame, 0) ?, type));
+    }
+    return Result::Ok(ScalarRegisterOperand(location.xmm, type));
+}
+Result<void, BackendError> EncodeScalarWireInstruction(ref ByteWriter writer, ref const BridgeReader reader,
+WireScalarMachineInstruction instruction, ref const BackendFunction function, ref const Allocation allocation,
+ref const FinalizedFrame frame) {
+    ScalarRepresentation type = instruction.Representation;
+    BridgeReader args = BridgeReader{reader.data, instruction.Args.offset};
+    int left = - 1;
+    int right = - 1;
+    if (instruction.Args.count>0) {
+        left = ReadWire(ref args, BridgeType<WireScalarValueUse>{0}) ?.Value;
+        if (ScalarFloating(function.scalarTypes[left])) {
+            type = function.scalarTypes[left];
+        }
+    }
+    if (instruction.Args.count>1) {
+        right = ReadWire(ref args, BridgeType<WireScalarValueUse>{0}) ?.Value;
+    }
+    if (instruction.Op == ScalarOpcode::CheckIndex or instruction.Op == ScalarOpcode::IndexAddress) {
+        return WriteScalarIndex(ref writer, instruction, left, ref const function, ref const allocation,
+        ref const frame);
+    }
+    if (not ScalarFloating(type)) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    int scratch = NativeScalarTemporary(ref const frame, 0) ?;
+    int accumulator = NativeScalarTemporary(ref const frame, 1) ?;
+    WriteSelectedScalar(ref writer, ScalarOpcode::Store, ScalarRepresentation::Float64, ScalarStackOperand(scratch,
+    ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
+    WriteRSPReg(ref writer, false, Register::RAX, accumulator, 8) ?;
+    ScalarSSEOperand destination = ScalarRegisterOperand(XMMRegister::XMM5, type);
+    if (left >= 0 and instruction.Op != ScalarOpcode::Load and instruction.Op != ScalarOpcode::Store) {
+        WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, destination, NativeScalarSource(left,
+        type, ref const allocation, ref const frame, true) ?) ?;
+    }
+    bool comparison = false;
+    match (instruction.Op) {
+        ScalarOpcode::FloatAdd => {
+            WriteSelectedScalar(ref writer, instruction.Op, type, destination, NativeScalarSource(right,
+            type, ref const allocation, ref const frame, true) ?) ?;
+        }
+        ScalarOpcode::FloatSub => {
+            WriteSelectedScalar(ref writer, instruction.Op, type, destination, NativeScalarSource(right,
+            type, ref const allocation, ref const frame, true) ?) ?;
+        }
+        ScalarOpcode::FloatMul => {
+            WriteSelectedScalar(ref writer, instruction.Op, type, destination, NativeScalarSource(right,
+            type, ref const allocation, ref const frame, true) ?) ?;
+        }
+        ScalarOpcode::FloatDiv => {
+            WriteSelectedScalar(ref writer, instruction.Op, type, destination, NativeScalarSource(right,
+            type, ref const allocation, ref const frame, true) ?) ?;
+        }
+        ScalarOpcode::FloatNeg => {
+            WriteScalarNegation(ref writer, XMMRegister::XMM5, type) ?;
+        }
+        ScalarOpcode::FloatEqual => {
+            comparison = true;
+        }
+        ScalarOpcode::FloatNotEqual => {
+            comparison = true;
+        }
+        ScalarOpcode::FloatLess => {
+            comparison = true;
+        }
+        ScalarOpcode::FloatLessEqual => {
+            comparison = true;
+        }
+        ScalarOpcode::FloatGreater => {
+            comparison = true;
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            comparison = true;
+        }
+        ScalarOpcode::LoadSlot => {
+            WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, destination, ScalarStackOperand(frame.slotOffsets[instruction.Slot],
+            type)) ?;
+        }
+        ScalarOpcode::StoreSlot => {
+            WriteSelectedScalar(ref writer, ScalarOpcode::Store, type, ScalarStackOperand(frame.slotOffsets[instruction.Slot],
+            type), destination) ?;
+        }
+        ScalarOpcode::FloatConst => {
+            byte[8] bits =[0 ...];
+            int width = ScalarWidth(type);
+            if (instruction.Literal.length != 2 + width * 2) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            for (i in 0 .. width) {
+                int digit = instruction.Literal.offset + 2 +(width - 1 - i) * 2;
+                int high = ScalarHexDigit(reader.data[digit] as int);
+                int low = ScalarHexDigit(reader.data[digit + 1] as int);
+                if (high<0 or low<0) { return Result::Error(BackendError::InvalidEncoding); }
+                bits[i] =(high * 16 + low) as byte;
+            }
+            if (width == 8) {
+                WriteScalarConstant(ref writer, ReadOnlySpan(bits), XMMRegister::XMM5, type) ?;
+            }
+            else {
+                byte[4] narrow =[0 ...];
+                for (i in 0 .. 4) {
+                    narrow[i] = bits[i];
+                }
+                WriteScalarConstant(ref writer, ReadOnlySpan(narrow), XMMRegister::XMM5, type) ?;
+            }
+        }
+        ScalarOpcode::Const => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Load => {
+            WriteScalarAddressSSE(ref writer, false, type, XMMRegister::XMM5, allocation.scalarLocations[left].gpr) ?;
+        }
+        ScalarOpcode::Store => {
+            WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, destination, NativeScalarSource(right,
+            type, ref const allocation, ref const frame, true) ?) ?;
+            WriteScalarAddressSSE(ref writer, true, type, XMMRegister::XMM5, allocation.scalarLocations[left].gpr) ?;
+        }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckIndex => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckedMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Add => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Sub => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Mul => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Equal => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::NotEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Less => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::LessEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Greater => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::GreaterEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Call => { return Result::Error(BackendError::UnsupportedInstruction); }
+    }
+    bool resultRAX = false;
+    bool resultScratch = false;
+    if (comparison) {
+        WriteSelectedScalar(ref writer, instruction.Op, type, destination, NativeScalarSource(right,
+        type, ref const allocation, ref const frame, true) ?) ?;
+        // Preserve RDX: SETP/SETNP consumes only its low byte.
+        int parity = NativeScalarTemporary(ref const frame, 2) ?;
+        WriteRSPReg(ref writer, false, Register::RDX, parity, 8) ?;
+        WriteScalarCompareBool(ref writer, instruction.Op) ?;
+        WriteRSPReg(ref writer, true, Register::RDX, parity, 8) ?;
+        ScalarLocation target = allocation.scalarLocations[instruction.Result];
+        resultRAX = target.gpr == Register::RAX;
+        WriteRegReg(ref writer, 137, target.gpr, Register::RAX, 4) ?;
+    } else {
+        if (instruction.Result >= 0) {
+            ScalarLocation target = allocation.scalarLocations[instruction.Result];
+            if (target.kind == ScalarLocationKind::Spill) {
+                WriteSelectedScalar(ref writer, ScalarOpcode::Store, type, ScalarStackOperand(frame.slots[frame.spillSlots[instruction.Result]].offset,
+                type), destination) ?;
+            }
+            else {
+                WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, ScalarRegisterOperand(target.xmm,
+                type), destination) ?;
+                resultScratch = target.xmm == XMMRegister::XMM5;
+            }
+        }
+    }
+    if (not resultRAX) {
+        WriteRSPReg(ref writer, true, Register::RAX, accumulator, 8) ?;
+    }
+    if (not resultScratch) {
+        WriteSelectedScalar(ref writer, ScalarOpcode::Load, ScalarRepresentation::Float64, ScalarRegisterOperand(XMMRegister::XMM5,
+        ScalarRepresentation::Float64), ScalarStackOperand(scratch, ScalarRepresentation::Float64)) ?;
+    }
+    return Result::Ok();
+}
+int ScalarHexDigit(int value) {
+    if (value >= 48 and value <= 57) { return value - 48; }
+    if (value >= 97 and value <= 102) { return value - 87; }
+    return - 1;
+}
+
+Result<void, BackendError> WriteScalarEntry(ref ByteWriter writer, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    for (i in 0 .. function.argCount) {
+        ScalarRepresentation type = function.scalarTypes[function.args[i].virtualReg];
+        if (i<4) {
+            int offset = NativeScalarTemporary(ref const frame, i) ?;
+            if (ScalarFloating(type)) {
+                WriteSelectedScalar(ref writer, ScalarOpcode::Store, type, ScalarStackOperand(offset,
+                type), ScalarRegisterOperand(XMMAt(i), type)) ?;
+            }
+            else {
+                WriteRSPReg(ref writer, false, Win64Registers().integerArguments[i], offset, ScalarWidth(type)) ?;
+            }
+        }
+    }
+    for (i in 0 .. function.argCount) {
+        int value = function.args[i].virtualReg;
+        ScalarRepresentation type = function.scalarTypes[value];
+        ScalarLocation target = allocation.scalarLocations[value];
+        if (ScalarFloating(type)) {
+            int offset = frame.byteCount + 40 +(i - 4) * 8;
+            if (i<4) {
+                offset = NativeScalarTemporary(ref const frame, i) ?;
+            }
+            if (target.kind == ScalarLocationKind::Physical) {
+                WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, ScalarRegisterOperand(target.xmm,
+                type), ScalarStackOperand(offset, type)) ?;
+            }
+            else {
+                int saved = NativeScalarTemporary(ref const frame, 3) ?;
+                WriteSelectedScalar(ref writer, ScalarOpcode::Store, ScalarRepresentation::Float64, ScalarStackOperand(saved,
+                ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
+                WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, ScalarRegisterOperand(XMMRegister::XMM5,
+                type), ScalarStackOperand(offset, type)) ?;
+                WriteSelectedScalar(ref writer, ScalarOpcode::Store, type, ScalarStackOperand(frame.slots[frame.spillSlots[value]].offset,
+                type), ScalarRegisterOperand(XMMRegister::XMM5, type)) ?;
+                WriteSelectedScalar(ref writer, ScalarOpcode::Load, ScalarRepresentation::Float64, ScalarRegisterOperand(XMMRegister::XMM5,
+                ScalarRepresentation::Float64), ScalarStackOperand(saved, ScalarRepresentation::Float64)) ?;
+            }
+        }
+    }
+    for (i in 0 .. function.argCount) {
+        int value = function.args[i].virtualReg;
+        ScalarRepresentation type = function.scalarTypes[value];
+        if (not ScalarFloating(type)) {
+            int offset = frame.byteCount + 40 +(i - 4) * 8;
+            if (i<4) {
+                offset = NativeScalarTemporary(ref const frame, i) ?;
+            }
+            Register destination = allocation.scalarLocations[value].gpr;
+            if (type == ScalarRepresentation::Bool) {
+                WriteMovImmediate(ref writer, destination, 0, 4) ?;
+            }
+            WriteRSPReg(ref writer, true, destination, offset, ScalarWidth(type)) ?;
+        }
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteScalarBranch(ref ByteWriter writer, ref EncodingPlan plan, int target,
+bool conditional) {
+    if (plan.fixupCount >= 256) { return Result::Error(BackendError::CapacityExceeded); }
+    if (conditional) {
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 132) ?;
+    } else {
+        WriteByte(ref writer, 233) ?;
+    }
+    plan.fixups[plan.fixupCount] = BranchFixup{writer.offset, target};
+    plan.fixupCount += 1;
+    WriteI32LE(ref writer, 0) ?;
+    return Result::Ok();
+}
+Result<int, BackendError> EmitScalarNativeFunction(ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output) {
+    ByteWriter writer = ByteWriter{output, 0};
+    EncodeScalarNativeFunctionIntoWriter(artifact, ordinal, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> EncodeScalarNativeFunctionIntoWriter(ReadOnlySpan<byte> artifact, int ordinal,
+ref ByteWriter writer) {
+    BackendFunction function = EmptyFunction();
+    DecodeScalarFunction(artifact, ordinal, ref function) ?;
+    Allocation allocation = EmptyAllocation();
+    AllocateRegisters(ref const function, ref allocation) ?;
+    if (allocation.callCount>0) {
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
+    PlanFunctionCalls(ref const function, ref allocation) ?;
+    FinalizedFrame frame = EmptyFinalizedFrame();
+    match (QualifyScalarNativeFrame(ref function, ref const allocation, ref frame)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    if (frame.byteCount >= 4096) { return Result::Error(BackendError::CapacityExceeded); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadScalarBridgeIdentity(ref reader) ?;
+    WireScalarMachineModule module = ReadWire(ref reader, BridgeType<WireScalarMachineModule>{
+        0
+    }) ?;
+    reader.offset = module.Functions.offset;
+    WireScalarMachineFunction owner = ReadWire(ref reader, BridgeType<WireScalarMachineFunction>{
+        0
+    }) ?;
+    for (i in 0 .. ordinal) {
+        owner = ReadWire(ref reader, BridgeType<WireScalarMachineFunction>{0}) ?;
+    }
+    for (i in 0 .. frame.prologueCount) {
+        EmitFrameAction(ref writer, frame.prologue[i]) ?;
+    }
+    WriteScalarEntry(ref writer, ref const function, ref const allocation, ref const frame) ?;
+    EncodingPlan branches = EmptyEncodingPlan();
+    BridgeReader blocks = BridgeReader{artifact, owner.Blocks.offset};
+    for (b in 0 .. owner.Blocks.count) {
+        WireScalarMachineBlock block = ReadWire(ref blocks, BridgeType<WireScalarMachineBlock>{
+            0
+        }) ?;
+        branches.blockOffsets[b] = writer.offset;
+        BridgeReader instructions = BridgeReader{artifact, block.Instructions.offset};
+        for (i in 0 .. block.Instructions.count) {
+            WireScalarMachineInstruction instruction = ReadWire(ref instructions, BridgeType<WireScalarMachineInstruction>{
+                0
+            }) ?;
+            EncodeScalarWireInstruction(ref writer, ref const reader, instruction, ref const function,
+            ref const allocation, ref const frame) ?;
+        }
+        match (block.Term.Op) {
+            ScalarTerminator::Return => {
+                if (function.scalarResult != ScalarRepresentation::Void) {
+                    if (ScalarFloating(function.scalarResult)) {
+                        WriteSelectedScalar(ref writer, ScalarOpcode::Load, function.scalarResult, ScalarRegisterOperand(XMMRegister::XMM0,
+                        function.scalarResult), NativeScalarSource(block.Term.Value, function.scalarResult,
+                        ref const allocation, ref const frame, false) ?) ?;
+                    }
+                    else {
+                        WriteRegReg(ref writer, 137, Register::RAX, allocation.scalarLocations[block.Term.Value].gpr,
+                        4) ?;
+                    }
+                }
+                for (i in 0 .. frame.epilogueCount) {
+                    EmitFrameAction(ref writer, frame.epilogue[i]) ?;
+                }
+            }
+            ScalarTerminator::Jump => {
+                WriteScalarBranch(ref writer, ref branches, block.Term.True, false) ?;
+            }
+            ScalarTerminator::Branch => {
+                Register physical = allocation.scalarLocations[block.Term.Value].gpr;
+                WriteRegReg(ref writer, 133, physical, physical, 4) ?;
+                WriteScalarBranch(ref writer, ref branches, block.Term.False, true) ?;
+                WriteScalarBranch(ref writer, ref branches, block.Term.True, false) ?;
+            }
+        }
+    }
+    for (i in 0 .. branches.fixupCount) {
+        BranchFixup fixup = branches.fixups[i];
+        if (fixup.targetBlock<0 or fixup.targetBlock >= function.blockCount) {
+            return Result::Error(BackendError::InvalidEncoding);
+        }
+        int target = branches.blockOffsets[fixup.targetBlock];
+        if (target<0) { return Result::Error(BackendError::InvalidEncoding); }
+        PatchI32LE(ref writer, fixup.patchOffset, target -(fixup.patchOffset + 4)) ?;
+    }
+    return Result::Ok();
+}
+
+Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadScalarBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    WireScalarMachineModule module = WireScalarMachineModule {
+        BridgeSequence<WireScalarMachineFunction>{0, 0}
+    };
+    match (ReadWire(ref reader, BridgeType<WireScalarMachineModule>{0})) {
+        Result::Ok(value) => {
+            module = value;
+        }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    if (module.Functions.count>128) { return Result::Error(NativeError::CapacityExceeded); }
+    BackendFunction function = EmptyFunction();
+    // Admission and call deferral precede any output/image mutation.
+    for (i in 0 .. module.Functions.count) {
+        match (DecodeScalarFunction(artifact, i, ref function)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        for (p in 0 .. function.instructionCount) {
+            if (function.instructions[p].op == Opcode::Call) {
+                return Result::Error(NativeError::UnsupportedFloatCallEmission);
+            }
+        }
+    }
+    image = EmptyNativeImage();
+    ByteWriter writer = ByteWriter{output, 0};
+    for (i in 0 .. module.Functions.count) {
+        int offset = writer.offset;
+        match (EncodeScalarNativeFunctionIntoWriter(artifact, i, ref writer)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        match (DecodeScalarFunction(artifact, i, ref function)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        int size = writer.offset - offset;
+        image.symbols[i] = NativeSymbol {
+            function.identity, function.name, i, offset, size, 0
+        };
+        image.symbolCount += 1;
+    }
+    image.byteCount = writer.offset;
+    image.finalized = true;
+    return Result::Ok(writer.offset);
+}
+
+Result<void, BackendError> WriteScalarAddressSSE(ref ByteWriter writer, bool store, ScalarRepresentation type,
+XMMRegister register, Register base) {
+    ScalarOpcode operation = ScalarOpcode::Load;
+    if (store) {
+        operation = ScalarOpcode::Store;
+    }
+    ScalarSSESelection selection = ScalarSSESelection{0, 0};
+    match (SelectScalarSSE(operation, type)) {
+        Result::Ok(value) => {
+            selection = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int code = RegisterEncoding(base);
+    int reg = XMMIndex(register);
+    WriteByte(ref writer, selection.prefix) ?;
+    WriteRex(ref writer, false, reg, code) ?;
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, selection.opcode) ?;
+    int mode = 0;
+    if (code % 8 == 5) {
+        mode = 64;
+    }
+    WriteByte(ref writer, mode +(reg % 8) * 8 + code % 8) ?;
+    if (code % 8 == 4) {
+        WriteByte(ref writer, 36) ?;
+    }
+    if (mode != 0) {
+        WriteByte(ref writer, 0) ?;
+    }
+    return Result::Ok();
+}
+MachineOperand ScalarAddressMemory(int base, int index, int stride) {
+    return MachineOperand {
+        OperandKind::Memory, - 1, 8, base, - 1, index, stride, 0, BridgeText{0, 0}, BridgeText {
+            0, 0
+        }, false
+    };
+}
+Result<void, BackendError> WriteScalarIndex(ref ByteWriter writer, WireScalarMachineInstruction instruction,
+int index, ref const BackendFunction function, ref const Allocation allocation, ref const FinalizedFrame frame) {
+    if (instruction.Op == ScalarOpcode::CheckIndex) {
+        WriteCompareImmediate(ref writer, allocation.scalarLocations[index].gpr, instruction.Extent,
+        4) ?;
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 130) ?;
+        WriteI32LE(ref writer, 2) ?;
+        WriteByte(ref writer, 15) ?;
+        WriteByte(ref writer, 11) ?;
+        return Result::Ok();
+    }
+    MachineSlot slot = function.slots[instruction.Slot];
+    Register destination = allocation.scalarLocations[instruction.Result].gpr;
+    int base = slot.baseVReg;
+    if (not slot.incomingIndirect) {
+        return Result::Error(BackendError::UnsupportedInstruction);
+    }
+    return WriteMemoryReg(ref writer, ref const allocation, 141, destination, ScalarAddressMemory(base,
+    index, instruction.Stride), 8);
+}
+
+Result<void, FrameError> QualifyScalarNativeFrame(ref BackendFunction function, ref const Allocation allocation,
+ref FinalizedFrame frame) {
+    function.nativeTemporaryCount = 0;
+    if (allocation.callCount == 0) {
+        function.nativeTemporaryCount = 4;
+    }
+    return QualifyFunctionFrame(ref const function, ref const allocation, ref frame);
+}
+
+BackendError ScalarSSEBackendError(SSEError error) {
+    return match (error) {
+        SSEError::BufferFull => BackendError::BufferFull,
+        SSEError::UnsupportedRepresentation => BackendError::UnsupportedInstruction,
+        SSEError::UnsupportedOperation => BackendError::UnsupportedInstruction,
+        SSEError::InvalidOperand => BackendError::InvalidEncoding,
+        SSEError::RepresentationMismatch => BackendError::InvalidEncoding,
+        SSEError::InvalidDisplacement => BackendError::InvalidEncoding,
+    };
+}
+void NativeScalarSSEFacts() {
+    Assert.Concept<NoAllocation>(EmitScalarNativeModule, "bounded native scalar image in caller-owned storage");
+    Assert.Concept<NoAllocation>(EncodeScalarNativeFunctionIntoWriter, "shared writer and frame-owned scratch");
 }

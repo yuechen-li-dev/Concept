@@ -1,0 +1,168 @@
+module EVT2f.Native;
+profile Core;
+float Add32(float a, float b) {
+    return a + b;
+}
+float Sub32(float a, float b) {
+    return a - b;
+}
+float Mul32(float a, float b) {
+    return a * b;
+}
+float Div32(float a, float b) {
+    return a / b;
+}
+float Neg32(float a, float b) {
+    return - a;
+}
+float Multi32(float a, float b) {
+    return(a - b) /(a + b);
+}
+bool Eq32(float a, float b) {
+    return a == b;
+}
+bool Ne32(float a, float b) {
+    return a != b;
+}
+bool Lt32(float a, float b) {
+    return a < b;
+}
+bool Le32(float a, float b) {
+    return a <= b;
+}
+bool Gt32(float a, float b) {
+    return a > b;
+}
+bool Ge32(float a, float b) {
+    return a >= b;
+}
+float Constant32() {
+    return 0.1;
+}
+float Pressure32(float a, float b, float c, float d, float e, float f, float g, float h) {
+    return a + b + c + d + e + f + g + h;
+}
+float Branch32(float a, float b) {
+    if (a<b) { return a; }
+    return b;
+}
+double Add64(double a, double b) {
+    return a + b;
+}
+double Sub64(double a, double b) {
+    return a - b;
+}
+double Mul64(double a, double b) {
+    return a * b;
+}
+double Div64(double a, double b) {
+    return a / b;
+}
+double Neg64(double a, double b) {
+    return - a;
+}
+double Multi64(double a, double b) {
+    return(a - b) /(a + b);
+}
+bool Eq64(double a, double b) {
+    return a == b;
+}
+bool Ne64(double a, double b) {
+    return a != b;
+}
+bool Lt64(double a, double b) {
+    return a < b;
+}
+bool Le64(double a, double b) {
+    return a <= b;
+}
+bool Gt64(double a, double b) {
+    return a > b;
+}
+bool Ge64(double a, double b) {
+    return a >= b;
+}
+double Constant64() {
+    return 1.0000000000000002;
+}
+double Pressure64(double a, double b, double c, double d, double e, double f, double g, double h) {
+    return a + b + c + d + e + f + g + h;
+}
+double Branch64(double a, double b) {
+    if (a<b) { return a; }
+    return b;
+}
+float Load32(float[4] values, int index) {
+    return values[index];
+}
+double Load64(double[4] values, int index) {
+    return values[index];
+}
+void Store32(float[4] values, int index, float value) {
+    values[index] = value;
+}
+void Store64(double[4] values, int index, double value) {
+    values[index] = value;
+}
+float Local32(float a, float b) {
+    float local = a - b;
+    return local /(a + b);
+}
+double Local64(double a, double b) {
+    double local = a - b;
+    return local /(a + b);
+}
+float<Pa> Interpret32(float value) {
+    return interpret value as float<Pa>;
+}
+double<m> Interpret64(double value) {
+    return interpret value as double<m>;
+}
+float BranchEq32(float a, float b) {
+    if (a == b) { return a; }
+    return b;
+}
+float BranchNe32(float a, float b) {
+    if (a != b) { return a; }
+    return b;
+}
+float BranchLt32(float a, float b) {
+    if (a < b) { return a; }
+    return b;
+}
+float BranchLe32(float a, float b) {
+    if (a <= b) { return a; }
+    return b;
+}
+float BranchGt32(float a, float b) {
+    if (a > b) { return a; }
+    return b;
+}
+float BranchGe32(float a, float b) {
+    if (a >= b) { return a; }
+    return b;
+}
+double BranchEq64(double a, double b) {
+    if (a == b) { return a; }
+    return b;
+}
+double BranchNe64(double a, double b) {
+    if (a != b) { return a; }
+    return b;
+}
+double BranchLt64(double a, double b) {
+    if (a < b) { return a; }
+    return b;
+}
+double BranchLe64(double a, double b) {
+    if (a <= b) { return a; }
+    return b;
+}
+double BranchGt64(double a, double b) {
+    if (a > b) { return a; }
+    return b;
+}
+double BranchGe64(double a, double b) {
+    if (a >= b) { return a; }
+    return b;
+}
