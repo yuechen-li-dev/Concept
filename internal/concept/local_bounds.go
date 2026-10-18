@@ -556,7 +556,7 @@ func (a *localBoundsAnalysis) block(b Block, s localBoundsState) localBoundsStat
 			// The range upper bound is evaluated once by foreach semantics.
 			// A descriptor assigned anywhere in the body lost its snapshot above.
 			// Escaped descriptors/captured values are never tracked by get.
-			if ok && rangeExpr.Op == ".." && lo.intKnown && lo.integer.lo >= 0 && v.ElementType.Name == "int" {
+			if ok && rangeExpr.Op == ".." && lo.intKnown && lo.integer.lo >= 0 && lo.integer.lo < math.MaxInt32 && v.ElementType.Name == "int" {
 				if query, ok := rangeExpr.Right.(*CallExpr); ok && query.Callee == "Len" && !query.Member && len(query.Args) == 1 && evt1ImplicitValueIntrinsic(a.env, query) {
 					if name, ok := query.Args[0].(*NameExpr); ok {
 						view := a.get(child, name.Name)

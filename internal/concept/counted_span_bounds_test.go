@@ -39,6 +39,16 @@ return concept_local_bounds_alias(shifted,prefix)==1 && a[3]==1 ? 0:1; }`)
 	}
 }
 
+func TestCountedSpanBoundsMaximumStartKeepsRangeFailure(t *testing.T) {
+	source := `module LocalBounds;profile Core;
+int Read(ReadOnlySpan<int> v){for(i in 2147483647..Len(v)){return v[i+0];}return 0;}`
+	for _, verify := range []bool{false, true} {
+		out, _ := localBoundsOutputs(t, source, verify)
+		runCountedSpanFailure(t, out, `#include "local_bounds.generated.h"
+int main(void){int32_t a[1]={7};return concept_local_bounds_read((concept_readonly_span_int){a,1});}`, "invalid range step or direction")
+	}
+}
+
 func TestCountedSpanBoundsInvalidation(t *testing.T) {
 	cases := map[string]string{
 		"different view":          `int Read(ReadOnlySpan<int> v,ReadOnlySpan<int> w){int s=0;for(i in 0..Len(v)){s+=w[i];}return s;}`,

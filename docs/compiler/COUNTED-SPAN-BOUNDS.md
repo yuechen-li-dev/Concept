@@ -32,6 +32,8 @@ minimizes this case and executes the required failure in Normal and Verify.
 overlapping backing, a short secondary input, descriptor reassignment, loop
 carried mutation, captures, escapes, index arithmetic/reassignment, shadowing,
 ordinary while fallback, artifact-only generics and deterministic regeneration.
+An `INT_MAX` starting value does not create a contradictory interval: the proof
+is withheld and the existing range-direction failure remains observable.
 MIR validation checks the proof variant's structural invariants; imported AST
 annotations are never proof authority and are recomputed from validated bodies.
 
