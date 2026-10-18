@@ -3160,6 +3160,7 @@ func (f *evt1FunctionLowerer) tensorStrategy(kind string) string {
 
 func (f *evt1FunctionLowerer) lower() string {
 	var b strings.Builder
+	parameterInputs, parameterEntry := f.valueParameterSnapshots()
 	prefix := ""
 	if f.private {
 		prefix = "static "
@@ -3172,9 +3173,14 @@ func (f *evt1FunctionLowerer) lower() string {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), evt1CParamName(param.Name)))
+		name := evt1CParamName(param.Name)
+		if incoming, ok := parameterInputs[i]; ok {
+			name = incoming
+		}
+		b.WriteString(fmt.Sprintf("%s %s", evt1CType(param.Type), name))
 	}
 	b.WriteString(") {\n")
+	b.WriteString(parameterEntry)
 	b.WriteString(f.lowerBlock(*f.fn.Body, 1))
 	b.WriteString(f.lowerCurrentScopeDrops(1))
 	b.WriteString("}\n")
