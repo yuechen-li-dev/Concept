@@ -323,12 +323,12 @@ record struct FrameAction {
 }
 struct CallSiteActions {
     CallPlan abi;
-    FrameAction[32] actions;
+    FrameAction[64] actions;
     int count;
     int callIndex;
-    ScalarMove[32] scalarActions;
-    int[32] sourceOffsets;
-    int[32] destinationOffsets;
+    ScalarMove[64] scalarActions;
+    int[64] sourceOffsets;
+    int[64] destinationOffsets;
 }
 FrameAction EmptyFrameAction() {
     return FrameAction {
@@ -354,7 +354,8 @@ struct FinalizedFrame
     FrameRegion[7] regions;
     int[512] spillSlots;
     int[15] saveSlots;
-    int[4] tempSlots;
+    int[8] tempSlots;
+    int nativeTemporaryBase;
     int[4] outgoingSlots;
     FrameAction[10] prologue;
     int prologueCount;
@@ -369,7 +370,7 @@ FinalizedFrame EmptyFinalizedFrame() {
         0,[- 1 ...], 0, 0,[FrameSlot{FrameRegionKind::LocalSlots, - 1, 0, 0, 1}
         ...], 0,
         [FrameRegion{FrameRegionKind::OutgoingShadow, 0, 0}
-        ...],[- 1 ...],[- 1 ...],[- 1 ...],[- 1 ...],
+        ...],[- 1 ...],[- 1 ...],[- 1 ...], 0,[- 1 ...],
         [EmptyFrameAction() ...], 0,[EmptyFrameAction() ...], 0, 0,[- 1 ...],[ScalarRepresentation::Void ...]
     };
 }

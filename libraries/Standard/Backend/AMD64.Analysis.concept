@@ -964,6 +964,9 @@ Result<void, BackendError> DecodeScalarFunction(ReadOnlySpan<byte> artifact, int
                 WireScalarMachineCall call = ReadWire(ref calls, BridgeType<WireScalarMachineCall>{
                     0
                 }) ?;
+                if (call.Arguments.count>Len(projected.values)) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
                 projected.target = call.Target;
                 projected.argumentCount = call.Arguments.count;
                 projected.result = LegacyScalarType(call.Result);

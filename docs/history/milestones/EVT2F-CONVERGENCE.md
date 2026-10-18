@@ -314,3 +314,119 @@ actual floating calls, nonvolatile XMM saves, SIMD/AVX/FMA, binary16, conversion
 COFF and unwind/SEH remain unqualified. EVT2f5 was not begun.
 
 SUCCESS — EVT2f4 Cathedral scalar SSE2 encoding and native arithmetic qualified.
+
+## EVT2f5 — mixed scalar native call closure
+
+Actual clean baseline: `64890e7d4927abd0d97e6329cd78777cfc0e8780` on `main`.
+It contains the request's EVT2f4 baseline
+`4c423a5ef548f92792b30329cf4cdfb00cc24771`, followed only by the requested AMD64
+module split. NURBS/SMLIB improvements were preserved. Compiler identity remains
+`concept-evt1-stage0-go`; CMIRAMD4 is v4/hash
+`aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c`.
+CMIRAMD3/4 schemas and generated codecs are unchanged.
+
+Baseline focused qualification passed with shared build reuse: compiler 80.131 s
+and CLI 9.394 s, including scalar SSE, 61-function planning, native integer calls
+and frozen byte oracles. The immediately preceding clean-baseline full suite had
+also passed during module-split closeout (compiler 479.249 s). No reset or
+unrelated optimization change was made.
+
+The shared `EmitAllocatedCall` now drives both integer and mixed scalar module
+emission. Concept owns placement, physical allocation, typed concrete actions,
+preservation, result capture, final frame geometry and native rel32 fixups. New
+production code stays in the existing `AMD64.Model`, `AMD64.Analysis`,
+`AMD64.Frame`, `AMD64.Encoding` and public `AMD64` modules. No allocator or move-cycle planner
+was replaced. `Win64ABI` receives a narrow cycle correction: save the old
+destination value with its own type, permitting a float32/float64 swap without
+conversion. Native execution and the existing replay verifier qualify it.
+Go production changes consist of one CLI presentation update
+displaying concrete rel32 realization of abstract calls. Other Go changes are
+qualification data/oracles and expectations for the newly supported path.
+
+The frame layer reserves distinct cycle and scalar scratch identities and owns
+incoming stack offsets. Temporary capacity is eight slots (up to four cycle
+slots plus four scalar scratch slots); concrete action capacity is 64. Both
+bounds reject overflow. Typed spill widths/alignments and the existing seven
+regions remain. Bool captures zero-extend the payload. Scalar int32 constants,
+slots, checked arithmetic and comparisons reuse the existing integer encoder
+where mixed source fixtures need them. A pressure-entry correction consumes
+staged GPR inputs before scratch can overwrite them. The EVT2f4 5,332-byte image
+remains byte-identical in Normal/Verify; frozen CMIRAMD3 bytes are retained.
+
+The 51-function source fixture emits 40 actual direct calls and an 11,744-byte
+image. Both modes pass arities zero through eight, the two mandatory mixed
+positional signatures, all eight mixed stack/register arguments, genuine void
+calls, floating/bool/integer returns, RAX/XMM0 coexistence, two-/three-way cycles,
+repeated sources, live-across values, mixed pressure, nested/multiple/recursive
+calls, signed-zero/NaN/infinity pass-through and binary64 precision checks.
+The strong native gate passed in 178.50 s (87.87 Normal / 90.61 Verify).
+
+Independent strict C11 arithmetic/branch oracles and controlled native Win64
+probes check register/stack placement, all 32 home bytes, entry alignment,
+RSP/canary and nonvolatile GPR preservation. The GPR pressure fixture uses at
+least three saved GPRs. Hostile callees replace all six volatile XMM values;
+actual typed spill/reload execution retains the caller's live values. A typed C
+void target records observable argument values. These foreign stubs are
+harness-only RW-stage substitutions; no production external linker or
+host-address-dependent deterministic image was introduced.
+
+One hundred complete emissions per mode match bytes and symbol/fixup metadata.
+Representative mixed/cycle/pressure plans receive 100 additional allocation,
+frame, action and canonical-debug signature checks. One hundred independent
+fixup replays reproduce the final image. CLI bytes/debug also match across two
+independent builds. The CLI reports, for example, Call8 code size 146 bytes,
+Cycle2 62, Cycle3 78, Live32/Live64 242 each and Pressure64 590. Informational
+timings and frame sizes are in the [conformance report](../../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
+
+Ten new malformed mixed-call artifacts reject transactionally; existing 52
+malformed CMIRAMD4 artifacts remain covered. Frame/action tests cover invalid
+class, width, offset, storage size, temporary identity, scratch overlap and
+capacity. Existing reserved-XMM, unsupported call-form/convention, stale-FLAGS
+and move/replay gates remain. Passed NoAllocation assertions cover shared call
+realization and typed action emission; existing PlainData and StaticExtent
+evidence remains in force.
+The contract-valid nine-argument capacity specimen is rejected before the
+eight-entry native projection buffer is written, with untouched output/image
+state in both modes (22.580 s focused gate). A separate four-function native
+fixture qualifies positive forward fixups and a float32/float64 register swap;
+the corrected 61-function planning/replay gate also passes. The final focused
+race rerun covering that correction passed in 99.804 s.
+
+Standard 44, DragonGod 23 and Golden 130 pass in Normal and Verify. Final vet,
+canonical format checks, actual Concept source checking and Normal/Verify R9d
+match-preference lint pass without findings. Focused LIR/call-contract/CMIRAMD4
+and new native-call race checks passed in 249.459 s. Optimized shared builds
+remain enabled; no 100-run cold-build loop was introduced.
+
+Final `go test ./... -count=1 -timeout=20m -parallel=4` passed: compiler
+641.795 s, CLI 84.650 s, GPU-free Vulkan 0.406 s. This includes the semantic
+corpus, checked-output, EVT2/EVT2x/EVT2e native/frozen-byte, EVT2f1/f2 transport,
+61-function planner/replay, EVT2f4 SSE and final EVT2f5 native/forward/capacity
+gates. Final vet and diff checks pass. The longer outer Go timeout accommodates
+the required 100-emission native stress; individual test assertions and runtime
+timeouts were not weakened.
+
+The first full concurrent run failed only
+`TestRunnerExecutesFactsTheoryBenchmarkAsyncAndProphecy`: its child printed the
+expected foretold panic and then reported `CONCEPT_TEST_TIMEOUT`. All backend
+tests passed in that run. The unchanged runner test passed three isolated runs
+(14.155 s total); the full suite passed after reducing outer test parallelism
+to four. No runner implementation or assertion was changed. The failure log is
+preserved as `artifacts/evt2f5-go-all.log`. A subsequent complete pre-capacity
+run also passed (compiler 648.490 s); the final run above includes the capacity
+guard and its regression.
+
+The semantic corpus manifest remains 444 valid, 357 static-invalid, 15
+runtime-negative, five compatibility and four expected-divergence cases. The new
+EVT2f5 native fixture is dedicated qualification outside that unchanged manifest.
+Root and legacy Zig suites are skipped under the frozen-path policy: neither
+the legacy compiler nor its build/test infrastructure changed. Qualification
+logs are under ignored `artifacts/evt2f5-*`.
+
+EVT2f closure is bounded to fixed-signature internal scalar direct calls.
+Aggregate ABI, indirect/variadic/unprototyped calls, production external linkage,
+XMM6–XMM15 allocation, SIMD/AVX/FMA, binary16, numeric conversions, object output,
+large-frame stack probing, and unwind/SEH remain deferred. No adjacent milestone
+was started.
+
+SUCCESS — EVT2f Cathedral scalar float/double native lowering and mixed Win64 calls qualified.

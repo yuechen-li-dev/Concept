@@ -637,3 +637,142 @@ floating calls, internal call chains and actual live-across-call floating
 execution remain EVT2f5 responsibilities, with the precise call boundary above.
 Final validation/identities and updated latest-baseline counts are recorded in
 the convergence ledger. Frozen Zig is skipped because its path was unchanged.
+
+## EVT2f5 — mixed Win64 floating calls
+
+EVT2f5 extends the qualified SSE2 path with fixed-signature scalar direct calls.
+The actual clean baseline is `64890e7d4927abd0d97e6329cd78777cfc0e8780`, preserving
+EVT2f4's `4c423a5ef548f92792b30329cf4cdfb00cc24771` and the subsequent AMD64 module
+split. Compiler identity remains `concept-evt1-stage0-go`. CMIRAMD4 remains v4,
+hash `aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c`;
+CMIRAMD3, schemas, codec generation and virtual-only physical-class contracts
+are unchanged. Earlier floating-call stop statements describe EVT2f4 history.
+
+### Native ABI and shared realization
+
+`EmitAllocatedCall` is shared by CMIRAMD3 integer and CMIRAMD4 mixed native
+emission. The existing `Win64ABI` planner, class-separated allocator and frame
+realizer remain authoritative. The encoder consumes their typed concrete
+actions; it does not plan cycles, recalculate spills or invent register policy.
+Semantic target identities, declaration-order symbols, checked `CALL rel32`
+fixups and `ResolveNativeCalls` are shared. All patches finish before RX.
+
+| Property | Qualified behavior |
+| --- | --- |
+| Argument positions 0–3 | Integer/bool use RCX/RDX/R8/R9; float32/float64 use XMM0/XMM1/XMM2/XMM3 at the same ordinal |
+| Positions 4–7 | Eight-byte ordered slots at caller RSP+32/+40/+48/+56; callee uses finalized frame size plus return-address/home-space offset |
+| Logical payloads | int32 four bytes, bool one byte, float32 four bytes, float64 eight bytes; no dependency on unused slot bytes |
+| Results | Integer/bool in RAX, float32/float64 in XMM0, void has no capture |
+| Preservation | Typed volatile GPR/XMM stores precede moves; capture precedes reloads; pressure spills remain typed |
+| Stack | One post-prologue-RSP frame, maximum outgoing area, 32-byte shadow space and 16-byte call-boundary alignment |
+| XMM policy | XMM0–XMM5 volatile allocation; XMM6–XMM15 reserved |
+
+Scalar call actions use MOVSS/MOVSD for XMM transfers and existing integer
+writers for GPR transfers. Memory-to-memory actions borrow a register with an
+explicit save/restore in frame-owned scratch. Bool capture uses MOVZX so stale
+upper bits cannot affect later branches. CMIRAMD4's int32 constants, local slots,
+checked signed arithmetic and materialized integer comparisons reuse the
+existing integer writer alongside floating instructions; no numeric conversion
+was added. Checked overflow retains a trap. Unsupported additional integer
+operation forms return `AMD64_UNSUPPORTED_SCALAR_OPERATION`.
+
+The frame finalizer now gives cycle temporaries and native scalar scratch
+distinct identities. The bounded temporary map grows from four to eight slots:
+up to four cycle slots followed by four eight-byte scratch slots. Scalar action
+storage grows from 32 to 64 entries, admitting combined preservation, moves and
+capture without truncation. Tests check the 64th append and reject a 65th.
+Spill payloads remain float32 size/alignment 4 and float64 size/alignment 8.
+Incoming GPR staging is consumed before a pressure reload can borrow its scratch
+slot. The seven frame regions and inverse callee-save/return sequence remain.
+
+The existing move planner's cycle save now uses the representation of the old
+value occupying the destination, rather than requiring that representation to
+match the incoming argument. This admits float32/float64 register swaps without
+conversion. Typed temporary/move replay still rejects incompatible actual
+transfers. The allocator and cycle algorithm remain otherwise unchanged.
+
+### Executable evidence
+
+`language/evt2f/valid/native_calls.concept` supplies 51 source functions and 40
+actual direct calls, producing an 11,744-byte image in both modes. Qualification
+runs the whole path from source through checked LIR/CMIRAMD4, Concept planning,
+encoding and RW→RX publication to correctly typed Win64 entrypoints.
+
+- Mandatory mixed signatures `[int,double,int,float]` and
+  `[double,int,float,int]`, with branch predicates that expose wrong class,
+  ordinal or argument order. Fixtures avoid unsupported numeric conversions.
+- Eight mixed arguments read all integer/bool/float32/float64 positions. Arity
+  zero through eight executes, including five/six/seven stack-argument cases.
+- Float32/float64 and bool returns, zero-argument floating returns, genuine void
+  calls, mixed RAX/XMM0 results, two-/three-way noncommutative XMM cycles and
+  repeated sources.
+- Live-across float32/float64 and combined GPR/XMM state, result capture versus
+  old XMM0 values, eight-live-value pressure spills and reloads, nested and
+  multiple calls, recursion, and a spilled incoming float beside an ordinal-3
+  integer parameter.
+- Exact pass-through bits for both signed zeros, infinities, payload-bearing
+  quiet NaNs and adjacent binary64 values near 1.0. Arithmetic oracle checks use
+  exact deterministic results; they do not promise universal NaN payload parity.
+- Numbered FLAGS validation remains active. A comparison bool survives a call,
+  and new comparisons after calls execute without stale-FLAGS dependence.
+
+The independently compiled C11 harness uses `-pedantic-errors -O2
+-fno-fast-math -ffp-contract=off`. Hand-authored C expressions supply independent
+arithmetic/branch oracles. A fixed mixed-eight C helper receives arguments from
+generated code. An assembly entry shim records unmodified entry RSP and writes
+all 32 home bytes before tail-jumping to that typed helper. Typed C callbacks
+observe void-call side effects; hostile leaf targets deliberately replace all
+six volatile XMM contents. A sentinel wrapper checks RSP balance, a stack canary
+and all eight nonvolatile GPRs through nested generated frames; the GPR-pressure
+fixture actually uses at least three callee-saved registers.
+
+Foreign targets are installed through controlled harness-only stubs into a
+separate writable image before RX. Production bytes and determinism checks
+contain no process addresses. This establishes independent fixed Win64 ABI
+evidence, not production external linkage or a general linker.
+
+Ten malformed mixed-call artifacts are rejected by the Go producer verifier and
+Concept admission: argument count/width/class, missing result, void capture,
+bool class, unsupported convention, missing direct target and result width.
+Concept rejection preserves both caller output bytes and image metadata.
+Focused action tests reject wrong class, width, offset, slot size, unsupported
+frame actions, excessive action count, invalid temporary identity and scratch
+overlap. Existing EVT2f2's 52 malformed artifacts and EVT2f3 reserved-register,
+move-plan, form/convention and stale-FLAGS tests remain intact.
+An additional contract-valid nine-argument source specimen is rejected with
+`AMD64_NATIVE_CAPACITY_EXCEEDED` before native call projection writes its
+eight-entry buffer. Output bytes and image metadata remain untouched in both
+modes; the wider semantic transport does not imply a wider native capacity.
+
+### Determinism, measurements and limits
+
+Each mode performs 100 complete native re-emissions and compares every byte and
+all symbol/fixup metadata. Four representative mixed/cycle/pressure functions
+also undergo 100 allocation/frame/action-signature checks. Canonical debug
+observations and image bytes agree between Normal and Verify. Another 100
+independent fixup-resolution replays reconstruct the identical final bytes.
+The previous EVT2f4 5,332-byte image remains byte-identical in both modes.
+A separate four-function source fixture places mixed-signature callers before
+their targets, asserts positive resolved rel32 displacement and executes
+argument-sensitive branches plus a float32/float64 XMM swap in Normal/Verify.
+Backward and recursive calls also execute in the main fixture.
+
+An informational run measured initial complete emission at 759 ms Normal /
+775 ms Verify. Planning/realization plus representative 100-run checks took
+1,683 / 1,727 ms; 100 fixup replays took 4 / 3 ms. The 100,000-call nested native
+sample took 3 ms per mode. These clock()-based measurements include harness and
+validation overhead and are not performance thresholds or superiority claims.
+Representative finalized frames include 72-byte simple callers, 104-byte mixed
+eight-argument callers, 152-byte float64 pressure functions and 168-byte combined
+pressure frames. Exact per-function frame/code sizes are in the qualification
+log's plan and symbol observations.
+
+Floating behavior assumes default round-to-nearest SSE execution, masked
+exceptions, and no FTZ/DAZ; the harness checks MXCSR. No fast-math, reassociation,
+contraction, signed-zero canonicalization or implicit conversion was enabled.
+The qualified subset is fixed-signature internal scalar direct calls with up
+to eight parameters. Indirect, variadic/unprototyped, aggregate and production
+external linkage remain unsupported, as do binary16, SIMD/AVX/FMA, nonvolatile
+XMM allocation, conversions, locally initialized indexed aggregates, object
+output, stack probing for large frames and SEH/unwind. No adjacent milestone was
+started. Validation results are recorded in the convergence ledger.

@@ -22,7 +22,7 @@ outcome, not an unfulfilled deletion. Paths identify the audited owner.
 | MIR | Go MIR/semantic facts | Go | Cathedral | Needs prerequisite | Validated typed input | MIR/semantic-fact parity | Concept owns normal MIR production | Retain seed | Later IR |
 | Planner | Go `planner.go` | Go | Cathedral | Needs prerequisite | MIR facts | Plan/guard decisions | Concept planner selected normally | Retain seed | C2 |
 | LIR | Go `lir*.go` | Go | Cathedral | Needs prerequisite | MIR/Planner | Verified LIR parity | Concept transform and verifier own normal path | Retain seed | C2 |
-| Scalar floating input | Go `lir.go/lir_lower.go` and checked virtual MachineIR projection | Stage-0 checked semantic production | Cathedral native consumer | Exact float32/float64 LIR and CMIRAMD4 transport qualified | Existing semantic float and quantity model | 100-run LIR/MachineIR; 52 malformed artifacts; Normal/Verify artifact-only roundtrip | Concept physical allocation/ABI/frame qualified in EVT2f3; SSE/native still required | Retain seed input only; no Go physical XMM algorithm | EVT2f3 planning qualified |
+| Scalar floating input | Go `lir.go/lir_lower.go` and checked virtual MachineIR projection | Stage-0 checked semantic production | Cathedral native consumer | Exact float32/float64 LIR and CMIRAMD4 transport qualified | Existing semantic float and quantity model | 100-run LIR/MachineIR; 52 malformed artifacts; Normal/Verify artifact-only roundtrip | Concept physical allocation/ABI/frame, SSE and fixed-signature native calls qualified through EVT2f5 | Retain seed input only; no Go physical XMM algorithm | EVT2f5 native scalar closure |
 | MachineIR | Go `machineir*.go`; Concept backend model | Shared | Cathedral | Direct scalar call contract feeds qualified native calls | CMIRAMD3 transport | Schema/IR/native parity | Concept native path owns new backend decisions | Retain seed producer | EVT2e5 |
 | MachineIR bridge | Concept `BridgeSchema[4]/Derive/Read/Validate[4]`; generated Go/Concept codec | Concept contract/admission; shared bootstrap transport | Shared bootstrap seam | Frozen CMIRAMD3 and virtual CMIRAMD4 qualified | Stage-0 emits explicitly selected version | Exact bytes/hash/artifact-only roundtrip; 23 v3/52 v4 malformed cases | Versioned Concept schemas; normal whole-artifact admission selected | Generated Go codec retained seed | R9a2; EVT2e2; EVT2f2 |
 | Liveness | Concept `Backend/AMD64.concept` | Concept | Cathedral | Call argument uses and exact live-across classification qualified | MachineIR input | Native/corpus oracle; 100-run summaries | Concept clobber analysis selected normally | No Go backend counterpart to retire | EVT2e3 |
@@ -66,10 +66,10 @@ prerequisite recorded in EVT2f1 is now qualified. The current bounded transition
 | CMIRAMD4 scalar/XMM schema | Concept authoritative; qualified | Reflection/materialization host | Version future changes explicitly |
 | CMIRAMD4 transport/admission | Generated Go/Concept transport; Concept whole-artifact admission qualified | Checked virtual projection and C bootstrap host | Preserve artifact-only parity and exact bits |
 | Physical XMM allocator | Concept authoritative; EVT2f3 qualified | Admitted virtual class/value identities | Later optimization/nonvolatile qualification |
-| Mixed positional Win64 ABI and XMM clobbers | Concept authoritative; EVT2f3 qualified | Ordered checked types; presentation host | SSE realization and later runtime ABI oracle |
-| Float spills and native frame integration | Concept authoritative; EVT2f3 qualified | Typed semantic locals | Encode already qualified actions in later slice |
+| Mixed positional Win64 ABI and XMM clobbers | Concept authoritative; EVT2f3 qualified | Ordered checked types; presentation host | EVT2f5 native action realization and independent Win64 probes qualified |
+| Float spills and native frame integration | Concept authoritative; EVT2f3 planning and EVT2f5 native qualified | Typed semantic locals | Preserve typed action/frame validation and native pressure regressions |
 | Scalar SSE2 encoding | Concept authoritative; EVT2f4 qualified | Semantic scalar ops and exact bits | Later unsupported forms/optimizations only |
-| No-call native float execution | Concept authoritative; EVT2f4 qualified | Existing Win64 RW-to-RX host and independent strict C11 oracle | EVT2f5 for generated floating calls |
+| No-call native float execution | Concept authoritative; EVT2f4 qualified | Existing Win64 RW-to-RX host and independent strict C11 oracle | EVT2f5 extends the same path with generated mixed calls |
 
 The normal backend validates CMIRAMD4, derives and qualifies XMM allocation,
 mixed Win64 calls, preservation, moves and one concrete frame, then stops at
@@ -86,3 +86,17 @@ geometry remain authoritative; derived scratch uses four generalized temporary
 slots. Source/transport/byte/native oracles qualify the bounded arithmetic,
 comparison, scalar-local, incoming-array and pressure subset. Earlier SSE-stop
 statements above describe EVT2f3 history; no production Go SSE path exists.
+
+EVT2f5 closes the fixed-signature scalar direct-call path: Concept realizes mixed
+GPR/XMM actions, captures RAX/XMM0 results before reloads, and reuses native
+semantic symbols and checked rel32 fixups. Source fixtures execute arities zero
+through eight, nested/recursive/multiple calls, live-across state, cycles and
+pressure spills in Normal/Verify. Compiled C probes independently observe the
+Win64 positional ABI and deliberately clobber volatile XMM registers. The
+production image remains address-independent and fully fixed before RX.
+
+The historical EVT2f4 stop above no longer applies to this subset. Stage-0
+remains checked input/transport, bootstrap host and diagnostics. No Go mixed-call
+backend was introduced. CMIRAMD3/4 remain frozen; external linkage,
+indirect/variadic/aggregate calls, XMM6-XMM15 allocation and additional targets
+remain separate work.

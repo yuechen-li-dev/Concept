@@ -1,0 +1,268 @@
+profile Core;
+
+float Return32(float x)
+{
+    return x;
+}
+double Return64(double x)
+{
+    return x;
+}
+int ReturnInt(int x)
+{
+    return x;
+}
+bool ReturnBool(bool x)
+{
+    return x;
+}
+float Zero32()
+{
+    return 0.1;
+}
+double Zero64()
+{
+    return 1.0000000000000002;
+}
+float CallZero32()
+{
+    return Zero32();
+}
+double CallZero64()
+{
+    return Zero64();
+}
+float CallReturn32(float x)
+{
+    return Return32(x);
+}
+double CallReturn64(double x)
+{
+    return Return64(x);
+}
+bool CallReturnBool(bool x)
+{
+    return ReturnBool(x);
+}
+double MixedA(int a, double b, int c, float d)
+{
+    if (a == 17) {
+        if (c == 29) {
+            if (d == 3.5) { return b; }
+        }
+    }
+    return - b;
+}
+double MixedB(double a, int b, float c, int d)
+{
+    if (b == 17) {
+        if (d == 29) {
+            if (c == 3.5) { return a; }
+        }
+    }
+    return - a;
+}
+double CallA(int a, double b, int c, float d)
+{
+    return MixedA(a, b, c, d);
+}
+double CallB(double a, int b, float c, int d)
+{
+    return MixedB(a, b, c, d);
+}
+double Mixed8(int a, double b, bool c, float d, double e, float f, int g, bool h)
+{
+    if (a == 17) {
+        if (c) {
+            if (d == 3.5) {
+                if (f == 1.5) {
+                    if (g == 29) {
+                        if (h) { return b - e; }
+                    }
+                }
+            }
+        }
+    }
+    return b + e;
+}
+double Call8(int a, double b, bool c, float d, double e, float f, int g, bool h)
+{
+    return Mixed8(a, b, c, d, e, f, g, h);
+}
+float Five(float a, float b, float c, float d, float e)
+{
+    return(a - b) +(c - d) + e;
+}
+float CallFive(float a, float b, float c, float d, float e)
+{
+    return Five(a, b, c, d, e);
+}
+void VoidMixed(int i, float f, double d)
+{
+    ReturnInt(i);
+    Return32(f);
+    Return64(d);
+}
+void CallVoid(int i, float f, double d)
+{
+    VoidMixed(i, f, d);
+}
+float Cycle2Target(float a, float b)
+{
+    return a - b;
+}
+float Cycle2(float a, float b)
+{
+    return Cycle2Target(b, a);
+}
+double Cycle3Target(double a, double b, double c)
+{
+    return(a - b) / c;
+}
+double Cycle3(double a, double b, double c)
+{
+    return Cycle3Target(b, c, a);
+}
+float RepeatTarget(float a, float b, float c, float d)
+{
+    return(a - b) +(c - d);
+}
+float Repeat(float x, float y)
+{
+    return RepeatTarget(x, x, y, x);
+}
+float Live32(float a, float b)
+{
+    float local = a + b;
+    float x = Return32(a);
+    return local + x;
+}
+double Live64(double a, double b)
+{
+    double local = a + b;
+    double x = Return64(a);
+    return local + x;
+}
+double MixedLive(int i, float f, double d)
+{
+    int integerLocal = i + 7;
+    float floatLocal = f + 1.0;
+    double doubleLocal = d + 1.0000000000000002;
+    double x = MixedA(i, d, i, f);
+    if (integerLocal == 24) {
+        if (floatLocal == 4.5) { return doubleLocal + x; }
+    }
+    return doubleLocal - x;
+}
+double NestedH(double a)
+{
+    return a + 1.0000000000000002;
+}
+double NestedG(double a, double b)
+{
+    double local = a - b;
+    double x = NestedH(b);
+    return local + x;
+}
+double NestedF(double a, double b)
+{
+    double local = a + b;
+    double x = NestedG(b, a);
+    return local + x;
+}
+double Multiple(double a, double b)
+{
+    double local = a - b;
+    double x = Return64(b);
+    double y = NestedG(a, x);
+    return local + x + y;
+}
+double MixedResults(int i, double a)
+{
+    int x = ReturnInt(i);
+    double y = Return64(a);
+    if (x == 17) { return y + a; }
+    return y - a;
+}
+float Pressure32(float a, float b, float c, float d, float e, float f, float g, float h)
+{
+    float x = Return32(a);
+    return a + b + c + d + e + f + g + h + x;
+}
+double Pressure64(double a, double b, double c, double d, double e, double f, double g, double h)
+{
+    double x = Return64(a);
+    return a + b + c + d + e + f + g + h + x;
+}
+float CallPressure32(float a, float b, float c, float d, float e, float f, float g, float h)
+{
+    return Pressure32(a, b, c, d, e, f, g, h);
+}
+double CallPressure64(double a, double b, double c, double d, double e, double f, double g, double h)
+{
+    return Pressure64(a, b, c, d, e, f, g, h);
+}
+bool CompareCalls(float a, float b)
+{
+    bool before = a < b;
+    Return32(a);
+    if (before) { return Return32(b) > a; }
+    return Return32(a) < b;
+}
+double MixedPressure(int i, float a, double b, float c, double d, float e, double f, bool flag)
+{
+    double x = Mixed8(i, b, flag, a, d, c, i, flag);
+    if (flag) {
+        if (i == 17) {
+            if (a < c) {
+                if (e > 0.0) { return b + d + f + x; }
+            }
+        }
+    }
+    return b + d + f - x;
+}
+double Recursive(int n, double x)
+{
+    if (n == 0) { return x; }
+    return Recursive(n - 1, x) + x;
+}
+double ProbeDriver()
+{
+    return Call8(17, 2.5, true, 3.5, 7.25, 1.5, 29, true);
+}
+double Six(double a, double b, double c, double d, double e, double f)
+{
+    return(a - b) +(c - d) +(e - f);
+}
+double CallSix(double a, double b, double c, double d, double e, double f)
+{
+    return Six(a, b, c, d, e, f);
+}
+float Seven(float a, float b, float c, float d, float e, float f, float g)
+{
+    return(a - b) +(c - d) +(e - f) + g;
+}
+float CallSeven(float a, float b, float c, float d, float e, float f, float g)
+{
+    return Seven(a, b, c, d, e, f, g);
+}
+float EntryPressure(float a, float b, float c, int marker, float d, float e, float f, float g)
+{
+    if (marker == 29) { return a + b + c + d + e + f + g; }
+    return - a;
+}
+float CallEntryPressure(float a, float b, float c, int marker, float d, float e, float f, float g)
+{
+    return EntryPressure(a, b, c, marker, d, e, f, g);
+}
+double GPRPressure(int a, int b, int c, int d, int e, int f, int g, int h)
+{
+    int total = a + b + c + d + e + f + g + h;
+    double x = Zero64();
+    if (total == 36) { return x; }
+    return - x;
+}
+double GPRDriver()
+{
+    return GPRPressure(1, 2, 3, 4, 5, 6, 7, 8);
+}

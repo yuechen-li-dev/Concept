@@ -92,6 +92,149 @@ Result<void, BackendError> EmitFrameCopy(ref ByteWriter writer, FrameAction acti
     }
     return WriteRegReg(ref writer, opcode, action.destination, action.source, action.width);
 }
+
+// Realize the planner's typed transfers without inventing moves or cycles.
+// Memory-to-memory transfers borrow one register with explicit scratch storage.
+Result<void, BackendError> EmitScalarCallAction(ref ByteWriter writer, ref const CallSiteActions site,
+int index, ref const FinalizedFrame frame) {
+    if (site.count<0 or site.count>Len(site.actions) or index<0 or index >= site.count or index == site.callIndex) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    ScalarMove transfer = site.scalarActions[index];
+    ScalarRepresentation type = transfer.representation;
+    match (ValidateScalarLocation(transfer.source, type)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    match (ValidateScalarLocation(transfer.destination, type)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    ValidateScalarActionStorage(transfer.source, type, ref const frame) ?;
+    ValidateScalarActionStorage(transfer.destination, type, ref const frame) ?;
+    bool fromMemory = transfer.source.kind != ScalarLocationKind::Physical;
+    bool toMemory = transfer.destination.kind != ScalarLocationKind::Physical;
+    FrameActionKind kind = FrameActionKind::Copy;
+    if (fromMemory) {
+        kind = FrameActionKind::Load;
+    }
+    if (toMemory) {
+        kind = FrameActionKind::Store;
+    }
+    int from = site.sourceOffsets[index];
+    int to = site.destinationOffsets[index];
+    int expectedFrom = - 1;
+    int expectedTo = - 1;
+    match (ScalarFrameOffset(transfer.source, ref const frame)) {
+        Result::Ok(value) => {
+            expectedFrom = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    match (ScalarFrameOffset(transfer.destination, ref const frame)) {
+        Result::Ok(value) => {
+            expectedTo = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int offset = to;
+    if (offset<0) {
+        offset = from;
+    }
+    if (site.actions[index].kind != kind or site.actions[index].offset != offset or
+    site.actions[index].width != ScalarWidth(type) or
+    from != expectedFrom or to != expectedTo or
+    (fromMemory and(from<0 or from>frame.byteCount - ScalarWidth(type))) or
+    (toMemory and(to<0 or to>frame.byteCount - ScalarWidth(type)))) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (ScalarFloating(type)) {
+        ScalarSSEOperand source = ScalarRegisterOperand(transfer.source.xmm, type);
+        ScalarSSEOperand destination = ScalarRegisterOperand(transfer.destination.xmm, type);
+        if (fromMemory) {
+            source = ScalarStackOperand(from, type);
+        }
+        if (toMemory) {
+            destination = ScalarStackOperand(to, type);
+        }
+        if (fromMemory and toMemory) {
+            int scratch = NativeScalarTemporary(ref const frame, 3) ?;
+            ScalarSSEOperand borrowed = ScalarRegisterOperand(XMMRegister::XMM5, type);
+            WriteSelectedScalar(ref writer, ScalarOpcode::Store, ScalarRepresentation::Float64,
+            ScalarStackOperand(scratch, ScalarRepresentation::Float64),
+            ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
+            WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, borrowed, source) ?;
+            WriteSelectedScalar(ref writer, ScalarOpcode::Store, type, destination, borrowed) ?;
+            return WriteSelectedScalar(ref writer, ScalarOpcode::Load, ScalarRepresentation::Float64,
+            ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64),
+            ScalarStackOperand(scratch, ScalarRepresentation::Float64));
+        }
+        ScalarOpcode operation = ScalarOpcode::Load;
+        if (toMemory) {
+            operation = ScalarOpcode::Store;
+        }
+        return WriteSelectedScalar(ref writer, operation, type, destination, source);
+    }
+    int width = ScalarWidth(type);
+    if (fromMemory and toMemory) {
+        int scratch = NativeScalarTemporary(ref const frame, 3) ?;
+        WriteRSPReg(ref writer, false, Register::RAX, scratch, 8) ?;
+        WriteRSPReg(ref writer, true, Register::RAX, from, width) ?;
+        WriteRSPReg(ref writer, false, Register::RAX, to, width) ?;
+        return WriteRSPReg(ref writer, true, Register::RAX, scratch, 8);
+    }
+    if (fromMemory) {
+        if (type == ScalarRepresentation::Bool) {
+            WriteMovImmediate(ref writer, transfer.destination.gpr, 0, 4) ?;
+        }
+        return WriteRSPReg(ref writer, true, transfer.destination.gpr, from, width);
+    }
+    if (toMemory) {
+        return WriteRSPReg(ref writer, false, transfer.source.gpr, to, width);
+    }
+    if (type == ScalarRepresentation::Bool) {
+        return WriteBoolRegister(ref writer, transfer.destination.gpr, transfer.source.gpr);
+    }
+    int opcode = 137;
+    if (width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, transfer.destination.gpr, transfer.source.gpr, width);
+}
+Result<void, BackendError> ValidateScalarActionStorage(ScalarLocation location, ScalarRepresentation type,
+ref const FinalizedFrame frame) {
+    if (location.kind == ScalarLocationKind::Physical) { return Result::Ok(); }
+    int slot = - 1;
+    match (ScalarFrameSlot(location, ref const frame)) {
+        Result::Ok(value) => {
+            slot = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    int width = ScalarWidth(type);
+    if (frame.slots[slot].size<width or frame.slots[slot].alignment<width) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (location.kind == ScalarLocationKind::Spill and
+    (frame.slots[slot].size != width or frame.representations[slot] != type)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    return Result::Ok();
+}
+
+Result<void, BackendError> WriteBoolRegister(ref ByteWriter writer, Register destination, Register source) {
+    int from = RegisterEncoding(source);
+    int to = RegisterEncoding(destination);
+    if (from >= 4 and from<8 and to<8) {
+        WriteByte(ref writer, 64) ?;
+    }
+    else {
+        WriteRex(ref writer, false, to, from) ?;
+    }
+    WriteByte(ref writer, 15) ?;
+    WriteByte(ref writer, 182) ?;
+    return WriteByte(ref writer, 192 +(to % 8) * 8 + from % 8);
+}
 Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
 {
     if (value < 0 or value > 255 or writer.offset < 0 or writer.offset >= Len(writer.bytes))
@@ -809,6 +952,7 @@ Result<void, BackendError> WriteScalarCompareBool(ref ByteWriter writer, ScalarO
 void ScalarSSEFacts() {
     Assert.Concept<PlainData>(ScalarSSEOperand, "derived typed scalar operand");
     Assert.Concept<NoAllocation>(EmitScalarSSE, "bounded caller-owned byte writer");
+    Assert.Concept<NoAllocation>(EmitScalarCallAction, "typed moves consume finalized frame offsets");
 }
 
 

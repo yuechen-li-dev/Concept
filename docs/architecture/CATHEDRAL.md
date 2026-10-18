@@ -184,7 +184,7 @@ language feedback, not permission for untracked permanent Go ownership.
 | Level | Evidence needed | Present status |
 | --- | --- | --- |
 | C0 | Stage-0 builds compiler libraries | Reached for the current AMD64/bridge libraries through Stage-0 C output |
-| C1 | Concept backend owns active native lowering | Partial: allocation/encoding yes; call/ABI path absent |
+| C1 | Concept backend owns active native lowering | Qualified bounded AMD64 integer and float/double scalar direct calls, allocation, ABI, frames and encoding; additional native forms remain deferred |
 | C2 | Concept owns Planner and LIR transforms | Future |
 | C3 | Concept owns most semantic rule decisions | Future; bounded innate rules already migrated |
 | C4 | Cathedral compiles substantial Cathedral source natively | Future |
@@ -200,3 +200,24 @@ A slower Concept path is a dogfood issue to quantify, not an automatic reason
 to move authority back to Go. `Bazaar` is reserved for a future package and
 dependency distribution tool; Cathedral is the compiler. The familiar names
 make a brief joke, not an R9c package-manager project.
+
+## EVT2f scalar native closure
+
+The ordinary `Standard.Backend.AMD64.*` modules own mixed fixed-signature Win64
+calls through the same `EmitAllocatedCall` realization and `CALL rel32` fixups
+used for integer calls. `Win64ABI` selects positional GPR/XMM arguments and
+ordered stack slots; the frame finalizer owns spill and temporary offsets.
+Typed action writers encode these decisions, including XMM0 result capture
+before caller reloads. XMM0–XMM5 are volatile; XMM6–XMM15 remain reserved.
+
+CMIRAMD3 and CMIRAMD4 remain semantic wire contracts. They contain no derived
+allocation, frame offsets or native fixups. Stage-0 continues to provide checked
+input, generated transport, compilation/bootstrap hosting, diagnostics and
+independent test oracles. There is no Go mixed-call lowering or SSE encoder.
+
+Controlled foreign target substitution in the test harness independently checks
+the fixed Win64 ABI while the image is writable, before RX publication. It does
+not provide production external linkage. Indirect/variadic/aggregate calls,
+nonvolatile XMM allocation, SIMD/AVX, binary16, numeric conversions, object output
+and unwind/SEH remain outside this qualification. See the
+[EVT2f5 evidence](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).

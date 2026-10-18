@@ -25,6 +25,7 @@ layouts for one module is an identity error; neither silently takes precedence.
 Compiled module artifacts retain their canonical directory-based paths and
 source-digest validation.
 
-The split changes organization, not backend authority, MachineIR contracts or
-native behavior. Full floating call emission remains the EVT2f5 boundary
-`AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION`.
+The split changes organization, not backend authority or MachineIR contracts.
+EVT2f5 realizes fixed-signature integer/bool/float32/float64 direct calls through
+the shared call actions and relative fixups. General external linkage,
+indirect/variadic/aggregate calls and nonvolatile XMM allocation remain deferred.

@@ -22,8 +22,8 @@ second contract author.
 | Artifact identity and loading | Stage-0 | None | Go `module_artifact.go` | GO_AUTHORITATIVE | Versioned read/write agreement |
 | MIR and semantic facts | Stage-0 | None | Go MIR producer | GO_AUTHORITATIVE | Typed MIR contract and shadow |
 | Planner and LIR | Stage-0 | None | Go Planner/LIR producer/verifier | GO_AUTHORITATIVE | Direct scalar call and EVT2f width-specific floating input contracts qualified; later Concept transformation parity |
-| Scalar floating/XMM allocation, ABI and frames | Cathedral AMD64/Win64ABI | Independent byte-stack replay and strict C11 source oracle | Stage-0 produces checked floating LIR/CMIRAMD4 and hosts compiled Concept | CONCEPT_AUTHORITATIVE | EVT2f3 qualifies XMM0..XMM5, mixed positional ABI, typed spills/moves and one frame; normal path reaches AMD64_UNSUPPORTED_SSE_ENCODING |
-| Scalar SSE2 encoding and no-call native execution | Cathedral AMD64 | Independent strict C11/native and exact-byte oracles | Stage-0 checked input and executable-memory host | CONCEPT_AUTHORITATIVE | EVT2f4 qualifies arithmetic/comparisons/constants/slots/incoming arrays/pressure; mixed calls stop at AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION |
+| Scalar floating/XMM allocation, ABI and frames | Cathedral AMD64/Win64ABI | Independent byte-stack replay and strict C11 source oracle | Stage-0 produces checked floating LIR/CMIRAMD4 and hosts compiled Concept | CONCEPT_AUTHORITATIVE | EVT2f3 plans and EVT2f5 native execution qualify XMM0..XMM5, mixed positional ABI, typed spills/moves and one frame |
+| Scalar SSE2 encoding and no-call native execution | Cathedral AMD64 | Independent strict C11/native and exact-byte oracles | Stage-0 checked input and executable-memory host | CONCEPT_AUTHORITATIVE | EVT2f4 arithmetic/comparisons/constants/slots/arrays/pressure retained; EVT2f5 qualifies fixed-signature scalar direct calls |
 | CMIRAMD4 scalar/XMM contract | Concept BridgeSchema4 | Exact generated codec agreement and 52 malformed artifacts | Generated Go transport; checked LIR projection/verifier | CONCEPT_AUTHORITATIVE | Virtual class, exact representation, IEEE bits, semantic operations and ordered calls qualified in EVT2f2; no physical XMM identities |
 | MachineIR producer and verifier | Stage-0 | Concept validates call transport before backend projection | Go producer/verifier | GO_AUTHORITATIVE | CMIRAMD3 input feeds qualified Concept native internal calls |
 | MachineIR wire schema | Concept `BridgeSchema` | Go/Concept generated codec agreement | Generated Go codec | CONCEPT_AUTHORITATIVE | CMIRAMD3 v3 qualified by exact bytes, artifact-only roundtrip and 23 malformed cases |
@@ -132,3 +132,26 @@ The AMD64 implementation is organized into ordinary `AMD64.*.concept` modules
 for model, analysis, frame realization and encoding, with `AMD64.concept`
 retaining the public emission entry point. This organizational split preserves
 the existing authority and contracts; see the [backend source map](../../libraries/Standard/Backend/README.md).
+
+## EVT2f5 mixed native call authority
+
+Cathedral now realizes CMIRAMD4 mixed direct calls using the existing ABI plan,
+class-separated allocation, concrete frame actions and semantic-identity rel32
+fixups. A single `EmitAllocatedCall` drives integer and mixed scalar emission.
+Typed GPR/SSE transfers consume the verified action order, including result
+capture before preservation reloads. The frame authority reserves distinct move
+cycle and native scratch storage; it also owns incoming stack offsets.
+
+New production code is ordinary Concept in `AMD64`, `AMD64.Encoding`,
+`AMD64.Frame` and `AMD64.Model`. `Win64ABI` remains the sole positional/move-graph
+authority. Go changes are BOOTSTRAP_ONLY diagnostic wording and
+INDEPENDENT_ORACLE/qualification tests. No new Go lowering, allocation or
+encoding algorithm exists. CMIRAMD3/4 and their generated codecs are unchanged.
+
+The earlier floating-call boundary describes EVT2f4 history. Fixed-signature
+scalar direct calls now execute natively in Normal and Verify. Independent
+compiled Win64 probes cover positional arguments, stack values, home space,
+entry alignment, volatile XMM clobbers and observable void calls. Controlled
+foreign stubs are test-only RW-stage integration, not production linkage.
+External/indirect/variadic/aggregate calls, XMM6–XMM15 allocation, object output
+and unwind remain deferred. See [EVT2f5 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).

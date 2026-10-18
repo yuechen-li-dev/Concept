@@ -90,8 +90,10 @@ ref const Liveness liveness, ref FinalizedFrame frame) {
     bool[15] saves =[false ...];
     int calls = 0;
     int stackCount = 0;
-    int temps = function.nativeTemporaryCount;
-    if (temps<0 or temps>4) { return Result::Error(FrameError::CapacityExceeded); }
+    int temps = 0;
+    if (function.nativeTemporaryCount<0 or function.nativeTemporaryCount>4) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
     Preservation[512] records =[Preservation {
         0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers, GPRLocation(Register::RAX),
         ScalarRepresentation::Void
@@ -193,6 +195,11 @@ ref const Liveness liveness, ref FinalizedFrame frame) {
     }
     frame.regions[4] = FrameRegion{FrameRegionKind::SpillSlots, begin, used - begin};
     begin = used;
+    // Cycle temporaries precede scalar instruction scratch. They can be live
+    // together during memory-to-memory argument transfers.
+    frame.nativeTemporaryBase = temps;
+    temps += function.nativeTemporaryCount;
+    if (temps>Len(frame.tempSlots)) { return Result::Error(FrameError::CapacityExceeded); }
     for (i in 0 .. temps) {
         frame.tempSlots[i] = AppendFrameSlot(ref frame, FrameRegionKind::MoveTemps, i, 8, 8, ref used) ?;
     }
@@ -319,7 +326,7 @@ Result<void, FrameError> ValidateFrame(ref const FinalizedFrame frame, bool call
                 mapped = frame.spillSlots[slot.identity];
             }
             FrameRegionKind::MoveTemps => {
-                if (slot.identity < 0 or slot.identity >= 4 or slot.size != 8 or slot.alignment != 8) {
+                if (slot.identity < 0 or slot.identity >= Len(frame.tempSlots) or slot.size != 8 or slot.alignment != 8) {
                     return Result::Error(FrameError::UnresolvedTemporary);
                 }
                 mapped = frame.tempSlots[slot.identity];
@@ -527,7 +534,7 @@ Result<int, FrameError> ResolveFrameSlot(ref const FinalizedFrame frame, FrameRe
             }
         }
         FrameRegionKind::MoveTemps => {
-            if (identity >= 0 and identity < 4) {
+            if (identity >= 0 and identity < Len(frame.tempSlots)) {
                 slot = frame.tempSlots[identity];
             }
         }
@@ -651,7 +658,7 @@ int count, ref const Allocation allocation, ref const FinalizedFrame frame) {
         Result::Error(error) => { return Result::Error(FrameError::InvalidInput); }
     }
     ValidateFrame(ref const frame, true) ?;
-    if (count < 0 or count > Len(records) or site.count < 1 or site.count > 32 or site.callIndex < 0 or site.callIndex >= site.count) {
+    if (count < 0 or count > Len(records) or site.count < 1 or site.count > Len(site.actions) or site.callIndex < 0 or site.callIndex >= site.count) {
         return Result::Error(FrameError::InvalidActions);
     }
     for (r in 0 .. count) {
@@ -901,6 +908,7 @@ ref const Liveness live, ref const FinalizedFrame frame) {
         Result::Ok => { }
     }
     bool[512] required = allocation.spilled;
+    int cycleTemps = 0;
     Preservation[512] records =[Preservation {
         0, 0, false, Register::RAX, 0, 0, 0, PreservationClass::OutsideClobbers, GPRLocation(Register::RAX),
         ScalarRepresentation::Void
@@ -930,6 +938,9 @@ ref const Liveness live, ref const FinalizedFrame frame) {
                     return Result::Error(FrameError::UnresolvedTemporary);
                 }
             }
+            if (plan.temporaryCount>cycleTemps) {
+                cycleTemps = plan.temporaryCount;
+            }
         }
     }
     for (id in 0 .. function.virtualRegCount) {
@@ -939,6 +950,15 @@ ref const Liveness live, ref const FinalizedFrame frame) {
             if (frame.representations[slot] != function.scalarTypes[id] or frame.slots[slot].size != ScalarWidth(function.scalarTypes[id])) {
                 return Result::Error(FrameError::UnsupportedWidth);
             }
+        }
+    }
+    if (frame.nativeTemporaryBase != cycleTemps or function.nativeTemporaryCount<0 or
+    function.nativeTemporaryCount>4 or cycleTemps + function.nativeTemporaryCount>Len(frame.tempSlots)) {
+        return Result::Error(FrameError::UnresolvedTemporary);
+    }
+    for (i in 0 .. Len(frame.tempSlots)) {
+        if ((frame.tempSlots[i] >= 0) !=(i<cycleTemps + function.nativeTemporaryCount)) {
+            return Result::Error(FrameError::UnresolvedTemporary);
         }
     }
     return Result::Ok();
@@ -961,7 +981,9 @@ Result<int, FrameError> ScalarCategoryOffset(FrameRegionKind category, int ident
 }
 Result<void, FrameError> AppendScalarAction(ref CallSiteActions site, FrameActionKind kind, ScalarLocation source,
 ScalarLocation destination, ScalarRepresentation type, int value, ref const FinalizedFrame frame) {
-    if (site.count >= 32) { return Result::Error(FrameError::CapacityExceeded); }
+    if (site.count >= Len(site.actions)) {
+        return Result::Error(FrameError::CapacityExceeded);
+    }
     int from = ScalarFrameOffset(source, ref const frame) ?;
     int to = ScalarFrameOffset(destination, ref const frame) ?;
     int index = site.count;
@@ -1030,7 +1052,7 @@ int count, ref const Allocation allocation, ref const FinalizedFrame frame, ref 
 // physical registers. Result capture must precede volatile reloads.
 Result<void, FrameError> ReplayScalarCallActions(ref const CallSiteActions site, Span<Preservation> records,
 int count, ref const Allocation allocation, ref const FinalizedFrame frame) {
-    if (site.count<0 or site.count>32 or site.callIndex<0 or site.callIndex >= site.count or count<0 or count>Len(records)) {
+    if (site.count<0 or site.count>Len(site.actions) or site.callIndex<0 or site.callIndex >= site.count or count<0 or count>Len(records)) {
         return Result::Error(FrameError::InvalidActions);
     }
     match (ValidateScalarCallPlan(ref const site.abi)) {
@@ -1242,7 +1264,8 @@ void ScalarPlanningProofs() {
     Assert.Concept<NoAllocation>(QualifyScalarModule, "bounded planning before SSE boundary");
 }
 Result<int, BackendError> NativeScalarTemporary(ref const FinalizedFrame frame, int ordinal) {
-    return match (ResolveFrameSlot(ref const frame, FrameRegionKind::MoveTemps, ordinal)) {
+    if (ordinal<0 or ordinal >= 4) { return Result::Error(BackendError::InvalidEncoding); }
+    return match (ResolveFrameSlot(ref const frame, FrameRegionKind::MoveTemps, frame.nativeTemporaryBase + ordinal)) {
         Result::Ok(index) => Result::Ok(frame.slots[index].offset), Result::Error(error) => Result::Error(BackendError::InvalidEncoding),
     };
 }
@@ -1269,9 +1292,16 @@ ref const FinalizedFrame frame, bool scratchSaved) {
 
 Result<void, FrameError> QualifyScalarNativeFrame(ref BackendFunction function, ref const Allocation allocation,
 ref FinalizedFrame frame) {
-    function.nativeTemporaryCount = 0;
-    if (allocation.callCount == 0) {
-        function.nativeTemporaryCount = 4;
-    }
+    function.nativeTemporaryCount = 4;
     return QualifyFunctionFrame(ref const function, ref const allocation, ref frame);
+}
+
+// Incoming stack positions include the return address and caller home area.
+// Keep this geometry in the frame layer, using finalized post-prologue RSP.
+Result<int, BackendError> ScalarIncomingOffset(int ordinal, ref const BackendFunction function,
+ref const FinalizedFrame frame) {
+    if (ordinal<4 or ordinal >= function.argCount or ordinal >= 8) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    return Result::Ok(frame.byteCount + 40 +(ordinal - 4) * 8);
 }

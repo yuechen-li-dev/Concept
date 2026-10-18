@@ -3,7 +3,6 @@ profile Core;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.BridgeValidate4;
 import Standard.Semantic.Vocabulary;
-
 using IntegerRegisterTable = Register<array>[4];
 record struct ABIRegisterTables {
     IntegerRegisterTable integerArguments;
@@ -438,7 +437,6 @@ Result<void, ABIError> ValidateArgumentMoves(ref const CallPlan plan, ref const 
     }
     return Result::Ok();
 }
-
 Result<void, ABIError> ValidatePreservation(Preservation value) {
     if (ScalarFloating(value.representation)) {
         ValidateScalarLocation(value.location, value.representation) ?;
@@ -459,7 +457,6 @@ Result<void, ABIError> ValidatePreservation(Preservation value) {
     return Result::Ok();
 }
 void ABIProofs() {
-
     Assert.Concept<StaticExtent<4>>(IntegerRegisterTable, "four integer argument positions");
     Assert.Concept<PlainData>(ABIRegisterTables, "canonical GPR policy tables");
     Assert.Concept<PlainData>(ArgumentPlacement, "bounded scalar ABI placement");
@@ -483,7 +480,6 @@ string PreservationName(PreservationClass classification) {
         PreservationClass::OutsideClobbers => "OutsideClobbers",
     };
 }
-
 // Derived physical state, deliberately absent from the frozen wire contracts.
 enum XMMRegister {
     XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15
@@ -784,8 +780,11 @@ Result<void, ABIError> PlanScalarArgumentMoves(ref CallPlan plan) {
                             type = plan.scalar.arguments[j];
                         }
                     }
-                    if (type != plan.scalar.arguments[i]) {
-                        return Result::Error(ABIError::IncompatibleRepresentation);
+                    // Save the value currently occupying this destination.
+                    // The incoming value can have a different representation;
+                    // every subsequent transfer still retains its own type.
+                    if (type == ScalarRepresentation::Void) {
+                        return Result::Error(ABIError::InvalidPlan);
                     }
                     ScalarLocation temporary = StorageLocation(ScalarLocationKind::Temporary, plan.temporaryCount,
                     type);

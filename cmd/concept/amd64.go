@@ -218,7 +218,7 @@ static int print_scalar_plans(concept_readonly_span_byte source,int ordinal) {
     if(plan.hasResult){printf("    return ");print_scalar_location(plan.scalar.resultSource);printf(" -> v%d:%s\n",plan.result.value,concept_standard__backend__amd64_scalar_type_name(plan.scalar.result));}else puts("    return void");
     concept_call_site_actions site=concept_standard__backend__amd64_empty_call_site_actions();
     if(concept_standard__backend__amd64_realize_allocated_call(&f,&a,&live,p,&frame,&site).tag)return 6;
-    for(int i=0;i<site.count;i++){if(i==site.callIndex){puts("    abstract-call (no SSE bytes)");continue;}
+    for(int i=0;i<site.count;i++){if(i==site.callIndex){puts("    abstract-call (CALL rel32)");continue;}
       printf("    %s %s ",i<site.callIndex?"pre-call":"post-call",concept_standard__backend__amd64_frame_action_name(site.actions.data[i].kind));
       print_scalar_location(site.scalarActions.data[i].source);if(site.sourceOffsets.data[i]>=0)printf(" [rsp+%d]",site.sourceOffsets.data[i]);printf(" -> ");print_scalar_location(site.scalarActions.data[i].destination);if(site.destinationOffsets.data[i]>=0)printf(" [rsp+%d]",site.destinationOffsets.data[i]);printf(" %s\n",concept_standard__backend__amd64_scalar_type_name(site.scalarActions.data[i].representation));}
   }

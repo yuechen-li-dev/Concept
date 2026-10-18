@@ -1,7 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
 import Standard.Backend.AMD64.Encoding;
-
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -133,7 +132,6 @@ MachineInstruction instruction)
     }
     return Result::Error(BackendError::UnsupportedInstruction);
 }
-
 // Callers must discard output on Error; the published count is transactional.
 Result<void, BackendError> EncodeFunctionIntoWriter(
 ref ByteWriter writer, ref const BridgeReader reader, ref const BackendFunction function,
@@ -172,22 +170,8 @@ ref const Allocation allocation, ref const FinalizedFrame frame, ref EncodingWor
             int position = block.firstInstruction + ii;
             MachineInstruction instruction = function.instructions[position];
             if (instruction.op == Opcode::Call) {
-                CallSiteActions site = EmptyCallSiteActions();
-                match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
-                position, ref const frame, ref site)) {
-                    Result::Ok() => { }
-                    Result::Error(error) => {
-                        return Result::Error(BackendError::InvalidEncoding);
-                    }
-                }
-                for (a in 0 .. site.count) {
-                    if (a == site.callIndex) {
-                        WriteCallPlaceholder(ref writer, ref plan, function.identity, site.abi.target) ?;
-                    }
-                    else {
-                        EmitFrameAction(ref writer, site.actions[a]) ?;
-                    }
-                }
+                EmitAllocatedCall(ref writer, ref const function, ref const allocation, ref const live,
+                position, ref const frame, ref plan) ?;
             } else {
                 EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
                 instruction) ?;
@@ -252,7 +236,6 @@ ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> outp
     ref const frame, ref plan) ?;
     return Result::Ok(writer.offset);
 }
-
 // Compatibility entry point retains the original bounded inline scratch budget.
 Result<int, BackendError> EncodeFunction(
 ref const BridgeReader reader, ref const BackendFunction function,
@@ -366,7 +349,6 @@ Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFix
     }
     return Result::Ok();
 }
-
 // Validate all patch sites and targets before touching bytes. Both forward and
 // backward calls use this single pass after declaration-order body emission.
 Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref NativeImage image, Span<byte> bytes) {
@@ -484,7 +466,6 @@ Span<byte> bytes) {
     }
     return Result::Ok();
 }
-
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
@@ -596,8 +577,6 @@ void NativeFacts() {
     Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
     Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
 }
-
-
 // This pins self-contained in-memory records, independently of the explicit
 // field-by-field wire codec above. PlainData is not the wire representation.
 void CheckBridgeRepresentation()
@@ -627,7 +606,11 @@ ref const FinalizedFrame frame) {
         ref const frame);
     }
     if (not ScalarFloating(type)) {
-        return Result::Error(BackendError::UnsupportedInstruction);
+        if (left >= 0) {
+            type = function.scalarTypes[left];
+        }
+        return EncodeScalarIntegerInstruction(ref writer, ref const reader, instruction,
+        left, right, type, ref const allocation, ref const frame);
     }
     int scratch = NativeScalarTemporary(ref const frame, 0) ?;
     int accumulator = NativeScalarTemporary(ref const frame, 1) ?;
@@ -794,8 +777,230 @@ int ScalarHexDigit(int value) {
     if (value >= 97 and value <= 102) { return value - 87; }
     return - 1;
 }
-
-
+// CMIRAMD4 keeps three-address integer operations alongside floating ones.
+// Reuse the existing integer instruction writer after preserving borrowed
+// registers; this does not change CMIRAMD3 instruction selection.
+Result<void, BackendError> EncodeScalarIntegerInstruction(ref ByteWriter writer, ref const BridgeReader reader,
+WireScalarMachineInstruction input, int left, int right, ScalarRepresentation type,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    int saved = NativeScalarTemporary(ref const frame, 1) ?;
+    int second = NativeScalarTemporary(ref const frame, 2) ?;
+    WriteRSPReg(ref writer, false, Register::RAX, saved, 8) ?;
+    WriteRSPReg(ref writer, false, Register::RDX, second, 8) ?;
+    int width = ScalarWidth(type);
+    if (left >= 0) {
+        LoadScalarGPR(ref writer, Register::RAX, left, width, ref const allocation, ref const frame) ?;
+    }
+    if (right >= 0) {
+        LoadScalarGPR(ref writer, Register::RDX, right, width, ref const allocation, ref const frame) ?;
+    }
+    Opcode operation = Opcode::None;
+    Condition condition = Condition::None;
+    bool checked = false;
+    bool comparison = false;
+    match (input.Op) {
+        ScalarOpcode::Const => {
+            int value = 0;
+            if (TextEquals(ref const reader, input.Literal, "true")) {
+                value = 1;
+            }
+            else {
+                if (not TextEquals(ref const reader, input.Literal, "false")) {
+                    value = ParseI32Literal(ref const reader, input.Literal) ?;
+                }
+            }
+            if (width != 4 and type != ScalarRepresentation::Bool) {
+                return Result::Error(BackendError::UnsupportedInstruction);
+            }
+            WriteMovImmediate(ref writer, Register::RAX, value, 4) ?;
+        }
+        ScalarOpcode::LoadSlot => {
+            WriteRSPReg(ref writer, true, Register::RAX, frame.slotOffsets[input.Slot], width) ?;
+        }
+        ScalarOpcode::StoreSlot => {
+            WriteRSPReg(ref writer, false, Register::RAX, frame.slotOffsets[input.Slot], width) ?;
+        }
+        ScalarOpcode::Add => {
+            operation = Opcode::Add;
+        }
+        ScalarOpcode::Sub => {
+            operation = Opcode::Sub;
+        }
+        ScalarOpcode::Mul => {
+            operation = Opcode::Imul;
+        }
+        ScalarOpcode::CheckedAdd => {
+            operation = Opcode::Add;
+            checked = true;
+        }
+        ScalarOpcode::CheckedSub => {
+            operation = Opcode::Sub;
+            checked = true;
+        }
+        ScalarOpcode::CheckedMul => {
+            operation = Opcode::Imul;
+            checked = true;
+        }
+        ScalarOpcode::Equal => {
+            condition = Condition::Equal;
+            comparison = true;
+        }
+        ScalarOpcode::NotEqual => {
+            condition = Condition::NotEqual;
+            comparison = true;
+        }
+        ScalarOpcode::Less => {
+            condition = Condition::Less;
+            comparison = true;
+        }
+        ScalarOpcode::LessEqual => {
+            condition = Condition::LessEqual;
+            comparison = true;
+        }
+        ScalarOpcode::Greater => {
+            condition = Condition::Greater;
+            comparison = true;
+        }
+        ScalarOpcode::GreaterEqual => {
+            condition = Condition::GreaterEqual;
+            comparison = true;
+        }
+        ScalarOpcode::FloatConst => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Load => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::Store => { return Result::Error(BackendError::UnsupportedInstruction); }
+        ScalarOpcode::IndexAddress => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::CheckIndex => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatAdd => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatSub => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatMul => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatDiv => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatNeg => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatNotEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatLess => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatLessEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatGreater => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::FloatGreaterEqual => {
+            return Result::Error(BackendError::UnsupportedInstruction);
+        }
+        ScalarOpcode::Call => { return Result::Error(BackendError::UnsupportedInstruction); }
+    }
+    if (comparison) {
+        // Signedness belongs to the representation, not to its byte width.
+        if (type == ScalarRepresentation::U8 or type == ScalarRepresentation::U16 or
+        type == ScalarRepresentation::U32 or type == ScalarRepresentation::U64) {
+            condition = match (condition) {
+                Condition::Less => Condition::Below, Condition::LessEqual => Condition::BelowEqual,
+                Condition::Greater => Condition::Above, Condition::GreaterEqual => Condition::AboveEqual,
+                Condition::None => Condition::None, Condition::Equal => Condition::Equal,
+                Condition::NotEqual => Condition::NotEqual, Condition::Below => Condition::Below,
+                Condition::BelowEqual => Condition::BelowEqual, Condition::Above => Condition::Above,
+                Condition::AboveEqual => Condition::AboveEqual, Condition::Overflow => Condition::Overflow,
+                Condition::Carry => Condition::Carry
+            };
+        }
+        EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
+        ScalarGPRInstruction(Opcode::Cmp, condition, width)) ?;
+        EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
+        ScalarGPRInstruction(Opcode::Setcc, condition, width)) ?;
+        WriteBoolRegister(ref writer, Register::RAX, Register::RAX) ?;
+    } else {
+        if (operation != Opcode::None) {
+            if (width != 4 or(checked and type != ScalarRepresentation::I32)) {
+                return Result::Error(BackendError::UnsupportedInstruction);
+            }
+            EmitInstruction(ref writer, ref const reader, ref const allocation, ref const frame,
+            ScalarGPRInstruction(operation, condition, width)) ?;
+            if (checked) {
+                // Preserve checked signed arithmetic: JNO past UD2.
+                WriteByte(ref writer, 15) ?;
+                WriteByte(ref writer, 129) ?;
+                WriteI32LE(ref writer, 2) ?;
+                WriteByte(ref writer, 15) ?;
+                WriteByte(ref writer, 11) ?;
+            }
+        }
+    }
+    bool resultRAX = false;
+    if (input.Result >= 0) {
+        Register target = allocation.scalarLocations[input.Result].gpr;
+        resultRAX = target == Register::RAX;
+        int resultWidth = ScalarWidth(input.Representation);
+        if (input.Representation == ScalarRepresentation::Bool) {
+            WriteBoolRegister(ref writer, target, Register::RAX) ?;
+        } else {
+            int opcode = 137;
+            if (resultWidth == 1) {
+                opcode = 136;
+            }
+            WriteRegReg(ref writer, opcode, target, Register::RAX, resultWidth) ?;
+        }
+    }
+    WriteRSPReg(ref writer, true, Register::RDX, second, 8) ?;
+    if (not resultRAX) {
+        WriteRSPReg(ref writer, true, Register::RAX, saved, 8) ?;
+    }
+    return Result::Ok();
+}
+MachineInstruction ScalarGPRInstruction(Opcode operation, Condition condition, int width) {
+    MachineOperand accumulator = MachineOperand {
+        OperandKind::Physical, 0, width, - 1, - 1, - 1, 1, 0, BridgeText{0, 0}, BridgeText{0, 0}, false
+    };
+    MachineOperand second = MachineOperand {
+        OperandKind::Physical, 3, width, - 1, - 1, - 1, 1, 0, BridgeText{0, 0}, BridgeText{0, 0}, false
+    };
+    MachineOperand source = second;
+    if (operation == Opcode::Cmp) {
+        source = accumulator;
+    }
+    return MachineInstruction {
+        operation, accumulator, source, second, 2, width, - 1, - 1, condition, 0, 0, 0, 0, EmptyProjectedCall()
+    };
+}
+Result<void, BackendError> LoadScalarGPR(ref ByteWriter writer, Register target, int value, int width,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    ScalarLocation source = allocation.scalarLocations[value];
+    if (source.kind != ScalarLocationKind::Physical or source.registerClass != RegisterClass::GPR) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (source.gpr == Register::RAX) {
+        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 1) ?, width);
+    }
+    if (source.gpr == Register::RDX) {
+        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 2) ?, width);
+    }
+    int opcode = 137;
+    if (width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, target, source.gpr, width);
+}
 Result<void, BackendError> WriteScalarEntry(ref ByteWriter writer, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame) {
     for (i in 0 .. function.argCount) {
@@ -811,14 +1016,28 @@ ref const Allocation allocation, ref const FinalizedFrame frame) {
             }
         }
     }
+    // A spilled floating parameter borrows scratch 3, after the first four
+    // floating inputs have been consumed. Load staged GPR inputs first when
+    // that scratch could still hold a positional integer argument.
+    bool earlyGPR = false;
+    for (i in 0 .. function.argCount) {
+        if (allocation.spilled[function.args[i].virtualReg]) {
+            earlyGPR = true;
+        }
+    }
+    if (earlyGPR) {
+        WriteScalarGPRParameters(ref writer, ref const function, ref const allocation, ref const frame) ?;
+    }
     for (i in 0 .. function.argCount) {
         int value = function.args[i].virtualReg;
         ScalarRepresentation type = function.scalarTypes[value];
         ScalarLocation target = allocation.scalarLocations[value];
         if (ScalarFloating(type)) {
-            int offset = frame.byteCount + 40 +(i - 4) * 8;
+            int offset = 0;
             if (i<4) {
                 offset = NativeScalarTemporary(ref const frame, i) ?;
+            } else {
+                offset = ScalarIncomingOffset(i, ref const function, ref const frame) ?;
             }
             if (target.kind == ScalarLocationKind::Physical) {
                 WriteSelectedScalar(ref writer, ScalarOpcode::Load, type, ScalarRegisterOperand(target.xmm,
@@ -837,13 +1056,22 @@ ref const Allocation allocation, ref const FinalizedFrame frame) {
             }
         }
     }
+    if (not earlyGPR) {
+        WriteScalarGPRParameters(ref writer, ref const function, ref const allocation, ref const frame) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> WriteScalarGPRParameters(ref ByteWriter writer, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
     for (i in 0 .. function.argCount) {
         int value = function.args[i].virtualReg;
         ScalarRepresentation type = function.scalarTypes[value];
         if (not ScalarFloating(type)) {
-            int offset = frame.byteCount + 40 +(i - 4) * 8;
+            int offset = 0;
             if (i<4) {
                 offset = NativeScalarTemporary(ref const frame, i) ?;
+            } else {
+                offset = ScalarIncomingOffset(i, ref const function, ref const frame) ?;
             }
             Register destination = allocation.scalarLocations[value].gpr;
             if (type == ScalarRepresentation::Bool) {
@@ -875,14 +1103,25 @@ Result<int, BackendError> EmitScalarNativeFunction(ReadOnlySpan<byte> artifact, 
 }
 Result<void, BackendError> EncodeScalarNativeFunctionIntoWriter(ReadOnlySpan<byte> artifact, int ordinal,
 ref ByteWriter writer) {
+    EncodingPlan branches = EmptyEncodingPlan();
+    CallFixup[1] unused =[EmptyCallFixup() ...];
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(unused), 0, ordinal, false
+    };
+    return EncodeScalarNativeFunctionWithCalls(artifact, ordinal, ref writer, ref workspace);
+}
+Result<void, BackendError> EncodeScalarNativeFunctionWithCalls(ReadOnlySpan<byte> artifact, int ordinal,
+ref ByteWriter writer, ref EncodingWorkspace workspace) {
     BackendFunction function = EmptyFunction();
     DecodeScalarFunction(artifact, ordinal, ref function) ?;
     Allocation allocation = EmptyAllocation();
     AllocateRegisters(ref const function, ref allocation) ?;
-    if (allocation.callCount>0) {
+    if (allocation.callCount>0 and not workspace.allowCalls) {
         return Result::Error(BackendError::UnsupportedCallLowering);
     }
     PlanFunctionCalls(ref const function, ref allocation) ?;
+    Liveness live = EmptyLiveness();
+    ComputeLiveness(ref const function, ref live) ?;
     FinalizedFrame frame = EmptyFinalizedFrame();
     match (QualifyScalarNativeFrame(ref function, ref const allocation, ref frame)) {
         Result::Ok => { }
@@ -913,12 +1152,22 @@ ref ByteWriter writer) {
         }) ?;
         branches.blockOffsets[b] = writer.offset;
         BridgeReader instructions = BridgeReader{artifact, block.Instructions.offset};
+        int position = function.blocks[b].firstInstruction;
+        if (b == 0) {
+            position += function.argCount;
+        }
         for (i in 0 .. block.Instructions.count) {
             WireScalarMachineInstruction instruction = ReadWire(ref instructions, BridgeType<WireScalarMachineInstruction>{
                 0
             }) ?;
-            EncodeScalarWireInstruction(ref writer, ref const reader, instruction, ref const function,
-            ref const allocation, ref const frame) ?;
+            if (instruction.Op == ScalarOpcode::Call) {
+                EmitAllocatedCall(ref writer, ref const function, ref const allocation, ref const live,
+                position, ref const frame, ref workspace) ?;
+            } else {
+                EncodeScalarWireInstruction(ref writer, ref const reader, instruction, ref const function,
+                ref const allocation, ref const frame) ?;
+            }
+            position += 1;
         }
         match (block.Term.Op) {
             ScalarTerminator::Return => {
@@ -929,8 +1178,16 @@ ref ByteWriter writer) {
                         ref const allocation, ref const frame, false) ?) ?;
                     }
                     else {
-                        WriteRegReg(ref writer, 137, Register::RAX, allocation.scalarLocations[block.Term.Value].gpr,
-                        4) ?;
+                        int width = ScalarWidth(function.scalarResult);
+                        if (function.scalarResult == ScalarRepresentation::Bool) {
+                            width = 4;
+                        }
+                        int opcode = 137;
+                        if (width == 1) {
+                            opcode = 136;
+                        }
+                        WriteRegReg(ref writer, opcode, Register::RAX,
+                        allocation.scalarLocations[block.Term.Value].gpr, width) ?;
                     }
                 }
                 for (i in 0 .. frame.epilogueCount) {
@@ -959,8 +1216,6 @@ ref ByteWriter writer) {
     }
     return Result::Ok();
 }
-
-
 Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
     BridgeReader reader = BridgeReader{artifact, 0};
     match (ReadScalarBridgeIdentity(ref reader)) {
@@ -978,23 +1233,24 @@ Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Spa
     }
     if (module.Functions.count>128) { return Result::Error(NativeError::CapacityExceeded); }
     BackendFunction function = EmptyFunction();
-    // Admission and call deferral precede any output/image mutation.
+    // Admit the complete semantic module before any output/image mutation.
     for (i in 0 .. module.Functions.count) {
         match (DecodeScalarFunction(artifact, i, ref function)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
         }
-        for (p in 0 .. function.instructionCount) {
-            if (function.instructions[p].op == Opcode::Call) {
-                return Result::Error(NativeError::UnsupportedFloatCallEmission);
-            }
-        }
     }
     image = EmptyNativeImage();
     ByteWriter writer = ByteWriter{output, 0};
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
     for (i in 0 .. module.Functions.count) {
         int offset = writer.offset;
-        match (EncodeScalarNativeFunctionIntoWriter(artifact, i, ref writer)) {
+        workspace.functionOrdinal = i;
+        int calls = workspace.callCount;
+        match (EncodeScalarNativeFunctionWithCalls(artifact, i, ref writer, ref workspace)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
         }
@@ -1004,15 +1260,41 @@ Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Spa
         }
         int size = writer.offset - offset;
         image.symbols[i] = NativeSymbol {
-            function.identity, function.name, i, offset, size, 0
+            function.identity, function.name, i, offset, size, workspace.callCount - calls
         };
         image.symbolCount += 1;
     }
     image.byteCount = writer.offset;
-    image.finalized = true;
+    image.fixupCount = workspace.callCount;
+    ResolveNativeCalls(ref const reader, ref image, output) ?;
     return Result::Ok(writer.offset);
+}
+// Integer and scalar modules share realization, call encoding, and fixups.
+// Only the representation of an already-validated transfer selects its writer.
+Result<void, BackendError> EmitAllocatedCall(ref ByteWriter writer, ref const BackendFunction function,
+ref const Allocation allocation, ref const Liveness live, int position,
+ref const FinalizedFrame frame, ref EncodingWorkspace workspace) {
+    CallSiteActions site = EmptyCallSiteActions();
+    match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+    position, ref const frame, ref site)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    for (a in 0 .. site.count) {
+        if (a == site.callIndex) {
+            WriteCallPlaceholder(ref writer, ref workspace, function.identity, site.abi.target) ?;
+        } else {
+            if (site.abi.scalar.enabled) {
+                EmitScalarCallAction(ref writer, ref const site, a, ref const frame) ?;
+            } else {
+                EmitFrameAction(ref writer, site.actions[a]) ?;
+            }
+        }
+    }
+    return Result::Ok();
 }
 void NativeScalarSSEFacts() {
     Assert.Concept<NoAllocation>(EmitScalarNativeModule, "bounded native scalar image in caller-owned storage");
     Assert.Concept<NoAllocation>(EncodeScalarNativeFunctionIntoWriter, "shared writer and frame-owned scratch");
+    Assert.Concept<NoAllocation>(EmitAllocatedCall, "shared checked integer and mixed call actions");
 }
