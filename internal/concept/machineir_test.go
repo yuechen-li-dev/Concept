@@ -1,7 +1,6 @@
 package concept
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -160,8 +159,8 @@ func TestEVT2cUnsignedAndUnsupported(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = GenerateMachineIR(float); e == nil || !strings.Contains(e.Error(), "EVT2_UNSUPPORTED_TYPE") {
-		t.Fatalf("float accepted: %v", e)
+	if scalar, err := GenerateMachineIR(float); err != nil || scalar.Scalar == nil || len(scalar.Functions) != 0 {
+		t.Fatalf("float bypassed explicit virtual scalar contract: %v", err)
 	}
 }
 func TestEVT2cVerifierRejectsMalformed(t *testing.T) {
@@ -245,6 +244,7 @@ func TestEVT2cVerifierRejectsMalformed(t *testing.T) {
 		t.Fatal("out-of-range immediate accepted")
 	}
 }
+
 // The literal set is the frozen pre-R9c Go verifier decision. The production
 // decision now comes from the checked Concept bridge enum's generated table.
 func TestR9cConditionAuthorityShadowAgreement(t *testing.T) {

@@ -1,0 +1,483 @@
+module Standard.Backend.BridgeValidate4;
+profile Core;
+import Standard.Backend.BridgeCodec4;
+import Standard.Semantic.Vocabulary;
+
+int ScalarWidth(ScalarRepresentation type) {
+    return match (type) {
+        ScalarRepresentation::Void => 0,
+        ScalarRepresentation::Bool => 1,
+        ScalarRepresentation::I8 => 1, ScalarRepresentation::U8 => 1,
+        ScalarRepresentation::I16 => 2, ScalarRepresentation::U16 => 2,
+        ScalarRepresentation::I32 => 4, ScalarRepresentation::U32 => 4,
+        ScalarRepresentation::I64 => 8, ScalarRepresentation::U64 => 8,
+        ScalarRepresentation::Float32 => 4, ScalarRepresentation::Float64 => 8,
+        ScalarRepresentation::Address => 8
+    };
+}
+bool ScalarFloating(ScalarRepresentation type) {
+    return type == ScalarRepresentation::Float32 or type == ScalarRepresentation::Float64;
+}
+bool ScalarInteger(ScalarRepresentation type) {
+    return type != ScalarRepresentation::Void and type != ScalarRepresentation::Address and
+    type != ScalarRepresentation::Bool and not ScalarFloating(type);
+}
+bool ScalarTextSame(ref const BridgeReader source, BridgeText a, BridgeText b) {
+    if (a.length != b.length) { return false; }
+    for (i in 0 .. a.length) {
+        if (source.data[a.offset + i] != source.data[b.offset + i]) { return false; }
+    }
+    return true;
+}
+string ScalarTypeName(ScalarRepresentation type) {
+    return match (type) {
+        ScalarRepresentation::Void => "void", ScalarRepresentation::Bool => "bool",
+        ScalarRepresentation::I8 => "i8", ScalarRepresentation::U8 => "u8",
+        ScalarRepresentation::I16 => "i16", ScalarRepresentation::U16 => "u16",
+        ScalarRepresentation::I32 => "i32", ScalarRepresentation::U32 => "u32",
+        ScalarRepresentation::I64 => "i64", ScalarRepresentation::U64 => "u64",
+        ScalarRepresentation::Float32 => "float32", ScalarRepresentation::Float64 => "float64",
+        ScalarRepresentation::Address => "address"
+    };
+}
+Result<WireScalarMachineVReg, BackendError> ScalarValueAt(ref const BridgeReader source, WireScalarMachineFunction owner,
+int index) {
+    if (index < 0 or index >= owner.VRegs.count) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeReader reader = BridgeReader{source.data, owner.VRegs.offset};
+    for (i in 0 .. index) {
+        ReadWire(ref reader, BridgeType<WireScalarMachineVReg>{0}) ?;
+    }
+    return ReadWire(ref reader, BridgeType<WireScalarMachineVReg>{0});
+}
+Result<WireScalarMachineSlot, BackendError> ScalarSlotAt(ref const BridgeReader source, WireScalarMachineFunction owner,
+int index) {
+    if (index < 0 or index >= owner.Slots.count) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeReader reader = BridgeReader{source.data, owner.Slots.offset};
+    for (i in 0 .. index) {
+        ReadWire(ref reader, BridgeType<WireScalarMachineSlot>{0}) ?;
+    }
+    return ReadWire(ref reader, BridgeType<WireScalarMachineSlot>{0});
+}
+bool ScalarFloatBits(ref const BridgeReader source, BridgeText bits, ScalarRepresentation type) {
+    int digits = 8;
+    if (type == ScalarRepresentation::Float64) {
+        digits = 16;
+    }
+    if (bits.length != digits + 2) { return false; }
+    if (source.data[bits.offset] != 48 or source.data[bits.offset + 1] != 120) { return false; }
+    for (i in 2 .. bits.length) {
+        byte c = source.data[bits.offset + i];
+        if (not((c >= 48 and c <= 57) or(c >= 97 and c <= 102))) { return false; }
+    }
+    return true;
+}
+bool ScalarSigned(ScalarRepresentation type) {
+    return type == ScalarRepresentation::I8 or type == ScalarRepresentation::I16 or
+    type == ScalarRepresentation::I32 or type == ScalarRepresentation::I64;
+}
+uint64 ScalarIntegerMaximum(ScalarRepresentation type) {
+    return match (type) {
+        ScalarRepresentation::I8 => 127u, ScalarRepresentation::U8 => 255u,
+        ScalarRepresentation::I16 => 32767u, ScalarRepresentation::U16 => 65535u,
+        ScalarRepresentation::I32 => 2147483647u, ScalarRepresentation::U32 => 4294967295u,
+        ScalarRepresentation::I64 => 9223372036854775807u,
+        ScalarRepresentation::U64 => 18446744073709551615u,
+        ScalarRepresentation::Void => 0u, ScalarRepresentation::Bool => 0u,
+        ScalarRepresentation::Float32 => 0u, ScalarRepresentation::Float64 => 0u,
+        ScalarRepresentation::Address => 0u
+    };
+}
+bool ScalarIntegerBits(ref const BridgeReader source, BridgeText literal, ScalarRepresentation type) {
+    if (type == ScalarRepresentation::Bool) {
+        return TextEquals(ref const source, literal, "true") or TextEquals(ref const source, literal,
+        "false");
+    }
+    if (not ScalarInteger(type) or literal.length == 0) { return false; }
+    int offset = 0;
+    uint64 maximum = ScalarIntegerMaximum(type);
+    if (source.data[literal.offset] == 45) {
+        if (not ScalarSigned(type)) { return false; }
+        offset = 1;
+        maximum += 1u;
+    }
+    if (offset == literal.length) { return false; }
+    uint64 value = 0u;
+    for (i in offset .. literal.length) {
+        byte c = source.data[literal.offset + i];
+        if (c < 48 or c > 57) { return false; }
+        uint64 digit =(c - 48) as uint64;
+        if (value >(maximum - digit) / 10u) { return false; }
+        value = value * 10u + digit;
+    }
+    return true;
+}
+bool ScalarArrayType(ref const BridgeReader source, BridgeText type, WireScalarMachineSlot slot) {
+    if (type.length < 4 or source.data[type.offset] != 91 or slot.Extent <= 0) { return false; }
+    int position = 1;
+    int extent = 0;
+    if (source.data[type.offset + position] == 48) { return false; }
+    while (position < type.length and source.data[type.offset + position] != 93) {
+        byte c = source.data[type.offset + position];
+        if (c < 48 or c > 57 or extent > 104857) { return false; }
+        extent = extent * 10 +(c - 48) as int;
+        position += 1;
+    }
+    if (position == 1 or position >= type.length or extent != slot.Extent) { return false; }
+    position += 1;
+    return TextEquals(ref const source, BridgeText {
+        type.offset + position, type.length - position
+    }, ScalarTypeName(slot.Representation));
+}
+bool ScalarIdentity(ref const BridgeReader source, WireScalarMachineFunction owner) {
+    int length = owner.Name.length;
+    if (length == 0 or owner.Identity.length < length * 2 + 3) { return false; }
+    int offset = owner.Identity.offset;
+    if (source.data[offset + length] != 124 or source.data[offset + length * 2 + 1] != 40 or
+    source.data[offset + owner.Identity.length - 1] != 41) { return false; }
+    for (i in 0 .. length) {
+        byte c = source.data[owner.Name.offset + i];
+        if (source.data[offset + i] != c or source.data[offset + length + 1 + i] != c) {
+            return false;
+        }
+    }
+    return true;
+}
+int ScalarArity(ScalarOpcode op) {
+    return match (op) {
+        ScalarOpcode::Const => 0, ScalarOpcode::FloatConst => 0,
+        ScalarOpcode::LoadSlot => 0, ScalarOpcode::StoreSlot => 1,
+        ScalarOpcode::Load => 1, ScalarOpcode::Store => 2,
+        ScalarOpcode::IndexAddress => 1, ScalarOpcode::CheckIndex => 1,
+        ScalarOpcode::CheckedAdd => 2, ScalarOpcode::CheckedSub => 2, ScalarOpcode::CheckedMul => 2,
+        ScalarOpcode::Add => 2, ScalarOpcode::Sub => 2, ScalarOpcode::Mul => 2,
+        ScalarOpcode::Equal => 2, ScalarOpcode::NotEqual => 2, ScalarOpcode::Less => 2,
+        ScalarOpcode::LessEqual => 2, ScalarOpcode::Greater => 2, ScalarOpcode::GreaterEqual => 2,
+        ScalarOpcode::FloatAdd => 2, ScalarOpcode::FloatSub => 2, ScalarOpcode::FloatMul => 2,
+        ScalarOpcode::FloatDiv => 2, ScalarOpcode::FloatNeg => 1,
+        ScalarOpcode::FloatEqual => 2, ScalarOpcode::FloatNotEqual => 2, ScalarOpcode::FloatLess => 2,
+        ScalarOpcode::FloatLessEqual => 2, ScalarOpcode::FloatGreater => 2, ScalarOpcode::FloatGreaterEqual => 2,
+        ScalarOpcode::Call => - 1
+    };
+}
+// Categories select semantic admission, never physical instruction lowering.
+int ScalarOperationKind(ScalarOpcode op) {
+    return match (op) {
+        ScalarOpcode::Const => 0, ScalarOpcode::FloatConst => 1,
+        ScalarOpcode::LoadSlot => 2, ScalarOpcode::StoreSlot => 3,
+        ScalarOpcode::Load => 4, ScalarOpcode::Store => 5,
+        ScalarOpcode::IndexAddress => 6, ScalarOpcode::CheckIndex => 7,
+        ScalarOpcode::CheckedAdd => 8, ScalarOpcode::CheckedSub => 8, ScalarOpcode::CheckedMul => 8,
+        ScalarOpcode::Add => 8, ScalarOpcode::Sub => 8, ScalarOpcode::Mul => 8,
+        ScalarOpcode::Equal => 9, ScalarOpcode::NotEqual => 9, ScalarOpcode::Less => 9,
+        ScalarOpcode::LessEqual => 9, ScalarOpcode::Greater => 9, ScalarOpcode::GreaterEqual => 9,
+        ScalarOpcode::FloatAdd => 10, ScalarOpcode::FloatSub => 10, ScalarOpcode::FloatMul => 10,
+        ScalarOpcode::FloatDiv => 10, ScalarOpcode::FloatNeg => 11,
+        ScalarOpcode::FloatEqual => 12, ScalarOpcode::FloatNotEqual => 12, ScalarOpcode::FloatLess => 12,
+        ScalarOpcode::FloatLessEqual => 12, ScalarOpcode::FloatGreater => 12, ScalarOpcode::FloatGreaterEqual => 12,
+        ScalarOpcode::Call => 13
+    };
+}
+Result<void, BackendError> ValidateScalarCall(ref const BridgeReader source, WireScalarMachineModule document,
+WireScalarMachineFunction owner, WireScalarMachineInstruction instruction) {
+    if (instruction.Calls.count != 1) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeReader calls = BridgeReader{source.data, instruction.Calls.offset};
+    WireScalarMachineCall call = ReadWire(ref calls, BridgeType<WireScalarMachineCall>{0}) ?;
+    if (not TextEquals(ref const source, call.Convention, "win64") or call.Arguments.count != instruction.Args.count or
+    call.Result != instruction.Representation) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    BridgeReader functions = BridgeReader{source.data, document.Functions.offset};
+    int matches = 0;
+    for (fi in 0 .. document.Functions.count) {
+        WireScalarMachineFunction target = ReadWire(ref functions, BridgeType<WireScalarMachineFunction>{
+            0
+        }) ?;
+        if (ScalarTextSame(ref const source, call.Target, target.Identity)) {
+            matches += 1;
+            if (target.Result != call.Result or target.Params.count != call.Arguments.count) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+            BridgeReader args = BridgeReader{source.data, call.Arguments.offset};
+            BridgeReader uses = BridgeReader{source.data, instruction.Args.offset};
+            BridgeReader params = BridgeReader{source.data, target.Params.offset};
+            for (ai in 0 .. call.Arguments.count) {
+                WireScalarMachineCallArgument arg = ReadWire(ref args, BridgeType<WireScalarMachineCallArgument>{
+                    0
+                }) ?;
+                WireScalarValueUse use = ReadWire(ref uses, BridgeType<WireScalarValueUse>{0}) ?;
+                WireScalarMachineParameter param = ReadWire(ref params, BridgeType<WireScalarMachineParameter>{
+                    0
+                }) ?;
+                WireScalarMachineVReg actual = ScalarValueAt(ref const source, owner, arg.Value) ?;
+                WireScalarMachineVReg expected = ScalarValueAt(ref const source, target, param.Value) ?;
+                if (arg.Value != use.Value or arg.Type != actual.Representation or arg.Type != expected.Representation or
+                arg.Type == ScalarRepresentation::Void or arg.Type == ScalarRepresentation::Address) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+        }
+    }
+    if (matches != 1) { return Result::Error(BackendError::BridgeInvalid); }
+    return Result::Ok();
+}
+
+Result<void, BackendError> ValidateScalarFunction(ref const BridgeReader source, WireScalarMachineModule document,
+WireScalarMachineFunction owner) {
+    if (owner.Identity.length == 0 or owner.Name.length == 0 or owner.VRegs.count > 128 or owner.Slots.count > 64 or
+    owner.Blocks.count == 0 or owner.Blocks.count > 128 or owner.Params.count > 128 or
+    not TextEquals(ref const source, owner.Target, "amd64-windows") or not TextEquals(ref const source,
+    owner.ABI, "win64") or
+    owner.Result == ScalarRepresentation::Address) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    if (not ScalarIdentity(ref const source, owner)) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    bool[128] defined =[false ...];
+    bool[128] parameters =[false ...];
+    BridgeReader values = BridgeReader{source.data, owner.VRegs.offset};
+    for (vi in 0 .. owner.VRegs.count) {
+        WireScalarMachineVReg value = ReadWire(ref values, BridgeType<WireScalarMachineVReg>{0}) ?;
+        bool floating = ScalarFloating(value.Representation);
+        if (value.ID != vi or value.Width != ScalarWidth(value.Representation) or value.Width == 0 or
+        value.Address !=(value.Representation == ScalarRepresentation::Address) or
+        floating !=(value.Class == RegisterClass::XMM)) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+    }
+    BridgeReader params = BridgeReader{source.data, owner.Params.offset};
+    for (pi in 0 .. owner.Params.count) {
+        WireScalarMachineParameter param = ReadWire(ref params, BridgeType<WireScalarMachineParameter>{
+            0
+        }) ?;
+        WireScalarMachineVReg value = ScalarValueAt(ref const source, owner, param.Value) ?;
+        if (param.Index != pi or defined[param.Value]) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+        if (not value.Address and not TextEquals(ref const source, param.Type, ScalarTypeName(value.Representation))) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+        if (value.Address) {
+            int matches = 0;
+            BridgeReader arraySlots = BridgeReader{source.data, owner.Slots.offset};
+            for (si in 0 .. owner.Slots.count) {
+                WireScalarMachineSlot slot = ReadWire(ref arraySlots, BridgeType<WireScalarMachineSlot>{
+                    0
+                }) ?;
+                if (slot.ParamValue == param.Value and ScalarArrayType(ref const source, param.Type,
+                slot)) {
+                    matches += 1;
+                }
+            }
+            if (matches != 1) { return Result::Error(BackendError::BridgeInvalid); }
+        }
+        defined[param.Value] = true;
+        parameters[param.Value] = true;
+    }
+    BridgeReader slots = BridgeReader{source.data, owner.Slots.offset};
+    for (si in 0 .. owner.Slots.count) {
+        WireScalarMachineSlot slot = ReadWire(ref slots, BridgeType<WireScalarMachineSlot>{0}) ?;
+        int width = ScalarWidth(slot.Representation);
+        if (slot.ID != si or width == 0 or slot.Representation == ScalarRepresentation::Address or slot.Align != width or
+        slot.Extent < 0 or slot.Extent > 1048576 or slot.ParamValue < - 1) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+        int count = slot.Extent;
+        if (count == 0) {
+            count = 1;
+        }
+        if (slot.Size != count * width) { return Result::Error(BackendError::BridgeInvalid); }
+        if (slot.ParamValue >= 0) {
+            WireScalarMachineVReg value = ScalarValueAt(ref const source, owner, slot.ParamValue) ?;
+            if (slot.Extent == 0 or not value.Address or not parameters[slot.ParamValue]) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+    }
+    BridgeReader blocks = BridgeReader{source.data, owner.Blocks.offset};
+    int instructionCount = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireScalarMachineBlock block = ReadWire(ref blocks, BridgeType<WireScalarMachineBlock>{
+            0
+        }) ?;
+        if (block.ID != bi) { return Result::Error(BackendError::BridgeInvalid); }
+        bool[128] known = parameters;
+        int[128] guarded =[- 1 ...];
+        int[128] pointee =[- 1 ...];
+        BridgeReader instructions = BridgeReader{source.data, block.Instructions.offset};
+        for (ii in 0 .. block.Instructions.count) {
+            instructionCount += 1;
+            WireScalarMachineInstruction in = ReadWire(ref instructions, BridgeType<WireScalarMachineInstruction>{
+                0
+            }) ?;
+            int kind = ScalarOperationKind(in.Op);
+            int arity = ScalarArity(in.Op);
+            if (instructionCount > 512 or(arity >= 0 and in.Args.count != arity) or in.LIRBlock != bi or in.LIRInstruction != ii or
+            in.Source.Line <= 0 or in.Source.Column <= 0 or(kind != 13 and in.Calls.count != 0) or
+            (kind != 0 and kind != 1 and in.Literal.length != 0)) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+            ScalarRepresentation first = ScalarRepresentation::Void;
+            ScalarRepresentation second = ScalarRepresentation::Void;
+            int firstID = - 1;
+            int secondID = - 1;
+            BridgeReader uses = BridgeReader{source.data, in.Args.offset};
+            for (ai in 0 .. in.Args.count) {
+                WireScalarValueUse use = ReadWire(ref uses, BridgeType<WireScalarValueUse>{0}) ?;
+                WireScalarMachineVReg value = ScalarValueAt(ref const source, owner, use.Value) ?;
+                if (not known[use.Value]) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                if (ai == 0) {
+                    first = value.Representation;
+                    firstID = use.Value;
+                }
+                if (ai == 1) {
+                    second = value.Representation;
+                    secondID = use.Value;
+                }
+            }
+            bool produces = kind != 3 and kind != 5 and kind != 7;
+            if (kind == 13 and in.Representation == ScalarRepresentation::Void) {
+                produces = false;
+            }
+            if (produces) {
+                WireScalarMachineVReg result = ScalarValueAt(ref const source, owner, in.Result) ?;
+                if (defined[in.Result] or result.Representation != in.Representation) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                defined[in.Result] = true;
+                known[in.Result] = true;
+            } else {
+                if (in.Result >= 0) { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (kind == 0) {
+                if (not ScalarIntegerBits(ref const source, in.Literal, in.Representation)) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+            if (kind == 1) {
+                if (not ScalarFloating(in.Representation) or not ScalarFloatBits(ref const source, in.Literal,
+                in.Representation)) { return Result::Error(BackendError::BridgeInvalid); }
+            }
+            if (kind == 2 or kind == 3) {
+                WireScalarMachineSlot slot = ScalarSlotAt(ref const source, owner, in.Slot) ?;
+                if (slot.Extent != 0 or slot.Representation != in.Representation or(kind == 3 and first != slot.Representation)) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+            if (kind == 4 or kind == 5) {
+                if (first != ScalarRepresentation::Address or pointee[firstID] < 0) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                WireScalarMachineSlot slot = ScalarSlotAt(ref const source, owner, pointee[firstID]) ?;
+                if (slot.Representation != in.Representation or(kind == 5 and second != in.Representation)) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+            if (kind == 6) {
+                WireScalarMachineSlot slot = ScalarSlotAt(ref const source, owner, in.Slot) ?;
+                if (not ScalarInteger(first) or slot.Extent <= 0 or in.Extent != slot.Extent or in.Stride != ScalarWidth(slot.Representation) or
+                in.Representation != ScalarRepresentation::Address or guarded[firstID] != in.Extent) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                pointee[in.Result] = in.Slot;
+            }
+            if (kind == 7) {
+                if (not ScalarInteger(first) or in.Extent <= 0 or in.Representation != ScalarRepresentation::Void) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+                guarded[firstID] = in.Extent;
+            }
+            if (kind == 8 or kind == 10 or kind == 11) {
+                bool floating = kind == 10 or kind == 11;
+                if (first != in.Representation or(kind != 11 and second != first) or
+                (floating and not ScalarFloating(first)) or(not floating and not ScalarInteger(first))) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+            if (kind == 9 or kind == 12) {
+                if (first != second or in.Representation != ScalarRepresentation::Bool or
+                (kind == 12 and not ScalarFloating(first)) or(kind == 9 and not ScalarInteger(first) and first != ScalarRepresentation::Bool)) {
+                    return Result::Error(BackendError::BridgeInvalid);
+                }
+            }
+            if (kind == 13) {
+                ValidateScalarCall(ref const source, document, owner, in) ?;
+            }
+        }
+        WireScalarMachineTerminator term = block.Term;
+        if (term.Op == ScalarTerminator::Return and owner.Result != ScalarRepresentation::Void) {
+            WireScalarMachineVReg value = ScalarValueAt(ref const source, owner, term.Value) ?;
+            if (not known[term.Value] or value.Representation != owner.Result) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+        if (term.Op == ScalarTerminator::Branch) {
+            WireScalarMachineVReg value = ScalarValueAt(ref const source, owner, term.Value) ?;
+            if (not known[term.Value] or value.Representation != ScalarRepresentation::Bool or term.False < 0 or term.False >= owner.Blocks.count) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+        if (term.Op != ScalarTerminator::Return and(term.True < 0 or term.True >= owner.Blocks.count)) {
+            return Result::Error(BackendError::BridgeInvalid);
+        }
+    }
+    for (vi in 0 .. owner.VRegs.count) {
+        if (not defined[vi]) { return Result::Error(BackendError::BridgeInvalid); }
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> ValidateScalarMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadScalarBridgeIdentity(ref reader) ?;
+    WireScalarMachineModule document = ReadWire(ref reader, BridgeType<WireScalarMachineModule>{
+        0
+    }) ?;
+    if (reader.offset != Len(artifact) or document.Functions.count == 0 or document.Functions.count > 128) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    reader.offset = document.Functions.offset;
+    for (fi in 0 .. document.Functions.count) {
+        WireScalarMachineFunction owner = ReadWire(ref reader, BridgeType<WireScalarMachineFunction>{
+            0
+        }) ?;
+        BridgeReader previous = BridgeReader{artifact, document.Functions.offset};
+        for (pi in 0 .. fi) {
+            WireScalarMachineFunction other = ReadWire(ref previous, BridgeType<WireScalarMachineFunction>{
+                0
+            }) ?;
+            if (ScalarTextSame(ref const reader, owner.Identity, other.Identity)) {
+                return Result::Error(BackendError::BridgeInvalid);
+            }
+        }
+        ValidateScalarFunction(ref const reader, document, owner) ?;
+    }
+    return Result::Ok();
+}
+Result<int, BackendError> ValidatedScalarBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidateScalarMachineBridge(artifact) ?;
+    if (Len(output) < Len(artifact)) { return Result::Error(BackendError::BufferFull); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadScalarBridgeIdentity(ref reader) ?;
+    WireScalarMachineModule document = ReadWire(ref reader, BridgeType<WireScalarMachineModule>{
+        0
+    }) ?;
+    for (i in 0 .. 44) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, 44};
+    WriteWire(ref const document, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+void AssertScalarBridgeProperties() {
+    Assert.Concept<NoAllocation>(ValidateScalarMachineBridge, "bounded scalar artifact views");
+    Assert.Concept<NoAllocation>(ValidatedScalarBridgeRoundTrip, "caller supplied scalar artifact output");
+    Assert.Concept<PlainData>(WireScalarMachineVReg, "virtual scalar class and representation descriptor");
+    Assert.Concept<PlainData>(WireScalarMachineInstruction, "exact bits and semantic operation wire view");
+    Assert.Concept<PlainData>(WireScalarMachineCallArgument, "ordered typed virtual call value");
+}

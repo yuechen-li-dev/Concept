@@ -1,0 +1,105 @@
+module EVT2f.Scalars;
+profile Core;
+
+float Arithmetic32(float a, float32 b) {
+    float sum = a + b;
+    return((sum - b) * b) / b;
+}
+double Arithmetic64(double a, float64 b) {
+    double sum = a + b;
+    return((sum - b) * b) / b;
+}
+float Constant32() {
+    return 0.1;
+}
+double Constant64() {
+    return 1.0000000000000002;
+}
+float Negative32(float a) {
+    return - a;
+}
+double Negative64(double a) {
+    return - a;
+}
+float NegativeZero32() {
+    return - 0.0;
+}
+double NegativeZero64() {
+    return - 0.0;
+}
+bool Equal32(float a, float b) {
+    return a == b;
+}
+bool NotEqual32(float a, float b) {
+    return a != b;
+}
+bool Less32(float a, float b) {
+    return a < b;
+}
+bool LessEqual32(float a, float b) {
+    return a <= b;
+}
+bool Greater32(float a, float b) {
+    return a > b;
+}
+bool GreaterEqual32(float a, float b) {
+    return a >= b;
+}
+bool Equal64(double a, double b) {
+    return a == b;
+}
+bool NotEqual64(double a, double b) {
+    return a != b;
+}
+bool Less64(double a, double b) {
+    return a < b;
+}
+bool LessEqual64(double a, double b) {
+    return a <= b;
+}
+bool Greater64(double a, double b) {
+    return a > b;
+}
+bool GreaterEqual64(double a, double b) {
+    return a >= b;
+}
+double Mixed(int a, double b, int c, float d) {
+    if (a > c) { return b; }
+    return - b;
+}
+double Mixed8(double a, int b, float c, int d, double e, float f, int g, double h) {
+    if (b > d) { return a + e; }
+    return e + h;
+}
+double Caller(int a, double b, int c, float d) {
+    double local = b + 1.0000000000000002;
+    double result = Mixed(a, b, c, d);
+    return local + result;
+}
+double Caller8(double a, int b, float c, int d, double e, float f, int g, double h) {
+    return Mixed8(a, b, c, d, e, f, g, h);
+}
+float Load32(float[4] values, int index) {
+    return values[index];
+}
+double Load64(double[4] values, int index) {
+    return values[index];
+}
+void Store32(float[4] values, int index, float value) {
+    values[index] = value;
+}
+void Store64(double[4] values, int index, double value) {
+    values[index] = value;
+}
+float<Pa> Pressure(float<Pa> a, float<Pa> b) {
+    return a + b;
+}
+double<m> Distance(double<m> a, double<m> b) {
+    return a + b;
+}
+float<Pa> InterpretPressure(float a) {
+    return interpret a as float<Pa>;
+}
+double<m> InterpretDistance(double a) {
+    return interpret a as double<m>;
+}

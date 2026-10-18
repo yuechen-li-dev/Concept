@@ -8,7 +8,10 @@ import (
 
 // MachineIR is AMD64-specific, but retains virtual registers and abstract frames.
 // No opcode below is an encoded instruction or an allocated register assignment.
-type MachineModule struct{ Functions []MachineFunction }
+type MachineModule struct {
+	Functions []MachineFunction    // Frozen CMIRAMD3 selected-integer contract.
+	Scalar    *ScalarMachineModule // CMIRAMD4 virtual-only exact scalar contract.
+}
 type MachineReg int
 
 const (
@@ -170,6 +173,11 @@ func machineABIWidth(t LIRType) (int, bool, error) {
 	return 0, false, fmt.Errorf("MIR_UNSUPPORTED_ABI_TYPE %s", t)
 }
 func machineScalarWidth(t LIRType) int {
+	// CMIRAMD3 has only integer/bool/address scalar classes. A width alone
+	// cannot authorize a floating value to use its GPR ABI or opcodes.
+	if lirFloating(t) {
+		return 0
+	}
 	if strings.HasPrefix(string(t), "ptr<") && strings.HasSuffix(string(t), ">") {
 		return 8
 	}
@@ -288,6 +296,9 @@ type MachineFunction struct {
 }
 
 func (m MachineModule) String() string {
+	if m.Scalar != nil {
+		return m.Scalar.String()
+	}
 	var b strings.Builder
 	for fi, f := range m.Functions {
 		if fi > 0 {

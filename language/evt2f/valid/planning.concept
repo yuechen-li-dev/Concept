@@ -1,0 +1,100 @@
+profile Core;
+float Return32(float x) {
+    return x;
+}
+double Return64(double x) {
+    return x;
+}
+float Zero32() {
+    return 0.1;
+}
+double Zero64() {
+    return 1.0000000000000002;
+}
+float CallZero32() {
+    return Zero32();
+}
+double CallZero64() {
+    return Zero64();
+}
+float Live32(float a, float b) {
+    float local = a + b;
+    return local + Return32(b);
+}
+double Live64(double a, double b) {
+    double local = a + b;
+    return local + Return64(b);
+}
+float Pressure32(float a, float b, float c, float d, float e, float f, float g, float h) {
+    return a + b + c + d + e + f + g + h;
+}
+double Pressure64(double a, double b, double c, double d, double e, double f, double g, double h) {
+    return a + b + c + d + e + f + g + h;
+}
+double MixedA(int a, double b, int c, float d) {
+    return b;
+}
+double MixedB(double a, int b, float c, int d) {
+    return a;
+}
+double CallA(int a, double b, int c, float d) {
+    return MixedA(a, b, c, d);
+}
+double CallB(double a, int b, float c, int d) {
+    return MixedB(a, b, c, d);
+}
+double Mixed8(int a, double b, bool c, float d, double e, float f, int g, bool h) {
+    return b + e;
+}
+double Call8(int a, double b, bool c, float d, double e, float f, int g, bool h) {
+    return Mixed8(a, b, c, d, e, f, g, h);
+}
+float Five(float a, float b, float c, float d, float e) {
+    return a + e;
+}
+float CallFive(float a, float b, float c, float d, float e) {
+    return Five(a, b, c, d, e);
+}
+void VoidMixed(int i, float f, double d) { }
+void CallVoid(int i, float f, double d) {
+    VoidMixed(i, f, d);
+}
+float Cycle2Target(float a, float b) {
+    return a + b;
+}
+float Cycle2(float a, float b) {
+    return Cycle2Target(b, a);
+}
+double Cycle3Target(double a, double b, double c) {
+    return a + b + c;
+}
+double Cycle3(double a, double b, double c) {
+    return Cycle3Target(b, c, a);
+}
+float RepeatTarget(float a, float b, float c, float d) {
+    return a + b + c + d;
+}
+float Repeat(float x, float y) {
+    return RepeatTarget(x, x, y, x);
+}
+bool Compare(float a, float b) {
+    return a<b;
+}
+float MixedLive(int i, float f, double d) {
+    float t = Return32(f);
+    if (i == 7) {
+        if (d>0.0) { return f + t; }
+    }
+    return f;
+}
+double MixedPressure(int i, float a, double b, float c, double d, float e, double f, bool flag) {
+    double t = Return64(b);
+    if (flag) {
+        if (i>0) {
+            if (a<c) {
+                if (e>0.0) { return b + d + f + t; }
+            }
+        }
+    }
+    return b + d + f;
+}

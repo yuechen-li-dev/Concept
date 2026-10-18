@@ -91,11 +91,16 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	var out BridgeCodecGeneration
 	var maxItems uint64
 	var representation string
-	if module.Name != "Standard.Backend.BridgeSchema" {
+	scalar := module.Name == "Standard.Backend.BridgeSchema4"
+	if module.Name != "Standard.Backend.BridgeSchema" && !scalar {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
 	}
 	for _, c := range module.ComptimeDecls {
-		switch c.Name {
+		name := c.Name
+		if scalar {
+			name = strings.TrimPrefix(name, "Scalar")
+		}
+		switch name {
 		case "BridgeMagic":
 			if v, ok := c.Value.(*StringLiteral); ok {
 				out.Magic = v.Value
@@ -168,16 +173,26 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		reflected[r.Name] = true
 	}
 	for _, r := range module.Structs {
+		if scalar && r.Module != "" && r.Module != module.Name {
+			continue
+		}
 		if strings.HasPrefix(r.Name, "Wire") && !reflected[r.Name] {
 			return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_UNREFLECTED %s", r.Name)
 		}
 	}
 	for _, e := range module.Enums {
+		if scalar && e.Module != "" && e.Module != module.Name {
+			continue
+		}
 		if e.Name != "BackendError" && !reflected[e.Name] {
 			return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_UNREFLECTED %s", e.Name)
 		}
 	}
-	if !reflected["WireMachineModule"] || !reflected["WireHeader"] {
+	rootName, headerName := "WireMachineModule", "WireHeader"
+	if scalar {
+		rootName, headerName = "WireScalarMachineModule", "WireScalarHeader"
+	}
+	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
 	}
 	metadata, err := json.MarshalIndent(def, "", "  ")
@@ -191,7 +206,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		emitter.records[r.Name] = r
 	}
 	headerSize := 0
-	for _, field := range emitter.records["WireHeader"].Fields {
+	for _, field := range emitter.records[headerName].Fields {
 		size, err := bridgeFixedWireSize(field.Type)
 		if err != nil {
 			return out, err
@@ -214,10 +229,21 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	}
 	fmt.Fprintln(&conceptSource, "]; return value; }")
 	for _, r := range def.Records {
-		if r.Name == "WireHeader" {
+		if r.Name == headerName {
 			fmt.Fprintln(&goSource, "type bridgeWireHeader struct {")
 			for _, f := range r.Fields {
 				fmt.Fprintf(&goSource, "%s %s\n", f.Name, emitter.goType(f.Type))
+			}
+			fmt.Fprintln(&goSource, "}")
+		}
+		if scalar && r.Name != headerName && len(r.Cases) == 0 {
+			fmt.Fprintf(&goSource, "type %s struct {\n", strings.TrimPrefix(r.Name, "Wire"))
+			for _, f := range r.Fields {
+				typ := emitter.goType(f.Type)
+				if f.GoCast != "" {
+					typ = f.GoCast
+				}
+				fmt.Fprintf(&goSource, "%s %s\n", f.Name, typ)
 			}
 			fmt.Fprintln(&goSource, "}")
 		}
@@ -238,12 +264,14 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			fmt.Fprintln(&goSource, "}")
 			continue
 		}
-		fmt.Fprintf(&conceptSource, "derive DeriveBridgeRead reflect<%s>;\n", r.Name)
-		if r.Name != "WireHeader" {
+		if !scalar || r.Name != headerName {
+			fmt.Fprintf(&conceptSource, "derive DeriveBridgeRead reflect<%s>;\n", r.Name)
+		}
+		if r.Name != headerName {
 			fmt.Fprintf(&conceptSource, "derive DeriveBridgeWrite reflect<%s>;\n", r.Name)
 		}
 		goType := strings.TrimPrefix(r.Name, "Wire")
-		if r.Name == "WireHeader" {
+		if r.Name == headerName {
 			goType = "bridgeWireHeader"
 		}
 		fmt.Fprintf(&goSource, "func (w *machineBridgeWriter) write%s(v %s) error {\n", r.Name, goType)
@@ -277,6 +305,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	for _, r := range def.Records {
 		for _, f := range r.Fields {
 			if f.Type.Name == "array" && f.Type.Element != nil && f.Type.Element.Name == "uint8" {
+				if scalar {
+					continue
+				} // Frozen v3 codec supplies the shared byte-array primitives.
 				key := fmt.Sprintf("uint8[%d]", f.Type.Extent)
 				if !seenSequences[key] {
 					seenSequences[key] = true
@@ -287,6 +318,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 				continue
 			}
 			element := f.Type.Arguments[0].Name
+			if scalar && element == "BridgeText" {
+				continue
+			}
 			if seenSequences[element] {
 				continue
 			}
@@ -317,7 +351,27 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
     return Result::Ok();
 }
 `)
-	formatted, err := format.Source(goSource.Bytes())
+	goBytes := goSource.Bytes()
+	if scalar {
+		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", "ScalarMachineBridge")
+		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema4;")
+		goText = strings.ReplaceAll(goText, "bridgeTags", "scalarBridgeTags")
+		goText = strings.ReplaceAll(goText, "bridgeWireHeader", "scalarBridgeWireHeader")
+		goBytes = []byte(goText)
+		conceptText := strings.NewReplacer(
+			"module Standard.Backend.BridgeCodec;", "module Standard.Backend.BridgeCodec4;",
+			"import Standard.Backend.BridgeDerive;", "import Standard.Backend.BridgeCodec;\nimport Standard.Backend.BridgeSchema4;",
+			"WireMachineModule", rootName,
+			"MachineBridgeSchemaHash", "ScalarMachineBridgeSchemaHash",
+			"BridgeRoundTrip", "ScalarBridgeRoundTrip",
+			"ReadBridgeIdentity", "ReadScalarBridgeIdentity",
+			"BridgeMagic[i]", "ScalarBridgeMagic[i]",
+			"header.version != BridgeVersion", "header.version != ScalarBridgeVersion",
+		).Replace(conceptSource.String())
+		conceptSource.Reset()
+		conceptSource.WriteString(conceptText)
+	}
+	formatted, err := format.Source(goBytes)
 	if err != nil {
 		return out, fmt.Errorf("MIR_BRIDGE_GENERATED_GO: %w", err)
 	}
@@ -424,6 +478,10 @@ func (e bridgeGoEmitter) read(t bridgeSchemaType) (string, error) {
 }
 func (e bridgeGoEmitter) goType(t bridgeSchemaType) string {
 	switch t.Name {
+	case "BridgeSequence":
+		if len(t.Arguments) == 1 {
+			return "[]" + e.goType(t.Arguments[0])
+		}
 	case "uint32", "uint":
 		return "uint32"
 	case "uint8":

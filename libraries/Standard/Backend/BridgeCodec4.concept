@@ -1,0 +1,137 @@
+// Code generated from checked BridgeSchema metadata; DO NOT EDIT.
+module Standard.Backend.BridgeCodec4;
+profile Core;
+import Standard.Backend.BridgeCodec;
+import Standard.Backend.BridgeSchema4;
+string ScalarMachineBridgeSchemaHash() {
+    return "aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c";
+}
+uint8[32] ScalarMachineBridgeSchemaHashBytes() {
+    uint8[32] value =[170u, 12u, 237u, 181u, 40u, 240u, 208u, 247u, 128u, 167u, 193u, 128u, 155u, 96u,
+    248u, 122u, 72u, 63u, 61u, 230u, 254u, 199u, 118u, 132u, 238u, 239u, 76u, 148u, 242u, 120u, 131u,
+    108u];
+    return value;
+}
+derive DeriveBridgeEnumRead reflect<RegisterClass>;
+derive DeriveBridgeEnumWrite reflect<RegisterClass>;
+derive DeriveBridgeEnumRead reflect<ScalarRepresentation>;
+derive DeriveBridgeEnumWrite reflect<ScalarRepresentation>;
+derive DeriveBridgeEnumRead reflect<ScalarOpcode>;
+derive DeriveBridgeEnumWrite reflect<ScalarOpcode>;
+derive DeriveBridgeEnumRead reflect<ScalarTerminator>;
+derive DeriveBridgeEnumWrite reflect<ScalarTerminator>;
+derive DeriveBridgeRead reflect<WireScalarSpan>;
+derive DeriveBridgeWrite reflect<WireScalarSpan>;
+derive DeriveBridgeRead reflect<WireScalarValueUse>;
+derive DeriveBridgeWrite reflect<WireScalarValueUse>;
+derive DeriveBridgeRead reflect<WireScalarMachineVReg>;
+derive DeriveBridgeWrite reflect<WireScalarMachineVReg>;
+derive DeriveBridgeRead reflect<WireScalarMachineParameter>;
+derive DeriveBridgeWrite reflect<WireScalarMachineParameter>;
+derive DeriveBridgeRead reflect<WireScalarMachineSlot>;
+derive DeriveBridgeWrite reflect<WireScalarMachineSlot>;
+derive DeriveBridgeRead reflect<WireScalarMachineCallArgument>;
+derive DeriveBridgeWrite reflect<WireScalarMachineCallArgument>;
+derive DeriveBridgeRead reflect<WireScalarMachineCall>;
+derive DeriveBridgeWrite reflect<WireScalarMachineCall>;
+derive DeriveBridgeRead reflect<WireScalarMachineInstruction>;
+derive DeriveBridgeWrite reflect<WireScalarMachineInstruction>;
+derive DeriveBridgeRead reflect<WireScalarMachineTerminator>;
+derive DeriveBridgeWrite reflect<WireScalarMachineTerminator>;
+derive DeriveBridgeRead reflect<WireScalarMachineBlock>;
+derive DeriveBridgeWrite reflect<WireScalarMachineBlock>;
+derive DeriveBridgeRead reflect<WireScalarMachineFunction>;
+derive DeriveBridgeWrite reflect<WireScalarMachineFunction>;
+derive DeriveBridgeRead reflect<WireScalarMachineModule>;
+derive DeriveBridgeWrite reflect<WireScalarMachineModule>;
+Result<BridgeSequence<WireScalarMachineCallArgument>, BackendError> ReadWire(ref BridgeReader reader,
+BridgeType<BridgeSequence<WireScalarMachineCallArgument>> type) {
+    return ReadBridgeSequence<WireScalarMachineCallArgument>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineCallArgument> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineCallArgument>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarValueUse>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarValueUse>> type) {
+    return ReadBridgeSequence<WireScalarValueUse>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarValueUse> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarValueUse>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineCall>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineCall>> type) {
+    return ReadBridgeSequence<WireScalarMachineCall>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineCall> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineCall>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineInstruction>, BackendError> ReadWire(ref BridgeReader reader,
+BridgeType<BridgeSequence<WireScalarMachineInstruction>> type) {
+    return ReadBridgeSequence<WireScalarMachineInstruction>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineInstruction> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineInstruction>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineParameter>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineParameter>> type) {
+    return ReadBridgeSequence<WireScalarMachineParameter>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineParameter> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineParameter>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineVReg>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineVReg>> type) {
+    return ReadBridgeSequence<WireScalarMachineVReg>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineVReg> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineVReg>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineSlot>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineSlot>> type) {
+    return ReadBridgeSequence<WireScalarMachineSlot>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineSlot> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineSlot>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineBlock>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineBlock>> type) {
+    return ReadBridgeSequence<WireScalarMachineBlock>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineBlock> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineBlock>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireScalarMachineFunction>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireScalarMachineFunction>> type) {
+    return ReadBridgeSequence<WireScalarMachineFunction>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireScalarMachineFunction> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireScalarMachineFunction>(ref const value, ref const source, ref writer);
+}
+Result<int, BackendError> ScalarBridgeRoundTrip(ReadOnlySpan<byte> payload, Span<byte> output) {
+    BridgeReader reader = BridgeReader{payload, 0};
+    WireScalarMachineModule value = ReadWire(ref reader, BridgeType<WireScalarMachineModule>{0}) ?;
+    if (reader.offset != Len(payload)) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeWriter writer = BridgeWriter{output, 0};
+    WriteWire(ref const value, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> ReadScalarBridgeIdentity(ref BridgeReader reader) {
+    WireHeader header = ReadWire(ref reader, BridgeType<WireHeader>{0}) ?;
+    for (i in 0 .. Len(header.magic)) {
+        if (header.magic[i] !=(ScalarBridgeMagic[i] as uint8)) {
+            return Result::Error(BackendError::BridgeVersion);
+        }
+    }
+    if (header.version != ScalarBridgeVersion) {
+        return Result::Error(BackendError::BridgeVersion);
+    }
+    uint8[32] expected = ScalarMachineBridgeSchemaHashBytes();
+    for (i in 0 .. Len(header.schemaHash)) {
+        if (header.schemaHash[i] != expected[i]) {
+            return Result::Error(BackendError::BridgeSchemaMismatch);
+        }
+    }
+    return Result::Ok();
+}

@@ -11,6 +11,32 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	// Select the virtual scalar contract before any legacy physical projection.
+	for _, f := range lir.Functions {
+		hasFloat := func(t LIRType) bool {
+			return strings.Contains(string(t), "float32") || strings.Contains(string(t), "float64")
+		}
+		if hasFloat(f.Result) {
+			return projectScalarMachine(lir)
+		}
+		for _, p := range f.Params {
+			if hasFloat(p.Type) {
+				return projectScalarMachine(lir)
+			}
+		}
+		for _, s := range f.Slots {
+			if hasFloat(s.Type) {
+				return projectScalarMachine(lir)
+			}
+		}
+		for _, b := range f.Blocks {
+			for _, in := range b.Instructions {
+				if hasFloat(in.Type) {
+					return projectScalarMachine(lir)
+				}
+			}
+		}
+	}
 	out := MachineModule{}
 	for _, lf := range lir.Functions {
 		b := machineBuilder{lir: lf, values: map[int]MachineOperand{}, types: map[int]LIRType{}, regions: map[int]string{}, frameOffsets: map[int]int{}, flags: map[int]machineCondition{}}

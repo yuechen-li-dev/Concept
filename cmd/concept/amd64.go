@@ -54,7 +54,12 @@ func printConceptAMD64(machine concept.MachineModule, artifact []byte) error {
 		return err
 	}
 	harnessPath := filepath.Join(dir, "backend_host.c")
-	if err := os.WriteFile(harnessPath, []byte(amd64BootstrapHost), 0600); err != nil {
+	scalarCount := 0
+	if machine.Scalar != nil {
+		scalarCount = len(machine.Scalar.Functions)
+	}
+	host := strings.ReplaceAll(amd64BootstrapHost, "/* SCALAR_COUNT */", fmt.Sprint(scalarCount))
+	if err := os.WriteFile(harnessPath, []byte(host), 0600); err != nil {
 		return err
 	}
 	compiler, err := exec.LookPath("gcc")
@@ -99,6 +104,7 @@ func findAMD64BackendSource() (string, error) {
 const amd64BootstrapHost = `#include "amd64.generated.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 // Presentation only: every placement, move and preservation decision comes
 // from the compiled Cathedral planner.
 static void print_frame_action(concept_frame_action a) {
@@ -180,6 +186,44 @@ static int print_call_plans(concept_readonly_span_byte source, int ordinal) {
   }
   return 0;
 }
+static void print_scalar_location(concept_scalar_location location) {
+  if(location.kind.tag==0) printf("%s",concept_standard__backend__amd64_scalar_physical_name(location));
+  else printf("%s[%d]",location.kind.tag==1?"stack":location.kind.tag==2?"temp":location.kind.tag==3?"spill":"incoming",location.slot);
+}
+static int print_scalar_plans(concept_readonly_span_byte source,int ordinal) {
+  concept_backend_function f=concept_standard__backend__amd64_empty_function();
+  if(concept_standard__backend__amd64_decode_scalar_function(source,ordinal,&f).tag) return 1;
+  printf("fn %.*s scalar planning\n",f.name.length,(const char*)source.data+f.name.offset);
+  concept_allocation a=concept_standard__backend__amd64_empty_allocation();
+  concept_result_void_backend_error allocated=concept_standard__backend__amd64_allocate_registers(&f,&a);
+  if(allocated.tag){puts(concept_standard__backend__amd64_describe_native_error(concept_standard__backend__amd64_scalar_backend_error(allocated.payload.error.error)));return 2;}
+  concept_result_void_abierror calls=concept_standard__backend__amd64_plan_function_calls_checked(&f,&a);
+  if(calls.tag){puts(concept_standard__backend__amd64_describe_abierror(calls.payload.error.error));return 2;}
+  concept_liveness live=concept_standard__backend__amd64_empty_liveness();
+  if(concept_standard__backend__amd64_compute_liveness(&f,&live).tag) return 3;
+  concept_finalized_frame frame=concept_standard__backend__amd64_empty_finalized_frame();
+  concept_result_void_frame_error qualified=concept_standard__backend__amd64_qualify_function_frame(&f,&a,&frame);
+  if(qualified.tag){printf("%s\n",concept_standard__backend__amd64_describe_frame_error(qualified.payload.error.error));return 4;}
+  for(int v=0;v<f.virtualRegCount;v++){printf("  v%d:%s -> ",v,concept_standard__backend__amd64_scalar_type_name(f.scalarTypes.data[v]));print_scalar_location(a.scalarLocations.data[v]);printf(" range=%d..%d\n",a.start.data[v],a.end.data[v]);}
+  for(int i=0;i<f.argCount;i++){printf("  incoming arg%d -> ",i);print_scalar_location(concept_standard__backend__amd64_win64scalar_argument(i,f.scalarTypes.data[f.args.data[i].virtualReg]));puts("");}
+  printf("  frame size=%d unaligned=%d padding=%d base=post-prologue-RSP\n",frame.byteCount,frame.unalignedSize,frame.padding);
+  for(int r=0;r<7;r++)printf("  region %s [rsp+%d .. +%d)\n",concept_standard__backend__amd64_frame_region_name(frame.regions.data[r].category),frame.regions.data[r].offset,frame.regions.data[r].offset+frame.regions.data[r].size);
+  for(int s=0;s<frame.slotCount;s++){concept_frame_slot slot=frame.slots.data[s];printf("  %s v%d %s -> [rsp+%d] size=%d align=%d\n",concept_standard__backend__amd64_frame_region_name(slot.category),slot.identity,concept_standard__backend__amd64_scalar_type_name(frame.representations.data[s]),slot.offset,slot.size,slot.alignment);}
+  for(int p=0;p<f.instructionCount;p++){if(f.instructions.data[p].op.tag!=16)continue;
+    concept_call_plan plan=concept_standard__backend__amd64_empty_call_plan();concept_preservation records[512];int count=0;concept_span_preservation span={records,512};
+    concept_result_void_abierror planned=concept_standard__backend__amd64_plan_allocated_call(&f,&a,&live,p,&plan,span,&count);
+    if(planned.tag){puts(concept_standard__backend__amd64_describe_abierror(planned.payload.error.error));return 5;}
+    printf("  call @%.*s instruction=%d shadow=%d stack-bytes=%d flags-clobbered=%d xmm-clobbers=XMM0..XMM5\n",plan.target.length,(const char*)source.data+plan.target.offset,p,plan.shadowSpaceBytes,plan.stackArgumentBytes,plan.flagsClobbered);
+    for(int i=0;i<plan.argumentCount;i++){printf("    arg%d v%d:%s -> ",i,plan.arguments.data[i].source.value,concept_standard__backend__amd64_scalar_type_name(plan.scalar.arguments.data[i]));print_scalar_location(plan.scalar.destinations.data[i]);puts("");}
+    if(plan.hasResult){printf("    return ");print_scalar_location(plan.scalar.resultSource);printf(" -> v%d:%s\n",plan.result.value,concept_standard__backend__amd64_scalar_type_name(plan.scalar.result));}else puts("    return void");
+    concept_call_site_actions site=concept_standard__backend__amd64_empty_call_site_actions();
+    if(concept_standard__backend__amd64_realize_allocated_call(&f,&a,&live,p,&frame,&site).tag)return 6;
+    for(int i=0;i<site.count;i++){if(i==site.callIndex){puts("    abstract-call (no SSE bytes)");continue;}
+      printf("    %s %s ",i<site.callIndex?"pre-call":"post-call",concept_standard__backend__amd64_frame_action_name(site.actions.data[i].kind));
+      print_scalar_location(site.scalarActions.data[i].source);if(site.sourceOffsets.data[i]>=0)printf(" [rsp+%d]",site.sourceOffsets.data[i]);printf(" -> ");print_scalar_location(site.scalarActions.data[i].destination);if(site.destinationOffsets.data[i]>=0)printf(" [rsp+%d]",site.destinationOffsets.data[i]);printf(" %s\n",concept_standard__backend__amd64_scalar_type_name(site.scalarActions.data[i].representation));}
+  }
+  return 0;
+}
 int main(int argc, char** argv) {
   if(argc!=2)return 2;
   FILE *file=fopen(argv[1],"rb");if(!file)return 3;
@@ -188,8 +232,9 @@ int main(int argc, char** argv) {
   unsigned char *input=malloc((size_t)size);if(!input||fread(input,1,(size_t)size,file)!=(size_t)size)return 6;fclose(file);
   unsigned char bytes[65536];concept_readonly_span_byte source={input,(size_t)size};concept_span_byte output={bytes,sizeof bytes};
   concept_native_image image=concept_standard__backend__amd64_empty_native_image();
+  if(size>=8 && !memcmp(input,"CMIRAMD4",8)){for(int i=0;i</* SCALAR_COUNT */;i++){if(print_scalar_plans(source,i)){free(input);return 8;}}}
   concept_result_int_native_error result=concept_standard__backend__amd64_emit_module(source,output,&image);
-  if(result.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_native_error(result.payload.error.error));free(input);return 7;}
+  if(result.tag){fflush(stdout);fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_native_error(result.payload.error.error));free(input);return 7;}
   printf("native image bytes=%d functions=%d calls=%d finalized=%d\n",image.byteCount,image.symbolCount,image.fixupCount,image.finalized);
   for(int i=0;i<image.symbolCount;++i){concept_native_symbol symbol=image.symbols.data[i];
     printf("fn %.*s [%.*s] offset=%d size=%d\n",symbol.name.length,(const char*)input+symbol.name.offset,symbol.identity.length,(const char*)input+symbol.identity.offset,symbol.offset,symbol.size);
