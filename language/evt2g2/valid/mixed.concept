@@ -1,0 +1,29 @@
+module EVT2g2.Mixed;
+profile Core;
+
+[[repr(C)]] record struct Sample {
+    int code;
+    double value;
+}
+
+Sample Mixed(int code, bool keep, float weight, double value, Sample original) {
+    const int selected = code;
+    if (keep) { return original; }
+    return Sample{selected, value};
+}
+
+Sample Exercise(int code, bool keep, float weight, double value) {
+    Sample original = Sample{code, value};
+    return Mixed(code, keep, weight, value, original) with {
+        code = 7;
+    };
+}
+
+int Repeat(int count) {
+    int total = 0;
+    for (i in 0 .. count) {
+        const int value = i;
+        total = total + value;
+    }
+    return total;
+}

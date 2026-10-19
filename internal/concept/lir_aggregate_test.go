@@ -56,16 +56,16 @@ func TestEVT2gCheckedAggregateLIR(t *testing.T) {
 		}
 	}
 	t.Logf("100 checked aggregate LIR generations: %s; inspection bytes=%d layouts=%d functions=%d", time.Since(start), len(text), len(lir.Aggregates), len(lir.Functions))
-	if _, err := LowerLirToAmd64Machine(lir); err == nil || !strings.Contains(err.Error(), "MIR_AGGREGATE_REQUIRES_CMIRAMD5") {
-		t.Fatalf("aggregate evidence erased into scalar bridge: %v", err)
+	if machine, err := LowerLirToAmd64Machine(lir); err != nil || machine.Object == nil {
+		t.Fatalf("aggregate evidence lost before CMIRAMD5: %v", err)
 	}
 	// An otherwise unused integer-only aggregate also requires the new bridge.
 	small, err := Parse("small.concept", `profile Core; record struct R { int x; } int F() { R r = R{1}; return 2; }`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := GenerateMachineIR(small); err == nil || !strings.Contains(err.Error(), "MIR_AGGREGATE_REQUIRES_CMIRAMD5") {
-		t.Fatalf("unused aggregate bypassed version gate: %v", err)
+	if machine, err := GenerateMachineIR(small); err != nil || machine.Object == nil {
+		t.Fatalf("unused aggregate bypassed versioned contract: %v", err)
 	}
 }
 
@@ -485,7 +485,7 @@ func TestEVT2gAggregateBounds(t *testing.T) {
 		if i != 0 {
 			field.Type = list[i-1].Type
 		}
-		l := LIRAggregateLayout{Identity: fmt.Sprintf("T%d", i), Name: fmt.Sprintf("T%d", i), Kind: "struct", Representation: "native", Size: 4, Alignment: 4, Fields: []LIRAggregateField{field}}
+		l := LIRAggregateLayout{Identity: fmt.Sprintf("T%d", i), Name: fmt.Sprintf("T%d", i), Kind: "struct", Representation: "native", Size: 4, Alignment: 4, Fields: []LIRAggregateField{field}, CopyEligibility: "checked_value"}
 		l.Type = lirAggregateIdentity(l)
 		list = append(list, l)
 	}

@@ -1,0 +1,213 @@
+module Standard.Backend.BridgeSchema5;
+profile Core;
+import Standard.Backend.BridgeSchema;
+
+// Source checking owns geometry. The wire transports it; Cathedral validates
+// supplied bounds/relationships, never computes field packing or C ABI classes.
+comptime string ObjectBridgeMagic = "CMIRAMD5";
+comptime uint ObjectBridgeVersion = 5u;
+comptime uint ObjectBridgeMaxItems = 1048576u;
+comptime string ObjectBridgeRepresentation = "little-endian;i32=int32;bool=i32:0|1;text=u32+utf8;sequence=u32+elements;header=magic:u8[8]+version:u32+sha256:u8[32];typed-values;checked-layout;semantic-copy;no-physical-abi";
+
+[[reflect]] enum ObjectKind {
+    [[bridge_value("void")]] Void,[[bridge_value("bool")]] Bool,
+    [[bridge_value("i8")]] I8,[[bridge_value("u8")]] U8,
+    [[bridge_value("i16")]] I16,[[bridge_value("u16")]] U16,
+    [[bridge_value("i32")]] I32,[[bridge_value("u32")]] U32,
+    [[bridge_value("i64")]] I64,[[bridge_value("u64")]] U64,
+    [[bridge_value("float32")]] Float32,[[bridge_value("float64")]] Float64,
+    [[bridge_value("aggregate")]] Aggregate,[[bridge_value("array")]] Array
+}
+[[reflect]] enum ObjectRepresentation {
+    [[bridge_value("scalar")]] Scalar,[[bridge_value("native")]] Native,
+    [[bridge_value("C")]] C,[[bridge_value("fixed_array")]] FixedArray
+}
+[[reflect]] enum ObjectValueClass {
+    [[bridge_value("scalar")]] Scalar,[[bridge_value("aggregate")]] Aggregate,
+    [[bridge_value("location")]] Location
+}
+[[reflect]] enum ObjectCopyKind {
+    [[bridge_value("none")]] None,[[bridge_value("checked_value")]] CheckedValue
+}
+[[reflect]] enum ObjectEvidence {
+    [[bridge_value("checked_layout")]] CheckedLayout
+}
+[[reflect]] enum ObjectAddressSpace {
+    [[bridge_value("SystemMemory")]] SystemMemory
+}
+[[reflect]] enum ObjectOpcode {
+    [[bridge_value("const")]] Const,
+    [[bridge_value("make_aggregate")]] MakeAggregate,
+    [[bridge_value("make_array")]] MakeArray,
+    [[bridge_value("copy_value")]] CopyValue,
+    [[bridge_value("replace_member")]] ReplaceMember,
+    [[bridge_value("initialize_slot")]] InitializeSlot,
+    [[bridge_value("load_slot")]] LoadSlot,[[bridge_value("store_slot")]] StoreSlot,
+    [[bridge_value("slot_address")]] SlotAddress,[[bridge_value("field_address")]] FieldAddress,
+    [[bridge_value("load")]] Load,[[bridge_value("store")]] Store,
+    [[bridge_value("index_address")]] IndexAddress,[[bridge_value("check_index")]] CheckIndex,
+    [[bridge_value("checked_add")]] CheckedAdd,[[bridge_value("checked_sub")]] CheckedSub,
+    [[bridge_value("checked_mul")]] CheckedMul,
+    [[bridge_value("add")]] Add,[[bridge_value("sub")]] Sub,[[bridge_value("mul")]] Mul,
+    [[bridge_value("eq")]] Equal,[[bridge_value("ne")]] NotEqual,
+    [[bridge_value("lt")]] Less,[[bridge_value("le")]] LessEqual,
+    [[bridge_value("gt")]] Greater,[[bridge_value("ge")]] GreaterEqual,
+    [[bridge_value("fadd")]] FloatAdd,[[bridge_value("fsub")]] FloatSub,
+    [[bridge_value("fmul")]] FloatMul,[[bridge_value("fdiv")]] FloatDiv,
+    [[bridge_value("fneg")]] FloatNeg,[[bridge_value("call")]] Call
+}
+[[reflect]] enum ObjectTerminator {
+    [[bridge_value("return")]] Return,[[bridge_value("jump")]] Jump,
+    [[bridge_value("branch")]] Branch
+}
+[[reflect]] record struct WireObjectHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireObjectSpan {
+    int Line;
+    int Column;
+}
+[[reflect]] record struct WireObjectDependency {
+    BridgeText Identity;
+    BridgeText Digest;
+}
+[[reflect]] record struct WireObjectField {
+    int ID;
+    BridgeText Identity;
+    BridgeText Name;
+    BridgeText SemanticType;
+    int Type;
+    BridgeText LayoutIdentity;
+    int Offset;
+    int Size;
+    int Align;
+    bool Readonly;
+}
+[[reflect]] record struct WireObjectType {
+    int ID;
+    BridgeText Identity;
+    BridgeText LayoutIdentity;
+    BridgeText Name;
+    ObjectKind Kind;
+    ObjectRepresentation Representation;
+    int Size;
+    int Align;
+    bool Immutable;
+    int Element;
+    int Extent;
+    int Stride;
+    ObjectCopyKind Copy;
+    ObjectEvidence Evidence;
+    BridgeSequence<WireObjectField> Fields;
+}
+[[reflect]] record struct WireObjectValue {
+    int ID;
+    int Type;
+    BridgeText LayoutIdentity;
+    ObjectValueClass Class;
+}
+[[reflect]] record struct WireObjectValueUse {
+    int Value;
+}
+[[reflect]] record struct WireObjectParameter {
+    int Index;
+    int Value;
+    int Type;
+}
+// A slot describes capacity only. InitializeSlot begins its object lifetime.
+[[reflect]] record struct WireObjectSlot {
+    int ID;
+    BridgeText Name;
+    int Type;
+    BridgeText LayoutIdentity;
+    bool Readonly;
+    int ParamValue;
+    ObjectAddressSpace Space;
+}
+[[reflect]] record struct WireObjectCallArgument {
+    int Value;
+    int Type;
+}
+[[reflect]] record struct WireObjectCall {
+    BridgeText Target;
+    BridgeText Convention;
+    BridgeSequence<WireObjectCallArgument> Arguments;
+    int ResultType;
+}
+[[reflect]] record struct WireObjectInstruction {
+    ObjectOpcode Op;
+    int Result;
+    int Type;
+    BridgeSequence<WireObjectValueUse> Args;
+    int Slot;
+    int ParentType;
+    int Member;
+    int Offset;
+    int Extent;
+    int Stride;
+    ObjectCopyKind Copy;
+    BridgeText Literal;
+    int LIRBlock;
+    int LIRInstruction;
+    WireObjectSpan Source;
+    BridgeText Decision;
+    BridgeSequence<BridgeText> Facts;
+    BridgeSequence<WireObjectCall> Calls;
+}
+[[reflect]] record struct WireObjectTerminator {
+    ObjectTerminator Op;
+    int Value;
+    int True;
+    int False;
+    WireObjectSpan Source;
+}
+[[reflect]] record struct WireObjectBlock {
+    int ID;
+    BridgeSequence<WireObjectInstruction> Instructions;
+    WireObjectTerminator Term;
+}
+[[reflect]] record struct WireObjectFunction {
+    BridgeText Identity;
+    BridgeText Name;
+    BridgeText Target;
+    BridgeText ABI;
+    int ResultType;
+    WireObjectSpan Source;
+    BridgeSequence<BridgeText> Facts;
+    BridgeSequence<BridgeText> Decisions;
+    BridgeSequence<WireObjectParameter> Params;
+    BridgeSequence<WireObjectValue> Values;
+    BridgeSequence<WireObjectSlot> Slots;
+    BridgeSequence<WireObjectBlock> Blocks;
+}
+[[reflect]] record struct WireObjectModule {
+    BridgeSequence<WireObjectDependency> Dependencies;
+    BridgeSequence<WireObjectType> Types;
+    BridgeSequence<WireObjectFunction> Functions;
+}
+reflect<ObjectKind>;
+reflect<ObjectRepresentation>;
+reflect<ObjectValueClass>;
+reflect<ObjectCopyKind>;
+reflect<ObjectEvidence>;
+reflect<ObjectAddressSpace>;
+reflect<ObjectOpcode>;
+reflect<ObjectTerminator>;
+reflect<WireObjectHeader>;
+reflect<WireObjectSpan>;
+reflect<WireObjectDependency>;
+reflect<WireObjectField>;
+reflect<WireObjectType>;
+reflect<WireObjectValue>;
+reflect<WireObjectValueUse>;
+reflect<WireObjectParameter>;
+reflect<WireObjectSlot>;
+reflect<WireObjectCallArgument>;
+reflect<WireObjectCall>;
+reflect<WireObjectInstruction>;
+reflect<WireObjectTerminator>;
+reflect<WireObjectBlock>;
+reflect<WireObjectFunction>;
+reflect<WireObjectModule>;

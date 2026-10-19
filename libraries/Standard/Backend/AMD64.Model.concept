@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64.Model;
 profile Core;
 import Standard.Backend.BridgeValidate4;
+import Standard.Backend.BridgeValidate5;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.Win64ABI;
 import Standard.Semantic.Vocabulary;
@@ -246,7 +247,7 @@ enum NativeError {
     UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation,
     UnsupportedSSEEncoding, ScalarPlanningFailure, RegisterExhausted, InvalidABILocation, UnsupportedABIClass,
     UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
-    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation
+    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation, UnsupportedAggregateStorage
 }
 struct NativeImage {
     NativeSymbol[128] symbols;

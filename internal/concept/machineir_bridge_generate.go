@@ -92,13 +92,19 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	var maxItems uint64
 	var representation string
 	scalar := module.Name == "Standard.Backend.BridgeSchema4"
-	if module.Name != "Standard.Backend.BridgeSchema" && !scalar {
+	object := module.Name == "Standard.Backend.BridgeSchema5"
+	modern := scalar || object
+	prefix := "Scalar"
+	if object {
+		prefix = "Object"
+	}
+	if module.Name != "Standard.Backend.BridgeSchema" && !modern {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
 	}
 	for _, c := range module.ComptimeDecls {
 		name := c.Name
-		if scalar {
-			name = strings.TrimPrefix(name, "Scalar")
+		if modern {
+			name = strings.TrimPrefix(name, prefix)
 		}
 		switch name {
 		case "BridgeMagic":
@@ -173,7 +179,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		reflected[r.Name] = true
 	}
 	for _, r := range module.Structs {
-		if scalar && r.Module != "" && r.Module != module.Name {
+		if modern && r.Module != "" && r.Module != module.Name {
 			continue
 		}
 		if strings.HasPrefix(r.Name, "Wire") && !reflected[r.Name] {
@@ -181,7 +187,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		}
 	}
 	for _, e := range module.Enums {
-		if scalar && e.Module != "" && e.Module != module.Name {
+		if modern && e.Module != "" && e.Module != module.Name {
 			continue
 		}
 		if e.Name != "BackendError" && !reflected[e.Name] {
@@ -191,6 +197,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	rootName, headerName := "WireMachineModule", "WireHeader"
 	if scalar {
 		rootName, headerName = "WireScalarMachineModule", "WireScalarHeader"
+	}
+	if object {
+		rootName, headerName = "WireObjectModule", "WireObjectHeader"
 	}
 	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
@@ -236,7 +245,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			}
 			fmt.Fprintln(&goSource, "}")
 		}
-		if scalar && r.Name != headerName && len(r.Cases) == 0 {
+		if modern && r.Name != headerName && len(r.Cases) == 0 {
 			fmt.Fprintf(&goSource, "type %s struct {\n", strings.TrimPrefix(r.Name, "Wire"))
 			for _, f := range r.Fields {
 				typ := emitter.goType(f.Type)
@@ -264,7 +273,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			fmt.Fprintln(&goSource, "}")
 			continue
 		}
-		if !scalar || r.Name != headerName {
+		if !modern || r.Name != headerName {
 			fmt.Fprintf(&conceptSource, "derive DeriveBridgeRead reflect<%s>;\n", r.Name)
 		}
 		if r.Name != headerName {
@@ -305,7 +314,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	for _, r := range def.Records {
 		for _, f := range r.Fields {
 			if f.Type.Name == "array" && f.Type.Element != nil && f.Type.Element.Name == "uint8" {
-				if scalar {
+				if modern {
 					continue
 				} // Frozen v3 codec supplies the shared byte-array primitives.
 				key := fmt.Sprintf("uint8[%d]", f.Type.Extent)
@@ -318,7 +327,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 				continue
 			}
 			element := f.Type.Arguments[0].Name
-			if scalar && element == "BridgeText" {
+			if modern && element == "BridgeText" {
 				continue
 			}
 			if seenSequences[element] {
@@ -352,21 +361,25 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 }
 `)
 	goBytes := goSource.Bytes()
-	if scalar {
-		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", "ScalarMachineBridge")
-		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema4;")
-		goText = strings.ReplaceAll(goText, "bridgeTags", "scalarBridgeTags")
-		goText = strings.ReplaceAll(goText, "bridgeWireHeader", "scalarBridgeWireHeader")
+	if modern {
+		suffix, lower := "4", "scalar"
+		if object {
+			suffix, lower = "5", "object"
+		}
+		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", prefix+"MachineBridge")
+		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema"+suffix+";")
+		goText = strings.ReplaceAll(goText, "bridgeTags", lower+"BridgeTags")
+		goText = strings.ReplaceAll(goText, "bridgeWireHeader", lower+"BridgeWireHeader")
 		goBytes = []byte(goText)
 		conceptText := strings.NewReplacer(
-			"module Standard.Backend.BridgeCodec;", "module Standard.Backend.BridgeCodec4;",
-			"import Standard.Backend.BridgeDerive;", "import Standard.Backend.BridgeCodec;\nimport Standard.Backend.BridgeSchema4;",
+			"module Standard.Backend.BridgeCodec;", "module Standard.Backend.BridgeCodec"+suffix+";",
+			"import Standard.Backend.BridgeDerive;", "import Standard.Backend.BridgeCodec;\nimport Standard.Backend.BridgeSchema"+suffix+";",
 			"WireMachineModule", rootName,
-			"MachineBridgeSchemaHash", "ScalarMachineBridgeSchemaHash",
-			"BridgeRoundTrip", "ScalarBridgeRoundTrip",
-			"ReadBridgeIdentity", "ReadScalarBridgeIdentity",
-			"BridgeMagic[i]", "ScalarBridgeMagic[i]",
-			"header.version != BridgeVersion", "header.version != ScalarBridgeVersion",
+			"MachineBridgeSchemaHash", prefix+"MachineBridgeSchemaHash",
+			"BridgeRoundTrip", prefix+"BridgeRoundTrip",
+			"ReadBridgeIdentity", "Read"+prefix+"BridgeIdentity",
+			"BridgeMagic[i]", prefix+"BridgeMagic[i]",
+			"header.version != BridgeVersion", "header.version != "+prefix+"BridgeVersion",
 		).Replace(conceptSource.String())
 		conceptSource.Reset()
 		conceptSource.WriteString(conceptText)

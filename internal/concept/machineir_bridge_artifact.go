@@ -89,6 +89,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	if m.Scalar != nil {
 		return encodeScalarMachineBridge(*m.Scalar)
 	}
+	if m.Object != nil {
+		return encodeObjectMachineBridge(*m.Object)
+	}
 	w := &machineBridgeWriter{}
 	hash, err := hex.DecodeString(MachineBridgeSchemaHash)
 	if err != nil {
@@ -106,6 +109,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	return w.Bytes(), nil
 }
 func DecodeMachineBridge(data []byte) (MachineModule, error) {
+	if len(data) >= 8 && string(data[:8]) == ObjectMachineBridgeSchema {
+		return DecodeObjectMachineBridge(data)
+	}
 	if len(data) >= 8 && string(data[:8]) == ScalarMachineBridgeSchema {
 		return DecodeScalarMachineBridge(data)
 	}

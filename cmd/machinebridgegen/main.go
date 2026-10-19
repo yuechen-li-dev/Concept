@@ -52,5 +52,24 @@ func main() {
 		}
 	}
 	fmt.Println(scalar.String())
+	objectPath := filepath.Join(root, "libraries/Standard/Backend/BridgeSchema5.concept")
+	objectSource, err := os.ReadFile(objectPath)
+	if err != nil {
+		fail(err)
+	}
+	objectModule, err := concept.ParseWithBuiltSemanticModuleRoots(objectPath, string(objectSource), []string{filepath.Join(root, "libraries")})
+	if err != nil {
+		fail(err)
+	}
+	object, err := concept.GenerateMachineBridgeCodecs(objectModule)
+	if err != nil {
+		fail(err)
+	}
+	for name, data := range map[string][]byte{"internal/concept/machineir_bridge5_codec_generated.go": object.Go, "libraries/Standard/Backend/BridgeCodec5.concept": object.Concept, "docs/design/EVT2-MACHINEIR-BRIDGE5.schema.json": object.Metadata} {
+		if err := os.WriteFile(filepath.Join(root, name), data, 0644); err != nil {
+			fail(err)
+		}
+	}
+	fmt.Println(object.String())
 }
 func fail(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }

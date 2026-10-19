@@ -1,5 +1,8 @@
 # EVT2g convergence — checked aggregate input
 
+Current milestone: [EVT2g2 closeout](#evt2g2-closeout). The original EVT2g1
+progression report below is retained with its historical boundary and evidence.
+
 Status: **MEANINGFUL PROGRESSION**; full native aggregate qualification remains open.
 
 Baseline: `8b129ad710e254e3cdc3b647418693cca175e24c`, clean `main`, containing
@@ -79,3 +82,78 @@ established frozen-path policy. No other repository is changed. EVT2h is not beg
 **MEANINGFUL PROGRESSION — checked aggregate/immutable-update LIR is qualified;
 native object storage, references, copies and Win64 aggregate ABI require the
 new checked Concept aggregate bridge before Cathedral realization.**
+
+## EVT2g2 closeout
+
+Baseline: `e51c184bf51e6073652073293ed5587e26546ba6`, clean at entry.
+Compiler: `concept-evt1-stage0-go`. EVT2g1 is preserved above as history.
+
+CMIRAMD5/version 5 removes the previous bridge blocker. The checked Concept
+schema derives both transport sides; the Concept validator consumes types,
+layout geometry, arrays, logical copies, initialization, field locations,
+immutable authority and unclassified aggregate calls/results from bytes alone.
+There is no record packing calculation in Cathedral. The real CLI now emits
+typed aggregate MachineIR and native admission stops precisely at
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE` without changing output/image.
+An independently built binary from an archived complete baseline SHA reproduces
+`MIR_AGGREGATE_REQUIRES_CMIRAMD5 RecordPair` on the same source fixture; the
+updated CLI emits the typed contract and reaches the new native boundary.
+
+The contract carries 94 fields and 60 enum cases. It adds 46 ordinary derived
+declarations, increasing combined inspection from 73 to 119. Its schema hash
+is `7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60`.
+CMIRAMD3/4 sources, generated payload codecs, schema hashes and native byte
+contracts remain frozen. The conformance report records both frozen hashes.
+
+One necessary portable bootstrap correction uses assignment target type when
+lowering contextual array literals. The new validator's fixed liveness arrays
+exposed the general mechanism; an independent Normal/Verify C11 regression
+checks repeated and listed scalar array reassignment. This is not a native
+aggregate implementation. Checked readonly scalar stores are represented as
+initialization in v5 so loop-local const bindings retain the correct operation.
+
+| Gate | Local result |
+| --- | --- |
+| Full `go test ./... -count=1 -parallel=4 -timeout=30m` | PASS; compiler 766.635 s, CLI 125.739 s, Vulkan profile 0.469 s |
+| `go vet ./...` | PASS |
+| Focused race `^TestEVT2g` | PASS; 191.986 s |
+| EVT2g1 LIR/source/generic/lifetime regressions and EVT2g2 focused suite | PASS |
+| Semantic corpus, Golden Normal/Verify, GPU-free Vulkan, EVT2/EVT2x/EVT2e/EVT2f native | PASS in full suite |
+| Standard explicit CLI Normal / Verify | 44 passed, 0 failed each; 3 informational benchmarks |
+| DragonGod explicit CLI Normal / Verify | 23 passed, 0 failed each; 1 informational benchmark |
+| Artifact-only Concept roundtrip | PASS; three fixtures, each 100 times in each mode |
+| Malformed artifacts | PASS; 43 exact typed failures in each mode; Go rejects all; output untouched |
+| Exact transport bytes | PASS; five pinned hex artifacts and SHA-256 identities |
+| Independent layout agreement | PASS; 8 semantic summaries / 13 fields; compiled C-repr size/alignment/offset probe |
+| Policy and 100-run determinism | PASS; fresh checked production, layouts, schema, bytes, printer, roundtrip, diagnostics |
+| Generated CLI inspection | PASS; standalone v5 codec 87, combined validator 119 |
+| PlainData / StaticExtent / NoAllocation | PASS; checked assertions in `ObjectContractFacts` |
+| Changed authored/generated Concept format checks and lint | PASS |
+| Whitespace / frozen codec diff / final clean worktree | PASS; committed closeout, no v3/v4 blob changes |
+| Frozen root and legacy Zig | SKIPPED; compiler/build/test paths unchanged |
+| Native aggregate storage, fields, copies, references, Win64 aggregate ABI | DEFERRED to later Cathedral stages |
+
+The broad run was dispatched on the final production code. A subsequent
+test-only extension added artifact-imported `Box<int>` and `Box<float>` to the
+roundtrip corpus; its Normal/Verify run passes separately (8.872 s), as does
+its focused race run (22.397 s). No production code changed after dispatch.
+
+### Does Explicit Layout Pay Off?
+
+For this contract, yes: zero duplicate record layout calculators and zero
+field-offset recomputations were required. Supplied semantic geometry suffices
+for independent consistency admission and source-free reserialization. The
+eight main summaries, 13 field descriptors, nested identities, array extent and
+stride all agree with canonical semantic layout; C representation has an
+additional compiled C oracle. Corrupt geometry rejects; relevant source/import
+changes alter contract identity. Opaque layout hashes are producer identities,
+not authentication or a replacement for checked provenance.
+
+No native speed, frame size, aggregate instruction bytes, physical copy cost,
+or Win64 aggregate execution was measured. PlainData is distinct from CAbiValue
+and lifetime permission. The exact capacities, source-reference boundary,
+automata/mixed-array limits, Stage-0 classifications and local informational
+measurements are in the [EVT2g2 conformance section](../../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).
+EVT2g3 has not begun.
+
+**SUCCESS — EVT2g2 CMIRAMD5 typed aggregate and explicit layout contract qualified.**

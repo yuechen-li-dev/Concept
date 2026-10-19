@@ -658,6 +658,7 @@ func composeSemanticModulesForNative(local Module, artifacts map[string][]byte, 
 	composed := Module{Path: local.Path, Name: local.Name, Profile: local.Profile}
 	for _, artifact := range order {
 		dependency := modules[artifact.ModuleIdentity]
+		composed.ImportedModuleIdentities = append(composed.ImportedModuleIdentities, SemanticModuleDependency{ModuleIdentity: artifact.ModuleIdentity, ContentSHA256: artifact.ContentSHA256})
 		appendSemanticDeclarations(&composed, dependency)
 		for _, decl := range dependency.Structs {
 			if evt1HasCRepr(decl.Attributes) {

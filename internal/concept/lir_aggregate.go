@@ -12,7 +12,7 @@ import (
 
 // These are bounded snapshots of the existing checked type/layout contract.
 // They describe source objects, not Win64 classes, copy algorithms or frames.
-// All physical realization remains Cathedral-owned and requires a new bridge.
+// All physical realization remains owned by later Cathedral storage/ABI stages.
 const (
 	lirAggregateMaxLayouts  = 128
 	lirAggregateMaxFields   = 64
@@ -22,24 +22,30 @@ const (
 )
 
 type LIRAggregateLayout struct {
-	Type           LIRType
-	Identity       string // source module + nominal/applied type identity
-	Name           string
-	Kind           string // record (read-only projections) or struct (mutable projections)
-	Representation string
-	Size           int
-	Alignment      int
-	Fields         []LIRAggregateField
+	Type            LIRType
+	Identity        string // source module + nominal/applied type identity
+	Name            string
+	Kind            string // record (read-only projections) or struct (mutable projections)
+	Representation  string
+	Size            int
+	Alignment       int
+	Fields          []LIRAggregateField
+	CopyEligibility string // source-checked value copy; never a raw representation-copy grant
 }
 
 type LIRAggregateField struct {
-	Name         string
-	Type         LIRType
-	TypeIdentity string // full checked semantic type, before scalar representation erasure
-	Offset       int
-	Size         int
-	Alignment    int
-	Readonly     bool // checked field const authority, independently of aggregate kind
+	Name                string
+	Type                LIRType
+	TypeIdentity        string // full checked semantic type, before scalar representation erasure
+	Offset              int
+	Size                int
+	Alignment           int
+	Readonly            bool // checked field const authority, independently of aggregate kind
+	DeclarationIdentity string
+	ElementType         LIRType
+	Extent              int
+	Stride              int
+	ElementAlignment    int
 }
 
 func lirAggregateType(t LIRType) bool { return strings.HasPrefix(string(t), "aggregate:") }
@@ -130,6 +136,7 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 		return "", fmt.Errorf("EVT2_AGGREGATE_SIZE_CAPACITY %s", t.String())
 	}
 	layout := LIRAggregateLayout{Identity: key, Name: t.String(), Representation: "native", Size: size, Alignment: alignment}
+	layout.CopyEligibility = "checked_value"
 	layout.Kind = "struct"
 	if decl.Record {
 		layout.Kind = "record"
@@ -147,7 +154,19 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 			return "", err
 		}
 		checkedType, _ := json.Marshal(evt1GenericIdentityType(field.Type))
-		layout.Fields = append(layout.Fields, LIRAggregateField{Name: field.Name, Type: ft, TypeIdentity: digest(checkedType), Offset: offsets[i], Size: fs, Alignment: fa, Readonly: field.Type.Const})
+		projected := LIRAggregateField{Name: field.Name, Type: ft, TypeIdentity: digest(checkedType), Offset: offsets[i], Size: fs, Alignment: fa, Readonly: field.Type.Const, DeclarationIdentity: key + "|" + field.Name}
+		if field.Type.ArrayElem != nil {
+			projected.ElementType, err = a.lower(*field.Type.ArrayElem)
+			if err != nil {
+				return "", err
+			}
+			projected.Extent = field.Type.ArrayLength
+			projected.Stride, projected.ElementAlignment, err = evt1TypeGeometry(a.env, *field.Type.ArrayElem)
+			if err != nil {
+				return "", err
+			}
+		}
+		layout.Fields = append(layout.Fields, projected)
 	}
 	if len(a.layouts) >= lirAggregateMaxLayouts {
 		return "", fmt.Errorf("EVT2_AGGREGATE_LAYOUT_CAPACITY")
@@ -173,6 +192,9 @@ func verifyLIRAggregateLayouts(list []LIRAggregateLayout) (map[LIRType]LIRAggreg
 		if layout.Type != lirAggregateIdentity(layout) || layouts[layout.Type].Type != "" || identities[layout.Identity] || layout.Identity == "" || layout.Name == "" {
 			return nil, fmt.Errorf("LIR_STALE_AGGREGATE_LAYOUT %s", layout.Type)
 		}
+		if layout.CopyEligibility != "checked_value" {
+			return nil, fmt.Errorf("LIR_AGGREGATE_COPY_ELIGIBILITY %s", layout.Name)
+		}
 		if (layout.Representation != "native" && layout.Representation != "C") || (layout.Kind != "record" && layout.Kind != "struct") || layout.Size <= 0 || layout.Size > lirAggregateMaxSize || layout.Alignment <= 0 || layout.Alignment > 16 || layout.Alignment&(layout.Alignment-1) != 0 || layout.Size%layout.Alignment != 0 || len(layout.Fields) == 0 || len(layout.Fields) > lirAggregateMaxFields {
 			return nil, fmt.Errorf("LIR_BAD_AGGREGATE_LAYOUT %s", layout.Type)
 		}
@@ -188,6 +210,12 @@ func verifyLIRAggregateLayouts(list []LIRAggregateLayout) (map[LIRType]LIRAggreg
 			size, align, err := lirAggregateGeometry(field.Type, layouts, 0)
 			if err != nil || size != field.Size || align != field.Alignment {
 				return nil, fmt.Errorf("LIR_BAD_AGGREGATE_FIELD_TYPE %s.%s", layout.Name, field.Name)
+			}
+			if element, extent, array := lirArrayValue(field.Type); array {
+				es, ea, e := lirAggregateGeometry(element, layouts, 0)
+				if e != nil || field.ElementType != element || field.Extent != extent || field.Stride != es || field.ElementAlignment != ea {
+					return nil, fmt.Errorf("LIR_BAD_AGGREGATE_ARRAY %s.%s", layout.Name, field.Name)
+				}
 			}
 			child := field.Type
 			arrayDepth := 0

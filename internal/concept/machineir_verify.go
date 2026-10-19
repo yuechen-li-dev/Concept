@@ -51,6 +51,12 @@ func machineConditionValid(c string) bool {
 }
 func machineWidthValid(w int) bool { return w == 1 || w == 2 || w == 4 || w == 8 }
 func VerifyMachineIR(m MachineModule) error {
+	if m.Object != nil {
+		if m.Scalar != nil || len(m.Functions) != 0 {
+			return fmt.Errorf("MIR_MIXED_CONTRACT_PAYLOAD")
+		}
+		return verifyObjectMachine(*m.Object)
+	}
 	if m.Scalar != nil {
 		if len(m.Functions) != 0 {
 			return fmt.Errorf("MIR_MIXED_CONTRACT_PAYLOAD")

@@ -3264,7 +3264,7 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
 		}
 		prelude, target, targetType, _ := f.lowerLValue(s.Target, indent)
-		rhsPrelude, value, valueType := f.lowerExpr(s.Value, indent)
+		rhsPrelude, value, valueType := f.lowerExprExpected(s.Value, targetType, indent)
 		replacementDrop := ""
 		if name, ok := s.Target.(*NameExpr); ok {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {

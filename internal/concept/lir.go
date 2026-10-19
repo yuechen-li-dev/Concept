@@ -11,7 +11,8 @@ import (
 type LIRModule struct {
 	PlanID        string
 	SemanticFacts []MIRSemanticFact
-	Aggregates    []LIRAggregateLayout // Checked source layout snapshots; never native storage plans.
+	Aggregates    []LIRAggregateLayout       // Checked source layout snapshots; never native storage plans.
+	Dependencies  []SemanticModuleDependency `json:",omitempty"` // verified artifact identities for aggregate transport
 	Functions     []LIRFunction
 }
 type LIRType string
@@ -366,6 +367,17 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "copy_value":
+					_, aggregate := layouts[in.Type]
+					_, _, array := lirArrayValue(in.Type)
+					if (!aggregate && !array) || in.Result < 0 || len(in.Args) != 1 || argType(0) != in.Type || in.Slot != -1 {
+						return fmt.Errorf("LIR_BAD_AGGREGATE_COPY b%d", b.ID)
+					}
+				case "replace_member":
+					layout, ok := layouts[in.Type]
+					if !ok || in.Result < 0 || in.Member < 0 || in.Member >= len(layout.Fields) || len(in.Args) != 2 || argType(0) != in.Type || argType(1) != layout.Fields[in.Member].Type || in.Slot != -1 {
+						return fmt.Errorf("LIR_BAD_AGGREGATE_REPLACEMENT b%d", b.ID)
+					}
 				case "record_with":
 					layout, ok := layouts[in.Type]
 					if !ok || layout.Kind != "record" || in.Result < 0 || in.Slot != -1 || len(in.Args) != len(in.Members)+1 || argType(0) != in.Type {
@@ -463,7 +475,7 @@ func VerifyLIR(m LIRModule) error {
 					if !hasSlot || s.Extent > 0 || in.Result >= 0 || len(in.Args) != 1 || argType(0) != s.Type {
 						return fmt.Errorf("LIR_BAD_SLOT_STORE b%d", b.ID)
 					}
-					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) {
+					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) && (len(layouts) == 0 || !lirCallScalar(s.Type)) {
 						return fmt.Errorf("LIR_BAD_OBJECT_INIT b%d", b.ID)
 					}
 				case "checked_add", "checked_sub", "checked_mul", "add", "sub", "mul":

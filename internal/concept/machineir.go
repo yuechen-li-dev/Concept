@@ -11,6 +11,7 @@ import (
 type MachineModule struct {
 	Functions []MachineFunction    // Frozen CMIRAMD3 selected-integer contract.
 	Scalar    *ScalarMachineModule // CMIRAMD4 virtual-only exact scalar contract.
+	Object    *ObjectModule        // CMIRAMD5 checked values/storage/geometry; no physical ABI.
 }
 type MachineReg int
 
@@ -296,6 +297,9 @@ type MachineFunction struct {
 }
 
 func (m MachineModule) String() string {
+	if m.Object != nil {
+		return m.Object.String()
+	}
 	if m.Scalar != nil {
 		return m.Scalar.String()
 	}

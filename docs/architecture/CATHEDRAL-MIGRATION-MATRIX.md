@@ -115,3 +115,27 @@ The normal aggregate path stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5`, including
 small and unused aggregate locals. Existing scalar native qualification is
 unchanged. C bootstrap `with` array replacements use the existing expected-type
 initializer seam; this is portable C seed correctness, not native copy policy.
+
+## EVT2g2 checked object contract
+
+The EVT2g1 table/stop above is retained as history. CMIRAMD5 now carries checked
+objects; CMIRAMD3/4 continue serving their frozen scalar subsets.
+
+| Capability | Current owner/state | Next switch condition |
+| --- | --- | --- |
+| Source aggregate type/layout/copyability | Existing checked frontend, qualified bounded input | Frontend migration retains the same canonical semantic layout observations |
+| Typed aggregate MachineIR and explicit geometry | Concept schema authoritative; generated transport qualified | Preserve version/hash, typed values/storage/locations, nested identities and array geometry |
+| Artifact-only consistency admission | Concept `BridgeValidate5`, qualified | Preserve source-free Normal/Verify exact roundtrip, typed errors, bounds and no-allocation proofs |
+| Immutable `with` | Checked frontend evaluation order, ordinary logical v5 copy/member operations | Later Cathedral chooses realization without a WITH instruction |
+| Semantic aggregate calls/results | V5 unclassified argument/result types, qualified | Concept Win64 aggregate classifier, separate from byte width and CAbiValue |
+| Native aggregate complete-object storage | Cathedral, pending EVT2g3 | Native placement consumes supplied size/alignment; no field layout recalculation |
+| Native aggregate field access/copy | Cathedral, pending | Typed address/instruction and copy strategies with real execution evidence |
+| Source-reference/raw/owned/Drop aggregate transport | Existing explicit checked-input stop | Separate admitted semantics and lifetime evidence; no fabrication from internal locations |
+| Aggregate Win64 register/indirect/sret/stack placement | Cathedral, pending | Dedicated semantic/layout ABI plan and independent ABI probes |
+
+`concept lir` and `concept machineir` succeed on the bounded object corpus.
+`concept amd64` validates its artifact then returns
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE` before changing output/image. Native
+scalar, SSE, direct calls and automata frames retain their earlier qualification.
+Mixing aggregate objects with automata activation frames remains an explicit
+v5 input boundary. EVT2g2 does not begin physical aggregate lowering.

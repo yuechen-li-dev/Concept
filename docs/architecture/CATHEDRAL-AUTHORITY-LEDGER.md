@@ -171,3 +171,36 @@ references, stack placement and Win64 aggregate classification remain
 NOT_YET_QUALIFIED and Cathedral-owned. No production Go native aggregate
 classifier, frame planner, copier or encoder was introduced. The checked LIR
 snapshot is not a new competing source-language type/layout model.
+
+## EVT2g2 CMIRAMD5 contract authority
+
+Source and semantic checking establish object layout. MachineIR transports
+checked layout facts. Cathedral verifies and consumes them. It does not
+independently derive record geometry. The preceding EVT2g bridge-stop statement
+is historical: aggregate `machineir` now succeeds and native admission stops at
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE`.
+
+| Changed surface | Stage-0 classification | Authority |
+| --- | --- | --- |
+| `lir_aggregate.go`, `lir_lower.go`, `types.go`, `module_artifact.go` | Checked semantic production | Snapshot existing semantic geometry/copyability, array extent/stride and verified dependency identities; no packing or native placement algorithm |
+| `BridgeSchema5` | Concept authoritative | Sole CMIRAMD5/version-5 schema, field order, tags, representation and schema identity |
+| `machineir_bridge_generate.go`, `cmd/machinebridgegen`, generated Go/Concept codecs | Artifact transport | Checked reflection derives both codec sides; v3/v4 remain frozen |
+| `machineir_object.go`, dispatch in `machineir*.go` | Artifact transport / compatibility seam | Project checked values/storage/locations and semantic calls; normalize `with` into logical copy/member replacements and readonly scalar initialization |
+| `machineir_object_verify.go`, added logical LIR operation checks | Bridge verifier | Bootstrap consistency with checked LIR identities/operations; no production ABI or native object algorithm |
+| `BridgeValidate5` | Concept authoritative | Artifact-only bounded type/geometry/copy/lifetime/provenance/call admission; typed Result diagnostics; consumes supplied field offsets |
+| `AMD64`, `AMD64.Model`, `AMD64.Analysis` | Concept authoritative / CLI diagnostic boundary | Recognize and independently validate v5, then return precise pending-storage error without touching output/image |
+| `generate.go` assignment expected-type repair | Compatibility seam | Portable C bootstrap contextual fixed-array assignments; necessary for ordinary validator liveness arrays, independently tested |
+| `machineir_object_test.go`, exact hex artifacts and fixtures | Test oracle | Semantic geometry, independent C layout probes, source-free Concept roundtrip, malformed inputs, determinism and unchanged native boundaries |
+
+There is no new CLI native algorithm and no Go aggregate frame allocator,
+copier, field encoder or Win64 classifier. Source references and raw/owned/Drop
+states remain outside this admitted input slice. Internal live-slot locations
+are not a source-reference ABI. Aggregate copy eligibility is logical value
+semantics, not permission to copy padding bytes or ignore lifetime.
+
+Layout digests identify the checked producer snapshot; the Concept validator
+checks relationships and geometry without recomputing JSON hashes. This is
+consistency validation, not artifact authentication. PlainData stays separate
+from CAbiValue and from native realization. The next Cathedral owners remain
+native complete-object placement, address/copy realization, and aggregate ABI
+classification. See [EVT2g2 evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).

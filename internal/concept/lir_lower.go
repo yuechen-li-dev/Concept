@@ -31,7 +31,12 @@ func GenerateLIR(module Module) (LIRModule, error) {
 	if err != nil {
 		return LIRModule{}, err
 	}
-	return LowerMirToLir(&mir, plan, env)
+	lir, err := LowerMirToLir(&mir, plan, env)
+	if err == nil && len(lir.Aggregates) != 0 {
+		lir.Dependencies = append([]SemanticModuleDependency(nil), module.ImportedModuleIdentities...)
+		sort.Slice(lir.Dependencies, func(i, j int) bool { return lir.Dependencies[i].ModuleIdentity < lir.Dependencies[j].ModuleIdentity })
+	}
+	return lir, err
 }
 
 // LowerMirToLir consumes validated MIR and the exact planner output. The

@@ -222,7 +222,7 @@ nonvolatile XMM allocation, SIMD/AVX, binary16, numeric conversions, object outp
 and unwind/SEH remain outside this qualification. See the
 [EVT2f5 evidence](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
 
-## EVT2g checked aggregate input
+## EVT2g1 checked aggregate input (historical)
 
 Stage-0 now constructs target-independent typed aggregate LIR from the existing
 checked layout/copyability/place contracts. Numeric structs, immutable records,
@@ -235,3 +235,20 @@ frozen, and aggregate input stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5` before
 scalar projection. A new checked Concept bridge and Cathedral-owned object,
 copy, reference, frame and Win64 aggregate ABI realization remain required.
 No native algorithm moved into Go. See [EVT2g conformance](../conformance/EVT2G-CONFORMANCE.md).
+
+## EVT2g2 typed aggregate contract
+
+CMIRAMD5/version 5 now transports checked type/layout identities, exact object
+geometry, field and array descriptors, typed values/storage/internal locations,
+logical copies and member replacements, and semantic aggregate calls/results.
+Its Concept schema derives both codecs; the Concept validator admits artifacts
+without domain source or AST access. It checks supplied geometry and lifetime
+relationships without calculating field packing. CMIRAMD3/4 remain frozen.
+
+`concept machineir` succeeds for the bounded aggregate corpus. `concept amd64`
+validates v5 then stops at `AMD64_UNSUPPORTED_AGGREGATE_STORAGE` before output
+or native-image mutation. Native storage, addresses, copy realization and
+Win64 aggregate classification remain Cathedral-owned later stages. Source
+borrows, raw/owned/Drop states remain outside this input slice; internal
+locations do not fabricate those semantics. See the
+[contract and qualification evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).

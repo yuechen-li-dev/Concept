@@ -470,6 +470,22 @@ Span<byte> bytes) {
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
     if (Len(artifact) >= 8) {
+        bool object = true;
+        for (i in 0 .. 8) {
+            if (artifact[i] != ObjectBridgeMagic[i]) {
+                object = false;
+            }
+        }
+        if (object) {
+            match (ValidateObjectMachineBridge(artifact)) {
+                Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+                Result::Ok => {
+                    return Result::Error(NativeError::UnsupportedAggregateStorage);
+                }
+            }
+        }
+    }
+    if (Len(artifact) >= 8) {
         bool scalar = true;
         for (i in 0 .. 8) {
             if (artifact[i] != ScalarBridgeMagic[i]) {
