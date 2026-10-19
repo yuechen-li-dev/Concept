@@ -1,7 +1,7 @@
 # EVT2g convergence — checked aggregate input
 
-Current milestone: [EVT2g2 closeout](#evt2g2-closeout). The original EVT2g1
-progression report below is retained with its historical boundary and evidence.
+Current milestone: [EVT2g3 closeout](#evt2g3-closeout). EVT2g1/g2 below retain
+their historical boundaries and evidence.
 
 Status: **MEANINGFUL PROGRESSION**; full native aggregate qualification remains open.
 
@@ -157,3 +157,129 @@ measurements are in the [EVT2g2 conformance section](../../conformance/EVT2G-CON
 EVT2g3 has not begun.
 
 **SUCCESS — EVT2g2 CMIRAMD5 typed aggregate and explicit layout contract qualified.**
+
+## EVT2g3 closeout
+
+Baseline: `7ccb968ab79d4ad700db7afa396970aa78868d06`, clean at entry, containing
+the EVT2g2 contract qualification. Compiler: `concept-evt1-stage0-go`.
+The closeout commit contains the implementation, fixtures and this report;
+`git log -1 --format=%H` identifies the final revision. No other repository is
+modified, and EVT2g4 is not begun.
+
+An independent CLI built from an archived complete baseline revision rejects
+the same small `Position` local/field-update program with
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE`. The updated CLI finalizes its one-function
+717-byte native image. The identical `Simple` body is executed in the native
+corpus (input 4 returns 11). Local comparison inputs and outputs are saved as
+`storage-comparison.concept`, `baseline-storage-stop.txt` and
+`current-storage-native.txt` under the stage's artifact directory.
+
+The real CMIRAMD5 native path now emits and executes complete aggregate locals,
+nested/array fields, mixed GPR/XMM transfers, initialized values, fieldwise
+copies, self-assignment and immutable `with` updates. It reuses the existing
+Concept allocator, unified frame, Win64 scalar calls and encoder. All production
+native object policy is Concept-owned. A new `AMD64.Objects` module supplies
+typed object placement and copy traversal; shared scalar addressing/encoding
+helpers avoid a parallel backend. Private aggregate value slots preserve
+snapshots and copy/update identity. Copy traversal skips padding.
+
+The checked artifact contains 21 aggregate layouts and 35 fields; native lowering
+uses 98 field derivations and 12 transported-stride operations. Both modes emit
+34 functions / 32,504 bytes from a 109,556-byte artifact. Actual artifact-only
+Win64 calls work without domain source/header/oracle functions. A separate
+strict C11 run compares native results with the C bootstrap over 100 vectors.
+The corpus includes 12-byte strides, narrow fields, 64-bit bounds and constants,
+early returns, loops and an outgoing eight-argument call with a live object.
+`with` is ordinary copy/member replacement, with a native trace proving
+base-once and replacement order. There is no native WITH opcode.
+
+### Exact remaining boundary
+
+`language/evt2g3/boundaries/source_references.concept` is valid source and
+executes to 9 through the independent C bootstrap in Normal/Verify. Its checked
+native LIR stops at `Change: EVT2_UNSUPPORTED_OBJECT_AUTHORITY ref Position`.
+This is the next blocker, not a native memory-operand or record-layout failure.
+CMIRAMD5's validator rejects location parameters, call arguments and returns;
+its derived locations require live local slot roots. Source borrow identity,
+access authority and cross-function lifetime are not represented by that slice.
+Those need checked LIR and a versioned transport contract before native reference
+parameter/call realization. Reusing a scalar pointer or detached copy would erase
+authority or break source storage identity. No such shortcut was added.
+
+Native mutable/const/field/array-element source references remain unqualified.
+Existing source escape/immutability/initialization/illegal-copy tests remain
+active. The older object corpus includes aggregate function signatures and
+now reaches `AMD64_UNSUPPORTED_AGGREGATE_ABI`, before output/image mutation.
+Aggregate by-value/indirect/sret qualification is deferred to EVT2g4.
+
+### Does Explicit Layout Actually Pay Off?
+
+Yes for local object realization: zero new Cathedral record packing rules.
+Supplied geometry determines whole-object size/alignment, field displacement,
+nested composition and fixed-array stride/extent. Native frame placement is the
+only new physical placement decision; field geometry is never reconstructed
+from source/AST or C conventions. Artifact-only execution, separate C semantic
+comparisons, existing semantic/C-repr layout probes, invalid-geometry admission
+and exact address/load/store/copy goldens support that claim. Layout digest
+validation remains consistency checking, not authentication. The remaining borrow
+gap concerns authority/lifetime, not geometry.
+
+CMIRAMD3/4/5 schemas and generated codecs are unchanged, including their frozen
+hashes. Source fixtures exercise alignments 1/2/4/8 and frame sizes 40–328 bytes;
+the admitted alignment cap is 16. Valid frames at or above 4096 reject with
+`AMD64_STACK_PROBE_REQUIRED`. There is no stack probing or general source
+over-alignment qualification. Slots are conservative, distinct and bounded;
+partial-overlap/raw-pointer copies and ownership/Drop are not qualified.
+
+One acceptance run measured about 55 ms combined planning/encoding and 1.28 s
+for all-function inspection (which revalidates the artifact per function).
+These local timings are informational, without an isolated planner or speedup
+claim. Per-function frame/code measurements, bounds and exact copy policy are
+recorded in [conformance](../../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+### Stage-0 changes
+
+Checked LIR reuses semantic aggregate-array element layouts, supports indexed
+record places, retains bounds checks even for static-safe plans, and recognizes
+existing byte/isize/usize representations. Portable C generation now keeps RHS
+bounds/side-effect preludes inside short-circuit guards; independently generated
+headers share one built-in range-type declaration set. The CLI prints actual
+Concept plans. Remaining Go changes are test oracles and the new expected ABI
+boundary. None is a production native object algorithm.
+
+### Validation
+
+Local logs are under `artifacts/evt2g3/`.
+
+| Gate | Local result |
+| --- | --- |
+| Full `go test ./... -count=1 -parallel=4 -timeout=30m` | PASS; compiler 851.785 s, CLI 138.860 s, Vulkan profile 0.486 s |
+| Semantic corpus, Golden Normal/Verify, GPU-free Vulkan, EVT2/EVT2x/EVT2e/EVT2f, EVT2g1/g2/g3 | PASS in the full Go regression run |
+| `go vet ./...` | PASS |
+| Final `^TestEVT2g3` focused suite | PASS; 92.288 s |
+| Final `go test -race ./internal/concept -run '^TestEVT2g3' -count=1 -timeout=15m` | PASS; 214.760 s |
+| Focused EVT2g1/g2, frozen native bytes, EVT2f source native and checked-output tests | PASS; 138.407 s; final g3 refinements covered by the final suite above |
+| Artifact-only native and separate independent C11/native oracle, Normal/Verify | PASS; 34 functions each mode; 100 semantic vectors in separate oracle run |
+| Determinism | PASS; 100 identical final module emissions and 100 representative frame/placement debug descriptions in each mode |
+| Exact memory instruction bytes | PASS; 11 address/load/store/extension/copy goldens in both modes |
+| Malformed geometry/copy, invalid frame slots, unprobed frame | PASS; precise rejection before output/image mutation |
+| Bounds traps | PASS; negative, extent and high-64-bit indices produce UD2 status in child processes |
+| Artifact-imported PlainData/StaticExtent and backend NoAllocation assertions | PASS; mutable-record PlainData Unknown retained |
+| Source borrow specimen | C bootstrap Normal/Verify PASS; native checked-input stop reproduced |
+| Real `machineir` / `amd64` CLI | PASS; native image finalized, object frame plans printed; aggregate ABI boundary reproduced |
+| Standard CLI Normal / Verify | 44 passed, 0 failed each; 3 informational benchmarks |
+| DragonGod CLI Normal / Verify | 23 passed, 0 failed each; 1 informational benchmark |
+| Standard/DragonGod module package build | PASS |
+| Eight changed Concept sources: format check / lint | PASS |
+| Go formatting, whitespace/diff checks | PASS |
+| Frozen root and legacy Zig | SKIPPED; frozen compiler/build/test paths unchanged |
+
+The broad run, final focused suite and race lane used the final production code.
+Only documentation and an ignored independent baseline comparison were added
+after dispatch. No failing gates were disabled or skipped. The closeout is
+committed with a clean worktree; generated checked outputs and frozen codecs
+require no changes.
+
+**MEANINGFUL PROGRESSION — native local aggregate storage, fields, copies and
+immutable updates execute; source-borrow authority/lifetime needs checked LIR
+and a versioned transport contract before native reference qualification.**

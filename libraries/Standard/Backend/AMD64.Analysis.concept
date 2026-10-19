@@ -801,6 +801,7 @@ string DescribeNativeError(NativeError error) {
         NativeError::UnsupportedFloatCallEmission => "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION",
         NativeError::UnsupportedScalarOperation => "AMD64_UNSUPPORTED_SCALAR_OPERATION",
         NativeError::UnsupportedAggregateStorage => "AMD64_UNSUPPORTED_AGGREGATE_STORAGE",
+        NativeError::UnsupportedAggregateABI => "AMD64_UNSUPPORTED_AGGREGATE_ABI",
 
         NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
         NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",

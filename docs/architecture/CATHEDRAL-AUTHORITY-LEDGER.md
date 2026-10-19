@@ -172,7 +172,7 @@ NOT_YET_QUALIFIED and Cathedral-owned. No production Go native aggregate
 classifier, frame planner, copier or encoder was introduced. The checked LIR
 snapshot is not a new competing source-language type/layout model.
 
-## EVT2g2 CMIRAMD5 contract authority
+## EVT2g2 CMIRAMD5 contract authority (historical stage boundary)
 
 Source and semantic checking establish object layout. MachineIR transports
 checked layout facts. Cathedral verifies and consumes them. It does not
@@ -204,3 +204,27 @@ consistency validation, not artifact authentication. PlainData stays separate
 from CAbiValue and from native realization. The next Cathedral owners remain
 native complete-object placement, address/copy realization, and aggregate ABI
 classification. See [EVT2g2 evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).
+
+## EVT2g3 native object authority
+
+The preceding native-storage stop is superseded for scalar-signature local
+objects. Source semantic checking still establishes layout/copyability and
+borrow legality; frozen CMIRAMD5 transports checked local object intent.
+
+| Changed surface / decision | Classification and current owner | Evidence / next transition |
+| --- | --- | --- |
+| Complete-object placement, snapshots, field/array copy traversal | CONCEPT_AUTHORITATIVE: `AMD64.Objects` | Native contiguous source/private slots; consumes supplied geometry, skips padding; no duplicate record layout |
+| Object operations, frame verification, module preflight and emission | CONCEPT_AUTHORITATIVE: `AMD64` | Real v5 dispatch; shared allocator/call/frame/fixup path; malformed input and unprobed frames fail before output mutation |
+| Memory operands and typed scalar transfer | CONCEPT_AUTHORITATIVE: shared `AMD64.Encoding` | Existing ModRM/SIB/REX writer factored for checked addresses; width-2 support and 11 exact byte goldens |
+| Native frame geometry and local-slot lookup | CONCEPT_AUTHORITATIVE: existing `AMD64.Frame` | Whole size/alignment enters one frame; local slots resolved by existing category-aware lookup |
+| Aggregate-array/index LIR and scalar aliases | GO_AUTHORITATIVE checked-input production | Existing semantic element layout and bounds decisions retained; no native placement/copy decisions |
+| Short-circuit RHS prelude placement and generated range declaration guard | BOOTSTRAP_ONLY portable C correctness | Independent Normal/Verify guarded bounds/side-effect tests; backend/oracle C headers coexist |
+| `cmd/concept/amd64.go` object plan printing | Bootstrap orchestration / presentation | Calls actual Concept `PlanObjectNativeFunction`; does not duplicate planning |
+| `native_object_test.go`, fixtures, updated older stop assertion | Test oracles | Artifact-only native, independent C, malformed/frame failures, bounds traps, exact bytes and 100-run determinism |
+| Source reference LIR/transport/native realization | NOT_YET_QUALIFIED | Explicit source-authority stop; versioned borrow origin/access/lifetime contract required before location parameters/calls |
+| Aggregate Win64 ABI classification | NOT_YET_QUALIFIED, Cathedral intended owner | Explicit `AMD64_UNSUPPORTED_AGGREGATE_ABI`; EVT2g4 remains separate |
+
+The native copy algorithm realizes admitted value-copy permission; it does not
+grant PlainData, CAbiValue, raw relocation, ownership or Drop authority. Source
+borrow validity is not inferred from integer addresses or local-slot locations.
+CMIRAMD3/4/5 schema/codecs remain frozen. See [EVT2g3 qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).

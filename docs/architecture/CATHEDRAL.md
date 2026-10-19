@@ -236,7 +236,7 @@ scalar projection. A new checked Concept bridge and Cathedral-owned object,
 copy, reference, frame and Win64 aggregate ABI realization remain required.
 No native algorithm moved into Go. See [EVT2g conformance](../conformance/EVT2G-CONFORMANCE.md).
 
-## EVT2g2 typed aggregate contract
+## EVT2g2 typed aggregate contract (historical stage boundary)
 
 CMIRAMD5/version 5 now transports checked type/layout identities, exact object
 geometry, field and array descriptors, typed values/storage/internal locations,
@@ -252,3 +252,24 @@ Win64 aggregate classification remain Cathedral-owned later stages. Source
 borrows, raw/owned/Drop states remain outside this input slice; internal
 locations do not fabricate those semantics. See the
 [contract and qualification evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).
+
+## EVT2g3 native local objects
+
+The current v5 path emits native aggregate locals, nested/array fields, typed
+loads/stores, fieldwise value copies, self-assignment and immutable `with`
+updates. `AMD64.Objects` consumes checked size/alignment/offset/extent/stride;
+it allocates complete contiguous objects in the existing unified frame. Private
+aggregate snapshots remain memory objects, while compact scalar/location values
+use the existing allocator, Win64 scalar-call planner and shared encoder.
+Padding is skipped by copy traversal. No record packing algorithm or Go native
+object backend was added. Frames requiring probing reject before output mutation.
+
+CMIRAMD3/4/5 and their generated codecs are unchanged. Artifact-only Normal/Verify
+Win64 execution qualifies 34 functions independently of domain source; separate
+strict C11 comparisons and 100-run byte determinism pass. Source `ref`/`ref const`
+still stop at `EVT2_UNSUPPORTED_OBJECT_AUTHORITY`: v5 internal locations require
+local slot roots and prohibit location parameters/call arguments/returns. Native
+source-borrow qualification needs checked LIR and a versioned authority/lifetime
+contract. Aggregate parameters/results stop at `AMD64_UNSUPPORTED_AGGREGATE_ABI`;
+EVT2g4 is not begun. This is meaningful progression rather than full EVT2g3
+reference closure. See [support, evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).

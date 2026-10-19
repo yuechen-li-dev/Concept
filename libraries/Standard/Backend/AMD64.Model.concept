@@ -247,7 +247,8 @@ enum NativeError {
     UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation,
     UnsupportedSSEEncoding, ScalarPlanningFailure, RegisterExhausted, InvalidABILocation, UnsupportedABIClass,
     UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
-    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation, UnsupportedAggregateStorage
+    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation, UnsupportedAggregateStorage,
+    UnsupportedAggregateABI
 }
 struct NativeImage {
     NativeSymbol[128] symbols;

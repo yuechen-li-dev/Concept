@@ -163,15 +163,15 @@ func lirType(t Type) (LIRType, error) {
 		return "u32", nil
 	case "int8":
 		return "i8", nil
-	case "uint8":
+	case "uint8", "byte":
 		return "u8", nil
 	case "int16":
 		return "i16", nil
 	case "uint16":
 		return "u16", nil
-	case "int64":
+	case "int64", "isize":
 		return "i64", nil
-	case "uint64":
+	case "uint64", "usize":
 		return "u64", nil
 	}
 	return "", fmt.Errorf("EVT2_UNSUPPORTED_TYPE %s", t.String())

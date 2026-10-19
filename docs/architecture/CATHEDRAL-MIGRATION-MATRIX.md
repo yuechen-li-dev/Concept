@@ -116,7 +116,7 @@ small and unused aggregate locals. Existing scalar native qualification is
 unchanged. C bootstrap `with` array replacements use the existing expected-type
 initializer seam; this is portable C seed correctness, not native copy policy.
 
-## EVT2g2 checked object contract
+## EVT2g2 checked object contract (historical stage boundary)
 
 The EVT2g1 table/stop above is retained as history. CMIRAMD5 now carries checked
 objects; CMIRAMD3/4 continue serving their frozen scalar subsets.
@@ -139,3 +139,24 @@ objects; CMIRAMD3/4 continue serving their frozen scalar subsets.
 scalar, SSE, direct calls and automata frames retain their earlier qualification.
 Mixing aggregate objects with automata activation frames remains an explicit
 v5 input boundary. EVT2g2 does not begin physical aggregate lowering.
+
+## EVT2g3 native local-object progression
+
+| Capability | Current owner/state | Next switch condition |
+| --- | --- | --- |
+| Complete local objects and private aggregate values | Concept `AMD64.Objects`, qualified | Preserve contiguous typed slots and checked size/alignment; retain existing unified frame |
+| Nested field/array addresses and typed memory operations | Concept `AMD64` / shared `Encoding`, qualified | Preserve transported offset/stride/type/authority and bounds checks; no source/C-layout reconstruction |
+| Value copies, assignment and immutable updates | Concept fieldwise traversal, qualified bounded local path | Copy meaningful fields only; disjoint private snapshots and self-assignment; arbitrary partial overlap is unqualified |
+| Scalar calls with live objects | Existing Concept allocator/Win64ABI/frame path, qualified | Scalar signature only; includes outgoing stack arguments and existing clobber preservation |
+| Source reference LIR and transport | Stage-0 checked-input boundary, NOT_YET_QUALIFIED | Add checked borrow identity/access/lifetime and explicitly version transport; v5 locations cannot cross function boundaries |
+| Source mutable/const/field/array-element native references | Cathedral intended owner, NOT_YET_QUALIFIED | Consume the admitted borrow contract, preserve original storage identity; native escape/alias tests |
+| Aggregate Win64 register/indirect/sret/stack placement | Cathedral intended owner, NOT_YET_QUALIFIED | EVT2g4 classifier and independent ABI probes; current explicit ABI stop |
+
+Go input changes preserve checked aggregate-array places and existing numeric
+representations. Portable C fixes preserve short-circuit RHS bounds/side-effect
+ordering and permit generated headers to share built-in range types. The CLI
+prints Concept plans. No Go native object algorithm or second frame/layout
+model is introduced. CMIRAMD3/4/5 remain unchanged. The normal native object
+path now executes 34 scalar-signature functions in artifact-only Normal/Verify
+tests, with separate C semantic comparisons and deterministic native bytes.
+See [the current support and limit inventory](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).

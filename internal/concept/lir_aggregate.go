@@ -96,7 +96,11 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 	t = t.valueType()
 	if t.ArrayElem != nil {
 		if len(a.visiting) == 0 {
-			return lirType(t)
+			// A checked aggregate array literal must reuse its element layout;
+			// scalar-only arrays retain the frozen scalar lowering path.
+			if _, record := evt1StructView(a.env, evt1CanonicalType(a.env, *t.ArrayElem)); !record {
+				return lirType(t)
+			}
 		}
 		if evt1StorageHasRuntimeShape(t) || evt1StorageRank(t) != 1 || t.StorageKind == StorageRaw || t.StorageKind == StorageSparse || t.ArrayLength <= 0 || t.ArrayLength > lirAggregateMaxElements {
 			return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_ARRAY %s", t.String())
@@ -396,6 +400,8 @@ func (b *lirBuilder) objectAddress(expr Expr) (int, Type, error) {
 	switch e := expr.(type) {
 	case *ParenExpr:
 		return b.objectAddress(e.Value)
+	case *IndexExpr:
+		return b.objectIndexPlace(e)
 	case *NameExpr:
 		binding, ok := b.names[e.Name]
 		if !ok || !binding.local {
@@ -437,37 +443,48 @@ func (b *lirBuilder) objectAddress(expr Expr) (int, Type, error) {
 }
 
 func (b *lirBuilder) objectIndexAddress(e *IndexExpr) (int, LIRType, error) {
-	base, array, err := b.objectAddress(e.Base)
+	address, element, err := b.objectIndexPlace(e)
 	if err != nil {
 		return 0, "", err
 	}
+	typ, err := b.lowerType(element)
+	return address, typ, err
+}
+
+func (b *lirBuilder) objectIndexPlace(e *IndexExpr) (int, Type, error) {
+	base, array, err := b.objectAddress(e.Base)
+	if err != nil {
+		return 0, Type{}, err
+	}
 	if array.ArrayElem == nil || array.ArrayLength <= 0 || len(evt1StorageIndices(e)) != 1 {
-		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_INDEX")
+		return 0, Type{}, fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_INDEX")
 	}
 	idx, t, err := b.expr(evt1StorageIndices(e)[0])
 	if err != nil || !lirInteger(t) {
-		return 0, "", fmt.Errorf("EVT2_OBJECT_INDEX_TYPE")
+		return 0, Type{}, fmt.Errorf("EVT2_OBJECT_INDEX_TYPE")
 	}
 	decision, facts, err := b.indexDecision(e)
 	if err != nil {
-		return 0, "", err
+		return 0, Type{}, err
 	}
 	lt, err := b.lowerType(*array.ArrayElem)
 	if err != nil {
-		return 0, "", err
+		return 0, Type{}, err
 	}
 	size, _, err := evt1TypeGeometry(b.env, *array.ArrayElem)
 	if err != nil {
-		return 0, "", err
+		return 0, Type{}, err
 	}
 	b.emit(LIRInstruction{Op: "check_index", Result: -1, Type: "void", Args: []int{idx}, Slot: -1, Extent: array.ArrayLength, Source: e.Span, Decision: decision, Facts: facts})
-	return b.emit(LIRInstruction{Op: "index_address", Result: 0, Type: lirPointer(lt), Args: []int{base, idx}, Slot: -1, Extent: array.ArrayLength, Stride: size, Source: e.Span}), lt, nil
+	return b.emit(LIRInstruction{Op: "index_address", Result: 0, Type: lirPointer(lt), Args: []int{base, idx}, Slot: -1, Extent: array.ArrayLength, Stride: size, Source: e.Span}), *array.ArrayElem, nil
 }
 
 func (b *lirBuilder) indexDecision(e *IndexExpr) (string, []string, error) {
 	for _, d := range b.plan.Decisions {
 		if d.Category == "BoundsPlan" && d.SourceSpan == e.Span {
-			if d.Strategy != "PerAccessRuntime" {
+			// A proven fixed index is admissible, but the current object wire
+			// contract deliberately retains its check_index safety mechanism.
+			if d.Strategy != "PerAccessRuntime" && d.Strategy != "StaticEliminated" {
 				return "", nil, fmt.Errorf("EVT2_UNSUPPORTED_BOUNDS_PLAN %s", d.Strategy)
 			}
 			facts := append([]string(nil), d.Evidence.FactIDs...)

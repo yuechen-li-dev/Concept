@@ -432,9 +432,9 @@ static concept_native_image image,before;
 int main(void){memset(output,0xa5,sizeof output);memset(&image,0x5a,sizeof image);before=image;
 concept_readonly_span_byte src={artifact,sizeof artifact};concept_span_byte dst={output,sizeof output};
 for(int i=0;i<100;i++){concept_result_int_native_error r=concept_standard__backend__amd64_emit_module(src,dst,&image);
-if(!r.tag||strcmp(concept_standard__backend__amd64_describe_native_error(r.payload.error.error),"AMD64_UNSUPPORTED_AGGREGATE_STORAGE"))return 1;
+if(!r.tag||strcmp(concept_standard__backend__amd64_describe_native_error(r.payload.error.error),"AMD64_UNSUPPORTED_AGGREGATE_ABI"))return 1;
 if(memcmp(&image,&before,sizeof image))return 2;for(size_t j=0;j<sizeof output;j++){if(output[j]!=0xa5)return 3;}}
-puts("100 precise aggregate-storage stops, output and NativeImage untouched");return 0;}
+puts("100 precise aggregate-ABI stops, output and NativeImage untouched");return 0;}
 `)
 	for _, verify := range []bool{false, true} {
 		out := backendTestOutputs(t, verify)

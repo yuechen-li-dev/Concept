@@ -1,0 +1,20 @@
+module EVT2g3.SourceReferences;
+profile Core;
+
+// Valid source semantics and C bootstrap behavior. Checked aggregate LIR
+// currently rejects the source-borrow authority before native projection.
+struct Position {
+    double x;
+    double y;
+}
+void Change(ref Position p) {
+    p.x = 7.0;
+}
+double Read(ref const Position p) {
+    return p.x + p.y;
+}
+double Main() {
+    Position p = Position{1.0, 2.0};
+    Change(ref p);
+    return Read(ref const p);
+}

@@ -1,8 +1,9 @@
 # EVT2g — checked aggregates and CMIRAMD5
 
-Current contract: [EVT2g2 CMIRAMD5](#evt2g2--typed-aggregate-and-explicit-layout-contract).
-The EVT2g1 report below is retained as history. Its old bridge stop is superseded
-by `AMD64_UNSUPPORTED_AGGREGATE_STORAGE`; native aggregate execution remains pending.
+Current qualification: [EVT2g3 native objects](#evt2g3--native-object-storage-progression).
+EVT2g1/g2 below are historical reports. Native local storage, fields, copies and
+immutable `with` now execute; source borrows remain a checked-input boundary and
+aggregate parameters/results stop at `AMD64_UNSUPPORTED_AGGREGATE_ABI`.
 
 ## EVT2g1 historical report
 
@@ -379,3 +380,196 @@ Local logs are under `artifacts/evt2g2/`. Frozen Zig tests are skipped because
 neither the legacy compiler nor its build/test infrastructure changed.
 
 **SUCCESS — EVT2g2 CMIRAMD5 typed aggregate and explicit layout contract qualified.**
+
+## EVT2g3 — native object storage progression
+
+Baseline: `7ccb968ab79d4ad700db7afa396970aa78868d06`, clean at entry.
+Compiler ID remains `concept-evt1-stage0-go`; target is Windows AMD64.
+This stage qualifies complete local objects through the real CMIRAMD5 native
+path. It does not qualify source references or begin EVT2g4 aggregate ABI work.
+
+```powershell
+go test ./internal/concept -run '^TestEVT2g3' -count=1 -v
+go run ./cmd/concept machineir language/evt2g3/valid/objects.concept
+go run ./cmd/concept amd64 language/evt2g3/valid/objects.concept
+go run ./cmd/concept machineir language/evt2g3/boundaries/source_references.concept
+```
+
+The first native command emits 34 functions. The final command deliberately
+stops at `EVT2_UNSUPPORTED_OBJECT_AUTHORITY ref Position`. Its ordinary source
+and independent Normal/Verify C bootstrap execution are valid and return 9.
+The older `language/evt2g/valid/objects.concept` includes aggregate function
+signatures and now reaches `AMD64_UNSUPPORTED_AGGREGATE_ABI`. Neither stop
+substitutes a scalar blob or an unclassified pointer signature.
+
+### Object storage and operations
+
+`AMD64.Objects` assigns each aggregate value a private, contiguous typed local
+slot. Source storage slots retain their own identities. The existing allocator
+receives only compact scalar/location virtual registers; fields do not become
+independent fake aggregate registers. Whole-object size/alignment feeds the
+existing local-slot/frame planner. Source-slot capacity and initialized live
+values remain separate concepts in the admitted contract. Internal addresses
+are derived from admitted live slots, checked field identities and checked array
+indices, retaining the existing location type and readonly authority checks.
+
+`PrepareObjectFunction` reuses allocation, scalar call planning and the unified
+frame. `ValidateObjectFrame` checks exact slot size/alignment, mapping uniqueness,
+containment, overlap and resolution before encoding. Module emission preflights
+all functions before output/image mutation. Final frame sizes at or above 4096
+bytes reject with `AMD64_STACK_PROBE_REQUIRED`; no probing is implemented.
+The existing prologue, epilogue, callee saves, outgoing shadow/stack arguments,
+spill areas, branch/call fixups and scratch regions remain authoritative.
+
+The memory selector realizes initialization, slot loads/stores, aggregate
+loads/stores, logical copies/member replacements, typed field/index addresses,
+bounds checks and scalar field transfers. One shared memory operand writer
+handles ModRM/SIB/REX and displacement encoding. It supports 1/2/4/8-byte GPR
+transfers and existing width-correct scalar XMM transfers. Signed/unsigned
+integer loads extend to the allocated register. Source qualification includes
+bool, byte/u8, u16, int/u32, isize/u64, float and double representations.
+Signed 8/16-bit extension instructions have exact byte goldens only: Core has
+no corresponding ordinary source type names, so source execution is not claimed.
+
+Nested addressing adds transported field offsets; array addressing multiplies
+by the transported stride, including stride 12. Full 64-bit index comparisons
+reject negative, out-of-range and high-bit indices before access. Even currently
+static-safe index plans conservatively retain a native check. Failed native
+bounds checks execute UD2, verified as `STATUS_ILLEGAL_INSTRUCTION` in separate
+child processes rather than accepted as arbitrary crashes.
+
+### Copies, padding and immutable updates
+
+The initial copy policy recursively transfers meaningful scalar fields using
+the checked nested descriptors and fixed-array extent/stride. It neither reads
+nor writes padding. Floating fields are copied bitwise through integer memory
+transfers. Copy permission comes from checked value semantics; byte width,
+PlainData and CAbiValue are not substitutes. There is no memcpy call, vector
+copy strategy or new ownership/relocation rule.
+
+Private value slots provide snapshots before assignment and replacements.
+Disjoint copies and self-assignment are qualified, including nested and array
+values. Arbitrary partial-overlap/raw-pointer copies are not qualified and are
+not expressible through this admitted local-value path. `with` uses the existing
+logical copy and member replacement operations; there is no native WITH opcode.
+The `WithOrder` native test records constructor/replacement calls as 1234 and
+returns 43, proving base-once evaluation and ordered replacements. Its controlled
+test-only foreign stub uses the existing writable-image test mechanism; it does
+not add production external linkage. Record fields remain immutable.
+
+### Reference and lifetime boundary
+
+Internal slot/field/index locations execute and mutate their original storage.
+They are not the source `ref T` / `ref const T` contract. Checked aggregate LIR
+still rejects those source authorities. In v5, location parameters, call
+arguments and returns are prohibited by `BridgeValidate5`; locations must have
+a local live-slot root. It has no admitted cross-function borrow origin,
+access-authority and lifetime contract. Treating a borrow as an ordinary scalar
+pointer would erase those distinctions; copying its target would break identity.
+
+The next isolated step is checked source-borrow LIR and an explicitly versioned
+transport correction, followed by native parameter/call/address realization and
+mutable/const/field/array-element identity and escape tests. This stage leaves
+that boundary explicit rather than widening CMIRAMD5 silently. Existing source
+escape, immutability, illegal-copy and initialization negatives continue to run
+in EVT2g1/g2 tests. Mutable/const source reference execution, reference aliasing
+and escape in native code remain **unqualified**. Raw Storage/Initialize/Destroy,
+owned/Drop/move states, device spaces, automata/object mixing and unrestricted
+pointers remain outside this slice. Aggregate by-value/indirect/sret ABI is
+EVT2g4 work, independently gated before emission.
+
+### Does Explicit Layout Actually Pay Off?
+
+For this native slice, yes: **zero new record-layout algorithms**. The corpus
+transports 21 aggregate layouts with 35 checked field descriptors; native code
+consumes them at 98 field derivations and 12 array-index operations. Nested
+composition uses supplied offsets and array strides (8, 12 and 16 in the
+fixtures), rather than source field names, AST access or C packing conventions.
+The 109,556-byte artifact is sufficient for backend compilation/emission and
+native execution without the domain source/header or source-oracle functions.
+Separate native/C comparisons establish semantic behavior. Existing EVT2g2
+semantic-layout summaries and compiled C-representation probes remain in the
+regression suite; malformed field offsets and missing copy permission reject
+before output/image mutation.
+
+Cathedral computes complete-object placement and native address displacements;
+it does not recompute record field placement. Fixtures exercise object alignments
+1, 2, 4 and 8; the existing frame base is 16-byte aligned. The admitted alignment
+limit remains 16, without a claim of source over-alignment qualification. Layout
+digests remain checked producer identities, not cryptographic authentication.
+The remaining source-borrow metadata gap is an authority/lifetime gap rather
+than missing record geometry.
+
+### Proofs, bounds and architecture
+
+`ObjectStorageFacts` checks PlainData for the immutable `FrameSlot` descriptor
+and NoAllocation for projection/copy. `NativeScalarSSEFacts` adds NoAllocation
+checks for whole-object emission and memory selection. Artifact-imported
+PlainData is proven for immutable Pair/Group/RecordSamples, and StaticExtent<4>
+for SampleArray. Mutable Position deliberately remains Unknown under the
+existing record-only predicate rule. Copyable mutable values do not widen that
+predicate. Native runtime checks are not counted as semantic proofs.
+
+The bounded implementation permits 64 total local slots (source plus private
+values), 128 compact scalar/location virtuals, 512 projected instructions,
+eight fixed scalar parameters/arguments and copy traversal depth 16. It retains
+the existing register pools, floating spills and explicit register-exhaustion
+failure. Slots are not reused across aggregate values. These are implementation
+limits, not general language limits.
+
+All native object policy is Concept-owned: `AMD64.Objects`, `AMD64`, shared
+`AMD64.Encoding`, and the existing frame/allocator/call modules. Stage-0 changes
+are checked aggregate-array/index input, existing scalar representation mapping,
+portable C short-circuit prelude ordering, a single generated range-type guard,
+CLI presentation and independent tests. The short-circuit correction is checked
+with guarded negative indices and side effects in Normal/Verify. The range guard
+permits independently generated C oracle/backend headers to coexist. No Go
+frame planner, field copier, object encoder or aggregate ABI classifier was added.
+
+CMIRAMD5/version 5 is unchanged, including generated codecs and schema. Frozen
+schema hashes are:
+
+| Version | SHA-256 |
+| --- | --- |
+| CMIRAMD3 | `3ebaeb0e5b79bea00d320991521b86015974cf994a3b1e1f498c944999dff312` |
+| CMIRAMD4 | `aa0cedb528f0d0f780a7c1809b60f87a483f3de6fec77684eeef4c94f278836c` |
+| CMIRAMD5 | `7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60` |
+
+### Native evidence and measurements
+
+`TestEVT2g3NativeObjects` first builds an artifact-only executable without the
+domain oracle, then a separate strict C11 executable comparing actual Win64
+native calls with the independent C bootstrap over 100 input vectors, in both
+modes. Executable memory changes from RW to RX; replay is not execution evidence.
+The corpus covers simple/nested records, fixed/nested arrays, padding, mixed
+GPR/XMM fields, 1/2/4/8/12/16/24-byte object copies, self-assignment, immutable
+updates, loops, early returns, scalar calls and live objects across an outgoing
+eight-argument call. Eleven small encoding goldens pin load/store/address/copy
+and signed extension bytes. Malformed geometry, copy authority and invalid frame
+slots reject; a valid large object reaches the unprobed-frame rejection.
+
+Each mode emits a 34-function, 32,504-byte image. Within each mode, 100 repeated
+emissions are identical, as are 100 descriptions of the representative nested
+array frame (including slots, offsets and value mapping). Frame sizes range from
+40 to 328 bytes; the simple object is 72 bytes. Representative measurements:
+
+| Function | Frame bytes | Local slots | Native code bytes |
+| --- | ---: | ---: | ---: |
+| Simple | 72 | 2 | 717 |
+| Copy | 168 | 6 | 2064 |
+| Padding | 136 | 4 | 1296 |
+| With | 152 | 7 | 1564 |
+| NestedArray | 328 | 8 | 2797 |
+| ArrayStride12 | 136 | 5 | 1533 |
+| LiveStackCall | 168 | 3 | 1401 |
+
+One local acceptance run measured about 55 ms for combined planning/encoding,
+and about 1.28 s for inspecting all function plans. Inspection revalidates the
+whole artifact per function; this is not an isolated planning benchmark or a
+speedup claim. Full per-function measurements and emitted plans are in local
+`artifacts/evt2g3/acceptance.log` and `amd64.txt`. Final validation is recorded in
+[the convergence report](../history/milestones/EVT2G-CONVERGENCE.md#evt2g3-closeout).
+
+**MEANINGFUL PROGRESSION — native local aggregate storage, fields, copies and
+immutable updates execute; source-borrow authority/lifetime needs checked LIR
+and a versioned transport contract before native reference qualification.**

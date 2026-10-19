@@ -224,6 +224,17 @@ static int print_scalar_plans(concept_readonly_span_byte source,int ordinal) {
   }
   return 0;
 }
+static int print_object_plans(concept_readonly_span_byte source,int ordinal) {
+  concept_backend_function f=concept_standard__backend__amd64_empty_function();
+  concept_object_placement p=concept_standard__backend__amd64_empty_object_placement();
+  concept_allocation a=concept_standard__backend__amd64_empty_allocation();
+  concept_finalized_frame frame=concept_standard__backend__amd64_empty_finalized_frame();
+  if(concept_standard__backend__amd64_plan_object_native_function(source,ordinal,&f,&p,&a,&frame).tag)return 1;
+  printf("  object frame size=%d locals=%d base=post-prologue-RSP\n",frame.byteCount,frame.regions.data[2].size);
+  for(int i=0;i<f.slotCount;i++){concept_machine_slot slot=f.slots.data[i];printf("    storage s%d %.*s -> [rsp+%d] size=%d align=%d\n",i,slot.source.length,(const char*)source.data+slot.source.offset,frame.slotOffsets.data[i],slot.size,slot.alignment);}
+  for(int v=0;v<512;v++){if(p.values.data[v]>=0)printf("    aggregate v%d -> storage s%d\n",v,p.values.data[v]);}
+  return 0;
+}
 int main(int argc, char** argv) {
   if(argc!=2)return 2;
   FILE *file=fopen(argv[1],"rb");if(!file)return 3;
@@ -239,6 +250,7 @@ int main(int argc, char** argv) {
   for(int i=0;i<image.symbolCount;++i){concept_native_symbol symbol=image.symbols.data[i];
     printf("fn %.*s [%.*s] offset=%d size=%d\n",symbol.name.length,(const char*)input+symbol.name.offset,symbol.identity.length,(const char*)input+symbol.identity.offset,symbol.offset,symbol.size);
     printf("  %04x: ",symbol.offset);for(int b=0;b<symbol.size;++b)printf("%02x",bytes[symbol.offset+b]);printf("\n");
+    if(size>=8 && !memcmp(input,"CMIRAMD5",8)){if(print_object_plans(source,i)){free(input);return 8;}}
     concept_backend_function function=concept_standard__backend__amd64_empty_function();
     if(!concept_standard__backend__amd64_decode_function(source,i,&function).tag){
       int calls=0;for(int p=0;p<function.instructionCount;++p)if(function.instructions.data[p].op.tag==16)calls++;

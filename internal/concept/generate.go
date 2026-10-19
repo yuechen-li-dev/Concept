@@ -4109,6 +4109,30 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.Tensor != nil && e.Tensor.Kind == "tensor_scalar_contract" {
 			return f.lowerScalarTensorContract(e, indent)
 		}
+		if e.Op == "and" || e.Op == "or" {
+			leftPrelude, left, _ := f.lowerExpr(e.Left, indent)
+			rightPrelude, right, _ := f.lowerExpr(e.Right, indent+1)
+			boolType, _ := evt1BuiltinType("bool", e.Span)
+			op := "&&"
+			if e.Op == "or" {
+				op = "||"
+			}
+			if rightPrelude == "" {
+				return leftPrelude, fmt.Sprintf("(%s %s %s)", left, op, right), boolType
+			}
+			// Bounds checks and other RHS preludes belong to the conditional
+			// evaluation, just as the RHS value does. Never hoist them past
+			// a guard that makes the RHS safe to evaluate.
+			temporary := f.nextTemp("short_circuit")
+			condition := temporary
+			if e.Op == "or" {
+				condition = "!" + temporary
+			}
+			prelude := leftPrelude + ind(indent) + fmt.Sprintf("bool %s = %s;\n", temporary, left)
+			prelude += ind(indent) + fmt.Sprintf("if (%s) {\n", condition) + rightPrelude
+			prelude += ind(indent+1) + fmt.Sprintf("%s = %s;\n", temporary, right) + ind(indent) + "}\n"
+			return prelude, temporary, boolType
+		}
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, rightType := f.lowerExpr(e.Right, indent)
 		if literal, ok := e.Left.(*FloatLiteral); ok && evt1IsFloating(rightType) {
