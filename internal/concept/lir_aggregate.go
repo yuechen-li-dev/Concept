@@ -64,7 +64,7 @@ func lirArrayValue(t LIRType) (LIRType, int, bool) {
 }
 func lirCallValue(t LIRType, layouts map[LIRType]LIRAggregateLayout) bool {
 	_, record := layouts[t]
-	return lirCallScalar(t) || record
+	return lirCallScalar(t) || record || lirReferenceType(t)
 }
 func lirAggregateIdentity(layout LIRAggregateLayout) LIRType {
 	layout.Type = ""
@@ -90,6 +90,10 @@ func (b *lirBuilder) lowerType(t Type) (LIRType, error) {
 
 func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 	t = evt1CanonicalType(a.env, t)
+	if t.isReference() {
+		target, err := a.lower(t.valueType())
+		return lirReference(target, !t.Const), err
+	}
 	if t.isBorrowLike() || t.isOwned() || t.PointerTo != nil {
 		return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_AUTHORITY %s", t.String())
 	}
@@ -404,14 +408,18 @@ func (b *lirBuilder) objectAddress(expr Expr) (int, Type, error) {
 		return b.objectIndexPlace(e)
 	case *NameExpr:
 		binding, ok := b.names[e.Name]
+		if ok && binding.typ.isReference() {
+			return binding.value, binding.typ.valueType(), nil
+		}
 		if !ok || !binding.local {
 			return 0, Type{}, fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_LOCATION %s", e.Name)
 		}
 		lt, err := b.lowerType(binding.typ)
-		if err != nil || !lirAggregateType(lt) {
+		if err != nil || (!lirAggregateType(lt) && !lirCallScalar(lt)) {
 			return 0, Type{}, fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_LOCATION %s", e.Name)
 		}
-		return b.emit(LIRInstruction{Op: "slot_address", Result: 0, Type: lirPointer(lt), Slot: binding.slot, Source: e.Span}), binding.typ, nil
+		id := b.emit(LIRInstruction{Op: "slot_address", Result: 0, Type: lirPointer(lt), Slot: binding.slot, Source: e.Span})
+		return b.referenceTarget(id, binding.typ), binding.typ, nil
 	case *FieldExpr:
 		base, t, err := b.objectAddress(e.Receiver)
 		if err != nil {
@@ -434,7 +442,8 @@ func (b *lirBuilder) objectAddress(expr Expr) (int, Type, error) {
 		}
 		for i, field := range decl.Fields {
 			if field.Name == e.Field {
-				return b.emit(LIRInstruction{Op: "field_address", Result: 0, Type: lirPointer(layout.Fields[i].Type), Args: []int{base}, Slot: -1, Aggregate: lt, Member: i, FrameOffset: layout.Fields[i].Offset, Source: e.Span}), field.Type, nil
+				id := b.emit(LIRInstruction{Op: "field_address", Result: 0, Type: lirPointer(layout.Fields[i].Type), Args: []int{base}, Slot: -1, Aggregate: lt, Member: i, FrameOffset: layout.Fields[i].Offset, Source: e.Span})
+				return b.referenceTarget(id, field.Type), field.Type, nil
 			}
 		}
 		return 0, Type{}, fmt.Errorf("EVT2_UNKNOWN_RECORD_FIELD %s", e.Field)
@@ -476,7 +485,8 @@ func (b *lirBuilder) objectIndexPlace(e *IndexExpr) (int, Type, error) {
 		return 0, Type{}, err
 	}
 	b.emit(LIRInstruction{Op: "check_index", Result: -1, Type: "void", Args: []int{idx}, Slot: -1, Extent: array.ArrayLength, Source: e.Span, Decision: decision, Facts: facts})
-	return b.emit(LIRInstruction{Op: "index_address", Result: 0, Type: lirPointer(lt), Args: []int{base, idx}, Slot: -1, Extent: array.ArrayLength, Stride: size, Source: e.Span}), *array.ArrayElem, nil
+	id := b.emit(LIRInstruction{Op: "index_address", Result: 0, Type: lirPointer(lt), Args: []int{base, idx}, Slot: -1, Extent: array.ArrayLength, Stride: size, Source: e.Span})
+	return b.referenceTarget(id, *array.ArrayElem), *array.ArrayElem, nil
 }
 
 func (b *lirBuilder) indexDecision(e *IndexExpr) (string, []string, error) {

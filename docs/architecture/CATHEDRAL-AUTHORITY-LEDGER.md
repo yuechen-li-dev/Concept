@@ -207,6 +207,8 @@ classification. See [EVT2g2 evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2
 
 ## EVT2g3 native object authority
 
+This table retains the EVT2g3 stage boundary; the reference rows are superseded below.
+
 The preceding native-storage stop is superseded for scalar-signature local
 objects. Source semantic checking still establishes layout/copyability and
 borrow legality; frozen CMIRAMD5 transports checked local object intent.
@@ -228,3 +230,25 @@ The native copy algorithm realizes admitted value-copy permission; it does not
 grant PlainData, CAbiValue, raw relocation, ownership or Drop authority. Source
 borrow validity is not inferred from integer addresses or local-slot locations.
 CMIRAMD3/4/5 schema/codecs remain frozen. See [EVT2g3 qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b reference authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Source borrow typing, liveness, mutability, lexical provenance and escape | GO_AUTHORITATIVE existing frontend | Existing place/lifetime/destructive-access checks retained; legal aliases remain legal |
+| Checked reference-origin witness and typed LIR | Stage-0 checked semantic production | Internal witness follows existing validation; ref/ref_const types, source roots, scopes and canonical target digests; no native algorithm |
+| CMIRAMD6 schema and metadata identity | CONCEPT_AUTHORITATIVE `BridgeSchema6` | Frozen v5 payload plus explicit authority tables; generated transport; v3/v4/v5 unchanged |
+| Generated bridge support / `machineir_borrow.go` | Bootstrap artifact transport and verifier | Reuse frozen codecs; project checked identities; verify consistency; no physical pointers, GPR choices or caller offsets |
+| Artifact reference admission | CONCEPT_AUTHORITATIVE `BridgeValidate6`, shared object consistency helpers | Source-free type/root/authority/scope/call preservation, typed Result errors, bounded arrays, NoAllocation; not a second source borrow checker |
+| Native reference representation, dereference and calls | CONCEPT_AUTHORITATIVE `AMD64.Objects` / `AMD64` and existing allocator/Win64ABI/frame/encoder | Address virtuals after admission, existing positional ABI, stable source slots, original-object mutation; no Go native reference backend |
+| Shared object validation / emission | CONCEPT_AUTHORITATIVE existing owners | Explicit v6 authority context; v5 public admission keeps empty context; one allocator/frame/memory/call/fixup path |
+| RefExpr MIR child traversal / void LIR terminators | Stage-0 checked-input correctness | Preserve indexed-borrow bounds operations and canonical no-value returns; independent regression coverage |
+| CLI inspection and diagnostics | Bootstrap presentation | Prints Concept plans and typed admission failures; no policy duplication |
+| Trusted semantic facts | Existing registry, unchanged | User concepts cannot manufacture the checker-owned witness or grant liveness/outlives/NoAlias; metadata digests are not authentication |
+| Reference-return / raw / owned / Drop / escaping reference semantics | NOT_YET_QUALIFIED at native boundary | Preserve explicit source/LIR stops; no weakening of memory ontology |
+| Aggregate by-value/indirect/sret ABI | NOT_YET_QUALIFIED, Cathedral intended owner | Still `AMD64_UNSUPPORTED_AGGREGATE_ABI` in v5 and v6; EVT2g4 separate |
+
+The native reference copy preserves an admitted address/capability; it does not
+copy the aggregate value. Explicit source value copies retain the existing
+fieldwise policy. Reference types do not gain PlainData or CAbiValue from pointer
+width. See [EVT2g3b qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).

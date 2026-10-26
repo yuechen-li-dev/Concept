@@ -1,9 +1,9 @@
 # EVT2g — checked aggregates and CMIRAMD5
 
-Current qualification: [EVT2g3 native objects](#evt2g3--native-object-storage-progression).
-EVT2g1/g2 below are historical reports. Native local storage, fields, copies and
-immutable `with` now execute; source borrows remain a checked-input boundary and
-aggregate parameters/results stop at `AMD64_UNSUPPORTED_AGGREGATE_ABI`.
+Current qualification: [EVT2g3b checked borrows](#evt2g3b--checked-borrow-authority-and-native-references).
+EVT2g1–g3 below retain their historical stage boundaries. Native local objects,
+copies, immutable updates and bounded nonescaping source references now execute.
+Aggregate by-value parameters/results remain gated for EVT2g4.
 
 ## EVT2g1 historical report
 
@@ -383,6 +383,8 @@ neither the legacy compiler nor its build/test infrastructure changed.
 
 ## EVT2g3 — native object storage progression
 
+The source-reference stop in this historical section is superseded by EVT2g3b.
+
 Baseline: `7ccb968ab79d4ad700db7afa396970aa78868d06`, clean at entry.
 Compiler ID remains `concept-evt1-stage0-go`; target is Windows AMD64.
 This stage qualifies complete local objects through the real CMIRAMD5 native
@@ -573,3 +575,201 @@ speedup claim. Full per-function measurements and emitted plans are in local
 **MEANINGFUL PROGRESSION — native local aggregate storage, fields, copies and
 immutable updates execute; source-borrow authority/lifetime needs checked LIR
 and a versioned transport contract before native reference qualification.**
+
+## EVT2g3b — checked borrow authority and native references
+
+Baseline: `2a8b6487adbc72c800120e0340db27f0aa5ee2ac`, clean at entry.
+Compiler ID: `concept-evt1-stage0-go`; native target: AMD64 Windows/Win64.
+
+> An address locates storage. A reference names a live object and carries checked access authority.
+
+The former `Change: EVT2_UNSUPPORTED_OBJECT_AUTHORITY ref Position` specimen
+now emits CMIRAMD6 and executes natively to 9 in Normal and Verify. An independent
+CLI built from an archived complete baseline revision reproduces the old stop.
+The new image has three functions, two calls and 859 bytes. The broader native
+corpus is [references.concept](../../language/evt2g3b/valid/references.concept).
+
+```powershell
+go test ./internal/concept -run '^TestEVT2g3b' -count=1 -v
+go run ./cmd/concept lir language/evt2g3b/valid/references.concept
+go run ./cmd/concept machineir language/evt2g3b/valid/references.concept
+go run ./cmd/concept amd64 language/evt2g3/boundaries/source_references.concept
+```
+
+### Source authority and admitted forms
+
+The existing Stage-0 checker establishes readable/live places, reference target
+types, mutable/const access, lexical outlives constraints and escape restrictions.
+`ref T` permits authorized referent mutation; `ref const T` permits reads and
+qualified value copies, without granting writes. Assignment to a reference name
+writes its referent. No new reference rebinding operation or qualifier is added.
+Record fields retain their existing immutable projection rule.
+
+Ordinary references are not globally exclusive or affine: the current language
+permits legal aliases and ordinary mutation visible through those aliases.
+Destructive operations retain the existing checked borrow conflicts. The new
+source negatives pin const stores/escalation, same-sized wrong nominal targets,
+local/temporary escape, uninitialized objects, use after Destroy, and declared
+destructive access while a conflicting borrow is live. Native tests pass the
+same object to two separate mutable reference parameters and observe writes.
+No Disjoint/NoAlias fact is inferred from distinct parameter or reference IDs.
+
+After the existing reference checks, the frontend retains an internal checked
+origin witness on RefExpr. LIR consumes that witness and the validated typed body;
+unknown/missing origin returns `EVT2_REFERENCE_AUTHORITY_UNKNOWN`. Local and
+parameter roots are admitted. User concepts cannot construct that compiler-owned
+witness or turn their propositions into liveness, outlives or exclusive-access
+authority. The existing trusted-fact registry remains unchanged. These are checked
+source decisions, not a new Cathedral borrow checker or new user proof primitive.
+
+### LIR and CMIRAMD6
+
+LIR distinguishes `ref<T>` and `ref_const<T>` from internal `ptr<T>` locations and
+integer scalars. A compact contract retains the reference SSA value, checked
+representation and semantic target identity, local-slot or parameter root, parent
+derivation, access authority, lexical lifetime scope, origin span and provenance.
+Scope IDs follow deterministic typed-body traversal. Slot scopes and instruction
+sites bind uses to the containing lexical scope. Dominance checks prevent a
+reference definition from being used on a path that did not establish it.
+
+CMIRAMD6/version 6 is a new envelope containing the frozen WireObjectModule
+payload and ordered per-function authority tables. It reuses supplied type/layout,
+field and array geometry. It does not mutate or reserialize a weaker v5 artifact
+for admission. All v3/v4/v5 schemas, generated codecs, hashes and byte contracts
+remain frozen. V6 has six reflected records and three enums; the checked Concept
+schema owns their order/tags, and the generator reuses imported frozen codecs.
+
+- V6 schema SHA-256: `67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d`.
+- Exact minimal reference artifact: 784 bytes, pinned as
+  [evt2g3b_ref.hex](../../internal/concept/testdata/evt2g3b_ref.hex), SHA-256
+  `eb23941570f01a685fe922386a9ecf9b16b24aff18eaf1058fd58b492f7106af`.
+- The 29-function corpus transports 164 location/reference rows and 58 lexical
+  scopes. Its 121,629 bytes comprise a 44-byte header, 80,370-byte embedded object
+  payload and 41,215 bytes of authority metadata. The embedded payload is not
+  claimed to be independently valid v5 input when it contains reference calls.
+
+Existing slot/field/index address, load/store and direct-call operations remain
+canonical. A LIR borrow normalizes to logical CopyValue of a location, with no
+aggregate-copy permission. Only v6 admits that capability-preserving reference
+copy. Internal place locations cannot silently become reference arguments;
+explicit checked borrow or parameter evidence is required. A canonical semantic
+target digest survives representation erasure and is compared across calls.
+Aggregate nominal/layout identity is also retained; equal size never matches types.
+
+The Concept v6 verifier checks target/layout/root bindings, inherited authority,
+source-operation correspondence, scope ancestry, definition dominance, bounds,
+initialization and call compatibility. Reference stores require writable authority.
+Location returns, stores into value slots/aggregates and unclassified escapes are
+rejected. Existing object validation is shared through an explicit context;
+legacy v5 entrypoints always use the empty context and retain their old limits.
+This verifies preservation/consistency of checked input, not the complete source
+borrow graph. Evidence tags and digests identify the producer's checked claims;
+they are not artifact authentication or a way to trust arbitrary user assertions.
+
+### Native realization and object lifetime
+
+After admission, references use pointer-sized Address virtuals in the existing
+GPR allocator. They are not aggregate scalar blobs. The existing Win64 positional
+call planner places their physical addresses in registers or stack arguments;
+the callee retains a typed reference contract and never needs caller frame offsets.
+There is no new Go native reference lowering, allocator, ABI planner or encoder.
+
+Slot/field/index addresses reuse LEA and the existing checked offset/stride
+machinery. Typed dereferences reuse existing GPR/XMM loads/stores and extension
+rules. Borrow copies preserve the address, while explicit source aggregate copies
+create independent memory values. Whole-object assignment through a mutable
+reference updates the original storage. Frame placement remains the existing
+unified model: source/private slots are distinct and not coalesced, so storage
+remains stable across valid borrows, nested scopes, calls and early returns.
+This is a property of these storage instances, not a global stable-address type law.
+
+Only complete initialized local objects and live reference parameters are admitted.
+Storage capacity alone does not create an object. Raw Storage/Initialize/Destroy,
+owned/move/Drop lowering, reference-bearing aggregate copies, arbitrary escapes,
+general standalone array/layout views and hardware address spaces remain outside
+this qualification. Existing source lifetime rules still reject known invalid uses.
+Valid source reference returns currently stop at `LIR_REFERENCE_RETURN_UNSUPPORTED`;
+they need a separately qualified return-lifetime contract. Aggregate by-value,
+indirect and sret parameters/results still stop at
+`AMD64_UNSUPPORTED_AGGREGATE_ABI`, including in a valid v6 module. EVT2g4 is not begun.
+
+The metadata limits are 128 functions/scopes/blocks, 512 location/reference rows
+per function, 64 source slots and 1024 instruction sites. Existing native limits
+remain 64 total source/private slots, 128 compact scalar/location virtuals,
+512 projected instructions, eight scalar/address parameters/arguments and frames
+below 4096 bytes. Overflow fails explicitly; no backend heap fallback is added.
+NoAllocation assertions cover v6 admission and roundtrip. A reference-type
+PlainData assertion is pinned as DISPROVEN; pointer width grants no raw transport
+permission. Fixed-array borrows retain checked extent/stride and runtime guards.
+
+### Does explicit layout still pay off? What about `layout`?
+
+Reference lowering adds zero record packing rules and no reference-specific
+layout engine. Nested field and array-element borrows use the existing checked
+parent/member identities, offsets, element types, extents and strides. The
+selected array index is evaluated when the borrow is constructed; changing the
+index variable afterwards does not retarget the reference.
+
+The source `layout` keyword is useful for static storage-region maps, alignment,
+typed bind views and disjoint-region facts. Examples are
+[fixed storage binding](../../language/evt1/storage/layout-stream/valid/layout_bind_fixed_storage.concept)
+and [aligned regions](../../language/evt1/semantic-facts/valid/fact_disjoint_layout_regions.concept).
+It could describe a fixed backend workspace or ABI probe buffer. A native frame's
+locals/spills/saves/outgoing arguments vary per function, so the current planner
+continues to own final frame placement. Layout geometry does not prove object
+liveness or borrow authority. Native layout/bind-view admission is a separate
+extension, not a new prerequisite or second planner in this milestone.
+
+### Evidence and measurements
+
+Normal/Verify tests execute 29 native functions in a 23,820-byte image, first
+without any domain source/header/C oracle, then with a separately compiled strict
+C11 logical oracle over 100 varied vectors. They cover local mutable/const
+references, integer/float/double fields, nested fields, fixed-array elements,
+legal local and parameter aliases, copy versus reference behavior, mutable/const
+reference parameters, nested calls, live references across scalar calls, early
+returns, whole-object replacement/snapshot and stable storage across shadowed
+lexical scopes. Separate children require UD2 status for negative/out-of-range
+element indices. Replay is not counted as native execution.
+
+Independently compiled C probes call native scalar-reference functions with
+pointer arguments in positions 0, 4 and 7, verifying mutation of the original
+int32/double objects. Generated calls also mix references with floating arguments.
+This qualifies those pointer-parameter placements, not complete external object ABI.
+The exact minimal artifact executes a signed scalar reference read without any
+aggregate type table entry. The original three-function boundary returns 9 natively.
+
+One hundred fresh LIR/artifact/debug generations match; each mode performs 100
+identical native emissions and representative frame/allocation descriptions.
+Normal and Verify images are compared byte-for-byte. Valid artifacts roundtrip
+100 times through the source-free Concept codec in each mode. Twenty-seven
+corruptions reject deterministically, including authority, target, semantic call
+target, root/provenance, layout/field/stride, scope/lifetime, known-not-live object,
+call/result, version/hash, tags/counts, address space and truncation. Roundtrip
+and native failures preserve output/image sentinels.
+
+| Function | Frame bytes | Local/private slots | Native code bytes |
+| --- | ---: | ---: | ---: |
+| Add | 40 | 0 | 171 |
+| Change | 72 | 0 | 407 |
+| Local | 88 | 2 | 911 |
+| Element | 376 | 6 | 2733 |
+| AliasParameters | 40 | 0 | 456 |
+| StackScalar | 104 | 0 | 363 |
+| WholeObject | 136 | 3 | 883 |
+| ScopeStable | 168 | 4 | 1875 |
+| SelectedElement | 360 | 7 | 3305 |
+
+Frames range from 40–376 bytes. Representative local combined admission/planning/
+encoding observations are about 55–58 ms; all-function inspection is about 1.3 s
+and revalidates the artifact per function. The harness separately times repeated
+native reference calls including their checked body and host-loop overhead;
+ten million calls took 34–35 ms in one local run. This is not an isolated ABI
+cost or a broad speed claim. Final timing and gate
+results are in [the closeout report](../history/milestones/EVT2G-CONVERGENCE.md#evt2g3b-closeout).
+
+Full Go regressions, vet, focused race, Standard/DragonGod in both modes, package
+build, generated inspection, source format/lint and diff checks pass. Frozen Zig
+suites are skipped because their compiler/build/test paths are unchanged.
+
+**SUCCESS — EVT2g3b Cathedral checked borrow authority and native references qualified.**

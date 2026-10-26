@@ -1,8 +1,8 @@
 module EVT2g3.SourceReferences;
 profile Core;
 
-// Valid source semantics and C bootstrap behavior. Checked aggregate LIR
-// currently rejects the source-borrow authority before native projection.
+// Historical EVT2g3 boundary. EVT2g3b admits this checked source through
+// CMIRAMD6 and executes its borrows natively; Main returns 9.
 struct Position {
     double x;
     double y;

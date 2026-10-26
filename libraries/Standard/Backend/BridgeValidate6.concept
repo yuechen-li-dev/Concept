@@ -1,0 +1,414 @@
+module Standard.Backend.BridgeValidate6;
+profile Core;
+import Standard.Backend.BridgeCodec6;
+import Standard.Backend.BridgeValidate5;
+enum BorrowError {
+    Malformed, Version, SchemaMismatch, Capacity, Target, Root, Authority, Lifetime, Provenance, Escape,
+    Call, NotLive, ObjectContract, ValueType, Geometry, Operation, Copy, ControlFlow
+}
+string DescribeBorrowError(BorrowError error) {
+    return match (error) {
+        BorrowError::Malformed => "CMIRAMD6_MALFORMED",
+        BorrowError::Version => "CMIRAMD6_VERSION_MISMATCH",
+        BorrowError::SchemaMismatch => "CMIRAMD6_SCHEMA_HASH_MISMATCH",
+        BorrowError::Capacity => "CMIRAMD6_CAPACITY_EXCEEDED",
+        BorrowError::Target => "CMIRAMD6_REFERENCE_TARGET_TYPE",
+        BorrowError::Root => "CMIRAMD6_REFERENCE_ROOT",
+        BorrowError::Authority => "CMIRAMD6_MUTABLE_AUTHORITY_REQUIRED",
+        BorrowError::Lifetime => "CMIRAMD6_REFERENCE_LIFETIME",
+        BorrowError::Provenance => "CMIRAMD6_REFERENCE_PROVENANCE",
+        BorrowError::Escape => "CMIRAMD6_REFERENCE_ESCAPE",
+        BorrowError::Call => "CMIRAMD6_REFERENCE_CALL_SIGNATURE",
+        BorrowError::NotLive => "CMIRAMD6_REFERENCE_TARGET_NOT_LIVE",
+        BorrowError::ValueType => "CMIRAMD6_VALUE_TYPE",
+        BorrowError::Geometry => "CMIRAMD6_LAYOUT_GEOMETRY",
+        BorrowError::Operation => "CMIRAMD6_TYPED_OPERATION",
+        BorrowError::Copy => "CMIRAMD6_COPY_ELIGIBILITY",
+        BorrowError::ControlFlow => "CMIRAMD6_CONTROL_FLOW",
+        BorrowError::ObjectContract => "CMIRAMD6_OBJECT_CONTRACT"
+    };
+}
+BorrowError BorrowObjectError(ObjectError error) {
+    if (error == ObjectError::ValueType) { return BorrowError::ValueType; }
+    if (error == ObjectError::Operation) { return BorrowError::Operation; }
+    if (error == ObjectError::CopyEligibility) { return BorrowError::Copy; }
+    if (error == ObjectError::Provenance) { return BorrowError::Provenance; }
+    if (error == ObjectError::Geometry or error == ObjectError::FieldGeometry or error == ObjectError::ArrayGeometry or error == ObjectError::NestedLayout) {
+        return BorrowError::Geometry;
+    }
+    if (error == ObjectError::ControlFlow) { return BorrowError::ControlFlow; }
+    if (error == ObjectError::StorageState) { return BorrowError::NotLive; }
+    if (error == ObjectError::ImmutableAccess) { return BorrowError::Authority; }
+    if (error == ObjectError::CallSignature) { return BorrowError::Call; }
+    if (error == ObjectError::Capacity) { return BorrowError::Capacity; }
+    return BorrowError::ObjectContract;
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, BorrowError> ReadBorrow(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<T>{0})) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(BorrowError::Malformed)
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, BorrowError> BorrowAt(ref const BridgeReader source, BridgeSequence<T> sequence, int index) {
+    return match (ObjectAt<T>(ref const source, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(BorrowError::Malformed)
+    };
+}
+Result<WireBorrowReference, BorrowError> BorrowReferenceAt(ref const BridgeReader source, WireBorrowFunction meta,
+int value) {
+    for (i in 0 .. meta.References.count) {
+        WireBorrowReference reference = BorrowAt<WireBorrowReference>(ref const source, meta.References,
+        i) ?;
+        if (reference.Value == value) { return Result::Ok(reference); }
+    }
+    return Result::Error(BorrowError::Provenance);
+}
+bool BorrowScopeContains(ref const BridgeReader source, WireBorrowFunction meta, int parent, int child) {
+    int cursor = child;
+    for (i in 0 .. meta.Scopes.count) {
+        if (cursor<0 or cursor >= meta.Scopes.count) { return false; }
+        if (cursor == parent) { return true; }
+        match (BorrowAt<WireBorrowScope>(ref const source, meta.Scopes, cursor)) {
+            Result::Ok(value) => {
+                cursor = value.Parent;
+            }
+            Result::Error(error) => { return false; }
+        }
+    }
+    return false;
+}
+Result<void, BorrowError> BorrowDominators(ref const BridgeReader source, WireObjectFunction owner, ref ObjectAuthorityContext authority) {
+    bool[128] reachable =[false ...];
+    reachable[0] = true;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (i in 0 .. owner.Blocks.count) {
+            WireObjectBlock block = BorrowAt<WireObjectBlock>(ref const source, owner.Blocks, i) ?;
+            if (block.Term.Op != ObjectTerminator::Return and(block.Term.True<0 or block.Term.True >= owner.Blocks.count)) {
+                return Result::Error(BorrowError::ObjectContract);
+            }
+            if (block.Term.Op == ObjectTerminator::Branch and(block.Term.False<0 or block.Term.False >= owner.Blocks.count)) {
+                return Result::Error(BorrowError::ObjectContract);
+            }
+            if (reachable[i]) {
+                if (block.Term.Op != ObjectTerminator::Return and not reachable[block.Term.True]) {
+                    reachable[block.Term.True] = true;
+                    changed = true;
+                }
+                if (block.Term.Op == ObjectTerminator::Branch and not reachable[block.Term.False]) {
+                    reachable[block.Term.False] = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    for (i in 0 .. owner.Blocks.count) {
+        for (j in 0 .. owner.Blocks.count) {
+            authority.dominators[i].items[j] = reachable[i] and reachable[j] and(i != 0 or j == 0);
+        }
+    }
+    changed = true;
+    while (changed) {
+        changed = false;
+        for (i in 1 .. owner.Blocks.count) {
+            if (reachable[i]) {
+                bool[128] incoming =[true ...];
+                for (p in 0 .. owner.Blocks.count) {
+                    WireObjectBlock prior = BorrowAt<WireObjectBlock>(ref const source, owner.Blocks,
+                    p) ?;
+                    bool predecessor =(prior.Term.Op != ObjectTerminator::Return and prior.Term.True == i) or(prior.Term.Op == ObjectTerminator::Branch and prior.Term.False == i);
+                    if (reachable[p] and predecessor) {
+                        for (j in 0 .. owner.Blocks.count) {
+                            incoming[j] = incoming[j] and authority.dominators[p].items[j];
+                        }
+                    }
+                }
+                incoming[i] = true;
+                for (j in 0 .. owner.Blocks.count) {
+                    if (incoming[j] != authority.dominators[i].items[j]) {
+                        authority.dominators[i].items[j] = incoming[j];
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, BorrowError> ValidateBorrowCall(ref const BridgeReader source, WireBorrowModule document,
+WireObjectInstruction in, WireBorrowFunction meta) {
+    WireObjectCall call = BorrowAt<WireObjectCall>(ref const source, in.Calls, 0) ?;
+    int selected = - 1;
+    for (i in 0 .. document.Objects.Functions.count) {
+        WireObjectFunction candidate = BorrowAt<WireObjectFunction>(ref const source, document.Objects.Functions,
+        i) ?;
+        if (ObjectSame(ref const source, candidate.Identity, call.Target)) {
+            selected = i;
+        }
+    }
+    if (selected<0) { return Result::Error(BorrowError::Call); }
+    WireObjectFunction target = BorrowAt<WireObjectFunction>(ref const source, document.Objects.Functions,
+    selected) ?;
+    WireBorrowFunction declared = BorrowAt<WireBorrowFunction>(ref const source, document.Authority,
+    selected) ?;
+    if (target.Params.count != call.Arguments.count) {
+        return Result::Error(BorrowError::Call);
+    }
+    for (i in 0 .. call.Arguments.count) {
+        WireObjectCallArgument arg = BorrowAt<WireObjectCallArgument>(ref const source, call.Arguments,
+        i) ?;
+        WireObjectParameter parameter = BorrowAt<WireObjectParameter>(ref const source, target.Params,
+        i) ?;
+        WireObjectValue value = BorrowAt<WireObjectValue>(ref const source, target.Values, parameter.Value) ?;
+        if (value.Class == ObjectValueClass::Location) {
+            WireBorrowReference supplied = BorrowReferenceAt(ref const source, meta, arg.Value) ?;
+            WireBorrowReference required = BorrowReferenceAt(ref const source, declared, parameter.Value) ?;
+            if (supplied.Evidence == BorrowEvidence::Place or required.Evidence != BorrowEvidence::Parameter or supplied.Target != required.Target or not ObjectSame(ref const source,
+            supplied.SemanticTarget, required.SemanticTarget)) {
+                return Result::Error(BorrowError::Call);
+            }
+            if (required.Mutable and not supplied.Mutable) {
+                return Result::Error(BorrowError::Authority);
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, BorrowError> ValidateBorrowFunction(ref const BridgeReader source, WireBorrowModule document,
+int ordinal) {
+    WireObjectFunction owner = BorrowAt<WireObjectFunction>(ref const source, document.Objects.Functions,
+    ordinal) ?;
+    WireBorrowFunction meta = BorrowAt<WireBorrowFunction>(ref const source, document.Authority, ordinal) ?;
+    if (not ObjectSame(ref const source, owner.Identity, meta.Identity)) {
+        return Result::Error(BorrowError::Provenance);
+    }
+    if (owner.Values.count>512 or owner.Slots.count>64 or owner.Blocks.count <= 0 or owner.Blocks.count>128 or meta.References.count>512 or meta.Scopes.count <= 0 or meta.Scopes.count>128 or meta.Sites.count>1024 or meta.SlotScopes.count != owner.Slots.count) {
+        return Result::Error(BorrowError::Capacity);
+    }
+    for (i in 0 .. meta.Scopes.count) {
+        WireBorrowScope scope = BorrowAt<WireBorrowScope>(ref const source, meta.Scopes, i) ?;
+        if (scope.ID != i or scope.Parent >= i or scope.Parent< - 1 or((i == 0) !=(scope.Parent == - 1)) or scope.Source.Line <= 0 or scope.Source.Column <= 0) {
+            return Result::Error(BorrowError::Lifetime);
+        }
+    }
+    for (i in 0 .. owner.Slots.count) {
+        int scope = BorrowAt<int>(ref const source, meta.SlotScopes, i) ?;
+        if (scope<0 or scope >= meta.Scopes.count) {
+            return Result::Error(BorrowError::Lifetime);
+        }
+    }
+    ObjectAuthorityContext authority = EmptyObjectAuthority();
+    authority.enabled = true;
+    int previous = - 1;
+    for (i in 0 .. meta.References.count) {
+        WireBorrowReference reference = BorrowAt<WireBorrowReference>(ref const source, meta.References,
+        i) ?;
+        if (reference.Value <= previous or reference.Value<0 or reference.Value >= owner.Values.count) {
+            return Result::Error(BorrowError::Provenance);
+        }
+        previous = reference.Value;
+        WireObjectValue value = BorrowAt<WireObjectValue>(ref const source, owner.Values, reference.Value) ?;
+        if (value.Class != ObjectValueClass::Location or value.Type != reference.Target or not ObjectSame(ref const source,
+        value.LayoutIdentity, reference.LayoutIdentity)) {
+            return Result::Error(BorrowError::Target);
+        }
+        if (reference.Lifetime<0 or reference.Lifetime >= meta.Scopes.count or reference.Source.Line <= 0 or reference.Source.Column <= 0) {
+            return Result::Error(BorrowError::Lifetime);
+        }
+        if (reference.Escape != BorrowEscape::NoEscape or reference.Space != ObjectAddressSpace::SystemMemory) {
+            return Result::Error(BorrowError::Escape);
+        }
+        if (not ObjectDigest(ref const source, reference.SemanticTarget)) {
+            return Result::Error(BorrowError::Target);
+        }
+        if (reference.Provenance.length <= 0) {
+            return Result::Error(BorrowError::Provenance);
+        }
+        if (reference.RootKind == BorrowRoot::Local) {
+            if (reference.Root<0 or reference.Root >= owner.Slots.count) {
+                return Result::Error(BorrowError::Root);
+            }
+            int lifetime = BorrowAt<int>(ref const source, meta.SlotScopes, reference.Root) ?;
+            if (not BorrowScopeContains(ref const source, meta, lifetime, reference.Lifetime)) {
+                return Result::Error(BorrowError::Lifetime);
+            }
+            authority.roots[reference.Value] = reference.Root;
+        } else {
+            if (reference.Root<0 or reference.Root >= owner.Params.count) {
+                return Result::Error(BorrowError::Root);
+            }
+            WireObjectParameter parameter = BorrowAt<WireObjectParameter>(ref const source, owner.Params,
+            reference.Root) ?;
+            WireObjectValue paramValue = BorrowAt<WireObjectValue>(ref const source, owner.Values, parameter.Value) ?;
+            if (paramValue.Class != ObjectValueClass::Location) {
+                return Result::Error(BorrowError::Root);
+            }
+            authority.roots[reference.Value] = 64 + reference.Root;
+        }
+        if (reference.Parent >= 0) {
+            if (reference.Parent >= reference.Value or not authority.valid[reference.Parent]) {
+                return Result::Error(BorrowError::Provenance);
+            }
+            WireBorrowReference parent = BorrowReferenceAt(ref const source, meta, reference.Parent) ?;
+            if (parent.RootKind != reference.RootKind or parent.Root != reference.Root or not ObjectSame(ref const source,
+            parent.Provenance, reference.Provenance)) {
+                return Result::Error(BorrowError::Provenance);
+            }
+            if (not BorrowScopeContains(ref const source, meta, parent.Lifetime, reference.Lifetime)) {
+                return Result::Error(BorrowError::Lifetime);
+            }
+            if (reference.Mutable and not parent.Mutable) {
+                return Result::Error(BorrowError::Authority);
+            }
+        } else if (reference.Evidence == BorrowEvidence::Parameter) {
+            if (reference.RootKind != BorrowRoot::Parameter or reference.Lifetime != 0) {
+                return Result::Error(BorrowError::Root);
+            }
+            WireObjectParameter parameter = BorrowAt<WireObjectParameter>(ref const source, owner.Params,
+            reference.Root) ?;
+            if (parameter.Value != reference.Value or parameter.Type != reference.Target) {
+                return Result::Error(BorrowError::Target);
+            }
+        } else if (reference.RootKind != BorrowRoot::Local or reference.Evidence != BorrowEvidence::Place) {
+            return Result::Error(BorrowError::Root);
+        }
+        authority.valid[reference.Value] = true;
+        authority.writable[reference.Value] = reference.Mutable;
+    }
+    for (i in 0 .. owner.Values.count) {
+        WireObjectValue value = BorrowAt<WireObjectValue>(ref const source, owner.Values, i) ?;
+        if ((value.Class == ObjectValueClass::Location) != authority.valid[i]) {
+            return Result::Error(BorrowError::Provenance);
+        }
+    }
+    int siteIndex = 0;
+    // Bind scope/origin metadata to the actual operation, not display names.
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = BorrowAt<WireObjectBlock>(ref const source, owner.Blocks, bi) ?;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction in = BorrowAt<WireObjectInstruction>(ref const source, block.Instructions,
+            ii) ?;
+            WireBorrowSite site = BorrowAt<WireBorrowSite>(ref const source, meta.Sites, siteIndex) ?;
+            siteIndex += 1;
+            if (site.Block != bi or site.Instruction != ii or site.Scope<0 or site.Scope >= meta.Scopes.count) {
+                return Result::Error(BorrowError::Lifetime);
+            }
+            if (in.Result >= 0 and in.Result<owner.Values.count and authority.valid[in.Result]) {
+                WireBorrowReference reference = BorrowReferenceAt(ref const source, meta, in.Result) ?;
+                if (reference.Source.Line != in.Source.Line or reference.Source.Column != in.Source.Column or reference.Lifetime != site.Scope) {
+                    return Result::Error(BorrowError::Provenance);
+                }
+                if (in.Op == ObjectOpcode::SlotAddress) {
+                    if (reference.RootKind != BorrowRoot::Local or reference.Root != in.Slot or reference.Parent != - 1 or reference.Evidence != BorrowEvidence::Place) {
+                        return Result::Error(BorrowError::Root);
+                    }
+                } else {
+                    WireObjectValueUse base = BorrowAt<WireObjectValueUse>(ref const source, in.Args,
+                    0) ?;
+                    if (base.Value != reference.Parent) {
+                        return Result::Error(BorrowError::Provenance);
+                    }
+                    if (in.Op == ObjectOpcode::CopyValue) {
+                        WireBorrowReference parent = BorrowReferenceAt(ref const source, meta, base.Value) ?;
+                        if (reference.Evidence != BorrowEvidence::Borrow or reference.Target != parent.Target or not ObjectSame(ref const source,
+                        reference.SemanticTarget, parent.SemanticTarget)) {
+                            return Result::Error(BorrowError::Target);
+                        }
+                    } else if (reference.Evidence != BorrowEvidence::Place or(in.Op != ObjectOpcode::FieldAddress and in.Op != ObjectOpcode::IndexAddress)) {
+                        return Result::Error(BorrowError::Provenance);
+                    }
+                }
+                authority.definitionBlocks[in.Result] = bi;
+            }
+            for (ai in 0 .. in.Args.count) {
+                WireObjectValueUse use = BorrowAt<WireObjectValueUse>(ref const source, in.Args, ai) ?;
+                if (use.Value >= 0 and use.Value<owner.Values.count and authority.valid[use.Value]) {
+                    WireBorrowReference reference = BorrowReferenceAt(ref const source, meta, use.Value) ?;
+                    if (not BorrowScopeContains(ref const source, meta, reference.Lifetime, site.Scope)) {
+                        return Result::Error(BorrowError::Lifetime);
+                    }
+                }
+            }
+            if (in.Op == ObjectOpcode::Call) {
+                ValidateBorrowCall(ref const source, document, in, meta) ?;
+            }
+        }
+    }
+    if (siteIndex != meta.Sites.count) { return Result::Error(BorrowError::Lifetime); }
+    BorrowDominators(ref const source, owner, ref authority) ?;
+    match (ValidateObjectFunctionContract(ref const source, document.Objects, owner, ref const authority)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BorrowObjectError(error)); }
+    }
+    return Result::Ok();
+}
+Result<void, BorrowError> ValidateBorrowMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadBorrowBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => {
+            if (error == BackendError::BridgeVersion) {
+                return Result::Error(BorrowError::Version);
+            }
+            if (error == BackendError::BridgeSchemaMismatch) {
+                return Result::Error(BorrowError::SchemaMismatch);
+            }
+            return Result::Error(BorrowError::Malformed);
+        }
+    }
+    WireBorrowModule document = ReadBorrow<WireBorrowModule>(ref reader) ?;
+    if (reader.offset != Len(artifact)) { return Result::Error(BorrowError::Malformed); }
+    if (document.Objects.Types.count <= 0 or document.Objects.Types.count>256 or document.Objects.Functions.count <= 0 or document.Objects.Functions.count>128 or document.Authority.count != document.Objects.Functions.count or document.Objects.Dependencies.count>128) {
+        return Result::Error(BorrowError::Capacity);
+    }
+    match (ValidateObjectTypeContract(ref const reader, document.Objects, false)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BorrowObjectError(error)); }
+    }
+    for (i in 0 .. document.Objects.Dependencies.count) {
+        WireObjectDependency dependency = BorrowAt<WireObjectDependency>(ref const reader, document.Objects.Dependencies,
+        i) ?;
+        if (dependency.Identity.length <= 0 or not ObjectDigest(ref const reader, dependency.Digest)) {
+            return Result::Error(BorrowError::Provenance);
+        }
+        for (j in 0 .. i) {
+            WireObjectDependency prior = BorrowAt<WireObjectDependency>(ref const reader, document.Objects.Dependencies,
+            j) ?;
+            if (ObjectSame(ref const reader, dependency.Identity, prior.Identity)) {
+                return Result::Error(BorrowError::Provenance);
+            }
+        }
+    }
+    for (i in 0 .. document.Objects.Functions.count) {
+        ValidateBorrowFunction(ref const reader, document, i) ?;
+    }
+    return Result::Ok();
+}
+Result<int, BorrowError> ValidatedBorrowBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidateBorrowMachineBridge(artifact) ?;
+    if (Len(output)<Len(artifact)) { return Result::Error(BorrowError::Capacity); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadBorrowBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BorrowError::Malformed); }
+    }
+    int header = reader.offset;
+    WireBorrowModule document = ReadBorrow<WireBorrowModule>(ref reader) ?;
+    for (i in 0 .. header) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, header};
+    match (WriteWire(ref const document, ref const reader, ref writer)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BorrowError::Malformed); }
+    }
+    return Result::Ok(writer.offset);
+}
+void BorrowContractFacts() {
+    Assert.Concept<NoAllocation>(ValidateBorrowMachineBridge, "bounded reference identity and scope tables");
+    Assert.Concept<NoAllocation>(ValidatedBorrowBridgeRoundTrip, "caller-owned output, no metadata heap fallback");
+}

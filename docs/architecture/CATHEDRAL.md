@@ -255,6 +255,8 @@ locations do not fabricate those semantics. See the
 
 ## EVT2g3 native local objects
 
+The reference stop below records the EVT2g3 boundary; EVT2g3b supersedes it.
+
 The current v5 path emits native aggregate locals, nested/array fields, typed
 loads/stores, fieldwise value copies, self-assignment and immutable `with`
 updates. `AMD64.Objects` consumes checked size/alignment/offset/extent/stride;
@@ -273,3 +275,27 @@ source-borrow qualification needs checked LIR and a versioned authority/lifetime
 contract. Aggregate parameters/results stop at `AMD64_UNSUPPORTED_AGGREGATE_ABI`;
 EVT2g4 is not begun. This is meaningful progression rather than full EVT2g3
 reference closure. See [support, evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b checked borrow authority and native references
+
+An address locates storage; a reference names a live object with checked access
+authority. The frontend retains existing authority over reference typing,
+liveness, mutability, lexical lifetimes and escape rules. Its checked witness
+feeds typed reference LIR and CMIRAMD6, rather than an unqualified integer address.
+No new borrow checker or user-proposition trust path is introduced.
+
+V6 wraps the frozen v5 object payload with reference roots, canonical semantic
+targets, authority, lexical scopes, provenance and non-escape metadata. Its
+Concept schema derives transport; v3/v4/v5 stay frozen. Concept verifies the
+relationships and realizes admitted references using the existing Address/GPR,
+frame, memory and Win64 scalar-call machinery. Callee parameter roots do not
+contain caller frame offsets. Separate parameter IDs never imply disjointness.
+
+Native qualification covers local/field/nested/array-element references,
+mutable/const direct parameters, legal aliases, nested calls, stable storage,
+snapshots and whole-object replacement. Artifact-only and separate C-oracle
+Normal/Verify runs execute 29 functions / 23,820 bytes; the original three-function
+borrow boundary returns 9 natively. Reference returns, raw/owned/Drop lifetimes,
+general layout/bind views and aggregate by-value/indirect/sret ABI remain outside
+the qualification. The aggregate ABI stop is retained in v6; EVT2g4 is not begun.
+See [the reference contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).

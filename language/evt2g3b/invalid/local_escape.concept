@@ -1,0 +1,9 @@
+profile Core;
+struct Position {
+    double x;
+    double y;
+}
+ref Position Bad() {
+    Position value = Position{1.0, 2.0};
+    return ref value;
+}

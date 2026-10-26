@@ -1,0 +1,188 @@
+module EVT2g3b.References;
+profile Core;
+
+struct Position {
+    double x;
+    double y;
+    int count;
+    float energy;
+}
+struct Particle {
+    Position position;
+    double mass;
+}
+struct Rack {
+    Position<array>[3] entries;
+}
+record struct Pair {
+    double x;
+    double y;
+}
+
+int Pass(int value) {
+    return value;
+}
+double Scale(double value) {
+    return value * 2.0;
+}
+void Add(ref int value, int delta) {
+    value = value + delta;
+}
+void Set(ref double value, double next) {
+    value = next;
+}
+void SetEnergy(ref float value, float next) {
+    value = next;
+}
+void Change(ref Position p, double delta) {
+    p.x = p.x + delta;
+    Add(ref p.count, 2);
+}
+double Read(ref const Position p) {
+    return p.x + p.y;
+}
+double ReadPair(ref const Pair p) {
+    return p.x + p.y;
+}
+void Nested(ref Particle particle, double value) {
+    Set(ref particle.position.x, value);
+    Change(ref particle.position, 2.0);
+}
+double Local(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref Position alias = ref p;
+    alias.x = 7.0;
+    ref const Position read = ref const p;
+    return read.x + p.y;
+}
+double Fields(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref int count = ref p.count;
+    count = 19;
+    ref double x = ref p.x;
+    x = value + 5.0;
+    ref float energy = ref p.energy;
+    SetEnergy(ref energy, 7.0);
+    Add(ref count, 2);
+    return x + p.y;
+}
+int IntegerField(int value) {
+    Position p = Position{1.0, 2.0, value, 4.0};
+    ref int count = ref p.count;
+    Add(ref count, 3);
+    return p.count;
+}
+float FloatField(float value) {
+    Position p = Position{1.0, 2.0, 3, value};
+    ref float energy = ref p.energy;
+    SetEnergy(ref energy, 7.0);
+    return p.energy;
+}
+double NestedField(double value) {
+    Particle p = Particle {
+        Position{1.0, 2.0, 3, 4.0}, 5.0
+    };
+    ref double x = ref p.position.x;
+    x = value;
+    Nested(ref p, value + 1.0);
+    return p.position.x + p.position.y;
+}
+double Element(int index, double value) {
+    Rack rack = Rack {
+        [Position{1.0, 2.0, 3, 4.0}
+        ...]
+    };
+    ref Position item = ref rack.entries[index];
+    Change(ref item, value);
+    return rack.entries[index].x + item.y;
+}
+double Aliases(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref Position first = ref p;
+    ref Position second = ref p;
+    first.x = 7.0;
+    second.y = first.x + 1.0;
+    AliasParameters(ref first, ref second);
+    return p.x + p.y;
+}
+void AliasParameters(ref Position first, ref Position second) {
+    first.x = 7.0;
+    second.y = first.x + 1.0;
+}
+double CopyVersusReference(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    Position copy = p;
+    ref Position alias = ref p;
+    alias.x = 9.0;
+    return copy.x + p.x;
+}
+double Calls(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    Change(ref p, 3.0);
+    double ignored = Scale(value);
+    return Read(ref const p);
+}
+double AcrossCall(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref Position alias = ref p;
+    double next = Scale(value);
+    Set(ref alias.x, next);
+    return alias.x + alias.y;
+}
+double Early(bool early, double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref Position alias = ref p;
+    if (early) {
+        Set(ref alias.x, 7.0);
+        return alias.x;
+    }
+    return alias.x + alias.y;
+}
+int StackScalar(int a, int b, int c, int d, ref int count, int f, int g, ref double value) {
+    Add(ref count, Pass(a));
+    Set(ref value, 9.0);
+    return count;
+}
+int StackCaller(int input) {
+    Position p = Position{1.0, 2.0, input, 4.0};
+    return StackScalar(3, 4, 5, 6, ref p.count, 7, 8, ref p.x);
+}
+double Immutable(double value) {
+    Pair p = Pair{value, 2.0};
+    return ReadPair(ref const p);
+}
+void Replace(ref Position p, double value) {
+    p = Position{value, 3.0, 5, 7.0};
+}
+double Snapshot(ref const Position p) {
+    Position copy = p;
+    return copy.x + copy.y;
+}
+double WholeObject(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref Position alias = ref p;
+    double before = Snapshot(ref const p);
+    Replace(ref p, 9.0);
+    return before + alias.x;
+}
+double ScopeStable(double value) {
+    Position p = Position{value, 2.0, 3, 4.0};
+    ref double held = ref p.x;
+    {
+        Position p = Position{1.0, 2.0, 3, 4.0};
+        Change(ref p, 4.0);
+    }
+    held = 7.0;
+    return p.x + p.y;
+}
+double SelectedElement() {
+    Rack rack = Rack {
+        [Position{1.0, 2.0, 3, 4.0}
+        ...]
+    };
+    int index = 0;
+    ref Position item = ref rack.entries[index];
+    index = 1;
+    Change(ref item, 4.0);
+    return rack.entries[0].x + rack.entries[1].x;
+}

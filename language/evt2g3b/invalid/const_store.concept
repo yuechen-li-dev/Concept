@@ -1,0 +1,8 @@
+profile Core;
+struct Position {
+    double x;
+    double y;
+}
+void Bad(ref const Position p) {
+    p.x = 7.0;
+}

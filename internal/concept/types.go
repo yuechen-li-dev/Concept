@@ -1188,6 +1188,7 @@ func (*MoveExpr) evt1Expr()        {}
 func (e *MoveExpr) exprSpan() Span { return e.Span }
 
 type RefExpr struct {
+	checkedBorrow       *checkedBorrowOrigin
 	Value               Expr   `json:"value"`
 	Const               bool   `json:"const,omitempty"`
 	DynInterface        string `json:"dyn_interface,omitempty"`

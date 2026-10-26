@@ -86,12 +86,17 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 			return LIRModule{}, fmt.Errorf("%s: %w", fn.Name, err)
 		}
 		b.newBlock()
-		for _, p := range fn.Params {
+		for ordinal, p := range fn.Params {
 			t, e := b.lowerType(p.Type)
 			if e != nil {
 				return LIRModule{}, fmt.Errorf("%s: %w", fn.Name, e)
 			}
-			if p.Type.Kind == TypeArray {
+			if p.Type.isReference() {
+				id := b.value()
+				b.fn.Params = append(b.fn.Params, LIRValue{ID: id, Type: t})
+				b.names[p.Name] = lirBinding{value: id, typ: p.Type}
+				b.referenceParameter(id, ordinal, p.Type, lirAddressTarget(t))
+			} else if p.Type.Kind == TypeArray {
 				s := b.slot(p.Name, p.Type)
 				id := b.value()
 				b.fn.Params = append(b.fn.Params, LIRValue{ID: id, Type: t})
@@ -112,6 +117,19 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		}
 		if err = b.block(*fn.SemanticBody); err != nil {
 			return LIRModule{}, fmt.Errorf("%s: %w", fn.Name, err)
+		}
+		if b.borrowErr != nil {
+			return LIRModule{}, b.borrowErr
+		}
+		if b.hasBorrow {
+			b.fn.Borrow = &LIRBorrowContract{Scopes: b.scopes, SlotScopes: b.slotScopes, References: b.references}
+		} else {
+			for bi := range b.fn.Blocks {
+				for ii := range b.fn.Blocks[bi].Instructions {
+					b.fn.Blocks[bi].Instructions[ii].Scope = 0
+				}
+				b.fn.Blocks[bi].Term.Scope = 0
+			}
 		}
 		if b.fn.Blocks[b.current].Term.Op == "" {
 			if b.fn.Result != "void" {
@@ -185,6 +203,12 @@ type lirBinding struct {
 	local bool
 }
 type lirBuilder struct {
+	scope         int
+	scopes        []LIRBorrowScope
+	slotScopes    []int
+	references    []LIRBorrowReference
+	hasBorrow     bool
+	borrowErr     error
 	mir           MIRFunction
 	plan          FunctionPlan
 	env           *semanticEnv
@@ -209,10 +233,20 @@ func (b *lirBuilder) newBlock() int {
 	b.fn.Blocks = append(b.fn.Blocks, LIRBlock{ID: n})
 	return n
 }
-func (b *lirBuilder) terminate(t LIRTerminator) { b.fn.Blocks[b.current].Term = t }
+func (b *lirBuilder) terminate(t LIRTerminator) {
+	if t.Op == "return" && b.fn.Result == "void" {
+		t.Value = -1
+	}
+	t.Scope = b.scope
+	b.fn.Blocks[b.current].Term = t
+}
 func (b *lirBuilder) emit(in LIRInstruction) int {
 	if in.Result >= 0 {
 		in.Result = b.value()
+	}
+	in.Scope = b.scope
+	if b.aggregates != nil && b.machine == nil {
+		b.noteLocation(in)
 	}
 	b.fn.Blocks[b.current].Instructions = append(b.fn.Blocks[b.current].Instructions, in)
 	return in.Result
@@ -226,12 +260,20 @@ func (b *lirBuilder) slot(name string, t Type) int {
 		s.Extent = t.ArrayLength
 	}
 	b.fn.Slots = append(b.fn.Slots, s)
+	b.slotScopes = append(b.slotScopes, b.scope)
 	return id
 }
 func (b *lirBuilder) constant(t LIRType, literal string, span Span) int {
 	return b.emit(LIRInstruction{Op: "const", Result: 0, Type: t, Slot: -1, Literal: literal, Source: span})
 }
 func (b *lirBuilder) block(block Block) error {
+	if len(b.scopes) == 0 {
+		b.scopes = append(b.scopes, LIRBorrowScope{ID: 0, Parent: -1, Source: b.fn.Source})
+	}
+	oldScope := b.scope
+	b.scope = len(b.scopes)
+	b.scopes = append(b.scopes, LIRBorrowScope{ID: b.scope, Parent: oldScope, Source: block.Span})
+	defer func() { b.scope = oldScope }()
 	old := b.names
 	b.names = make(map[string]lirBinding, len(old))
 	for k, v := range old {
@@ -257,6 +299,18 @@ func (b *lirBuilder) statement(stmt Statement) error {
 	case *VarDecl:
 		if s.Comptime {
 			return fmt.Errorf("EVT2_UNSUPPORTED_COMPTIME_LOCAL at %d:%d", s.Span.Line, s.Span.Column)
+		}
+		if s.Type.isReference() {
+			v, t, err := b.expr(s.Value)
+			if err != nil {
+				return err
+			}
+			expected, err := b.lowerType(s.Type)
+			if err != nil || t != expected {
+				return fmt.Errorf("EVT2_REFERENCE_INITIALIZER %s", s.Name)
+			}
+			b.names[s.Name] = lirBinding{value: v, typ: s.Type}
+			return nil
 		}
 		if s.Type.Kind == TypeArray {
 			return fmt.Errorf("EVT2_UNSUPPORTED_LOCAL_ARRAY at %d:%d", s.Span.Line, s.Span.Column)
@@ -329,6 +383,18 @@ func (b *lirBuilder) statement(stmt Statement) error {
 		switch target := s.Target.(type) {
 		case *NameExpr:
 			binding, ok := b.names[target.Name]
+			if ok && binding.typ.isReference() {
+				v, t, err := b.expr(s.Value)
+				if err != nil {
+					return err
+				}
+				expected, err := b.lowerType(binding.typ.valueType())
+				if err != nil || t != expected {
+					return fmt.Errorf("EVT2_REFERENCE_REBIND_UNSUPPORTED")
+				}
+				b.emit(LIRInstruction{Op: "store", Result: -1, Type: t, Args: []int{binding.value, v}, Slot: -1, Source: s.Span})
+				return nil
+			}
 			if !ok || !binding.local {
 				return fmt.Errorf("EVT2_UNSUPPORTED_ASSIGN %s", target.Name)
 			}
@@ -522,6 +588,8 @@ func (b *lirBuilder) foreach(s *ForeachStmt) error {
 
 func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	switch e := expr.(type) {
+	case *RefExpr:
+		return b.borrowExpr(e)
 	case *ParenExpr:
 		return b.expr(e.Value)
 	case *InterpretExpr:
@@ -581,7 +649,7 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 				return 0, "", err
 			}
 			expected, err := b.lowerType(target.Params[i].Type)
-			if err != nil || (!lirCallScalar(expected) && !lirAggregateType(expected)) || actual != expected {
+			if err != nil || (!lirCallScalar(expected) && !lirAggregateType(expected) && !lirReferenceType(expected)) || actual != expected {
 				return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_ARGUMENT %s arg=%d", e.Callee, i)
 			}
 			args = append(args, v)
@@ -611,6 +679,10 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			return 0, "", fmt.Errorf("EVT2_ARRAY_VALUE %s", e.Name)
 		}
 		t, _ := b.lowerType(v.typ)
+		if v.typ.isReference() {
+			target := lirAddressTarget(t)
+			return b.emit(LIRInstruction{Op: "load", Result: 0, Type: target, Args: []int{v.value}, Slot: -1, Source: e.Span}), target, nil
+		}
 		if v.local {
 			return b.emit(LIRInstruction{Op: "load_slot", Result: 0, Type: t, Slot: v.slot, Source: e.Span}), t, nil
 		}

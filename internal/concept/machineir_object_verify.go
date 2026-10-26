@@ -5,6 +5,9 @@ import "fmt"
 // Bootstrap producer consistency. The independent Concept validator owns
 // artifact admission on the Cathedral path. Neither computes field packing.
 func verifyObjectMachine(m ObjectModule) error {
+	return verifyObjectContract(m, nil)
+}
+func verifyObjectContract(m ObjectModule, authority []BorrowFunction) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD5_%s", s) }
 	if len(m.Types) == 0 || len(m.Types) > 256 || len(m.Functions) == 0 || len(m.Functions) > 128 || len(m.Dependencies) > 128 {
 		return bad("CAPACITY")
@@ -84,7 +87,7 @@ func verifyObjectMachine(m ObjectModule) error {
 			types[i] = LIRType(t.Kind)
 		}
 	}
-	if len(layouts) == 0 {
+	if len(layouts) == 0 && authority == nil {
 		return bad("MISSING_AGGREGATE_LAYOUT")
 	}
 	lir := LIRModule{Aggregates: layouts}
@@ -95,7 +98,7 @@ func verifyObjectMachine(m ObjectModule) error {
 		}
 		return types[id], nil
 	}
-	for _, f := range m.Functions {
+	for fi, f := range m.Functions {
 		if f.Target != "amd64-windows" || f.ABI != "win64" || len(f.Values) > 512 || len(f.Slots) > 64 || len(f.Blocks) > 128 || len(f.Blocks) == 0 || len(f.Params) > 32 || f.Source.Line <= 0 || f.Source.Column <= 0 {
 			return bad("FUNCTION")
 		}
@@ -104,6 +107,13 @@ func verifyObjectMachine(m ObjectModule) error {
 			return e
 		}
 		lf := LIRFunction{Identity: f.Identity, Name: f.Name, Result: result, Source: Span{Line: f.Source.Line, Column: f.Source.Column}, Facts: f.Facts, Decisions: f.Decisions}
+		if authority != nil {
+			var err error
+			lf.Borrow, err = borrowLIRContract(authority[fi], f, types)
+			if err != nil {
+				return err
+			}
+		}
 		defs := make([]int, len(f.Values))
 		valueType := func(id int) (LIRType, error) {
 			if id < 0 || id >= len(f.Values) {
@@ -115,6 +125,13 @@ func verifyObjectMachine(m ObjectModule) error {
 				return "", e
 			}
 			if v.Class == "location" {
+				if lf.Borrow != nil {
+					for _, ref := range lf.Borrow.References {
+						if ref.Value == id && ref.Evidence != "checked_place" {
+							return lirReference(t, ref.Mutable), nil
+						}
+					}
+				}
 				return lirPointer(t), nil
 			}
 			return t, nil
@@ -132,7 +149,7 @@ func verifyObjectMachine(m ObjectModule) error {
 			}
 		}
 		for i, p := range f.Params {
-			if p.Index != i || p.Value < 0 || p.Value >= len(f.Values) || p.Type != f.Values[p.Value].Type || f.Values[p.Value].Class == "location" {
+			if p.Index != i || p.Value < 0 || p.Value >= len(f.Values) || p.Type != f.Values[p.Value].Type || f.Values[p.Value].Class == "location" && authority == nil {
 				return bad("PARAMETER")
 			}
 			t, e := valueType(p.Value)
@@ -164,7 +181,7 @@ func verifyObjectMachine(m ObjectModule) error {
 				return bad("BLOCK")
 			}
 			lb := LIRBlock{ID: b.ID, Term: LIRTerminator{Op: b.Term.Op, Value: b.Term.Value, True: b.Term.True, False: b.Term.False, Source: Span{Line: b.Term.Source.Line, Column: b.Term.Source.Column}}}
-			for _, in := range b.Instructions {
+			for ii, in := range b.Instructions {
 				count++
 				if count > 1024 || in.LIRBlock != bi || in.LIRInstruction < 0 || in.Source.Line <= 0 || in.Source.Column <= 0 {
 					return bad("OPERATION_PROVENANCE")
@@ -178,7 +195,7 @@ func verifyObjectMachine(m ObjectModule) error {
 				}
 				wantCopy := "none"
 				kind := m.Types[in.Type].Kind
-				if (kind == "aggregate" || kind == "array") && (in.Op == "copy_value" || in.Op == "replace_member" || in.Op == "initialize_slot" || in.Op == "load_slot" || in.Op == "store_slot" || in.Op == "load" || in.Op == "store") {
+				if (kind == "aggregate" || kind == "array") && !(authority != nil && in.Op == "copy_value" && in.Result >= 0 && in.Result < len(f.Values) && f.Values[in.Result].Class == "location") && (in.Op == "copy_value" || in.Op == "replace_member" || in.Op == "initialize_slot" || in.Op == "load_slot" || in.Op == "store_slot" || in.Op == "load" || in.Op == "store") {
 					wantCopy = "checked_value"
 				}
 				if in.Copy != wantCopy {
@@ -195,6 +212,12 @@ func verifyObjectMachine(m ObjectModule) error {
 					}
 				}
 				li := LIRInstruction{Op: in.Op, Result: in.Result, Type: t, Slot: in.Slot, Member: in.Member, FrameOffset: in.Offset, Extent: in.Extent, Stride: in.Stride, Literal: in.Literal, Source: Span{Line: in.Source.Line, Column: in.Source.Column}, Decision: in.Decision, Facts: in.Facts}
+				if authority != nil {
+					li.Scope = borrowSiteScope(authority[fi], bi, ii)
+					if in.Op == "copy_value" && in.Result >= 0 && f.Values[in.Result].Class == "location" {
+						li.Op = "borrow"
+					}
+				}
 				if in.ParentType != -1 {
 					li.Aggregate, e = typeAt(in.ParentType)
 					if e != nil {
@@ -225,6 +248,12 @@ func verifyObjectMachine(m ObjectModule) error {
 						at, e := typeAt(a.Type)
 						if e != nil {
 							return e
+						}
+						if authority != nil && a.Value >= 0 && a.Value < len(f.Values) && f.Values[a.Value].Class == "location" {
+							at, e = valueType(a.Value)
+							if e != nil {
+								return e
+							}
 						}
 						if a.Value != in.Args[i].Value {
 							return bad("CALL_SIGNATURE")

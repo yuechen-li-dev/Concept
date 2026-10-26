@@ -24,7 +24,7 @@ func verifyLIRAggregateFunction(f LIRFunction, layouts map[LIRType]LIRAggregateL
 				return fmt.Errorf("LIR_UNKNOWN_OBJECT_TYPE %s", t)
 			}
 		}
-		if strings.HasPrefix(string(t), "ptr<") && strings.Contains(string(t), "aggregate:") {
+		if strings.HasPrefix(string(t), "ptr<") && strings.Contains(string(t), "aggregate:") && f.Borrow == nil {
 			return fmt.Errorf("LIR_OBJECT_REFERENCE_NOT_QUALIFIED %s", t)
 		}
 		return nil
@@ -133,11 +133,17 @@ func verifyLIRAggregateFunction(f LIRFunction, layouts map[LIRType]LIRAggregateL
 		}
 		locations := map[int]LIRType{}
 		writable := map[int]bool{}
+		if f.Borrow != nil {
+			for _, r := range f.Borrow.References {
+				locations[r.Value] = r.Target
+				writable[r.Value] = r.Mutable
+			}
+		}
 		for _, in := range block.Instructions {
 			// Object locations are compiler-internal address derivations, not
 			// source references. This slice cannot return, store or pass them.
 			for ai, arg := range in.Args {
-				if _, location := locations[arg]; location && (in.Op == "call" || in.Op == "initialize_slot" || in.Op == "store_slot" || in.Op == "store" && ai == 1) {
+				if _, location := locations[arg]; location && (in.Op == "call" && f.Borrow == nil || in.Op == "initialize_slot" || in.Op == "store_slot" || in.Op == "store" && ai == 1) {
 					return fmt.Errorf("LIR_OBJECT_ADDRESS_ESCAPE b%d", bi)
 				}
 			}

@@ -1,0 +1,15 @@
+profile Core;
+struct Position {
+    double x;
+    double y;
+}
+void Reset(ref Position p) {
+    p.x = 0.0;
+}
+requires compiler.InvalidatesBorrows(Reset, p);
+double Bad() {
+    Position p = Position{1.0, 2.0};
+    ref const double held = ref const p.x;
+    Reset(ref p);
+    return held;
+}

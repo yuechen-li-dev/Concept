@@ -93,10 +93,14 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	var representation string
 	scalar := module.Name == "Standard.Backend.BridgeSchema4"
 	object := module.Name == "Standard.Backend.BridgeSchema5"
-	modern := scalar || object
+	borrow := module.Name == "Standard.Backend.BridgeSchema6"
+	modern := scalar || object || borrow
 	prefix := "Scalar"
 	if object {
 		prefix = "Object"
+	}
+	if borrow {
+		prefix = "Borrow"
 	}
 	if module.Name != "Standard.Backend.BridgeSchema" && !modern {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
@@ -201,6 +205,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	if object {
 		rootName, headerName = "WireObjectModule", "WireObjectHeader"
 	}
+	if borrow {
+		rootName, headerName = "WireBorrowModule", "WireBorrowHeader"
+	}
 	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
 	}
@@ -213,6 +220,13 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	emitter := bridgeGoEmitter{records: map[string]bridgeSchemaRecord{}}
 	for _, r := range def.Records {
 		emitter.records[r.Name] = r
+	}
+	// Explicit reuse of frozen v5 codecs, never a duplicated field definition.
+	if borrow {
+		emitter.sharedObject = true
+		for _, name := range []string{"WireObjectModule", "WireObjectSpan"} {
+			emitter.records[name] = bridgeSchemaRecord{Name: name}
+		}
 	}
 	headerSize := 0
 	for _, field := range emitter.records[headerName].Fields {
@@ -366,10 +380,16 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		if object {
 			suffix, lower = "5", "object"
 		}
+		if borrow {
+			suffix, lower = "6", "borrow"
+		}
 		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", prefix+"MachineBridge")
 		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema"+suffix+";")
 		goText = strings.ReplaceAll(goText, "bridgeTags", lower+"BridgeTags")
 		goText = strings.ReplaceAll(goText, "bridgeWireHeader", lower+"BridgeWireHeader")
+		if borrow {
+			goText = strings.ReplaceAll(goText, "borrowBridgeTagsObjectAddressSpace", "objectBridgeTagsObjectAddressSpace")
+		}
 		goBytes = []byte(goText)
 		conceptText := strings.NewReplacer(
 			"module Standard.Backend.BridgeCodec;", "module Standard.Backend.BridgeCodec"+suffix+";",
@@ -381,6 +401,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			"BridgeMagic[i]", prefix+"BridgeMagic[i]",
 			"header.version != BridgeVersion", "header.version != "+prefix+"BridgeVersion",
 		).Replace(conceptSource.String())
+		if borrow {
+			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec5;")
+		}
 		conceptSource.Reset()
 		conceptSource.WriteString(conceptText)
 	}
@@ -397,7 +420,10 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	return out, nil
 }
 
-type bridgeGoEmitter struct{ records map[string]bridgeSchemaRecord }
+type bridgeGoEmitter struct {
+	records      map[string]bridgeSchemaRecord
+	sharedObject bool
+}
 
 func bridgeFixedWireSize(t bridgeSchemaType) (int, error) {
 	switch t.Name {
@@ -418,6 +444,9 @@ func bridgeFixedWireSize(t bridgeSchemaType) (int, error) {
 }
 
 func (e bridgeGoEmitter) write(t bridgeSchemaType, v string) (string, error) {
+	if e.sharedObject && t.Name == "ObjectAddressSpace" {
+		return "w.tag(objectBridgeTagsObjectAddressSpace," + v + ")", nil
+	}
 	switch t.Name {
 	case "uint32", "uint":
 		return "w.u32(int(" + v + "))", nil
@@ -453,6 +482,9 @@ func (e bridgeGoEmitter) write(t bridgeSchemaType, v string) (string, error) {
 	return "", fmt.Errorf("MIR_BRIDGE_SCHEMA_WIRE_TYPE %+v", t)
 }
 func (e bridgeGoEmitter) read(t bridgeSchemaType) (string, error) {
+	if e.sharedObject && t.Name == "ObjectAddressSpace" {
+		return "r.tag(objectBridgeTagsObjectAddressSpace)", nil
+	}
 	switch t.Name {
 	case "uint32", "uint":
 		return "r.u32()", nil
@@ -490,6 +522,9 @@ func (e bridgeGoEmitter) read(t bridgeSchemaType) (string, error) {
 	return "", fmt.Errorf("MIR_BRIDGE_SCHEMA_WIRE_TYPE %+v", t)
 }
 func (e bridgeGoEmitter) goType(t bridgeSchemaType) string {
+	if e.sharedObject && t.Name == "ObjectAddressSpace" {
+		return "string"
+	}
 	switch t.Name {
 	case "BridgeSequence":
 		if len(t.Arguments) == 1 {

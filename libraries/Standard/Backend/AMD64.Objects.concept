@@ -1,7 +1,6 @@
 module Standard.Backend.AMD64.Objects;
 profile Core;
 import Standard.Backend.AMD64.Encoding;
-
 // Aggregate values are private typed frame objects, never scalar virtuals.
 // Scalar/location IDs alone enter the existing register allocator.
 struct ObjectPlacement {
@@ -14,8 +13,24 @@ ObjectPlacement EmptyObjectPlacement() {
 }
 Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        ReadBorrowBridgeIdentity(ref reader) ?;
+        WireBorrowModule document = ReadWire(ref reader, BridgeType<WireBorrowModule>{0}) ?;
+        return Result::Ok(document.Objects);
+    }
     ReadObjectBridgeIdentity(ref reader) ?;
     return ReadWire(ref reader, BridgeType<WireObjectModule>{0});
+}
+Result<WireBorrowModule, BackendError> NativeBorrowDocument(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadBorrowBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WireBorrowModule>{0});
+}
+Result<WireObjectModule, NativeError> AdmittedObjectDocument(ReadOnlySpan<byte> artifact) {
+    return match (NativeObjectDocument(artifact)) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput)
+    };
 }
 template <typename T> requires BridgeReadable<T>
 Result<T, BackendError> NativeObjectAt(ref const BridgeReader reader, BridgeSequence<T> sequence, int index) {
@@ -241,7 +256,6 @@ WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement plac
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> ObjectStackAddress(ref ByteWriter writer, Register target, int offset) {
     if (offset < 0 or offset >= 4096) { return Result::Error(BackendError::InvalidEncoding); }
     return WriteAddressReg(ref writer, 141, target, 4, - 1, 0, offset, 8);
@@ -290,7 +304,6 @@ void ObjectStorageFacts() {
     Assert.Concept<NoAllocation>(ProjectObjectFunction, "bounded shared allocator/frame input");
     Assert.Concept<NoAllocation>(CopyObjectFields, "bounded emitted scalar transfers, no runtime memcpy");
 }
-
 Result<void, BackendError> ExtendObjectInteger(ref ByteWriter writer, Register reg, ScalarRepresentation type) {
     int width = ScalarWidth(type);
     if (width == 8) { return Result::Ok(); }

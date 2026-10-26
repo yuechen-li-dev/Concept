@@ -11,6 +11,9 @@ import (
 // This is checked semantic production/transport, not object placement, copying
 // or ABI lowering. All aggregate geometry is supplied by the checked LIR.
 func projectObjectMachine(lir LIRModule) (MachineModule, error) {
+	return projectObjectContract(lir, false)
+}
+func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 	out := ObjectModule{}
 	for _, d := range lir.Dependencies {
 		out.Dependencies = append(out.Dependencies, ObjectDependency{Identity: d.ModuleIdentity, Digest: d.ContentSHA256})
@@ -26,6 +29,9 @@ func projectObjectMachine(lir LIRModule) (MachineModule, error) {
 	}
 	var valueType func(LIRType) (int, error)
 	valueType = func(t LIRType) (int, error) {
+		if target := lirAddressTarget(t); target != "" {
+			return valueType(target)
+		}
 		if id, ok := types[t]; ok {
 			return id, nil
 		}
@@ -85,7 +91,7 @@ func projectObjectMachine(lir LIRModule) (MachineModule, error) {
 				return e
 			}
 			class := "scalar"
-			if _, loc := locations[t]; loc {
+			if lirAddressTarget(t) != "" {
 				class = "location"
 			} else if k := out.Types[tid].Kind; k == "aggregate" || k == "array" {
 				class = "aggregate"
@@ -123,6 +129,9 @@ func projectObjectMachine(lir LIRModule) (MachineModule, error) {
 				si := ObjectInstruction{Op: in.Op, Result: in.Result, Type: tid, Slot: in.Slot, ParentType: -1, Member: in.Member, Offset: in.FrameOffset, Extent: in.Extent, Stride: in.Stride, Copy: "none", Literal: in.Literal, LIRBlock: b.ID, LIRInstruction: ii, Source: ObjectSpan{Line: in.Source.Line, Column: in.Source.Column}, Decision: in.Decision, Facts: append([]string(nil), in.Facts...)}
 				for _, a := range in.Args {
 					si.Args = append(si.Args, ObjectValueUse{Value: a})
+				}
+				if in.Op == "borrow" {
+					si.Op = "copy_value"
 				}
 				if in.Aggregate != "" {
 					si.ParentType, e = valueType(in.Aggregate)
@@ -197,6 +206,9 @@ func projectObjectMachine(lir LIRModule) (MachineModule, error) {
 		out.Functions = append(out.Functions, sf)
 	}
 	m := MachineModule{Object: &out}
+	if borrow {
+		return m, nil
+	}
 	return m, VerifyMachineIR(m)
 }
 

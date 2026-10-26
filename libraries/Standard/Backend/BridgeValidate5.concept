@@ -3,7 +3,6 @@ profile Core;
 import Standard.Backend.BridgeCodec5;
 import Standard.Backend.BridgeValidate4;
 import Standard.Semantic.Vocabulary;
-
 enum ObjectError {
     Malformed, Version, SchemaMismatch, Capacity, TypeIdentity, Geometry,
     FieldIdentity, FieldGeometry, NestedLayout, ArrayGeometry, CopyEligibility,
@@ -89,6 +88,10 @@ ScalarRepresentation ObjectScalar(ObjectKind kind) {
     };
 }
 Result<void, ObjectError> ValidateObjectTypes(ref const BridgeReader source, WireObjectModule document) {
+    return ValidateObjectTypeContract(ref const source, document, true);
+}
+Result<void, ObjectError> ValidateObjectTypeContract(ref const BridgeReader source, WireObjectModule document,
+bool requireAggregate) {
     int[256] depths =[0 ...];
     int aggregateCount = 0;
     for (i in 0 .. document.Types.count) {
@@ -174,12 +177,36 @@ Result<void, ObjectError> ValidateObjectTypes(ref const BridgeReader source, Wir
             }
         }
     }
-    if (aggregateCount == 0) { return Result::Error(ObjectError::Geometry); }
+    if (requireAggregate and aggregateCount == 0) {
+        return Result::Error(ObjectError::Geometry);
+    }
     return Result::Ok();
 }
-
+// Optional checked v6 location context. The legacy entrypoints always use the
+// empty context; no CMIRAMD5 wire or admission capability is widened.
+struct ObjectBlockMask {
+    bool[128] items;
+}
+struct ObjectAuthorityContext {
+    bool enabled;
+    bool[512] valid;
+    int[512] roots;
+    bool[512] writable;
+    int[512] definitionBlocks;
+    ObjectBlockMask[128] dominators;
+}
+ObjectAuthorityContext EmptyObjectAuthority() {
+    return ObjectAuthorityContext {
+        false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask{[false ...]}
+        ...]
+    };
+}
 Result<void, ObjectError> ValidateObjectCall(ref const BridgeReader source, WireObjectModule document,
 WireObjectFunction owner, WireObjectInstruction instruction) {
+    return ValidateObjectCallContract(ref const source, document, owner, instruction, false);
+}
+Result<void, ObjectError> ValidateObjectCallContract(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, WireObjectInstruction instruction, bool references) {
     if (instruction.Calls.count != 1) { return Result::Error(ObjectError::CallSignature); }
     WireObjectCall call = ObjectAt<WireObjectCall>(ref const source, instruction.Calls, 0) ?;
     if (not TextEquals(ref const source, call.Convention, "win64") or call.ResultType != instruction.Type or call.Arguments.count != instruction.Args.count or call.Arguments.count > 32) {
@@ -206,15 +233,23 @@ WireObjectFunction owner, WireObjectInstruction instruction) {
         WireObjectParameter parameter = ObjectAt<WireObjectParameter>(ref const source, target.Params,
         i) ?;
         WireObjectValue value = ObjectAt<WireObjectValue>(ref const source, owner.Values, argument.Value) ?;
-        if (argument.Value != use.Value or argument.Type != parameter.Type or argument.Type != value.Type or value.Class == ObjectValueClass::Location) {
+        WireObjectValue declared = ObjectAt<WireObjectValue>(ref const source, target.Values, parameter.Value) ?;
+        if ((declared.Class == ObjectValueClass::Location) !=(value.Class == ObjectValueClass::Location)) {
+            return Result::Error(ObjectError::CallSignature);
+        }
+        if (argument.Value != use.Value or argument.Type != parameter.Type or argument.Type != value.Type or(value.Class == ObjectValueClass::Location and not references)) {
             return Result::Error(ObjectError::CallSignature);
         }
     }
     return Result::Ok();
 }
-
 Result<void, ObjectError> ValidateObjectFunction(ref const BridgeReader source, WireObjectModule document,
 WireObjectFunction owner) {
+    ObjectAuthorityContext authority = EmptyObjectAuthority();
+    return ValidateObjectFunctionContract(ref const source, document, owner, ref const authority);
+}
+Result<void, ObjectError> ValidateObjectFunctionContract(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
     if (owner.Values.count > 512 or owner.Slots.count > 64 or owner.Blocks.count <= 0 or owner.Blocks.count > 128 or owner.Params.count > 32) {
         return Result::Error(ObjectError::Capacity);
     }
@@ -244,7 +279,7 @@ WireObjectFunction owner) {
         if (parameter.Index != i or parameter.Value < 0 or parameter.Value >= owner.Values.count) {
             return Result::Error(ObjectError::ValueType);
         }
-        if (parameter.Type != valueTypes[parameter.Value] or classes[parameter.Value] == ObjectValueClass::Location or parameters[parameter.Value]) {
+        if (parameter.Type != valueTypes[parameter.Value] or(classes[parameter.Value] == ObjectValueClass::Location and not authority.enabled) or parameters[parameter.Value]) {
             return Result::Error(ObjectError::ValueType);
         }
         parameters[parameter.Value] = true;
@@ -267,8 +302,16 @@ WireObjectFunction owner) {
         WireObjectBlock block = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks, bi) ?;
         if (block.ID != bi) { return Result::Error(ObjectError::ControlFlow); }
         bool[512] known = parameters;
-        int[512] roots =[- 1 ...];
-        bool[512] writable =[false ...];
+        int[512] roots = authority.roots;
+        bool[512] writable = authority.writable;
+        if (authority.enabled) {
+            for (v in 0 .. owner.Values.count) {
+                int defined = authority.definitionBlocks[v];
+                if (authority.valid[v] and defined >= 0 and defined != bi and authority.dominators[bi].items[defined]) {
+                    known[v] = true;
+                }
+            }
+        }
         int[512] guards =[0 ...];
         BridgeReader instructions = BridgeReader{source.data, block.Instructions.offset};
         for (ii in 0 .. block.Instructions.count) {
@@ -290,7 +333,8 @@ WireObjectFunction owner) {
                 if (not known[use.Value]) { return Result::Error(ObjectError::ValueType); }
                 args[ai] = use.Value;
             }
-            bool aggregateCopy = ObjectAggregate(type.Kind) and(in.Op == ObjectOpcode::CopyValue or in.Op == ObjectOpcode::ReplaceMember or in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::LoadSlot or in.Op == ObjectOpcode::StoreSlot or in.Op == ObjectOpcode::Load or in.Op == ObjectOpcode::Store);
+            bool referenceCopy = authority.enabled and in.Op == ObjectOpcode::CopyValue and in.Result >= 0 and in.Result < owner.Values.count and classes[in.Result] == ObjectValueClass::Location;
+            bool aggregateCopy = not referenceCopy and ObjectAggregate(type.Kind) and(in.Op == ObjectOpcode::CopyValue or in.Op == ObjectOpcode::ReplaceMember or in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::LoadSlot or in.Op == ObjectOpcode::StoreSlot or in.Op == ObjectOpcode::Load or in.Op == ObjectOpcode::Store);
             if (aggregateCopy !=(in.Copy == ObjectCopyKind::CheckedValue)) {
                 return Result::Error(ObjectError::CopyEligibility);
             }
@@ -308,7 +352,7 @@ WireObjectFunction owner) {
                 if (valueTypes[in.Result] != in.Type or known[in.Result]) {
                     return Result::Error(ObjectError::ValueType);
                 }
-                bool location = in.Op == ObjectOpcode::SlotAddress or in.Op == ObjectOpcode::FieldAddress or in.Op == ObjectOpcode::IndexAddress;
+                bool location = in.Op == ObjectOpcode::SlotAddress or in.Op == ObjectOpcode::FieldAddress or in.Op == ObjectOpcode::IndexAddress or referenceCopy;
                 if (location !=(classes[in.Result] == ObjectValueClass::Location)) {
                     return Result::Error(ObjectError::Provenance);
                 }
@@ -358,7 +402,13 @@ WireObjectFunction owner) {
                     }
                 }
                 ObjectOpcode::CopyValue => {
-                    if (not ObjectAggregate(type.Kind) or in.Args.count != 1 or not operandsAreValues or valueTypes[args[0]] != in.Type) {
+                    if (referenceCopy) {
+                        if (in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type or(authority.writable[in.Result] and not writable[args[0]])) {
+                            return Result::Error(ObjectError::ImmutableAccess);
+                        }
+                        roots[in.Result] = roots[args[0]];
+                        writable[in.Result] = authority.writable[in.Result];
+                    } else if (not ObjectAggregate(type.Kind) or in.Args.count != 1 or not operandsAreValues or valueTypes[args[0]] != in.Type) {
                         return Result::Error(ObjectError::CopyEligibility);
                     }
                 }
@@ -397,7 +447,7 @@ WireObjectFunction owner) {
                     }
                 }
                 ObjectOpcode::SlotAddress => {
-                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 0 or type.Kind != ObjectKind::Aggregate) {
+                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 0 or(type.Kind != ObjectKind::Aggregate and not authority.enabled) or type.Kind == ObjectKind::Void) {
                         return Result::Error(ObjectError::Provenance);
                     }
                     if (slotTypes[in.Slot] != in.Type) {
@@ -457,7 +507,7 @@ WireObjectFunction owner) {
                     writable[in.Result] = writable[args[0]];
                 }
                 ObjectOpcode::Call => {
-                    ValidateObjectCall(ref const source, document, owner, in) ?;
+                    ValidateObjectCallContract(ref const source, document, owner, in, authority.enabled) ?;
                 }
                 ObjectOpcode::FloatNeg => {
                     if (in.Args.count != 1 or not operandsAreValues or valueTypes[args[0]] != in.Type or not ScalarFloating(ObjectScalar(type.Kind))) {
@@ -514,6 +564,11 @@ WireObjectFunction owner) {
                 }
             }
             if (produces) {
+                if (authority.enabled and classes[in.Result] == ObjectValueClass::Location) {
+                    if (not authority.valid[in.Result] or roots[in.Result] != authority.roots[in.Result] or writable[in.Result] != authority.writable[in.Result]) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                }
                 known[in.Result] = true;
             }
         }
@@ -559,7 +614,6 @@ WireObjectFunction owner) {
     }
     return ValidateObjectLifetimes(ref const source, document, owner);
 }
-
 Result<void, ObjectError> ValidateObjectBinary(ref const BridgeReader source, WireObjectModule document,
 WireObjectFunction owner, WireObjectInstruction in, bool floating, bool comparison) {
     if (in.Args.count != 2) { return Result::Error(ObjectError::Operation); }
@@ -583,7 +637,6 @@ WireObjectFunction owner, WireObjectInstruction in, bool floating, bool comparis
     }
     return Result::Ok();
 }
-
 // A bounded forward must analysis. Entry starts empty; reachable joins
 // intersect predecessor live sets. There are no Drop/move/reference states.
 struct ObjectLiveSet {
@@ -700,7 +753,6 @@ WireObjectFunction owner) {
     }
     return Result::Ok();
 }
-
 Result<void, ObjectError> ValidateObjectMachineBridge(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
     match (ReadObjectBridgeIdentity(ref reader)) {

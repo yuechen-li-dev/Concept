@@ -142,6 +142,8 @@ v5 input boundary. EVT2g2 does not begin physical aggregate lowering.
 
 ## EVT2g3 native local-object progression
 
+This is the historical EVT2g3 boundary; current reference status follows below.
+
 | Capability | Current owner/state | Next switch condition |
 | --- | --- | --- |
 | Complete local objects and private aggregate values | Concept `AMD64.Objects`, qualified | Preserve contiguous typed slots and checked size/alignment; retain existing unified frame |
@@ -160,3 +162,23 @@ model is introduced. CMIRAMD3/4/5 remain unchanged. The normal native object
 path now executes 34 scalar-signature functions in artifact-only Normal/Verify
 tests, with separate C semantic comparisons and deterministic native bytes.
 See [the current support and limit inventory](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b checked references
+
+| Capability | Current owner/state | Next transition |
+| --- | --- | --- |
+| Source borrow/lifetime/exclusivity rules | Existing Stage-0 checker, authoritative | Frontend migration only through explicit parity; no native-side rule replacement |
+| Reference LIR and checked source-origin projection | Stage-0 checked input, qualified | Preserve target/authority/root/scope/provenance; do not turn refs into unrestricted integers |
+| Reference artifact | Concept `BridgeSchema6` and generated codecs, qualified | Preserve version/hash, exact bytes and frozen v3/v4/v5 dependencies |
+| Reference consistency admission | Concept `BridgeValidate6`, qualified bounded noescape slice | Source-free malformed/roundtrip checks; explicit capacity; no general proof graph reconstruction |
+| Reference representation and typed memory | Existing Concept AMD64 allocator/encoder, qualified | Reuse Address virtuals and checked fields/strides; no new layout engine |
+| Reference parameter ABI / stable frames | Existing Concept Win64ABI/frame/call infrastructure, qualified | Original storage mutation and register/stack pointer probes; no by-value aggregate reinterpretation |
+| Reference returns / ownership-bearing or general layout views | Explicit checked/native boundary, unqualified | Separate lifetime/return/view contract before admission |
+| Aggregate by-value/indirect/sret ABI | Cathedral intended owner, deferred | EVT2g4 semantic classifier and independent ABI probes |
+
+The local reference/parameter blocker recorded in EVT2g3 is removed. The same
+source now executes natively through a versioned artifact with the domain source
+absent. Legal aliases remain observable, and source copy versus borrow behavior
+differs as specified. Go additions provide checked input, generated transport,
+consistency, orchestration and independent tests. New physical reference policy
+remains in Concept. See [current evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).

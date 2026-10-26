@@ -146,10 +146,8 @@ double Main(){Position p=Position{1.0,2.0};Change(ref p);return Read(ref const p
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := GenerateMachineIR(m); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_OBJECT_AUTHORITY") {
-		t.Fatalf("source borrow contract boundary: %v", err)
-	} else {
-		t.Logf("isolated remaining reference contract: %v", err)
+	if machine, err := GenerateMachineIR(m); err != nil || machine.Borrow == nil {
+		t.Fatalf("source borrow contract must use CMIRAMD6: %v", err)
 	}
 	for _, verify := range []bool{false, true} {
 		policy := ConservativeCompilationPolicy()

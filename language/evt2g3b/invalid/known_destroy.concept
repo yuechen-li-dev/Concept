@@ -1,0 +1,9 @@
+profile Core;
+struct SystemMemory { }
+int Bad(ref int<array>[1] backing) {
+    Address<SystemMemory> address = AddressOf<SystemMemory>(ref backing);
+    Storage<int> storage = bind<int>(address, SizeOf<int>());
+    ref int value = Initialize(storage, 7);
+    Destroy(storage);
+    return value;
+}

@@ -31,6 +31,7 @@ type LIRSlot struct {
 	Facts      []string
 }
 type LIRInstruction struct {
+	Scope       int `json:",omitempty"`
 	Op          string
 	Result      int // -1 for no result
 	Type        LIRType
@@ -53,6 +54,7 @@ type LIRInstruction struct {
 	Facts       []string
 }
 type LIRTerminator struct {
+	Scope  int `json:",omitempty"`
 	Op     string
 	Value  int
 	True   int
@@ -67,6 +69,7 @@ type LIRBlock struct {
 	Term         LIRTerminator
 }
 type LIRFunction struct {
+	Borrow     *LIRBorrowContract `json:",omitempty"`
 	Identity   string
 	Name       string
 	Params     []LIRValue
@@ -181,6 +184,14 @@ func (m LIRModule) String() string {
 		for _, decision := range f.Decisions {
 			fmt.Fprintf(&out, "  decision %s\n", decision)
 		}
+		if f.Borrow != nil {
+			for _, scope := range f.Borrow.Scopes {
+				fmt.Fprintf(&out, "  lifetime scope%d parent=%d source=%d:%d\n", scope.ID, scope.Parent, scope.Source.Line, scope.Source.Column)
+			}
+			for _, ref := range f.Borrow.References {
+				fmt.Fprintf(&out, "  reference v%d target=%s semantic=%s root=%s:%d parent=v%d mutable=%t lifetime=scope%d evidence=%s provenance=%q noescape\n", ref.Value, ref.Target, ref.SemanticTarget, ref.RootKind, ref.Root, ref.Parent, ref.Mutable, ref.Lifetime, ref.Evidence, ref.Provenance)
+			}
+		}
 		for _, s := range f.Slots {
 			if s.Readonly {
 				fmt.Fprint(&out, "  readonly\n")
@@ -282,6 +293,9 @@ func VerifyLIR(m LIRModule) error {
 	}
 	functions := map[string]LIRFunction{}
 	for _, f := range m.Functions {
+		if err := verifyLIRBorrowFunction(f, layouts); err != nil {
+			return err
+		}
 		if f.Identity == "" || functions[f.Identity].Identity != "" {
 			return fmt.Errorf("LIR_DUPLICATE_FUNCTION %s", f.Identity)
 		}
@@ -338,6 +352,16 @@ func VerifyLIR(m LIRModule) error {
 			for id, t := range params {
 				known[id] = t
 			}
+			if f.Borrow != nil {
+				types, defs := lirReferenceDefinitions(f)
+				dom := lirDominators(f)
+				for _, r := range f.Borrow.References {
+					db := defs[r.Value]
+					if db >= 0 && db != bi && dom[bi][db] {
+						known[r.Value] = types[r.Value]
+					}
+				}
+			}
 			for _, in := range b.Instructions {
 				for _, id := range in.Facts {
 					if !facts[id] {
@@ -367,6 +391,10 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "borrow":
+					if !lirReferenceType(in.Type) || in.Result < 0 || len(in.Args) != 1 || lirAddressTarget(argType(0)) != lirAddressTarget(in.Type) || in.Slot != -1 {
+						return fmt.Errorf("LIR_REFERENCE_TARGET")
+					}
 				case "copy_value":
 					_, aggregate := layouts[in.Type]
 					_, _, array := lirArrayValue(in.Type)
@@ -411,12 +439,12 @@ func VerifyLIR(m LIRModule) error {
 						}
 					}
 				case "slot_address":
-					if !hasSlot || s.Extent != 0 || !lirAggregateType(s.Type) || in.Result < 0 || len(in.Args) != 0 || in.Type != lirPointer(s.Type) {
+					if !hasSlot || s.Extent != 0 || (!lirAggregateType(s.Type) && !lirCallScalar(s.Type)) || in.Result < 0 || len(in.Args) != 0 || in.Type != lirPointer(s.Type) {
 						return fmt.Errorf("LIR_BAD_OBJECT_ADDRESS b%d", b.ID)
 					}
 				case "field_address":
 					layout, ok := layouts[in.Aggregate]
-					if !ok || in.Member < 0 || in.Member >= len(layout.Fields) || in.Result < 0 || in.Slot != -1 || len(in.Args) != 1 || argType(0) != lirPointer(in.Aggregate) {
+					if !ok || in.Member < 0 || in.Member >= len(layout.Fields) || in.Result < 0 || in.Slot != -1 || len(in.Args) != 1 || lirAddressTarget(argType(0)) != in.Aggregate {
 						return fmt.Errorf("LIR_BAD_FIELD_ADDRESS b%d", b.ID)
 					}
 					field := layout.Fields[in.Member]
@@ -438,6 +466,13 @@ func VerifyLIR(m LIRModule) error {
 					for i, arg := range in.Args {
 						if !lirCallValue(in.ArgTypes[i], layouts) || in.ArgTypes[i] != known[arg] || in.ArgTypes[i] != target.Params[i].Type {
 							return fmt.Errorf("LIR_BAD_CALL_ARGUMENT b%d arg=%d", b.ID, i)
+						}
+						if lirReferenceType(in.ArgTypes[i]) {
+							supplied, ok := lirBorrowReference(f, arg)
+							required, found := lirBorrowReference(target, target.Params[i].ID)
+							if !ok || !found || supplied.SemanticTarget != required.SemanticTarget {
+								return fmt.Errorf("LIR_REFERENCE_CALL_TARGET")
+							}
 						}
 					}
 				case "const":
@@ -516,11 +551,11 @@ func VerifyLIR(m LIRModule) error {
 						return fmt.Errorf("LIR_MISSING_INDEX_GUARD b%d", b.ID)
 					}
 				case "load":
-					if in.Result < 0 || len(in.Args) != 1 || argType(0) != LIRType("ptr<"+string(in.Type)+">") {
+					if in.Result < 0 || len(in.Args) != 1 || lirAddressTarget(argType(0)) != in.Type {
 						return fmt.Errorf("LIR_BAD_LOAD b%d", b.ID)
 					}
 				case "store":
-					if in.Result >= 0 || len(in.Args) != 2 || argType(0) != LIRType("ptr<"+string(in.Type)+">") || argType(1) != in.Type {
+					if in.Result >= 0 || len(in.Args) != 2 || lirAddressTarget(argType(0)) != in.Type || argType(1) != in.Type {
 						return fmt.Errorf("LIR_BAD_STORE b%d", b.ID)
 					}
 				default:

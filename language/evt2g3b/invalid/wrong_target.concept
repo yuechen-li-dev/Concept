@@ -1,0 +1,16 @@
+profile Core;
+struct Position {
+    double x;
+    double y;
+}
+struct Velocity {
+    double x;
+    double y;
+}
+void Change(ref Position p) {
+    p.x = 7.0;
+}
+void Bad() {
+    Velocity value = Velocity{1.0, 2.0};
+    Change(ref value);
+}

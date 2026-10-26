@@ -1,7 +1,6 @@
 module Standard.Backend.AMD64.Analysis;
 profile Core;
 import Standard.Backend.AMD64.Model;
-
 bool ValidWidth(int width)
 {
     return width == 1 or width == 2 or width == 4 or width == 8;
@@ -47,7 +46,6 @@ MachineOperand ProjectWireOperand(WireMachineOperand value) {
         value.Literal, value.Region, value.Signed
     };
 }
-
 // This is a semantic projection. Wire order belongs exclusively to ReadWire.
 Result<void, BackendError> ProjectWireFunction(
 ref const BridgeReader source, WireMachineFunction wire, ref BackendFunction function) {
@@ -203,7 +201,6 @@ string DescribeBackendError(BackendError error)
     }
     return "AMD64_BACKEND_ERROR";
 }
-
 // A bounds/overflow check splits one LIR block into several MachineIR blocks.
 // Keep those continuations adjacent before computing linear intervals. Appended
 // checks otherwise create artificial overlapping intervals across unrelated
@@ -407,7 +404,6 @@ ref const BackendFunction function, ref Liveness liveness)
     }
     return Result::Error(BackendError::BridgeInvalid);
 }
-
 // Live-in/out edges extend intervals across branches and loop backedges.
 // The layout order stays deterministic even when the CFG is cyclic.
 Result<void, BackendError> ComputeIntervals(
@@ -462,7 +458,6 @@ Register PoolRegister(int ordinal)
     if (ordinal == 3) { return Register::R8; }
     return Register::R9;
 }
-
 // R10/R11/RAX handle the initial ABI copies. R8/R9 become available only
 // after their incoming arguments have been copied, which happens before any
 // later value can require a fourth register. Spills remain explicit failure.
@@ -715,7 +710,6 @@ int position, ref CallPlan plan, Span<Preservation> preservation, ref int count)
     }
     return Result::Ok();
 }
-
 // Only one bounded per-call plan and one caller-owned preservation buffer are
 // resident. Summary maxima feed later shared outgoing/frame storage.
 Result<void, BackendError> PlanFunctionCalls(ref const BackendFunction function, ref Allocation allocation) {
@@ -724,7 +718,6 @@ Result<void, BackendError> PlanFunctionCalls(ref const BackendFunction function,
         Result::Error(error) => Result::Error(BackendError::BridgeInvalid),
     };
 }
-
 // CMIRAMD3 values can exceed CMIRAMD4's 128-value type map. Inspect scalar
 // metadata only after admitting the scalar projection.
 bool AllocatedGPR(ref const BackendFunction function, ref const Allocation allocation, int id) {
@@ -801,8 +794,13 @@ string DescribeNativeError(NativeError error) {
         NativeError::UnsupportedFloatCallEmission => "AMD64_UNSUPPORTED_FLOAT_CALL_EMISSION",
         NativeError::UnsupportedScalarOperation => "AMD64_UNSUPPORTED_SCALAR_OPERATION",
         NativeError::UnsupportedAggregateStorage => "AMD64_UNSUPPORTED_AGGREGATE_STORAGE",
+        NativeError::ReferenceTarget => "AMD64_REFERENCE_TARGET_TYPE",
+        NativeError::ReferenceAuthority => "AMD64_REFERENCE_MUTABLE_AUTHORITY_REQUIRED",
+        NativeError::ReferenceLifetime => "AMD64_REFERENCE_LIFETIME",
+        NativeError::ReferenceEscape => "AMD64_REFERENCE_ESCAPE",
+        NativeError::ReferenceCall => "AMD64_REFERENCE_CALL_SIGNATURE",
+        NativeError::ReferenceNotLive => "AMD64_REFERENCE_TARGET_NOT_LIVE",
         NativeError::UnsupportedAggregateABI => "AMD64_UNSUPPORTED_AGGREGATE_ABI",
-
         NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
         NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
     };
@@ -821,8 +819,6 @@ int FrameRegionIndex(FrameRegionKind category) {
         FrameRegionKind::AlignmentPadding => 6,
     };
 }
-
-
 CallValueType LegacyScalarType(ScalarRepresentation type) {
     return match (type) {
         ScalarRepresentation::Void => CallValueType::Void, ScalarRepresentation::Bool => CallValueType::Bool,
@@ -1185,8 +1181,6 @@ ref const Liveness liveness, int position, ref CallPlan plan, Span<Preservation>
     }
     return Result::Ok();
 }
-
-
 NativeError ScalarBackendError(BackendError error) {
     return match (error) {
         BackendError::CapacityExceeded => NativeError::CapacityExceeded,
@@ -1200,8 +1194,6 @@ NativeError ScalarBackendError(BackendError error) {
         BackendError::UnsupportedCallLowering => NativeError::ScalarPlanningFailure,
     };
 }
-
-
 NativeError ScalarNativeABIError(ABIError error) {
     return match (error) {
         ABIError::InvalidPlan => NativeError::InvalidABILocation,

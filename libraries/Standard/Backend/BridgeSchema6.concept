@@ -1,0 +1,72 @@
+module Standard.Backend.BridgeSchema6;
+profile Core;
+import Standard.Backend.BridgeSchema5;
+// A reference is a checked live-object capability, not an address integer.
+// The embedded object contract and its field geometry remain frozen CMIRAMD5.
+comptime string BorrowBridgeMagic = "CMIRAMD6";
+comptime uint BorrowBridgeVersion = 6u;
+comptime uint BorrowBridgeMaxItems = 1048576u;
+comptime string BorrowBridgeRepresentation = "little-endian;CMIRAMD5=7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60;checked-reference-capabilities;lexical-scopes;SystemMemory;noescape;no-reference-returns";
+[[reflect]] enum BorrowRoot {
+    [[bridge_value("local")]] Local,
+    [[bridge_value("parameter")]] Parameter
+}
+[[reflect]] enum BorrowEvidence {
+    [[bridge_value("checked_place")]] Place,
+    [[bridge_value("checked_borrow")]] Borrow,
+    [[bridge_value("checked_parameter")]] Parameter
+}
+[[reflect]] enum BorrowEscape {
+    [[bridge_value("noescape")]] NoEscape
+}
+[[reflect]] record struct WireBorrowHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireBorrowScope {
+    int ID;
+    int Parent;
+    WireObjectSpan Source;
+}
+[[reflect]] record struct WireBorrowReference {
+    int Value;
+    int Target;
+    BridgeText SemanticTarget;
+    BridgeText LayoutIdentity;
+    BorrowRoot RootKind;
+    int Root;
+    int Parent;
+    bool Mutable;
+    int Lifetime;
+    BorrowEvidence Evidence;
+    BridgeText Provenance;
+    BorrowEscape Escape;
+    ObjectAddressSpace Space;
+    WireObjectSpan Source;
+}
+[[reflect]] record struct WireBorrowSite {
+    int Block;
+    int Instruction;
+    int Scope;
+}
+[[reflect]] record struct WireBorrowFunction {
+    BridgeText Identity;
+    BridgeSequence<WireBorrowScope> Scopes;
+    BridgeSequence<int> SlotScopes;
+    BridgeSequence<WireBorrowReference> References;
+    BridgeSequence<WireBorrowSite> Sites;
+}
+[[reflect]] record struct WireBorrowModule {
+    WireObjectModule Objects;
+    BridgeSequence<WireBorrowFunction> Authority;
+}
+reflect<BorrowRoot>;
+reflect<BorrowEvidence>;
+reflect<BorrowEscape>;
+reflect<WireBorrowHeader>;
+reflect<WireBorrowScope>;
+reflect<WireBorrowReference>;
+reflect<WireBorrowSite>;
+reflect<WireBorrowFunction>;
+reflect<WireBorrowModule>;

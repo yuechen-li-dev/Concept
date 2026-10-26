@@ -367,8 +367,8 @@ func TestEVT2gSourceAndNativeBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := GenerateLIR(m); err == nil || !strings.Contains(err.Error(), "EVT2_UNSUPPORTED_OBJECT_AUTHORITY") {
-			t.Fatalf("reference collapsed to scalar: %v", err)
+		if lir, err := GenerateLIR(m); err != nil || lir.Functions[0].Borrow == nil || !lirReferenceType(lir.Functions[0].Params[0].Type) {
+			t.Fatalf("reference lost checked authority: %v", err)
 		}
 	}
 	for _, tc := range []struct{ source, want string }{

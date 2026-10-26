@@ -4767,6 +4767,9 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 		out.Ownership = "ref"
 		out.Const = e.Const || !lvalue.mutable
 		out.Span = e.Span
+		// Retain the existing checker's decision, not a user proposition or a
+		// new borrow analysis in LIR. This in-memory witness is not serialized AST.
+		e.checkedBorrow = &checkedBorrowOrigin{Target: out.valueType(), Root: lvalue.path.Root, Provenance: evt1ExprProvenance(env, scope, e.Value), Mutable: !out.Const}
 		return out, nil
 	case *BinaryExpr:
 		if e.Op == ".." || e.Op == "step" || e.Op == "descend" {

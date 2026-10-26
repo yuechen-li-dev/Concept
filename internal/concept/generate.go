@@ -1469,6 +1469,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = true, true, true
 		}
 		fn.Operations = append(fn.Operations, op)
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *BindExpr:
 		if e.BindKind == "layout" || e.BindKind == "stream" {
 			kind := e.BindKind + "_bind"

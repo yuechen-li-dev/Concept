@@ -1,6 +1,6 @@
 # EVT2g convergence — checked aggregate input
 
-Current milestone: [EVT2g3 closeout](#evt2g3-closeout). EVT2g1/g2 below retain
+Current milestone: [EVT2g3b closeout](#evt2g3b-closeout). EVT2g1–g3 below retain
 their historical boundaries and evidence.
 
 Status: **MEANINGFUL PROGRESSION**; full native aggregate qualification remains open.
@@ -283,3 +283,133 @@ require no changes.
 **MEANINGFUL PROGRESSION — native local aggregate storage, fields, copies and
 immutable updates execute; source-borrow authority/lifetime needs checked LIR
 and a versioned transport contract before native reference qualification.**
+
+## EVT2g3b closeout
+
+Baseline: `2a8b6487adbc72c800120e0340db27f0aa5ee2ac`, clean at entry.
+Compiler: `concept-evt1-stage0-go`. The closeout commit contains implementation,
+generated transport, fixtures and documentation; `git log -1 --format=%H`
+identifies the final revision. No other repository is changed.
+
+An independently built CLI from an archived complete baseline rejects the saved
+reference specimen with `Change: EVT2_UNSUPPORTED_OBJECT_AUTHORITY ref Position`.
+The updated real path emits CMIRAMD6, finalizes a three-function/two-call/859-byte
+image, and executes that same source to 9 in Normal and Verify without domain
+source or oracle functions in the native host. This removes the exact EVT2g3
+reference blocker. Aggregate by-value/indirect/sret ABI remains separately gated;
+EVT2g4 is not begun.
+
+### Authority and architecture
+
+An address locates storage; a reference names a live object with checked access
+authority. Existing Stage-0 place/lifetime checking remains authoritative. Its
+internal checked origin witness feeds typed ref/ref_const LIR, stable local or
+parameter roots, canonical target digests, source spans and lexical scopes.
+Unknown origins fail explicitly. User concepts cannot manufacture the witness
+or grant liveness/outlives/exclusive access. The fact-trust registry is unchanged.
+
+Concept's `BridgeSchema6` owns the envelope and generated codecs; the frozen v5
+payload is reused with explicit reference metadata. Concept's `BridgeValidate6`
+checks consistency and preservation, not the full source borrow graph. The shared
+object validator takes an explicit context; v5 admission always uses its empty
+context. V3/v4/v5 schemas/codecs/hashes/bytes remain unchanged. V6 schema SHA-256:
+`67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d`.
+The pinned minimal reference artifact is 784 bytes, SHA-256
+`eb23941570f01a685fe922386a9ecf9b16b24aff18eaf1058fd58b492f7106af`.
+
+Cathedral realizes admitted references with existing Address/GPR virtuals, frame
+slots, typed memory operands, Win64 positional calls and fixups. A reference
+copy preserves the original address; explicit source aggregate copies remain
+independent values. Incoming parameters do not materialize detached aggregates.
+There is no Go native reference allocator, ABI algorithm or encoder, no second
+borrow checker, and no record/reference-specific packing engine.
+
+Legal aliases remain legal and observable; distinct parameter IDs do not imply
+NoAlias. Source destructive-access conflicts, readonly authority and escape
+checks remain enforced. Referenced source slots are not reused/coalesced. The
+source `layout` keyword remains useful for static workspace/probe storage maps
+and checked region facts; it neither establishes live-object authority nor
+replaces the existing per-function frame planner. General native layout/bind
+views are a separate extension.
+
+### Native evidence and limits
+
+The main corpus executes 29 functions / 25 calls / 23,820 native bytes, in both
+modes, first artifact-only and then against a separately compiled strict C11
+logical oracle over 100 varied vectors. It covers local mutable/const references,
+integer/floating fields, nested fields, fixed-array elements, local/parameter
+aliases, copy versus borrow, reference calls, nested calls, live references across
+scalar calls, early returns, whole-object replacement/snapshot, shadowed lexical
+scopes and index selection that remains stable after the index variable changes.
+Independent C pointer-parameter probes exercise positions 0, 4 and 7. This is not
+complete external object ABI qualification.
+
+The 121,629-byte artifact contains 80,370 bytes of embedded object payload and
+41,215 bytes of authority metadata, plus the 44-byte header. There are 164
+location/reference rows and 58 lexical scopes. Frames range from 40–376 bytes;
+reference-only callees use no local/private aggregate slots. One hundred fresh
+LIR/artifact/debug generations match. Each mode performs 100 identical native
+emissions and frame/allocation descriptions, with cross-mode byte comparison.
+Artifact-only validated roundtrips repeat 100 times per mode. Twenty-seven
+malformed inputs reject with typed diagnostics and unchanged output/image state.
+Native child processes pin bounds failure to UD2 status.
+
+Combined admission/planning/encoding observations are about 55–58 ms; inspection
+of all functions is about 1.3 s and revalidates the artifact per function. Repeated
+reference-call timing includes the checked native body and host loop: ten million
+calls took 34–35 ms in one local run, not an isolated ABI cost. Detailed
+frame/code measurements, capacities and support forms
+are in [conformance](../../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+Reference returns remain at `LIR_REFERENCE_RETURN_UNSUPPORTED`; raw/owned/Drop
+native lifetime transitions, arbitrary escapes, reference-bearing aggregate
+copies, general standalone array/layout views and hardware spaces remain
+unqualified. PlainData for a reference type is DISPROVEN. Capacity, initialized
+extent and live-object validity remain distinct. No broad safety/performance
+claim or new source ownership model is made.
+
+### Stage-0 repairs and regression findings
+
+MIR now traverses a RefExpr operand, preserving indexed-borrow bounds operations.
+Void LIR terminators canonically carry no value. These are general checked-input
+corrections, not native lowering. Reference metadata construction explicitly
+excludes the frozen scalar-array address path; the initial wider hook caused
+`LIR_REFERENCE_ORIGIN_MISSING` in the frozen native oracle and was narrowed.
+The rerun passes with unchanged native bytes. Vet also caught an unreachable
+semantic-target call check; it was moved into active validation and a corruption
+case now pins that check. Full/race runs were restarted after that repair.
+
+### Validation
+
+Local logs are under `artifacts/evt2g3b/`.
+
+| Gate | Local result |
+| --- | --- |
+| Baseline focused native/source/lifetime checks | PASS; 104.387 s |
+| Full `go test ./... -count=1 -parallel=4 -timeout=30m` | PASS; compiler 1043.481 s, CLI 189.000 s, Vulkan profile 0.496 s |
+| Semantic corpus, Golden Normal/Verify, GPU-free Vulkan, EVT2/EVT2x/EVT2e/EVT2f, EVT2g1–g3b | PASS in the full Go regression run |
+| `go vet ./...` | PASS |
+| Focused race `^TestEVT2g3b` | PASS; 314.918 s |
+| EVT2g1/g2/g3/g3b and checked-output focus | PASS except the initial frozen-array hook regression, repaired and rerun below |
+| Frozen native oracle rerun | PASS; 17.727 s, byte-identical manual oracle cases |
+| EVT2g3b acceptance | PASS; 126.166 s; final call-check/ABI admission refinements covered separately |
+| Final v6 admission / ABI boundary | PASS; 47.046 s; 27 corruptions, 100 roundtrips per mode, valid v6 aggregate ABI stop |
+| Artifact-only native and independent C oracle | PASS; Normal/Verify, 29 functions, actual Win64 execution |
+| Original motivating source | PASS; native result 9, three functions / 859 bytes in each mode |
+| Final native timing/execution rerun | PASS; 105.185 s, with ten-million-call timing and byte-identical Normal/Verify images |
+| Exact bytes / schema generation / fresh determinism | PASS; pinned hex, checked generated outputs, 100 LIR/artifact/debug and native image/plan runs |
+| Source lifetime/authority negatives | PASS; eight precise existing diagnostic categories |
+| NoAllocation / reference PlainData refutation | PASS |
+| Standard CLI Normal / Verify | 44 passed, 0 failed each; 3 informational benchmarks |
+| DragonGod CLI Normal / Verify | 23 passed, 0 failed each; 1 informational benchmark |
+| Standard/DragonGod package graph build | PASS |
+| CLI LIR/MachineIR/native / generated inspection | PASS; finalized 29-function image and v6 authority inspection |
+| Changed Concept format / valid-source lint | PASS; negative fixtures checked in their expected-rejection lane |
+| Frozen root and legacy Zig | SKIPPED; frozen compiler/build/test paths unchanged |
+
+The final full/race runs used the corrected production code and final tests.
+Only documentation changed after dispatch. No failing gate was weakened or
+disabled. Go formatting and staged/unstaged whitespace checks pass. The closeout
+is committed with a clean worktree, retaining all frozen schema/codec files.
+
+**SUCCESS — EVT2g3b Cathedral checked borrow authority and native references qualified.**

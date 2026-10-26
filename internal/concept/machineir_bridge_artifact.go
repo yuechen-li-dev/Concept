@@ -86,6 +86,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	if err := VerifyMachineIR(m); err != nil {
 		return nil, err
 	}
+	if m.Borrow != nil {
+		return encodeBorrowMachineBridge(*m.Borrow)
+	}
 	if m.Scalar != nil {
 		return encodeScalarMachineBridge(*m.Scalar)
 	}
@@ -109,6 +112,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	return w.Bytes(), nil
 }
 func DecodeMachineBridge(data []byte) (MachineModule, error) {
+	if len(data) >= 8 && string(data[:8]) == BorrowMachineBridgeSchema {
+		return DecodeBorrowMachineBridge(data)
+	}
 	if len(data) >= 8 && string(data[:8]) == ObjectMachineBridgeSchema {
 		return DecodeObjectMachineBridge(data)
 	}

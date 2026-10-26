@@ -469,6 +469,15 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        match (ValidateBorrowMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(NativeBorrowError(error)); }
+        }
+        BridgeReader source = BridgeReader{artifact, 0};
+        WireObjectModule document = AdmittedObjectDocument(artifact) ?;
+        return EmitObjectNativeDocument(ref const source, document, output, ref image, true);
+    }
     if (Len(artifact) >= 8) {
         bool object = true;
         for (i in 0 .. 8) {
@@ -584,12 +593,6 @@ Result<WireMachineFunction, NativeError> ReadNativeFunction(ref BridgeReader rea
         Result::Ok(value) => Result::Ok(value),
         Result::Error(error) => Result::Error(NativeError::InvalidInput),
     };
-}
-void NativeFacts() {
-    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
-    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
-    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
-    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
 }
 // This pins self-contained in-memory records, independently of the explicit
 // field-by-field wire codec above. PlainData is not the wire representation.
@@ -1329,7 +1332,11 @@ ref const FinalizedFrame frame) {
     ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
     bool scalarResult = false;
     bool floatingResult = false;
-    if (input.Op == ObjectOpcode::MakeAggregate or input.Op == ObjectOpcode::MakeArray) {
+    if (input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) {
+        LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
+        ref const frame) ?;
+        scalarResult = true;
+    } else if (input.Op == ObjectOpcode::MakeAggregate or input.Op == ObjectOpcode::MakeArray) {
         int destination = frame.slotOffsets[placement.values[input.Result]];
         for (i in 0 .. input.Args.count) {
             int offset = i * type.Stride;
@@ -1481,13 +1488,12 @@ ref const FinalizedFrame frame) {
     }
     return Result::Ok();
 }
-
 Result<void, BackendError> EncodeObjectInstruction(ref ByteWriter writer, ref const BridgeReader reader,
 WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input,
 ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
 ref const FinalizedFrame frame) {
     WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
-    if (ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
+    if ((input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) or ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
     input.Op == ObjectOpcode::IndexAddress or input.Op == ObjectOpcode::CheckIndex or input.Op == ObjectOpcode::Load or input.Op == ObjectOpcode::Store) {
         return EncodeObjectMemoryInstruction(ref writer, ref const reader, document, owner, input, ref const placement,
         ref const function, ref const allocation, ref const frame);
@@ -1520,7 +1526,6 @@ ref const FinalizedFrame frame) {
     return EncodeScalarOperands(ref writer, ref const reader, adapted, left, right, ref const function,
     ref const allocation, ref const frame);
 }
-
 Result<void, BackendError> PrepareObjectFunction(ref const BridgeReader reader, WireObjectModule document,
 WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation,
 ref FinalizedFrame frame) {
@@ -1591,13 +1596,19 @@ Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction fu
 // Inspection uses the same production projection, allocator and finalizer.
 Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
 ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
-    match (ValidateObjectMachineBridge(artifact)) {
-        Result::Ok => { }
-        Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        match (ValidateBorrowMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    } else {
+        match (ValidateObjectMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
     }
     BridgeReader reader = BridgeReader{artifact, 0};
-    ReadObjectBridgeIdentity(ref reader) ?;
-    WireObjectModule document = ReadWire(ref reader, BridgeType<WireObjectModule>{0}) ?;
+    WireObjectModule document = NativeObjectDocument(artifact) ?;
     WireObjectFunction owner = NativeObjectAt<WireObjectFunction>(ref const reader, document.Functions,
     ordinal) ?;
     return PrepareObjectFunction(ref const reader, document, owner, ref function, ref placement, ref allocation,
@@ -1686,6 +1697,10 @@ Result<int, NativeError> EmitObjectNativeModule(ReadOnlySpan<byte> artifact, Spa
         }
         Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
     }
+    return EmitObjectNativeDocument(ref const reader, document, output, ref image, false);
+}
+Result<int, NativeError> EmitObjectNativeDocument(ref const BridgeReader reader, WireObjectModule document,
+Span<byte> output, ref NativeImage image, bool references) {
     // Whole-module ABI and frame admission precedes output/image mutation.
     BackendFunction function = EmptyFunction();
     ObjectPlacement placement = EmptyObjectPlacement();
@@ -1703,7 +1718,9 @@ Result<int, NativeError> EmitObjectNativeModule(ReadOnlySpan<byte> artifact, Spa
             p) ?;
             WireObjectType type = AdmittedObjectAt<WireObjectType>(ref const reader, document.Types,
             parameter.Type) ?;
-            if (ObjectAggregate(type.Kind)) {
+            WireObjectValue value = AdmittedObjectAt<WireObjectValue>(ref const reader, owner.Values,
+            parameter.Value) ?;
+            if (ObjectAggregate(type.Kind) and not(references and value.Class == ObjectValueClass::Location)) {
                 return Result::Error(NativeError::UnsupportedAggregateABI);
             }
         }
@@ -1752,11 +1769,25 @@ Result<int, NativeError> EmitObjectNativeModule(ReadOnlySpan<byte> artifact, Spa
     ResolveNativeCalls(ref const reader, ref image, output) ?;
     return Result::Ok(writer.offset);
 }
-
 void NativeScalarSSEFacts() {
     Assert.Concept<NoAllocation>(EmitScalarNativeModule, "bounded native scalar image in caller-owned storage");
     Assert.Concept<NoAllocation>(EncodeScalarNativeFunctionIntoWriter, "shared writer and frame-owned scratch");
     Assert.Concept<NoAllocation>(EmitAllocatedCall, "shared checked integer and mixed call actions");
     Assert.Concept<NoAllocation>(EmitObjectNativeModule, "typed objects use the existing frame and caller-owned backend stores");
     Assert.Concept<NoAllocation>(EncodeObjectMemoryInstruction, "scalar field transfers and bounded snapshots");
+}
+void NativeFacts() {
+    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
+    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
+    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
+    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
+}
+NativeError NativeBorrowError(BorrowError error) {
+    if (error == BorrowError::Target) { return NativeError::ReferenceTarget; }
+    if (error == BorrowError::Authority) { return NativeError::ReferenceAuthority; }
+    if (error == BorrowError::Lifetime) { return NativeError::ReferenceLifetime; }
+    if (error == BorrowError::Escape) { return NativeError::ReferenceEscape; }
+    if (error == BorrowError::Call) { return NativeError::ReferenceCall; }
+    if (error == BorrowError::NotLive) { return NativeError::ReferenceNotLive; }
+    return NativeError::InvalidInput;
 }
