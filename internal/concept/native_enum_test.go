@@ -100,6 +100,39 @@ func TestEVT2h1Transport(t *testing.T) {
 	}
 	t.Logf("100 fresh generations and codecs; %d bytes sha256=%x schema=%s elapsed=%s", len(data), sha256.Sum256(data), generated.Hash, time.Since(start))
 }
+
+func TestEVT2h1ImportedIdentity(t *testing.T) {
+	artifact, err := CompileSemanticModule("EnumTypes.concept", "module EnumTypes; profile Core; enum Imported { First, Second, }", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const source = "module EnumUse; profile Core; import EnumTypes; enum Local { First, Second, } Imported Identity(Imported value){return value;} Imported Make(){return Imported::Second;} Local Own(){return Local::Second;}"
+	m, err := ParseWithSemanticModules("EnumUse.concept", source, map[string][]byte{"EnumTypes": artifact})
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := GenerateMachineIR(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if machine.Enum == nil || len(machine.Enum.Domains) != 2 || len(machine.Enum.Objects.Dependencies) != 1 || machine.Enum.Objects.Dependencies[0].Identity != "EnumTypes" || !objectDigest(machine.Enum.Objects.Dependencies[0].Digest) {
+		t.Fatalf("lost imported provenance: %+v", machine.Enum)
+	}
+	if machine.Enum.Domains[0].Identity != "EnumTypes|Imported" || machine.Enum.Domains[0].LayoutIdentity == machine.Enum.Domains[1].LayoutIdentity {
+		t.Fatalf("lost nominal domain: %+v", machine.Enum.Domains)
+	}
+	data, err := EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeMachineBridge(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bridgeSemanticEqual(reflect.ValueOf(*machine.Enum), reflect.ValueOf(*decoded.Enum)) {
+		t.Fatal("imported domain transport differs")
+	}
+}
 func TestEVT2h1NativeExecution(t *testing.T) {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")

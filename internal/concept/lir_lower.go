@@ -32,7 +32,7 @@ func GenerateLIR(module Module) (LIRModule, error) {
 		return LIRModule{}, err
 	}
 	lir, err := LowerMirToLir(&mir, plan, env)
-	if err == nil && len(lir.Aggregates) != 0 {
+	if err == nil && (len(lir.Aggregates) != 0 || len(lir.Enums) != 0) {
 		lir.Dependencies = append([]SemanticModuleDependency(nil), module.ImportedModuleIdentities...)
 		sort.Slice(lir.Dependencies, func(i, j int) bool { return lir.Dependencies[i].ModuleIdentity < lir.Dependencies[j].ModuleIdentity })
 	}
