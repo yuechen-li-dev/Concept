@@ -1,6 +1,7 @@
 # Cathedral authority ledger (R9c)
 
 Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
+Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
 Earlier milestone tables below retain their historical qualification boundaries.
 
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
@@ -294,3 +295,17 @@ Dynamic frame geometry continues to come from the single existing finalizer.
 | Owned/Drop, escaping reference returns, general storage views, varargs/indirect calls, object output | NOT_YET_QUALIFIED | Explicit existing boundaries retained; no EVT2h or object-file work begun |
 
 See [EVT2g5 execution and ABI evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).
+
+## EVT2h1 ordinary enum authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Declaration identity, legal constructors/tags, equality, assignment and conversions | Existing Stage-0 source checks, GO_AUTHORITATIVE | Existing language retained; no enum/integer casts or payload equality |
+| Checked ordinary enum LIR domains and producer verification | Stage-0 semantic production | Explicit nominal identities, checked geometry and ordered variants; no physical native decisions |
+| CMIRAMD7 schema | CONCEPT_AUTHORITATIVE `BridgeSchema7` | Frozen v5 records plus enum domains; schema-generated Go/Concept transport; CMIRAMD3–6 unchanged |
+| Native artifact admission and representation validation | CONCEPT_AUTHORITATIVE `BridgeValidate7` and common typed object verifier | Independent source-free domain/geometry/tag/op/call/CFG validation before mutation; aliases unavailable to v5/v6 |
+| Native realization, scalar selection, storage, allocation, frames and Win64 calls | CONCEPT_AUTHORITATIVE existing `AMD64.Objects`, scalar and Win64 stack | Admitted U32 carriers reuse one allocator/frame/encoder; nominal IDs remain checked until physical projection |
+| Bootstrap codec, CLI and tests | Generated transport / orchestration / independent oracles | No production Go enum lowering, allocation, ABI or encoding algorithm |
+| Payloads, match, built-in fallible types, mixed object/reference enum modules | NOT_YET_QUALIFIED | Source C support does not imply native qualification; separate review after EVT2h1 |
+
+See [the enum contract and executed evidence](../conformance/EVT2H-CONFORMANCE.md).

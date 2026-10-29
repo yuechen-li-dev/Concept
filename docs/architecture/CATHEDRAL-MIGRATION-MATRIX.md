@@ -224,3 +224,19 @@ boundaries remain unchanged. See [the current contract and evidence](../conforma
 The aggregate emission gate is removed for admitted signatures. Actual native
 execution, checked-source C parity and independent C ABI probes now qualify the
 bounded planner/emitter composition. See [the execution contract](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).
+
+## EVT2h1 ordinary enums
+
+| Capability | Current owner/state | Remaining boundary |
+| --- | --- | --- |
+| Ordinary enum declaration, nominal identity and legal operations | Existing Stage-0 checked semantics | No source redesign; explicit discriminants and numeric casts remain invalid |
+| Enum values and domains in LIR / MachineIR | Checked semantic production and Concept-schema-owned CMIRAMD7 | Distinct identities survive equal geometry; CMIRAMD3–6 frozen |
+| Domain/geometry/variant/tag/operation admission | Concept `BridgeValidate7`, independent artifact validator | Scalar-and-enum modules only; identity consistency is not producer authentication |
+| Native local construction/storage/copy/equality | Existing Concept object-to-scalar projection and encoder, native execution tested | No payload storage or ownership semantics |
+| Enum direct parameters/results, branches, loops, recursion and call pressure | Existing Concept scalar allocation/frame/Win64 machinery, native execution tested | Eight arguments; source extern enum ABI remains invalid |
+| Transport/orchestration and oracle | Go seed plus generated codecs and independent strict C11 | No Go native enum algorithm to retire |
+| Payload variants, match, Option/Result/Verdict, enum/reference/aggregate coexistence | Deferred | EVT2h2 only after separate review |
+
+See [EVT2h conformance](../conformance/EVT2H-CONFORMANCE.md) and the
+[convergence record](../history/milestones/EVT2H-CONVERGENCE.md) for exact bytes,
+gate outcomes and measured limits.
