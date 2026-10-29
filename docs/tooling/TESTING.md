@@ -58,6 +58,9 @@ Win64 ABI component facts. It removes the corresponding Go-owned runtime
 assertions while retaining generated-code, diagnostics and foreign aliasing/
 descriptor mutation probes. New migrations should preserve that distinction.
 
+The [2026-10-29 workflow record](TEST-WORKFLOW-2026-10-29.md) records the audit,
+migrated coverage, build reuse, measured timings and qualification boundaries.
+
 Test-only runtime reflection with `[[reflect]]` is not yet implemented. Type-level `[[reflect]]` is a compile-time cross-module structural permission and does not enable test runtime metadata.
 
 Concept tests are ordinary Concept functions in `.concept_test` files. Test
