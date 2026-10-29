@@ -160,6 +160,9 @@ func TestEVT2g4ScalarLeafFallback(t *testing.T) {
 	m, err := Parse("leaf.concept", `module Leaf; profile Core;
 int Sum(int a, int b, int c, int d, int e, int f) {
     return a + b + c + d + e + f;
+}
+double ScalarLane(double value) {
+    return value;
 }`)
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +170,9 @@ int Sum(int a, int b, int c, int d, int e, int f) {
 	machine, err := GenerateMachineIR(m)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if machine.Scalar == nil {
+		t.Fatal("expected scalar CMIRAMD4 allocator lane")
 	}
 	data, err := EncodeMachineBridge(machine)
 	if err != nil {
@@ -207,11 +213,15 @@ static concept_allocation allocation;
 static concept_finalized_frame frame;
 static concept_aggregate_function_plan plan;
 static unsigned long long digest;
-static void word(int n){digest^=(unsigned)n;digest*=1099511628211ULL;}
+/* Canonical debug text compares every inspected field, without C padding. */
+static char debugText[65536],firstText[FUNCTION_COUNT][65536];
+static size_t debugLength;
+static int debugOverflow;
+static void word(int n){digest^=(unsigned)n;digest*=1099511628211ULL;if(debugOverflow)return;int count=snprintf(debugText+debugLength,sizeof debugText-debugLength,"%d,",n);if(count<0||(size_t)count>=sizeof debugText-debugLength){debugOverflow=1;return;}debugLength+=(size_t)count;}
 static void location(concept_scalar_location l){word(l.kind.tag);word(l.registerClass.tag);word(l.gpr.tag);word(l.xmm.tag);word(l.slot);}
 static void type(concept_aggregate_abitype t){word(t.type);word(t.size);word(t.alignment);word(t.category.tag);word(t.carrier.tag);for(int i=0;i<t.identity.length;i++)word(artifact[t.identity.offset+i]);for(int i=0;i<t.layout.length;i++)word(artifact[t.layout.offset+i]);}
 static unsigned long long fingerprint(void){
- digest=1469598103934665603ULL;type(plan.result);word(plan.hiddenPointer);word(plan.parameterCount);word(plan.callCount);word(plan.transferCount);word(plan.returnCount);
+ digest=1469598103934665603ULL;debugLength=0;debugOverflow=0;debugText[0]=0;type(plan.result);word(plan.hiddenPointer);word(plan.parameterCount);word(plan.callCount);word(plan.transferCount);word(plan.returnCount);
  for(int i=0;i<plan.parameterCount;i++){concept_aggregate_argument_plan a=plan.parameters.data[i];type(a.type);word(a.semanticIndex);word(a.physicalIndex);word(a.value);word(a.carrier);word(a.storage);word(a.start);word(a.end);}
  word(frame.byteCount);word(frame.padding);word(frame.slotCount);
  for(int i=0;i<7;i++){word(frame.regions.data[i].category.tag);word(frame.regions.data[i].offset);word(frame.regions.data[i].size);}
@@ -247,7 +257,7 @@ int main(void){
  for(int i=0;i<15;i++){REQUIRE(!run_plan(src,i));REQUIRE(plan.parameterCount==1);REQUIRE(plan.parameters.data[0].type.size==sizes[i]);REQUIRE(plan.parameters.data[0].type.category.tag==argumentClasses[i]);REQUIRE(plan.result.category.tag==resultClasses[i]);}
  unsigned long long first[FUNCTION_COUNT];
  for(int run=0;run<100;run++)for(int i=0;i<FUNCTION_COUNT;i++){
-  REQUIRE(!run_plan(src,i));unsigned long long hash=fingerprint();if(!run){first[i]=hash;printf("function=%d frame=%d slots=%d calls=%d returns=%d transfers=%d plan=%016llx\n",i,frame.byteCount,frame.slotCount,plan.callCount,plan.returnCount,plan.transferCount,hash);}else REQUIRE(first[i]==hash);
+  REQUIRE(!run_plan(src,i));unsigned long long hash=fingerprint();REQUIRE(!debugOverflow);if(!run){first[i]=hash;memcpy(firstText[i],debugText,debugLength+1);printf("function=%d frame=%d slots=%d calls=%d returns=%d transfers=%d plan=%016llx\n",i,frame.byteCount,frame.slotCount,plan.callCount,plan.returnCount,plan.transferCount,hash);}else {REQUIRE(first[i]==hash);REQUIRE(!strcmp(firstText[i],debugText));}
  }
  REQUIRE(!run_plan(src,ORD_Shifted));REQUIRE(plan.result.category.tag==6 && plan.hiddenPointer>=0);
  REQUIRE(plan.parameters.data[0].physicalIndex==1 && plan.parameters.data[1].physicalIndex==2 && plan.parameters.data[2].physicalIndex==3 && plan.parameters.data[3].physicalIndex==4);

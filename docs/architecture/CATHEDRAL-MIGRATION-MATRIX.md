@@ -1,5 +1,8 @@
 # Cathedral migration matrix (R9c)
 
+Current aggregate stage: [EVT2g4 structural planning](#evt2g4-aggregate-abi-planning).
+Earlier stage tables remain historical; full aggregate native ABI closure is EVT2g5.
+
 This inventory is a decision map, not a schedule to delete Stage-0. `Current`
 classifies implementation as Go, Concept, or Shared. `Desired` means Stage-0
 permanent, Cathedral, or Shared bootstrap seam. `Ready` means an existing
@@ -182,3 +185,23 @@ absent. Legal aliases remain observable, and source copy versus borrow behavior
 differs as specified. Go additions provide checked input, generated transport,
 consistency, orchestration and independent tests. New physical reference policy
 remains in Concept. See [current evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 aggregate ABI planning
+
+| Capability | Current owner/state | Next transition |
+| --- | --- | --- |
+| Direct/indirect aggregate argument selection | Concept `Win64AggregateABI`, structurally qualified | Preserve checked representation/copy contract while encoding carriers |
+| Direct RAX versus hidden aggregate return | Concept classifier, structurally qualified | Encode meaningful-field construction and designated sret pointer return |
+| Hidden result physical argument shift | Concept object projection and existing positional Win64 planner, qualified plans | Execute generated mixed caller/callee paths in EVT2g5 |
+| Explicit reference versus indirect value argument | Existing checked reference path plus typed Concept aggregate plan | Retain original-object authority versus isolated caller temporary semantics |
+| Argument temporary / result object storage | Concept object projection and shared frame owner, qualified plans | Encode initialization, capture and lifetime actions without broad Drop elaboration |
+| Alignment / shadow / outgoing maximum / nonoverlap / save-spill interaction | Existing Concept frame, allocation and replay owners, structurally qualified | Preserve shared geometry; frames requiring probing remain explicit stops |
+| Leaf GPR pressure | Existing Concept allocator, shared correction | Real scalar encoder regression; same callee-save frame policy |
+| Semantic aggregate/reference artifact | CMIRAMD6 unchanged; v3/v4/v5 frozen | No new schema required; no physical ABI serialization |
+| Stage-0 native ABI logic | None added | Keep checked input, generated transport and orchestration; no classifier retirement needed |
+| Aggregate call native encoding and external ABI probes | Explicit emission stop, unqualified | EVT2g5; do not infer completion from structural replay or C compiler classifications |
+
+The earlier aggregate-ABI planning blocker is removed for the bounded copyable
+record slice. The next boundary is native call emission, diagnosed before byte
+or image mutation. Source ownership, reference-return and general layout-view
+boundaries remain unchanged. See [the current contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).

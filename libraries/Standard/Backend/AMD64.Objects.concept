@@ -55,14 +55,21 @@ Result<T, NativeError> AdmittedObjectAt(ref const BridgeReader reader, BridgeSeq
     };
 }
 Result<int, BackendError> AddObjectSlot(ref BackendFunction function, WireObjectType type, BridgeText name) {
-    if (function.slotCount >= 64 or type.Size <= 0 or not FrameAlignmentValid(type.Align)) {
+    return AddObjectSlotWithAlignment(ref function, type, name, type.Align);
+}
+// A native storage requirement may strengthen alignment without modifying the
+// checked semantic layout or pretending it has a different natural alignment.
+Result<int, BackendError> AddObjectSlotWithAlignment(ref BackendFunction function, WireObjectType type,
+BridgeText name, int storageAlignment) {
+    if (function.slotCount >= 64 or type.Size <= 0 or not FrameAlignmentValid(type.Align) or
+    not FrameAlignmentValid(storageAlignment) or storageAlignment < type.Align) {
         return Result::Error(BackendError::CapacityExceeded);
     }
     int id = function.slotCount;
-    function.slots[id] = MachineSlot{id, type.Size, type.Align, false, - 1, name};
+    function.slots[id] = MachineSlot{id, type.Size, storageAlignment, false, - 1, name};
     function.slotTypes[id] = ObjectScalar(type.Kind);
     function.slotCount += 1;
-    match (AlignFrameBytes(function.frameLocalSize, type.Align)) {
+    match (AlignFrameBytes(function.frameLocalSize, storageAlignment)) {
         Result::Ok(value) => {
             function.frameLocalSize = value;
         }
@@ -321,11 +328,8 @@ WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement plac
                             }
                             WireObjectType temporary = NativeObjectAt<WireObjectType>(ref const reader,
                             document.Types, arg.Type) ?;
-                            temporary = temporary with {
-                                Align = 16;
-                            };
-                            placement.argumentTemps[placement.argumentTempCount] = AddObjectSlot(ref function,
-                            temporary, temporary.Name) ?;
+                            placement.argumentTemps[placement.argumentTempCount] = AddObjectSlotWithAlignment(ref function,
+                            temporary, temporary.Name, 16) ?;
                             placement.argumentTempCount += 1;
                         }
                     }

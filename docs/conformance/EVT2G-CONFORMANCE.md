@@ -1,9 +1,9 @@
 # EVT2g — checked aggregates and CMIRAMD5
 
-Current qualification: [EVT2g3b checked borrows](#evt2g3b--checked-borrow-authority-and-native-references).
-EVT2g1–g3 below retain their historical stage boundaries. Native local objects,
-copies, immutable updates and bounded nonescaping source references now execute.
-Aggregate by-value parameters/results remain gated for EVT2g4.
+Current qualification: [EVT2g4 ABI planning](#evt2g4--win64-aggregate-abi-planning),
+with [EVT2g3b native checked borrows](#evt2g3b--checked-borrow-authority-and-native-references)
+retained. EVT2g1–g3b below preserve historical boundaries. Aggregate call encoding,
+generated caller/callee execution and final external conformance remain EVT2g5.
 
 ## EVT2g1 historical report
 
@@ -773,3 +773,166 @@ build, generated inspection, source format/lint and diff checks pass. Frozen Zig
 suites are skipped because their compiler/build/test paths are unchanged.
 
 **SUCCESS — EVT2g3b Cathedral checked borrow authority and native references qualified.**
+
+## EVT2g4 — Win64 aggregate ABI planning
+
+Baseline: `e7c10a81324abb7511ef4a42d49d27e31f543f4b`, clean checkout;
+compiler `concept-evt1-stage0-go`; target AMD64 Windows, Microsoft default x64
+calling convention. This stage qualifies derived classification, storage and
+physical call/frame plans. It does **not** qualify native aggregate call encoding
+or complete external ABI conformance.
+
+### Artifact and authority
+
+CMIRAMD6 remains version 6 with schema hash
+`67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d`.
+Its existing semantic aggregate values, call arguments, results, checked layouts
+and separate reference capabilities suffice. No schema, generated codec or
+physical ABI metadata was added; CMIRAMD3/4/5 remain frozen. V5 aggregate-only
+artifacts also use the new planner without changing their semantic contract.
+
+`Win64AggregateABI.concept` is the only aggregate classifier. It reads checked
+type/layout identities, representation, size, alignment and copy evidence.
+`AMD64.Aggregates.concept` owns typed signature, temporary, result and transfer
+plans and their verification. `AMD64.Objects` extends the existing object
+projection to synthesize physical carriers. The existing scalar allocator,
+Win64 positional planner, parallel-move replay and `FinalizedFrame` remain the
+physical owners. Go adds CLI presentation and tests, with no production ABI
+classifier, temporary allocator, hidden-pointer algorithm or packing engine.
+
+### Classification contract
+
+| Semantic input | Classification | Physical carrier / condition |
+| --- | --- | --- |
+| Qualified copyable record argument, exact size 1/2/4/8 bytes | Direct integer aggregate argument | Same-width unsigned GPR bits or outgoing stack slot; fields stay one aggregate |
+| Other qualified record argument sizes, including 3/5/6/7/12/16/24 | Indirect by-value argument | Pointer to distinct caller-created temporary; alignment 16 |
+| Eligible checked C record result, exact size 1/2/4/8 | Direct aggregate return | RAX payload with exact logical width; distinct from scalar source values |
+| Other qualified record result | Hidden aggregate return | Caller-owned typed result storage, hidden pointer at physical zero/RCX, same pointer returned in RAX |
+| `ref T` / `ref const T` | Checked reference | Existing Address carrier to original live object; no by-value temporary |
+| Scalar / void | Existing scalar / void class | Existing integer/bool/GPR or floating/XMM policy |
+
+Direct return qualification is stricter than argument size eligibility. It
+requires recursively checked `repr(C)` record structure, scalar/fixed-array
+members and checked copy permission. Native records lack that C structural
+evidence and conservatively use hidden returns, even when small. This bounded
+internal convention is not an external C++ ABI claim. Existing source C-repr
+admission excludes ownership, references and unsupported representations;
+the classifier does not turn PlainData into CAbiValue or add innate trust.
+Standalone array ABI, constructors/destructors/inheritance, vectorcall, varargs,
+indirect calls, move-only/Drop objects and arbitrary escaping values remain out
+of scope. Fixed arrays inside qualified records are covered.
+
+### Physical sequence and storage
+
+One physical ordinal drives GPR, XMM and outgoing-stack placement. For
+`TwentyFour Shifted(int a, double b, int c, float d)` the plan is exactly:
+
+| Physical position | Value | Location |
+| ---: | --- | --- |
+| 0 | Hidden result pointer | RCX |
+| 1 | a | RDX |
+| 2 | b | XMM2 |
+| 3 | c | R9 |
+| 4 | d | outgoing stack slot 0 |
+
+`Blend(Eight, TwentyFour, double, ref const Four, float, int)` additionally
+combines a direct small aggregate, indirect value, float and explicit reference
+under a hidden return. The result pointer is part of the ordered argument
+sequence. It has no independent hidden-pointer side channel.
+
+Each indirect value argument has its source value ID, checked type/layout,
+distinct temporary slot, exact object size, alignment 16, carrier vreg and
+call-covering start/end points. Initialization is a typed meaningful-field copy,
+following EVT2g3 `CopyObjectFields` semantics. Padding is never meaningful copy
+data. Each aggregate parameter has private materialization storage, so mutable
+value parameters cannot acquire authority over the caller's original object.
+Explicit reference parameters use the original reference path instead.
+
+Direct carriers pack/unpack meaningful fields; carrier padding may be zeroed
+without becoming semantic object data. Direct results are captured before
+caller-preservation reloads. Hidden results bind a stable typed result object;
+the return transfer must use the same incoming hidden pointer. Every return
+block has the corresponding result transfer and the shared inverse epilogue.
+Nested call results remain in separate private slots before subsequent argument
+copies. Storage is conservatively distinct; there is no lifetime-based reuse
+optimizer or general destructor elaboration.
+
+Source slots, private values, argument temporaries and result storage share the
+existing `LocalSlots` region with the same frame as saves, spills, move temps,
+outgoing arguments and one 32-byte shadow area. The maximum outgoing area is
+reserved once. Finalized post-prologue RSP is 16-byte aligned; local slot offsets
+enforce temporary alignment and the existing frame verifier rejects overlaps.
+Frames at or above 4096 bytes stop at `AMD64_STACK_PROBE_REQUIRED`.
+
+The shared scalar allocator also permits its existing callee-save GPR fallback
+for leaf entry pressure. Its first five choices are unchanged. A real scalar
+CMIRAMD4 native specimen exercises six incoming integer arguments, a saved
+register and `Sum(1,2,3,4,5,6) == 21`; this is not an aggregate native-call claim.
+
+### Evidence and stage boundaries
+
+`language/evt2g4/valid/aggregate_abi.concept` has 29 functions. The matrix covers
+1/2/4/8-byte direct arguments/returns; 3/5/6/7/12/16/24-byte indirect values;
+padding, nested records, fixed-array records, a small native hidden return,
+mixed int/bool/float/double/aggregate/reference signatures, stack arguments,
+hidden shifts, multiple calls, two early returns and nested aggregate calls.
+
+| Stage | Qualification |
+| --- | --- |
+| Checked semantic aggregate artifact | CMIRAMD6, 54,171 bytes; no new version; V5 regression artifact also planned |
+| Classification and physical call plan | Artifact-only Concept execution, source/AST/domain header absent |
+| Frame and typed transfer plans | Verified against admitted types, values, source slots, physical projection and shared frame; structural mutation isolation and padding replay |
+| Independent C classification | 14 real Win64 C/LLVM compiler signatures agree with literal expected direct/indirect and result classes |
+| Determinism | 100 plans per function per mode; classifications, argument order/placement, hidden pointers, storage/lifetimes, frame regions, moves and transfer/debug fields identical |
+| Normal / Verify | Same semantic plan fingerprints and frame geometry |
+| New aggregate native emission | Not qualified; precise next boundary before bytes/image mutation |
+| Existing scalar/object/reference native execution | Retained by the existing native regression lanes |
+| Full external aggregate ABI execution | Deferred to EVT2g5 |
+
+Independent fixtures are in `language/evt2g4/probes/win64_aggregate.c`, compiled
+with `clang --target=x86_64-pc-windows-msvc -std=c11 -pedantic-errors -S -emit-llvm -O0`.
+The 14 C record classifications agree. This Clang version nevertheless gives a
+24-byte caller temporary natural alignment 8 (assembly uses `[rsp+40]`), unlike
+Microsoft's documented 16-byte caller-temporary rule. Cathedral enforces 16.
+This discrepancy is retained as evidence, not silently treated as external
+alignment conformance. The target contract is
+[Microsoft x64 calling convention](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170).
+
+Derived-plan corruptions reject wrong physical shifts/XMM positions, direct
+width, return eligibility, stale layouts, by-value/reference confusion,
+original-storage aliasing, shortened lifetimes, missing/altered copies,
+temporary alignment, invalid hidden pointer, outgoing area, frame overlap and
+capacity. Missing layout lookup is a separate typed error. Valid source boundary
+specimens pin eight source parameters plus hidden pointer against the existing
+eight-physical-argument bound, and a large frame against the probing boundary.
+Existing v6 malformed-reference admissions remain exact and output preserving.
+
+The bounded plan holds 32 calls and 256 typed transfers; existing projection
+limits remain 64 source/private/temp objects, 128 physical vregs, 512 projected
+instructions and eight physical arguments (including hidden parameters). No heap
+fallback is introduced. Resident `AggregateFunctionPlan` metadata is 78,016 bytes
+on the tested C host; Driver's five active call records occupy 10,820 bytes.
+
+Representative frames range from 40 to 552 bytes: Shifted 56, Blend 120,
+Mixed 104, Early 136, Chain 120, Driver 552, Isolation 168, DirectChain 104,
+StackArguments 168 and CallMixed 184. Informational local observations for
+1600 classifications were 55–66 ms; 100 projections including temporary planning
+were 57–65 ms; 100 full Driver call/frame plans were 184–215 ms. These include
+their reader/classification work and are not isolated ABI or superiority claims.
+
+`concept amd64 language/evt2g4/valid/aggregate_abi.concept` prints the derived
+classifications, hidden shifts, frame, storage/lifetimes, moves and typed
+transfers, then stops at `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`.
+The native byte buffer and `NativeImage` stay untouched. General external
+linkage, final generated caller/callee execution, object output, unwind/SEH,
+ownership/Drop and broader native ABI closure are not added in this stage.
+
+Validation and final result are recorded in [EVT2g4 closeout](../history/milestones/EVT2G-CONVERGENCE.md#evt2g4-closeout).
+
+Full Go regression, semantic corpus, Golden Normal/Verify, GPU-free Vulkan and
+existing native integer/scalar/automata/object/reference lanes pass. Focused race,
+vet, Standard/DragonGod Normal/Verify, package build, backend admission, actual CLI
+planning, formatting, lint and diff checks pass. Frozen Zig suites are skipped
+because their compiler/build/test infrastructure is unchanged.
+
+**SUCCESS — EVT2g4 Win64 aggregate ABI classification and verified call/frame planning qualified. Native aggregate ABI execution and external closure remain EVT2g5.**

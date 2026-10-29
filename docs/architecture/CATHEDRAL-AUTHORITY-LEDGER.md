@@ -1,5 +1,8 @@
 # Cathedral authority ledger (R9c)
 
+Current aggregate status is [EVT2g4 planning](#evt2g4-aggregate-abi-authority).
+Earlier milestone tables below retain their historical qualification boundaries.
+
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
 migration matrix records the fuller subsystem inventory and prerequisites.
 
@@ -252,3 +255,24 @@ The native reference copy preserves an admitted address/capability; it does not
 copy the aggregate value. Explicit source value copies retain the existing
 fieldwise policy. Reference types do not gain PlainData or CAbiValue from pointer
 width. See [EVT2g3b qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 aggregate ABI authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Aggregate argument classification | CONCEPT_AUTHORITATIVE `Win64AggregateABI` | Exact 1/2/4/8-byte integer carriers; other record sizes indirect; checked copy evidence required |
+| Aggregate return classification | CONCEPT_AUTHORITATIVE `Win64AggregateABI` | Separate C structural eligibility for direct RAX; hidden caller storage otherwise |
+| Hidden pointer insertion and physical position shifts | CONCEPT_AUTHORITATIVE `AMD64.Objects`, existing `Win64ABI` | One ordered physical sequence; GPR/XMM and stack positions share the same ordinal |
+| Caller argument temporaries / callee materialization | CONCEPT_AUTHORITATIVE `AMD64.Objects` / `AMD64.Aggregates` | Distinct storage identities, checked field-copy transfers, align 16 and call-covering lifetime; references remain separate |
+| Result storage / capture / early-return transfers | CONCEPT_AUTHORITATIVE `AMD64.Aggregates` | Checked type/layout, stable storage, direct payload versus designated sret pointer, capture before preservation reload |
+| Aggregate frame geometry | CONCEPT_AUTHORITATIVE existing `AMD64.Frame` | Shared locals/outgoing/saves/spills/move temps; maximum outgoing area, nonoverlap, align 16, stack-probe stop |
+| Carrier allocation and parallel moves | CONCEPT_AUTHORITATIVE existing `AMD64.Analysis` / `Win64ABI` | Shared allocator and move replay; leaf GPR pressure may use existing callee-save pool |
+| Checked source layouts, copy and borrow semantics | Existing Stage-0 authoritative semantic input | No packing calculator, ownership checker, fact registry change or ABI classifier added in Go |
+| CMIRAMD6 and earlier schemas/codecs | Existing Concept schemas, unchanged | Existing semantic aggregate values/calls/results suffice; derived ABI state stays out of the artifact |
+| CLI plan printing | BOOTSTRAP_ONLY presentation | Prints actual Concept classifications, placements, storage, moves and transfers |
+| Classification tables, compiled Win64 C/LLVM probes and structural replay | Test oracles | Independent C record classifications; no production Go classifier |
+| Aggregate call encoding / generated caller-callee execution / external conformance | NOT_YET_QUALIFIED | `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`; EVT2g5 |
+
+Static `layout` remains useful for bounded metadata and explicit storage maps;
+it does not prove object initialization, copy permission or borrow authority.
+Dynamic frame geometry continues to come from the single existing finalizer.

@@ -1,7 +1,8 @@
 # EVT2g convergence — checked aggregate input
 
-Current milestone: [EVT2g3b closeout](#evt2g3b-closeout). EVT2g1–g3 below retain
-their historical boundaries and evidence.
+Current milestone: [EVT2g4 closeout](#evt2g4-closeout). EVT2g1–g3b below retain
+their historical boundaries and evidence. EVT2g4 qualifies structural ABI
+planning; complete native aggregate ABI qualification remains EVT2g5.
 
 Status: **MEANINGFUL PROGRESSION**; full native aggregate qualification remains open.
 
@@ -413,3 +414,148 @@ disabled. Go formatting and staged/unstaged whitespace checks pass. The closeout
 is committed with a clean worktree, retaining all frozen schema/codec files.
 
 **SUCCESS — EVT2g3b Cathedral checked borrow authority and native references qualified.**
+
+## EVT2g4 closeout
+
+### Identity and scope
+
+- Clean starting SHA: `e7c10a81324abb7511ef4a42d49d27e31f543f4b`.
+- Compiler: `concept-evt1-stage0-go`; AMD64 Windows, Microsoft default x64 ABI.
+- Branch: `codex/evt2g4-aggregate-abi`.
+- Implementation commit: `79e739c4ea94cbee9f5722d583ded0f7fc34dc17`;
+  retained when observed during validation. Alignment/inspection refinements and
+  this closeout follow separately. No newer work was reset or discarded.
+- Result scope: aggregate classification and verified physical call/storage/frame
+  planning. Native aggregate encoding and final external ABI closure remain EVT2g5.
+
+The motivating source now reaches a complete Concept-owned structural plan
+through a checked MachineIR artifact. `concept amd64` prints all 29 plans and
+advances from the old aggregate ABI gate to
+`AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`. The artifact-only native host also
+asserts this next boundary and unchanged byte/image sentinels. No source AST,
+domain-generated header or source-name reconstruction is available to its planner.
+
+### Ownership and semantic contract
+
+`Win64AggregateABI` exclusively classifies qualified aggregate arguments and
+returns. Exact 1/2/4/8-byte record arguments have integer carriers; all other
+qualified record sizes use distinct aligned caller temporaries. Direct RAX
+returns additionally need recursively checked C record structure. Native records
+without that evidence use hidden storage even when small. PlainData and CAbiValue
+are not equated, and no new user-fact or innate-trust path is added.
+
+`AMD64.Aggregates` verifies typed parameter, argument, result and lifetime
+transfers. `AMD64.Objects` projects carriers into the existing scalar allocator,
+Win64 argument policy, parallel-move planner, preservation replay and frame
+owner. Temporary storage alignment is an explicit native-slot requirement;
+natural alignment and checked semantic layout descriptors remain unchanged.
+Source/private/temp/result objects all occupy the same `LocalSlots` region.
+There is no separate aggregate stack, packing calculator, source borrow checker,
+physical ABI serialization or production Go classifier.
+
+Hidden results occupy physical position zero/RCX, shift integer and floating
+arguments together, and require the designated pointer back in RAX. Structural
+tests pin RDX/XMM2/R9/stack for the Shifted example, mixed small/large values and
+references, stack value/pointer distinction, one 32-byte shadow area and maximum
+outgoing reservation. Each indirect argument temporary is separate from every
+private source value, aligned to 16, initialized by checked meaningful-field
+copy and live throughout its call. Callee-private parameter materialization,
+direct result capture before reload, hidden pointer identity, nested result
+storage and all early returns have explicit transfers. General Move/Drop cleanup
+is not implemented.
+
+CMIRAMD6 remains v6, hash
+`67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d`.
+All frozen v3/v4/v5 schemas, codecs and exact artifact specimens remain unchanged.
+The existing semantic contract already distinguishes aggregate values, results
+and reference capabilities. Stage-0 changes are CLI presentation and test oracles
+only; no Go production ABI algorithm was introduced.
+
+### Evidence and measurements
+
+The fixture has 29 functions and covers the required direct/indirect sizes,
+padding, nesting, fixed-array records, direct/hidden returns, mixed scalar and
+reference arguments, stack positions, multiple calls, early returns and nested
+calls. The 54,171-byte v6 artifact alone drives Concept plans in both modes.
+One hundred runs per function compare classifications, storage/lifetimes, frames,
+physical arguments, hidden pointers, parallel moves and canonical debug fields.
+The final test also compares canonical text without depending on C struct padding.
+Normal and Verify have identical plan fingerprints and frame geometry.
+
+Structural replay follows actual planned caller temporary and callee-private
+slots. It preserves the original when the callee's materialized parameter is
+mutated. A padding-bearing record replay copies meaningful fields and retains
+poison bytes in padding. Derived-plan negative cases cover bad shifts/XMM,
+invalid direct width/return class, stale layout, reference/value confusion,
+source/temporary aliasing, lifetime/copy changes, alignment, hidden result
+identity, outgoing geometry, overlap and capacity. Missing layout is a distinct
+typed lookup error. Valid source boundary fixtures reject hidden-plus-eight
+arguments and frames requiring unsupported probing before output mutation.
+
+Fourteen independent Win64 C/LLVM record signatures agree with the literal
+expected classification tables. The compiler probe's 24-byte temporary has
+alignment 8 in IR and `[rsp+40]` in assembly. This differs from Microsoft's
+documented 16-byte caller-temporary requirement. Cathedral enforces 16; external
+temporary alignment and generated aggregate caller/callee execution are not
+claimed from this probe. Prepared C fixtures remain for EVT2g5.
+
+Representative frame bytes: Shifted 56, Blend 120, Mixed 104, Early 136,
+Chain 120, Driver 552, Isolation 168, DirectChain 104, StackArguments 168,
+CallMixed 184; overall range 40–552. Resident plan capacity uses 78,016 bytes;
+Driver's five active call records use 10,820 bytes on the tested C host.
+Informational focused observations: 1600 classifications 55–66 ms; 100 projections
+including argument storage 56–65 ms; 100 Driver call/frame plans 184–215 ms.
+These timings include checked reader work, are not isolated ABI timings and
+support no superiority claim.
+
+The shared allocator's leaf GPR fallback is also exercised through actual scalar
+CMIRAMD4 native encoding: six integer inputs, a saved register and result 21 in
+Normal/Verify. Aggregate native call encoding itself remains unqualified.
+
+### Validation record
+
+Evidence logs are under ignored `artifacts/evt2g4/`.
+
+| Gate | Result |
+| --- | --- |
+| Clean baseline native/object/reference regression | PASS; 191.829 s |
+| Final focused EVT2g4 classification/storage/frame tests | PASS; 119.251 s before the final canonical-text assertion; final assertion also included in full/race runs |
+| Independent Microsoft-target C compiler classifications | PASS; 14 signatures |
+| Derived corruption / physical capacity / probing boundaries | PASS in both modes |
+| Existing v5 ABI boundary and v6 reference admission | PASS; precise next emission stop, unchanged output/image; 27 reference corruptions and 100 roundtrips retained |
+| Scalar leaf fallback native execution | PASS; Normal/Verify, result 21, saved register |
+| Full `go test ./... -count=1 -parallel=4 -timeout=30m` | PASS; compiler 1086.486 s, CLI 212.588 s, GPU-free Vulkan profile 0.461 s |
+| Semantic corpus, Golden Normal/Verify, GPU-free Vulkan, EVT2/EVT2x/EVT2e/EVT2f, EVT2g1–g3b | PASS in the full Go regression run |
+| Focused EVT2g4 race | PASS; 313.064 s; final canonical-text checks and native leaf regression included |
+| Go vet | PASS |
+| Standard Normal / Verify CLI | 44 passed, 0 failed each; 3 informational benchmarks |
+| DragonGod Normal / Verify CLI | 23 passed, 0 failed each; 1 informational benchmark |
+| Standard/DragonGod package graph build | PASS; repeated against final source |
+| Actual CLI aggregate plans and next boundary | PASS; 29 printed plans, precise emission stop |
+| Changed Concept format/lint and backend source admission | PASS with configured library roots |
+| Frozen schema/codec diff | Empty; no generated transport update required |
+| Frozen root and legacy Zig | SKIPPED; legacy compiler/build/test infrastructure unchanged |
+
+The initial mixed leaf signature exposed the old five-GPR leaf search limit;
+the shared allocator now searches its existing callee-save pool after its first
+five choices. The first independent C probe test incorrectly expected Clang to
+emit alignment 16; the observed alignment-8 evidence is now recorded instead of
+being discarded. The initial scalar leaf harness selected frozen integer v3,
+while its inspector required v4; an explicit floating scalar function now pins
+the intended v4 allocator lane. These failures were repaired and rerun, without
+weakening production ABI checks. Earlier broad runs were deliberately interrupted
+for stronger semantic-storage validation and explicit native storage alignment;
+only the final full/race runs qualify the final code.
+
+The remaining native boundary is aggregate call emission, followed by EVT2g5
+generated caller/callee and external ABI qualification. Source reference returns,
+general raw/owned/Drop lifetime transitions, broad layout/bind-view admission,
+external linkage, varargs, indirect calls, object output and unwind/SEH remain
+outside this milestone.
+
+Final full/race runs include the explicit native alignment API and canonical-text
+determinism checks. Only documentation changed after their dispatch. Go format,
+Concept format/lint, frozen transport diff and whitespace checks pass. The final
+closeout is committed with a clean worktree; no push or PR is part of this task.
+
+**SUCCESS — EVT2g4 Cathedral Win64 aggregate ABI classification and verified call/frame planning qualified. Native aggregate call encoding and final external conformance remain EVT2g5.**

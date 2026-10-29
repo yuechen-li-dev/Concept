@@ -1,5 +1,8 @@
 # Cathedral transition (R9c)
 
+Current aggregate ABI stage: [EVT2g4 structural planning](#evt2g4-win64-aggregate-abi-planning).
+Native aggregate call encoding and external ABI execution qualification remain EVT2g5.
+
 Cathedral is the self-hosted Concept compiler and compiler-library stack. It
 grows upward from MachineIR by replacing semantic authority piecemeal, not by
 rewriting Stage-0 wholesale. The current checkout has Concept-authored AMD64
@@ -35,11 +38,12 @@ target:    Concept source -> Cathedral frontend/semantic libraries -> Planner
 ```
 
 The target path is a roadmap, not a currently runnable pipeline. The current
-Concept-authored slice consumes Stage-0-produced MachineIR through CMIRAMD2.
-Its present conceptual entrypoint is the composition of
-`Standard.Backend.Bridge{Schema,Derive,Read}` with
-`Standard.Backend.AMD64`, invoked by the Stage-0 `concept amd64` host. There is
-no Cathedral executable or `Standard.Compiler` umbrella module yet.
+Concept-authored slice consumes Stage-0-produced semantic MachineIR through
+versioned bridges. Qualified native integer, scalar, object and reference input
+uses CMIRAMD3/4/5/6. EVT2g4 derives aggregate ABI plans from v5/v6 without a new
+schema. The entrypoint is `Standard.Backend.AMD64`, composed with generated
+bridge readers and validators and invoked by the Stage-0 `concept amd64` host.
+There is no Cathedral executable or `Standard.Compiler` umbrella module yet.
 The C backend is a portable bootstrap and potentially long-lived fallback.
 Native Cathedral output is the intended normal path once qualified. Object
 emission is future Cathedral ownership. Neither a native object writer nor an
@@ -299,3 +303,38 @@ borrow boundary returns 9 natively. Reference returns, raw/owned/Drop lifetimes,
 general layout/bind views and aggregate by-value/indirect/sret ABI remain outside
 the qualification. The aggregate ABI stop is retained in v6; EVT2g4 is not begun.
 See [the reference contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 Win64 aggregate ABI planning
+
+`Standard.Backend.Win64AggregateABI` now owns the Microsoft default x64 aggregate
+classification. It consumes checked identities, representation, size, alignment
+and copy eligibility from the existing object document. It never computes record
+packing or field offsets, and PlainData does not grant CAbiValue. Argument and
+return classes are separate: exact 1/2/4/8-byte qualified records use integer
+argument carriers; other sizes use caller temporaries. Direct RAX returns also
+require recursively checked C record structure. Native records without that
+evidence conservatively use hidden result storage, including small records.
+
+`AMD64.Aggregates` retains typed parameter, argument, temporary, result and
+transfer identities while `AMD64.Objects` projects physical carriers into the
+existing scalar allocator, Win64 positional ABI, move planner and frame owner.
+One hidden pointer occupies physical position zero and shifts both GPR and XMM
+positions. Explicit references retain checked borrow semantics; indirect value
+arguments instead receive distinct, 16-byte-aligned caller temporaries and
+callee-private materialization. Field-copy transfers use the admitted object
+type and existing meaningful-field copy policy; padding is not semantic data.
+
+All source slots, private values, argument temporaries, result objects, saves,
+spills, cycle temporaries and outgoing arguments share `FinalizedFrame`.
+Aggregate storage uses its existing `LocalSlots` region, with explicit roles in
+the aggregate plan; there is no second call stack or frame finalizer. The shared
+allocator now also admits callee-saved GPR fallback for leaf entry pressure.
+
+CMIRAMD6 and the frozen CMIRAMD3/4/5 schema/codecs are unchanged. No derived
+RCX/RAX, stack offset or ABI class is serialized into semantic MachineIR. Go
+changes only present the Concept plans and provide independent test oracles.
+Artifact-only classification, frame planning and typed transfer verification
+advance supported signatures to `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`
+before output mutation. This qualifies planning, not aggregate call encoding,
+generated caller/callee execution, general external linkage, ownership/Drop or
+complete external ABI conformance. See [the stage-specific evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).
