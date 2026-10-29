@@ -1,7 +1,7 @@
 # Cathedral migration matrix (R9c)
 
-Current aggregate stage: [EVT2g4 structural planning](#evt2g4-aggregate-abi-planning).
-Earlier stage tables remain historical; full aggregate native ABI closure is EVT2g5.
+Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
+Earlier stage tables retain their historical qualification boundaries.
 
 This inventory is a decision map, not a schedule to delete Stage-0. `Current`
 classifies implementation as Go, Concept, or Shared. `Desired` means Stage-0
@@ -205,3 +205,22 @@ The earlier aggregate-ABI planning blocker is removed for the bounded copyable
 record slice. The next boundary is native call emission, diagnosed before byte
 or image mutation. Source ownership, reference-return and general layout-view
 boundaries remain unchanged. See [the current contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).
+
+## EVT2g5 native aggregate calls
+
+| Capability | Current owner/state | Remaining boundary |
+| --- | --- | --- |
+| Direct aggregate arguments and direct RAX results | Concept `AMD64.AggregateEmission`, native-qualified bounded slice | EVT2g4 structural eligibility retained; no arbitrary same-sized type admission |
+| Indirect value arguments and callee-private parameters | Concept transfer selector and existing field copier, native-qualified | Checked copyable objects only; no ownership/Drop extension |
+| Hidden result construction, argument shifts and pointer return | Concept transfer selector / existing Win64 call actions, native-qualified | No source reference or escape authority inferred from sret pointers |
+| Mixed scalar/reference/aggregate calls, recursion and fixups | Existing Concept allocation/frame/call/fixup stack, native-qualified | Eight physical arguments including hidden pointers; existing bounded resources |
+| Frame alignment / shadow / saves / spills | Existing unified frame, native-qualified | Actual outgoing align 16; 4088-byte unprobed frame tested; probing remains unsupported |
+| Native module rejection atomicity | Count-only shared writer / fixup preflight and existing typed plan verifier | Unsupported contracts, capacities and geometry reject before byte/image mutation |
+| Independent Microsoft x64 ABI evidence | MSVC and Clang C callers/callees, qualified tested C record slice | Test-only tail thunks; no general external linker, C++ ABI, varargs or indirect calls |
+| Bootstrap header coexistence | Go C emitter, BOOTSTRAP_ONLY correction | Canonical natural built-in arrays share guarded definitions; no native ABI policy added |
+| Semantic contracts and frozen transport | Existing Stage-0 source checks and CMIRAMD3/4/5/6, unchanged | Layout identity consistency is not producer authentication |
+| Ownership/Drop, broader reference/storage forms and object output | Deferred | Separate explicit mission; EVT2h and object-file output not begun |
+
+The aggregate emission gate is removed for admitted signatures. Actual native
+execution, checked-source C parity and independent C ABI probes now qualify the
+bounded planner/emitter composition. See [the execution contract](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).

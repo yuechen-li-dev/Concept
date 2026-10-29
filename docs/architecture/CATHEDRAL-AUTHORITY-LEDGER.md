@@ -1,6 +1,6 @@
 # Cathedral authority ledger (R9c)
 
-Current aggregate status is [EVT2g4 planning](#evt2g4-aggregate-abi-authority).
+Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
 Earlier milestone tables below retain their historical qualification boundaries.
 
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
@@ -276,3 +276,21 @@ width. See [EVT2g3b qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--
 Static `layout` remains useful for bounded metadata and explicit storage maps;
 it does not prove object initialization, copy permission or borrow authority.
 Dynamic frame geometry continues to come from the single existing finalizer.
+
+## EVT2g5 aggregate emission authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Aggregate ABI classification and physical plan | Existing CONCEPT_AUTHORITATIVE `Win64AggregateABI` / `AMD64.Aggregates` | EVT2g4 rules unchanged; separate argument/return eligibility; same typed plan validator |
+| Direct carrier packing and parameter/result materialization | CONCEPT_AUTHORITATIVE `AMD64.AggregateEmission` | Zero physical carrier, copy meaningful fields through existing `CopyObjectFields`; no object padding read or packing inference |
+| Indirect argument initialization and pointer placement | CONCEPT_AUTHORITATIVE transfer selector and existing scalar call machinery | Distinct typed temporary, actual pointer alignment 16, existing parallel moves and positional destinations |
+| Hidden result binding / construction / RAX identity | CONCEPT_AUTHORITATIVE transfer selector | Stable caller result storage; shifted physical arguments; all return paths copy fields and return the designated pointer; call result pointer checked |
+| Call encoding / preservation / fixups | Existing Concept `RealizeAllocatedCall`, scalar actions, placeholder writer and resolver | Aggregate transfers surround the same call actions; direct result capture precedes reload; forward/backward/recursive calls qualified |
+| Frame and scratch storage | Existing Concept frame owner | One frame, fixed RSP, one shadow area, existing scratch/spill/save slots; observed 4088-byte native frame, larger probing requirement rejected |
+| Failure preflight | CONCEPT_AUTHORITATIVE existing byte/fixup writers with count-only mode | Same opcode selectors and capacity checks before writes; checked plans before emission; measured images are never finalized/published |
+| Go production change | BOOTSTRAP_ONLY generated C header correctness | Natural built-in array typedef guards allow backend/oracle headers to coexist; nominal and layout-strengthened declarations remain separately owned |
+| Independent C ABI qualification | Test oracles: separately compiled MSVC/Clang C DLLs plus independent ml64 boundary observer | Both directions, positional GPR/XMM/stack, sret RAX, shadow/RSP, temporary pointers, GPR/XMM nonvolatiles; test-only tail thunks, no production external linker |
+| Wire contract / source semantics | Existing checked source and CMIRAMD3/4/5/6 owners, unchanged | No new schema/hash/tags/codecs, source borrow rule, copy permission, CAbiValue or NoAlias grant |
+| Owned/Drop, escaping reference returns, general storage views, varargs/indirect calls, object output | NOT_YET_QUALIFIED | Explicit existing boundaries retained; no EVT2h or object-file work begun |
+
+See [EVT2g5 execution and ABI evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).

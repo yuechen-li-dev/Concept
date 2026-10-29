@@ -1,9 +1,9 @@
 # EVT2g — checked aggregates and CMIRAMD5
 
-Current qualification: [EVT2g4 ABI planning](#evt2g4--win64-aggregate-abi-planning),
-with [EVT2g3b native checked borrows](#evt2g3b--checked-borrow-authority-and-native-references)
-retained. EVT2g1–g3b below preserve historical boundaries. Aggregate call encoding,
-generated caller/callee execution and final external conformance remain EVT2g5.
+Current qualification: [EVT2g5 native aggregate calls and Win64 ABI](#evt2g5--native-aggregate-calls-and-win64-abi-closeout).
+EVT2g1–g4 below preserve historical boundaries. Local objects, checked references,
+aggregate calls/results and the bounded C-compatible Win64 ABI slice now execute.
+Ownership/Drop, general external linkage and object-file output remain excluded.
 
 ## EVT2g1 historical report
 
@@ -936,3 +936,199 @@ planning, formatting, lint and diff checks pass. Frozen Zig suites are skipped
 because their compiler/build/test infrastructure is unchanged.
 
 **SUCCESS — EVT2g4 Win64 aggregate ABI classification and verified call/frame planning qualified. Native aggregate ABI execution and external closure remain EVT2g5.**
+
+## EVT2g5 — native aggregate calls and Win64 ABI closeout
+
+Baseline: `bcfe25c52627127873242e91a077a14dbe7e186b`, clean checkout;
+compiler `concept-evt1-stage0-go`; target Windows AMD64 / Microsoft default x64
+ABI. EVT2g4's classifier, eligibility rules, physical plans and unified frame
+remain the authority. This stage realizes those plans and qualifies actual
+native execution, checked-source C parity and independent C ABI boundaries.
+
+### Implementation and contracts
+
+`AMD64.AggregateEmission.concept` selects typed entry, argument, result and
+return transfers. The direct path zero-initializes an eight-byte physical
+carrier workspace, uses existing `CopyObjectFields` operations to copy meaningful
+fields into it, and sends the exact qualified carrier through the existing
+scalar call actions. Parameter and result materialization copy meaningful fields
+out of that carrier. Source object padding is never read as semantic data.
+Direct carrier padding is zeroed as a physical policy, not a C semantic guarantee.
+
+Indirect arguments initialize distinct typed caller temporaries with that same
+field copier, then place their addresses in the EVT2g4 destinations. Entry
+transfers materialize private callee parameter values. Explicit references retain
+their existing address/authority path and continue to name the original object.
+No pointer-sized carrier is itself proof of copy permission, object liveness,
+reference authority or NoAlias.
+
+Hidden returns bind caller result storage, shift all explicit integer/floating/
+reference arguments by one position, construct the meaningful result fields and
+return the designated pointer in RAX. The caller checks that RAX denotes its
+planned result slot. Direct result field capture happens immediately after CALL,
+before preservation reloads. Every early return follows the same typed return
+contract and shared inverse epilogue. Recursive and forward/backward calls use
+the existing semantic symbol identities and rel32 resolver.
+
+`AMD64.concept` and the existing scalar frame/call infrastructure remain the
+instruction, move, spill/save and fixup owners. `EncodeCheckedAggregateFunction`
+calls the existing EVT2g4 plan validator before selecting bytes. Aggregate module
+preflight uses the same byte writer and selectors in count-only mode, checking
+capacity, opcodes, branches and symbol/fixup geometry before either caller output
+is changed. Measured images are never marked executable/finalized. The subsequent
+write pass uses the same immutable admitted input and plans; only its completed,
+resolved image is published. There is no heap fallback or separate aggregate
+stack allocator.
+
+| Signature class | Qualified realization |
+| --- | --- |
+| Copyable record arguments of exact size 1/2/4/8 | Integer carriers in positional RCX/RDX/R8/R9 or outgoing stack slots |
+| Other qualified record argument sizes | Caller-owned aligned indirect value temporaries, private callee materialization |
+| Structurally eligible checked C record results of size 1/2/4/8 | RAX payload, exact meaningful fields |
+| Other qualified record results | Hidden caller storage at physical position zero/RCX; same pointer in RAX |
+| Mixed int/bool, float32/float64, checked refs and aggregates | Existing positional GPR/XMM policy; stack after physical position three |
+| Native records without C direct-return evidence | Existing conservative internal hidden-return convention; no arbitrary C++ interoperability claim |
+
+Eight physical arguments remain the capacity. Hidden results consume one of
+them, so their supported source signatures have at most seven explicit arguments.
+Standalone array ABI, ownership-bearing/noncopyable/reference-bearing aggregate
+copies, classes, varargs, indirect calls, general reference returns and layout-
+erased values retain their explicit source/native boundaries. No source ownership
+or borrow rule was added or weakened.
+
+CMIRAMD3/4/5/6 schemas, versions, hashes, generated codecs, tags and exact wire
+specimens are unchanged. CMIRAMD6 remains v6 with hash
+`67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d`.
+The existing artifact already carries all required semantic values and identities.
+No RCX/RAX choices or native placement is serialized back into it. Checked layout
+geometry remains supplied upstream; no field offsets or packing are inferred.
+
+### Native corpus and C semantic parity
+
+`language/evt2g5/valid/calls.concept` contains 38 functions covering direct integer
+and floating-member aggregate carriers, odd-size and padding-bearing records,
+nested records, fixed arrays, native small hidden results, scalar/ref mixtures,
+all register positions and stack arguments, two indirect temporaries, nested
+results, direct/hidden recursive forwarding, early returns, immutable `with`,
+mutable value-versus-reference isolation and pressure/spill cases.
+
+`TestEVT2g5NativeExecution` first runs with the domain source and generated domain
+header absent, using only the CMIRAMD6 bytes and Concept-authored backend compiled
+through the bootstrap C path. It then links a separate strict-C11 oracle generated
+from the checked source. Each mode compares 100 varied finite inputs and logical
+fields/mutations, with bitwise floating identity where required. Negative zero,
+infinities and a quiet NaN payload pass through an eight-byte aggregate unchanged.
+Padding is not compared as semantic value data.
+
+`TestEVT2g5NativeSmoke` executes the prior EVT2g4 29-function artifact. Additional
+100-vector calls cover 5/6/7-byte records, 12/16-byte records and an eight-byte
+fixed-array record. The odd-size source also compiles through the checked-source
+C oracle. Bounds failures on aggregate array parameters are child-process UD2
+checks, with timeout cleanup.
+
+`near_frame.concept` independently executes a 1352-byte C record with 168 double
+fields and a byte tag. Its three private object regions and existing scratch
+produce a 4088-byte native frame, the largest aligned frame below the existing
+4096-byte probing boundary. One hundred physical-sret calls verify returned
+pointer identity, every field, caller guards and unchanged destination padding.
+The code image is 9398 bytes. Larger frames still reject with
+`AMD64_STACK_PROBE_REQUIRED` before output mutation.
+
+### Independent Microsoft x64 C ABI probes
+
+`language/evt2g5/probes/probe.c` is separately compiled as a DLL with both MSVC
+and Clang in Microsoft x64 mode. It includes no Cathedral types, classifier,
+frame description or generated domain source. `boundary.asm`, assembled by
+ml64, observes registers/stack addresses before C parameter materialization and
+checks all eight nonvolatile GPRs and XMM6–XMM15 with full-width sentinels.
+
+| Direction / observation | Actual evidence in each compiler and mode |
+| --- | --- |
+| Compiled C caller to unmodified Cathedral callee | 100 varied calls: direct 1/2/4/8, floating member bits, hidden return, mixed GPR/XMM/ref/stack, eight explicit arguments, recursion and array parameters |
+| Cathedral caller to compiled C callee | 100 varied calls through admitted internal call sites redirected by test-only tail thunks: direct 1/2/8 identities, mixed direct four/indirect 24, sret, shifted int/double/float, explicit mutable/const references |
+| By-value temporary versus reference | Actual indirect pointer differs from original ref address; mutation of the temporary leaves original value fields intact; authorized reference mutation remains visible |
+| Native outgoing temporary alignment | Observed raw argument pointer is 0 modulo 16 |
+| Stack / shadow | Entry RSP is 8 modulo 16, giving aligned caller call sites; the 32-byte shadow area is writable without damaging stack arguments |
+| Hidden result return | Independently compiled physical-signature caller receives exactly its supplied result pointer in RAX; guarded result fields are correct |
+| Register preservation | Native nested/recursive execution preserves full-width RBX/RBP/RSI/RDI/R12–R15 and XMM6–XMM15 sentinels |
+
+The test-only absolute tail thunks redirect already resolved internal symbols to
+the independent DLL; they do not introduce a production external-symbol linker,
+classifier, move planner or call encoder. Native byte determinism is measured
+on the unmodified emitted image, before probe redirection.
+
+MSVC was found at `VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe` (file version
+19.51.36260.0); Clang 22.1.3 uses `clang-cl.exe`, target
+`x86_64-pc-windows-msvc`, with the MSVC environment and runtime. Both execute
+the same independently authored C contract. The complex C caller probe observed
+16-byte-aligned incoming temporaries with both compilers. The earlier simple
+Clang probe still shows alignment 8 / `[rsp+40]`; the new observation does not
+resolve or erase that compiler-specific discrepancy. Cathedral consistently
+enforces its documented outgoing align-16 policy. The external target remains
+[Microsoft's default x64 calling convention](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170), not SysV or vectorcall.
+
+### Determinism, rejection and measurements
+
+One hundred fresh parses/checks/LIR/MachineIR generations agree. Each mode also
+performs 100 fresh native emissions and plans, compares the full bytes, symbol
+order/offsets/sizes, call fixups and representative pressure-case allocation,
+frame and move descriptions. Normal/Verify native images are byte-identical.
+
+| Artifact / native image | Size / identity |
+| --- | --- |
+| Final EVT2g5 CMIRAMD6 corpus | 144387 bytes; SHA256 `5a1b3c2d0a55e382a84bf502757c8e93ddebd2c302079bab1fd9a3f98cabbc69` |
+| EVT2g5 native module | 38 functions, 21 calls, 40381 bytes; SHA256 `41c1e7e01c3dd80e8c1b46f131cd85812feff64a780adf4c3e4816b363c46a4b` |
+| EVT2g4 artifact now executed | 29 functions, 12 calls, 15859 bytes |
+| Near-probing-boundary native specimen | Frame 4088; image 9398 bytes |
+| Existing EVT2g3 / EVT2g3b images | Retained at 32504 / 23820 bytes; original reference specimen still returns 9 |
+
+The main corpus frames range from 40–344 bytes. Pressure has a 312-byte frame
+with 104 spill bytes; FloatLive, Scenario and BoolDriver also exercise typed
+floating spills. CallShifted and CallMixed preserve the incoming result pointer
+across a nested hidden-return call. Combined local admission/planning/count-only
+preflight/emission observations were roughly 109–114 ms for the 38-function
+image in a focused run. These are informational combined costs, not isolated
+allocation/ABI timings or a performance-superiority claim.
+
+Eighteen malformed derived plans are rejected by the production checked encoder
+before byte/image/workspace mutation. Cases include direct width, structural
+return eligibility, missing/wrong hidden pointer or storage, shifted positions,
+XMM placement, original/temporary aliasing, both reference/value reinterpretations,
+temporary alignment and size, frame overlap, stale layout, wrong result carrier,
+shortened lifetime, missing copy, plan capacity and outgoing area.
+
+Eight additional malformed aggregate artifacts repeat rejection 100 times per
+mode: scalar/aggregate source-class confusion, stale value layout, missing copy
+permission, contradictory geometry, call argument type, call target, call result
+type and malformed parameter capacity. Existing 27 reference corruptions and
+the prior object/bridge corpus remain intact. Output/image sentinels prove
+admission and preflight failures do not publish partial native code. The old
+valid-aggregate-stop tests now assert successful emission plus atomic insufficient-
+buffer rejection. Physical argument/frame-probing boundaries remain explicit.
+
+Admission checks supplied layout relationships and identities, not producer
+authentication. A padding-only size alteration can remain geometrically legal;
+the malformed geometry test uses a genuine parent/field contradiction instead.
+No second packing engine was added to invent a different layout authority.
+
+### Bootstrap correction and validation
+
+Independent oracle compilation exposed duplicate natural built-in array C
+typedefs in two generated headers (`concept_array_8_byte`). The existing Go C
+header owner now guards canonical natural built-in wrappers. Nominal element
+types and layout-strengthened storage are not folded into that rule. Only two
+portable-C checked headers and their manifests required regeneration, through
+the checked-output test; frozen bridge/native bytes remain unchanged. No Go
+production native ABI classification or physical emission algorithm was added.
+
+Final commands, outcomes and closeout status are recorded in
+[the EVT2g5 convergence report](../history/milestones/EVT2G-CONVERGENCE.md#evt2g5-closeout).
+The full Go regression passed (compiler 1391.101 s, CLI 278.923 s, GPU-free Vulkan
+profile 0.478 s), as did the focused EVT2g5 race run (572.161 s), vet, checked
+outputs, Standard's 44 tests and DragonGod's 23 tests per mode. Frozen Zig lanes
+were skipped under the unchanged compiler/build/test infrastructure policy.
+Ownership/Drop, general raw storage, escaping reference returns, reference-bearing
+copies, C++ object ABI, varargs, indirect calls, general external linkage,
+COFF/object output, unwind/SEH, SysV and AArch64 remain outside this qualification.
+
+**SUCCESS — EVT2g5 native aggregate call/return execution and the bounded Microsoft x64 C ABI slice qualified.**

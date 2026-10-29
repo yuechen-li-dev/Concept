@@ -1,7 +1,7 @@
 # Cathedral transition (R9c)
 
-Current aggregate ABI stage: [EVT2g4 structural planning](#evt2g4-win64-aggregate-abi-planning).
-Native aggregate call encoding and external ABI execution qualification remain EVT2g5.
+Current aggregate ABI stage: [EVT2g5 native execution](#evt2g5-native-aggregate-emission).
+Earlier milestone sections preserve their historical qualification boundaries.
 
 Cathedral is the self-hosted Concept compiler and compiler-library stack. It
 grows upward from MachineIR by replacing semantic authority piecemeal, not by
@@ -42,7 +42,8 @@ Concept-authored slice consumes Stage-0-produced semantic MachineIR through
 versioned bridges. Qualified native integer, scalar, object and reference input
 uses CMIRAMD3/4/5/6. EVT2g4 derives aggregate ABI plans from v5/v6 without a new
 schema. The entrypoint is `Standard.Backend.AMD64`, composed with generated
-bridge readers and validators and invoked by the Stage-0 `concept amd64` host.
+bridge readers and validators; EVT2g5 realizes aggregate plans as native calls
+and returns. It is invoked by the Stage-0 `concept amd64` host.
 There is no Cathedral executable or `Standard.Compiler` umbrella module yet.
 The C backend is a portable bootstrap and potentially long-lived fallback.
 Native Cathedral output is the intended normal path once qualified. Object
@@ -338,3 +339,26 @@ advance supported signatures to `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`
 before output mutation. This qualifies planning, not aggregate call encoding,
 generated caller/callee execution, general external linkage, ownership/Drop or
 complete external ABI conformance. See [the stage-specific evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).
+
+## EVT2g5 native aggregate emission
+
+`AMD64.AggregateEmission` now realizes EVT2g4's typed entry, argument, result and
+return transfers. It packs direct carriers through initialized frame scratch,
+copies meaningful fields with the existing object copier, initializes isolated
+indirect temporaries, materializes private value parameters and writes typed
+result storage. `AMD64` surrounds existing scalar call actions with these
+transfers; physical placement, parallel moves, frame geometry and rel32 fixups
+retain their existing owners. Hidden returns write the designated result object
+and return its pointer in RAX; callers check that identity.
+
+The byte writer has a count-only mode. Aggregate module preflight uses the same
+selectors, bounds and fixup geometry before publishing bytes or `NativeImage`.
+Actual emission follows only after all bodies and call targets pass. This adds
+no second emitter, frame allocator or shadow area. Native execution and separate
+MSVC/Clang C ABI probes now qualify the bounded copyable-record slice; reference-return,
+ownership/Drop, general external linkage and object-file exclusions remain.
+
+The sole Go production correction shares canonical natural built-in array C
+typedefs across generated headers. It unblocks independent backend/oracle
+compilation and adds no native ABI policy. Frozen CMIRAMD3/4/5/6 schemas, codecs,
+hashes and byte specimens remain unchanged. See [the qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).
