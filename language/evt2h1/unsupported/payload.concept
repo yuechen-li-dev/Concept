@@ -1,0 +1,7 @@
+profile Core;
+enum A {
+    One, Value(int value),
+}
+A Main() {
+    return A::One;
+}

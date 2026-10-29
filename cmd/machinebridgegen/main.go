@@ -90,5 +90,24 @@ func main() {
 		}
 	}
 	fmt.Println(borrow.String())
+	enumPath := filepath.Join(root, "libraries/Standard/Backend/BridgeSchema7.concept")
+	enumSource, err := os.ReadFile(enumPath)
+	if err != nil {
+		fail(err)
+	}
+	enumModule, err := concept.ParseWithBuiltSemanticModuleRoots(enumPath, string(enumSource), []string{filepath.Join(root, "libraries")})
+	if err != nil {
+		fail(err)
+	}
+	ordinary, err := concept.GenerateMachineBridgeCodecs(enumModule)
+	if err != nil {
+		fail(err)
+	}
+	for name, data := range map[string][]byte{"internal/concept/machineir_bridge7_codec_generated.go": ordinary.Go, "libraries/Standard/Backend/BridgeCodec7.concept": ordinary.Concept, "docs/design/EVT2-MACHINEIR-BRIDGE7.schema.json": ordinary.Metadata} {
+		if err := os.WriteFile(filepath.Join(root, name), data, 0644); err != nil {
+			fail(err)
+		}
+	}
+	fmt.Println(ordinary.String())
 }
 func fail(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }

@@ -11,7 +11,10 @@ Baseline: `535910e486b0f20f6ec1c6e6e7bee931d359b61a` (EVT2g5),
   declaration ordinal. The grammar has no explicit discriminant initializer or
   underlying-type clause. Attributes do not grant a different enum carrier.
 * Both tag-only and payload declarations already exist. `ConstructExpr` carries
-  the resolved enum type, variant name and checked arguments. Checking rejects
+  enum/variant names and arguments. Ordinary checking returns the enum type;
+  its `ResolvedType` field is not populated for ordinary constructors (that field
+  is used by special fallible forms). LIR resolves the checked declaration.
+  Checking rejects
   unknown variants, wrong arity and payload type mismatches. An enum containing
   any payload is not an ordinary enum, including its payload-free cases.
 * Same nominal ordinary enum supports `==` / `!=`. Payload equality rejects

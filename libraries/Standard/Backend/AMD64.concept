@@ -481,6 +481,15 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8 and artifact[7] == 55) {
+        match (ValidateEnumMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        BridgeReader source = BridgeReader{artifact, 0};
+        WireObjectModule document = AdmittedObjectDocument(artifact) ?;
+        return EmitObjectNativeDocument(ref const source, document, output, ref image, false);
+    }
     if (Len(artifact) >= 8 and artifact[7] == 54) {
         match (ValidateBorrowMachineBridge(artifact)) {
             Result::Ok => { }
@@ -1608,7 +1617,12 @@ Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction fu
 // Inspection uses the same production projection, allocator and finalizer.
 Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
 ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
-    if (Len(artifact) >= 8 and artifact[7] == 54) {
+    if (Len(artifact) >= 8 and artifact[7] == 55) {
+        match (ValidateEnumMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    } else if (Len(artifact) >= 8 and artifact[7] == 54) {
         match (ValidateBorrowMachineBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }

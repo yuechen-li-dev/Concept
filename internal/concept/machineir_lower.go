@@ -11,6 +11,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	if len(lir.Enums) != 0 {
+		return projectEnumMachine(lir)
+	}
 	// Frozen CMIRAMD3/4 have no typed aggregate layout, object derivation,
 	// copy eligibility or result-storage contract. Never erase that evidence
 	// by treating a small record as an integer or an object address as a scalar.

@@ -1,0 +1,7 @@
+profile Core;
+enum A {
+    One, Two,
+}
+A Read(ref const A value) {
+    return value;
+}

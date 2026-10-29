@@ -1,0 +1,11 @@
+profile Core;
+enum A {
+    One, Two,
+}
+struct R {
+    A value;
+}
+A Main() {
+    R record = R{A::One};
+    return record.value;
+}

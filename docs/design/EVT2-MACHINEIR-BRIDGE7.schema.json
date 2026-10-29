@@ -1,0 +1,127 @@
+{
+  "module": "Standard.Backend.BridgeSchema7",
+  "magic": "CMIRAMD7",
+  "version": 7,
+  "max_items": 1048576,
+  "representation": "little-endian;CMIRAMD5=7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60;ordinary-enum-domains;checked-u32-tags;nominal-values;no-payload;no-reference-or-aggregate-types",
+  "records": [
+    {
+      "name": "WireEnumHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireEnumVariant",
+      "fields": [
+        {
+          "name": "Name",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Tag",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireEnumDomain",
+      "fields": [
+        {
+          "name": "Type",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Identity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "LayoutIdentity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Size",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Align",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Variants",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireEnumVariant"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireEnumModule",
+      "fields": [
+        {
+          "name": "Objects",
+          "type": {
+            "name": "WireObjectModule"
+          }
+        },
+        {
+          "name": "Domains",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireEnumDomain"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

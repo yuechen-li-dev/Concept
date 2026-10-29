@@ -1,0 +1,2 @@
+profile Core;
+enum A { One, One, }

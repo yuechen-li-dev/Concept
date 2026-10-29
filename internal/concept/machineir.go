@@ -9,6 +9,7 @@ import (
 // MachineIR is AMD64-specific, but retains virtual registers and abstract frames.
 // No opcode below is an encoded instruction or an allocated register assignment.
 type MachineModule struct {
+	Enum      *EnumModule          // CMIRAMD7 ordinary nominal discriminants.
 	Borrow    *BorrowModule        // CMIRAMD6 checked reference authority.
 	Functions []MachineFunction    // Frozen CMIRAMD3 selected-integer contract.
 	Scalar    *ScalarMachineModule // CMIRAMD4 virtual-only exact scalar contract.
@@ -298,6 +299,9 @@ type MachineFunction struct {
 }
 
 func (m MachineModule) String() string {
+	if m.Enum != nil {
+		return fmt.Sprintf("CMIRAMD7 domains=%v\n%s", m.Enum.Domains, m.Enum.Objects.String())
+	}
 	if m.Borrow != nil {
 		return borrowMachineString(*m.Borrow)
 	}

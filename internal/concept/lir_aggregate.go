@@ -74,6 +74,7 @@ func lirAggregateIdentity(layout LIRAggregateLayout) LIRType {
 }
 
 type lirAggregateTypes struct {
+	enums    []LIREnum
 	env      *semanticEnv
 	layouts  []LIRAggregateLayout
 	known    map[string]LIRType
@@ -98,6 +99,9 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 		return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_AUTHORITY %s", t.String())
 	}
 	t = t.valueType()
+	if decl, ok := a.env.enums[t.Name]; ok {
+		return a.lowerEnum(t, decl)
+	}
 	if t.ArrayElem != nil {
 		if len(a.visiting) == 0 {
 			// A checked aggregate array literal must reuse its element layout;

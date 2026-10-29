@@ -143,6 +143,7 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		out.Functions = append(out.Functions, b.fn)
 	}
 	out.Aggregates = aggregates.layouts
+	out.Enums = aggregates.enums
 	if err := VerifyLIR(out); err != nil {
 		return LIRModule{}, err
 	}
@@ -588,6 +589,24 @@ func (b *lirBuilder) foreach(s *ForeachStmt) error {
 
 func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	switch e := expr.(type) {
+	case *ConstructExpr:
+		decl, ok := b.env.enums[e.EnumName]
+		if !ok {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_ENUM_CONSTRUCTOR %s", e.EnumName)
+		}
+		t, err := b.lowerType(Type{Name: decl.Name, Kind: TypeEnum, Span: e.Span})
+		if err != nil {
+			return 0, "", err
+		}
+		if !lirEnumType(t) || len(e.Args) != 0 {
+			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_ENUM_CONSTRUCTOR")
+		}
+		for _, v := range decl.Variants {
+			if v.Name == e.VariantName {
+				return b.constant(t, strconv.Itoa(v.Tag), e.Span), t, nil
+			}
+		}
+		return 0, "", fmt.Errorf("EVT2_UNKNOWN_ENUM_VARIANT")
 	case *RefExpr:
 		return b.borrowExpr(e)
 	case *ParenExpr:

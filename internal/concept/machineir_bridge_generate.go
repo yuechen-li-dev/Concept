@@ -94,13 +94,17 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	scalar := module.Name == "Standard.Backend.BridgeSchema4"
 	object := module.Name == "Standard.Backend.BridgeSchema5"
 	borrow := module.Name == "Standard.Backend.BridgeSchema6"
-	modern := scalar || object || borrow
+	ordinary := module.Name == "Standard.Backend.BridgeSchema7"
+	modern := scalar || object || borrow || ordinary
 	prefix := "Scalar"
 	if object {
 		prefix = "Object"
 	}
 	if borrow {
 		prefix = "Borrow"
+	}
+	if ordinary {
+		prefix = "Enum"
 	}
 	if module.Name != "Standard.Backend.BridgeSchema" && !modern {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
@@ -208,6 +212,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	if borrow {
 		rootName, headerName = "WireBorrowModule", "WireBorrowHeader"
 	}
+	if ordinary {
+		rootName, headerName = "WireEnumModule", "WireEnumHeader"
+	}
 	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
 	}
@@ -222,7 +229,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		emitter.records[r.Name] = r
 	}
 	// Explicit reuse of frozen v5 codecs, never a duplicated field definition.
-	if borrow {
+	if borrow || ordinary {
 		emitter.sharedObject = true
 		for _, name := range []string{"WireObjectModule", "WireObjectSpan"} {
 			emitter.records[name] = bridgeSchemaRecord{Name: name}
@@ -383,6 +390,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		if borrow {
 			suffix, lower = "6", "borrow"
 		}
+		if ordinary {
+			suffix, lower = "7", "enum"
+		}
 		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", prefix+"MachineBridge")
 		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema"+suffix+";")
 		goText = strings.ReplaceAll(goText, "bridgeTags", lower+"BridgeTags")
@@ -401,7 +411,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 			"BridgeMagic[i]", prefix+"BridgeMagic[i]",
 			"header.version != BridgeVersion", "header.version != "+prefix+"BridgeVersion",
 		).Replace(conceptSource.String())
-		if borrow {
+		if borrow || ordinary {
 			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec5;")
 		}
 		conceptSource.Reset()

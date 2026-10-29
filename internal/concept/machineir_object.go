@@ -38,6 +38,11 @@ func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 		if id, ok := locations[t]; ok {
 			return id, nil
 		}
+		for _, e := range lir.Enums {
+			if e.Type == t {
+				return add(t, ObjectType{Identity: e.Identity, LayoutIdentity: string(e.Type), Name: e.Name, Kind: "u32", Representation: "scalar", Size: e.Size, Align: e.Alignment, Element: -1, Copy: "checked_value", Evidence: "checked_layout"}), nil
+			}
+		}
 		if t == "void" || lirCallScalar(t) {
 			width := scalarWidth(string(t))
 			copy := "checked_value"

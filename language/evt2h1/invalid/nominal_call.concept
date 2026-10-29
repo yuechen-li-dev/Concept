@@ -1,0 +1,5 @@
+profile Core;
+enum A { One, Two, }
+enum B { One, Two, }
+A Identity(A value) { return value; }
+A Main() { return Identity(B::One); }

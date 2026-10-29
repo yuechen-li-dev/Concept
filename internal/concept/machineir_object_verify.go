@@ -8,6 +8,9 @@ func verifyObjectMachine(m ObjectModule) error {
 	return verifyObjectContract(m, nil)
 }
 func verifyObjectContract(m ObjectModule, authority []BorrowFunction) error {
+	return verifyObjectContractEnums(m, authority, nil)
+}
+func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums []LIREnum) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD5_%s", s) }
 	if len(m.Types) == 0 || len(m.Types) > 256 || len(m.Functions) == 0 || len(m.Functions) > 128 || len(m.Dependencies) > 128 {
 		return bad("CAPACITY")
@@ -73,6 +76,13 @@ func verifyObjectContract(m ObjectModule, authority []BorrowFunction) error {
 				return bad("ARRAY_IDENTITY")
 			}
 		} else {
+			var domain *LIREnum
+			for j := range enums {
+				if string(enums[j].Type) == t.LayoutIdentity {
+					domain = &enums[j]
+					break
+				}
+			}
 			width := scalarWidth(t.Kind)
 			if t.Kind == "void" {
 				width = 0
@@ -81,16 +91,19 @@ func verifyObjectContract(m ObjectModule, authority []BorrowFunction) error {
 			if t.Kind == "void" {
 				copy = "none"
 			}
-			if t.Size != width || t.Align != max(1, width) || t.Identity != t.Kind || t.LayoutIdentity != t.Kind || t.Name != t.Kind || t.Representation != "scalar" || t.Element != -1 || t.Extent != 0 || t.Stride != 0 || t.Immutable || len(t.Fields) != 0 || t.Copy != copy {
+			if t.Size != width || t.Align != max(1, width) || (domain == nil && (t.Identity != t.Kind || t.LayoutIdentity != t.Kind || t.Name != t.Kind)) || t.Representation != "scalar" || t.Element != -1 || t.Extent != 0 || t.Stride != 0 || t.Immutable || len(t.Fields) != 0 || t.Copy != copy {
 				return bad("SCALAR_TYPE")
 			}
 			types[i] = LIRType(t.Kind)
+			if domain != nil {
+				types[i] = domain.Type
+			}
 		}
 	}
-	if len(layouts) == 0 && authority == nil {
+	if len(layouts) == 0 && authority == nil && len(enums) == 0 {
 		return bad("MISSING_AGGREGATE_LAYOUT")
 	}
-	lir := LIRModule{Aggregates: layouts}
+	lir := LIRModule{Aggregates: layouts, Enums: enums}
 	facts := map[string]bool{}
 	typeAt := func(id int) (LIRType, error) {
 		if id < 0 || id >= len(types) {
