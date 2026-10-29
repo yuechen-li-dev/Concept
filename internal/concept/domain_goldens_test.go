@@ -7,6 +7,7 @@ import (
 )
 
 func TestDomainGoldensNormalAndVerify(t *testing.T) {
+	requireNativeQualification(t)
 	root := filepath.Join("..", "..", "libraries", "Golden")
 	manifest, err := DiscoverTests(root)
 	if err != nil {

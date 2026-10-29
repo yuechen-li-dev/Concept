@@ -53,22 +53,7 @@ float<mm> Convert(float<m> distance) { return distance as float<mm>; }
 }
 
 func TestContextualArrayLiteralLowering(t *testing.T) {
-	const source = `module Contextual.Arrays; profile Core;
-struct Inner { uint8[4] bytes; int count; }
-struct Outer { Inner inner; }
-template <typename T> struct Box { T[4] values; }
-enum Packet { Bytes(uint8[4] bytes), Empty }
-Inner Make() { return Inner{[0, 1, 2, 3], 4}; }
-Outer Nested() { return Outer{Inner{[7 ... 4], 9}}; }
-Box<uint8> Generic() { return Box<uint8>{[1, 2, 3, 4]}; }
-int GenericFirst() { Box<uint8> box = Generic(); return box.values[0] as int; }
-int First(uint8[4] bytes) { return bytes[0] as int; }
-int DirectArrayArgument() { return First([9, 8, 7, 6]); }
-Packet MakePacket() { return Packet::Bytes([5, 4, 3, 2]); }
-int PacketFirst() { Packet packet = MakePacket(); return match (packet) { Packet::Bytes(bytes) => bytes[0] as int, Packet::Empty => 0 }; }
-int Sum(Inner value) { return (value.bytes[0] as int) + (value.bytes[1] as int) + (value.bytes[2] as int) + (value.bytes[3] as int) + value.count; }
-int Pass() { return Sum(Inner{[4, 5, 6, 7], 8}); }
-`
+	source := runtimeTestSource(t, "contextual_arrays.concept_test")
 	module, err := Parse("r8g_arrays.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -81,35 +66,10 @@ int Pass() { return Sum(Inner{[4, 5, 6, 7], 8}); }
 	if strings.Contains(c, "concept_array_4_int") {
 		t.Fatalf("array literal lost uint8 element context:\n%s", c)
 	}
-	assertR8cStrictC11(t, outputs, "r8g_arrays.generated.c")
-	runFoundationNativeHarness(t, outputs, "arrays_harness.c", `#include "r8g_arrays.generated.h"
-int main(void) {
-  if (concept_contextual__arrays_sum(concept_contextual__arrays_make()) != 10) return 1;
-  if (concept_contextual__arrays_pass() != 30) return 2;
-  if (concept_contextual__arrays_generic_first() != 1) return 3;
-  if (concept_contextual__arrays_direct_array_argument() != 9) return 4;
-  if (concept_contextual__arrays_packet_first() != 5) return 5;
-  return 0;
-}`)
 }
 
 func TestContextualFloatLiterals(t *testing.T) {
-	const source = `module Contextual.Floats; profile Core;
-struct Sample { double value; double[2] pair; }
-enum Choice { Left, Right }
-enum ChoiceError { Rejected }
-double Identity(double x) { return x; }
-double UnitCircle(double c, double s) { return c*c + s*s - 1.0; }
-double Negative() { double value = -1.0; return value; }
-bool IsTwenty(double x) { return x == 20.0; }
-Sample MakeSample() { return Sample{1.25, [2.5, -3.75]}; }
-double Call() { return Identity(1.0); }
-double TensorLiteral() { tensor<double> values[2] = [1.0, 2.0]; return values[1]; }
-double MatchFloat(Choice choice) { return match (choice) { Choice::Left => 1.0, Choice::Right => -2.0 }; }
-double MatchFloatValue() { return MatchFloat(Choice::Left); }
-Result<double, ChoiceError> MatchResult(Choice choice) { return match (choice) { Choice::Left => Result::Ok(1.0), Choice::Right => Result::Error(ChoiceError::Rejected) }; }
-double MatchResultValue() { return MatchResult(Choice::Left)!; }
-`
+	source := runtimeTestSource(t, "contextual_floats.concept_test")
 	module, err := Parse("r8g_floats.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -122,20 +82,6 @@ double MatchResultValue() { return MatchResult(Choice::Left)!; }
 	if strings.Contains(c, "1.25f") || strings.Contains(c, "2.5f") || strings.Contains(c, "3.75f") {
 		t.Fatal("double literal was lowered through binary32")
 	}
-	assertR8cStrictC11(t, outputs, "r8g_floats.generated.c")
-	runFoundationNativeHarness(t, outputs, "floats_harness.c", `#include "r8g_floats.generated.h"
-int main(void) {
-  if (concept_contextual__floats_call() != 1.0) return 1;
-  if (concept_contextual__floats_negative() != -1.0) return 2;
-  if (!concept_contextual__floats_is_twenty(20.0)) return 3;
-  if (concept_contextual__floats_unit_circle(1.0, 0.0) != 0.0) return 4;
-  if (concept_contextual__floats_tensor_literal() != 2.0) return 6;
-  if (concept_contextual__floats_match_float_value() != 1.0) return 7;
-  if (concept_contextual__floats_match_result_value() != 1.0) return 8;
-  concept_sample sample = concept_contextual__floats_make_sample();
-  if (sample.value != 1.25 || sample.pair.data[0] != 2.5 || sample.pair.data[1] != -3.75) return 5;
-  return 0;
-}`)
 	for _, tc := range []struct{ source, code string }{
 		{`float F() { return 1e100; }`, "FLOAT_LITERAL_OUT_OF_RANGE"},
 		{`half F() { return 70000.0; }`, "FLOAT_LITERAL_OUT_OF_RANGE"},
@@ -148,21 +94,7 @@ int main(void) {
 }
 
 func TestPayloadFreeEnumGeometry(t *testing.T) {
-	const source = `module Contextual.Enums; profile Core;
-enum TokenKind { Number, Operator, End }
-struct Token { TokenKind kind; int value; }
-table<2> Rows { TokenKind kind; }
-static_assert(SizeOf<TokenKind>() == 4, "enum backing is uint32");
-static_assert(AlignOf<TokenKind>() == 4, "enum alignment is fixed");
-static_assert(SizeOf<Token>() == 8, "enum-containing struct is fixed");
-int Read(ReadOnlySpan<Token> tokens) { return tokens[0].value; }
-int Main() {
-  TokenKind[2] kinds = [TokenKind::Number, TokenKind::End];
-  Token[2] tokens = [Token{kinds[0], 11}, Token{kinds[1], 12}];
-  ReadOnlySpan<Token> span = ReadOnlySpan(tokens);
-  return Read(span);
-}
-`
+	source := runtimeTestSource(t, "enum_geometry.concept_test")
 	module, err := Parse("r8g_enums.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -175,9 +107,6 @@ int Main() {
 	if !strings.Contains(h, "uint32_t tag;") {
 		t.Fatal("payload-free enum does not have fixed uint32 backing")
 	}
-	assertR8cStrictC11(t, outputs, "r8g_enums.generated.c")
-	runFoundationNativeHarness(t, outputs, "enums_harness.c", `#include "r8g_enums.generated.h"
-int main(void) { return concept_contextual__enums_main() == 11 ? 0 : 1; }`)
 	_, err = Parse("r8g_payload_geometry.concept", `profile Core; enum Payload { Value(int x), Empty } static_assert(SizeOf<Payload>() == 4, "payload is not scalar");`)
 	if err == nil || !strings.Contains(err.Error(), "CV4573") {
 		t.Fatalf("payload enum unexpectedly acquired scalar geometry: %v", err)
@@ -185,30 +114,7 @@ int main(void) { return concept_contextual__enums_main() == 11 ? 0 : 1; }`)
 }
 
 func TestBorrowedResultErrorRemap(t *testing.T) {
-	const source = `module Contextual.Remap; profile Core;
-enum SourceError { Missing }
-enum TargetError { Unavailable }
-struct Page { int value; }
-TargetError Map(ref int calls) { calls++; return TargetError::Unavailable; }
-Result<ref Page, SourceError> Find(ref Page page, bool fail) {
-  if (fail) { return Result::Error(SourceError::Missing); }
-  return Result::Ok(ref page);
-}
-Result<ref Page, TargetError> Access(ref Page page, bool fail, ref int calls) {
-  ref Page found = Find(ref page, fail) ? else Map(ref calls);
-  return Result::Ok(ref found);
-}
-int Check(bool fail) {
-  Page page = Page{17};
-  int calls = 0;
-  Result<ref Page, TargetError> result = Access(ref page, fail, ref calls);
-  int answer = match (result) {
-    Result::Ok(found) => found.value,
-    Result::Error(error) => -1,
-  };
-  return answer - calls * 100;
-}
-`
+	source := runtimeTestSource(t, "error_remap.concept_test")
 	module, err := Parse("r8g_remap.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -221,13 +127,6 @@ int Check(bool fail) {
 	if !strings.Contains(c, "cv_remapped_error") {
 		t.Fatal("remap was not lowered on the error branch")
 	}
-	assertR8cStrictC11(t, outputs, "r8g_remap.generated.c")
-	runFoundationNativeHarness(t, outputs, "remap_harness.c", `#include "r8g_remap.generated.h"
-int main(void) {
-  if (concept_contextual__remap_check(false) != 17) return 1;
-  if (concept_contextual__remap_check(true) != -101) return 2;
-  return 0;
-}`)
 	artifact, err := CompileSemanticModule("r8g_remap.concept", source, nil)
 	if err != nil {
 		t.Fatal(err)

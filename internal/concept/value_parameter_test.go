@@ -7,18 +7,7 @@ import (
 )
 
 func TestValueParameterSnapshotPreservesAliasingAndMutation(t *testing.T) {
-	const source = `module ValueParameter; profile Core;
-struct Pair {double x; double y;}
-template<usize N> double Value(Pair pair,Span<double> out) {
- double old=pair.x;out[0]=9.0;if(pair.x!=old){return -1.0;}
- pair.x=5.0;return pair.x+pair.y;
-}
-template<usize N> double Alias(ReadOnlySpan<double> input,Span<double> out) {
- double old=input[0];out[0]=old+1.0;return input[0];
-}
-double Run(Pair pair,Span<double> out){return Value<1>(pair,out);}
-double Shared(ReadOnlySpan<double> input,Span<double> out){return Alias<1>(input,out);}
-`
+	source := runtimeTestSource(t, "value_parameters.concept_test")
 	for _, verify := range []bool{false, true} {
 		out, _ := localBoundsOutputs(t, source, verify)
 		c := moduleOutput(t, out, ".generated.c")
@@ -91,17 +80,12 @@ func TestValueParameterSnapshotBoundsAndEligibility(t *testing.T) {
 }
 
 func TestValueParameterSnapshotGeneratedNameCollision(t *testing.T) {
-	const source = `module ValueNames;profile Core;
-template<usize N> int Cell(Span<int> cv_parameter_value_01){
-int cv_parameter_value_02=7;return cv_parameter_value_01[0]+cv_parameter_value_02;}
-int Run(Span<int> values){return Cell<1>(values);}`
+	source := runtimeTestSource(t, "value_names.concept_test")
 	for _, verify := range []bool{false, true} {
 		out, _ := localBoundsOutputs(t, source, verify)
 		if !strings.Contains(moduleOutput(t, out, ".generated.c"), "cv_parameter_value_01 = cv_parameter_value_03;") {
 			t.Fatal("entry parameter name collides with a source binding")
 		}
-		runFoundationNativeHarness(t, out, "name.c", `#include "local_bounds.generated.h"
-int main(void){int32_t a=5;return concept_value_names_run((concept_span_int){&a,1})==12?0:1;}`)
 	}
 }
 

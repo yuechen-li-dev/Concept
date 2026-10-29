@@ -91,6 +91,7 @@ var backendFixtureBuilds [2]struct {
 
 func backendTestOutputs(t *testing.T, verify bool) Outputs {
 	t.Helper()
+	requireNativeQualification(t)
 	index := 0
 	if verify {
 		index = 1

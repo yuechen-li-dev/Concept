@@ -1,0 +1,28 @@
+module Contextual.Enums;
+profile Core;
+enum TokenKind {
+    Number, Operator, End
+}
+struct Token {
+    TokenKind kind;
+    int value;
+}
+table<2> Rows {
+    TokenKind kind;
+}
+static_assert(SizeOf<TokenKind>() == 4, "enum backing is uint32");
+static_assert(AlignOf<TokenKind>() == 4, "enum alignment is fixed");
+static_assert(SizeOf<Token>() == 8, "enum-containing struct is fixed");
+int Read(ReadOnlySpan<Token> tokens) {
+    return tokens[0].value;
+}
+int Main() {
+    TokenKind[2] kinds =[TokenKind::Number, TokenKind::End];
+    Token[2] tokens =[Token{kinds[0], 11}, Token{kinds[1], 12}];
+    ReadOnlySpan<Token> span = ReadOnlySpan(tokens);
+    return Read(span);
+}
+
+[[fact]] void EnumStorageGeometry() {
+    Assert.Equal(Main(), 11, "enum arrays and enum-bearing records preserve their values");
+}
