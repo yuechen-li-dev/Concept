@@ -21,9 +21,15 @@ typedef struct concept_transition {
   concept_lifecycle_state to;
 } concept_transition;
 
+#ifndef CONCEPT_ARRAY_2_INT_NATURAL_DEFINED
+#define CONCEPT_ARRAY_2_INT_NATURAL_DEFINED
 typedef struct { int32_t data[2]; } concept_array_2_int;
+#endif
 
+#ifndef CONCEPT_ARRAY_3_INT_NATURAL_DEFINED
+#define CONCEPT_ARRAY_3_INT_NATURAL_DEFINED
 typedef struct { int32_t data[3]; } concept_array_3_int;
+#endif
 
 typedef struct { concept_array_2_int data[3]; } concept_array_3_array_2_int;
 

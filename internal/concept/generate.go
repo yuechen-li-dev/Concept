@@ -2364,7 +2364,16 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 				if len(l.module.Layouts) > 0 {
 					return fmt.Sprintf("typedef struct { _Alignas(%d) %s data[%d]; } %s;\n\n", evt1InlineStorageAlignment, evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
 				}
-				return fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				definition := fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				// Natural built-in array wrappers have one canonical C shape and
+				// may be required by several independent generated headers.
+				// Keep nominal element types and layout-strengthened storage out
+				// of this sharing rule: those require their own declaration owner.
+				if current.ArrayElem.Kind == TypeBuiltin && !current.ArrayElem.isBorrowLike() && !current.ArrayElem.isOwned() {
+					guard := strings.ToUpper(evt1StorageCName(current)) + "_NATURAL_DEFINED"
+					return fmt.Sprintf("#ifndef %s\n#define %s\n%s#endif\n\n", guard, guard, definition)
+				}
+				return definition + "\n"
 			},
 		})
 	}

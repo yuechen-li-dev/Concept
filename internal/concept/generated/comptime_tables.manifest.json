@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "comptime_tables.generated.h",
-      "sha256": "8bf49616edfb47baebda0259d86b5aa62e85ce5f11ebd348d3ce901506a0b27c"
+      "sha256": "2538b335a7db8b18e2c8ceefbace4885534d4347078164f1235e925e64ba1f10"
     },
     {
       "path": "comptime_tables.generated.c",
