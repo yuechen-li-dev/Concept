@@ -8,6 +8,9 @@ examples/evt1/*.concept text eol=lf
 internal/concept/machineir_bridge_codec_generated.go text eol=lf
 libraries/Standard/Backend/BridgeCodec.concept text eol=lf
 docs/design/EVT2-MACHINEIR-BRIDGE.schema.json text eol=lf
+internal/concept/machineir_bridge[456]_codec_generated.go text eol=lf
+libraries/Standard/Backend/BridgeCodec[456].concept text eol=lf
+docs/design/EVT2-MACHINEIR-BRIDGE[456].schema.json text eol=lf
 internal/concept/testdata/machinebridge/*.cmir1 binary
 internal/concept/testdata/machinebridge/*.amd64 binary
 internal/concept/module_artifact.go text eol=lf
