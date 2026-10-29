@@ -308,7 +308,8 @@ int main(void){
  begin=clock();for(int run=0;run<100;run++){concept_result_void_aggregate_abierror r=F(prepare_aggregate_function)(&reader,document,driver.payload.ok.value,&function,&placement,&allocation,&frame,&plan);REQUIRE(!r.tag);}double planningMs=1000.0*(double)(clock()-begin)/CLOCKS_PER_SEC;
  printf("timing classifications=%d classification-ms=%.3f projection-with-temporaries-100-ms=%.3f full-call-frame-plans-100-ms=%.3f resident-plan-bytes=%zu active-call-bytes=%zu Driver-frame=%d\n",classified,classificationMs,projectionMs,planningMs,sizeof plan,(size_t)plan.callCount*sizeof(concept_aggregate_call_plan),frame.byteCount);
  concept_native_image image,before;memset(&image,0x5a,sizeof image);before=image;memset(output,0xa5,sizeof output);
- concept_result_int_native_error emitted=F(emit_module)(src,dst,&image);REQUIRE(emitted.tag && !strcmp(F(describe_native_error)(emitted.payload.error.error),"AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION"));REQUIRE(!memcmp(&image,&before,sizeof image));for(size_t i=0;i<sizeof output;i++)REQUIRE(output[i]==0xa5);
- puts("100 artifact-only ABI/frame/move/transfer plans per function; independent expected classes; native emission deferred");return 0;
+ concept_result_int_native_error emitted=F(emit_module)(src,dst,&image);REQUIRE(!emitted.tag && image.finalized && image.symbolCount==FUNCTION_COUNT);
+ image=before;memset(output,0xa5,sizeof output);concept_span_byte tiny={output,1};emitted=F(emit_module)(src,tiny,&image);REQUIRE(emitted.tag && !memcmp(&image,&before,sizeof image));for(size_t i=0;i<sizeof output;i++)REQUIRE(output[i]==0xa5);
+ puts("100 artifact-only ABI/frame/move/transfer plans per function; native emission now succeeds; capacity failure is atomic");return 0;
 }
 `

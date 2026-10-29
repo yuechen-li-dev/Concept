@@ -199,6 +199,7 @@ Liveness EmptyLiveness()
 struct ByteWriter {
     Span<byte> bytes;
     int offset;
+    bool measuring;
 }
 record struct BranchFixup {
     int patchOffset;

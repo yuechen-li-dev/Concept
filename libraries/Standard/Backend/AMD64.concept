@@ -1,6 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
-import Standard.Backend.AMD64.Aggregates;
+import Standard.Backend.AMD64.AggregateEmission;
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -231,7 +231,7 @@ ref const Allocation allocation, ref const FinalizedFrame frame, ref EncodingWor
 }
 Result<int, BackendError> EncodeFunctionWithWorkspace(ref const BridgeReader reader, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan) {
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
     ref const frame, ref plan) ?;
     return Result::Ok(writer.offset);
@@ -333,6 +333,10 @@ BridgeText identity) {
     return Result::Ok(found);
 }
 Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFixup fixup, Span<byte> bytes) {
+    return ValidateCallPatchMode(ref const image, fixup, bytes, false);
+}
+Result<void, NativeError> ValidateCallPatchMode(ref const NativeImage image, CallFixup fixup, Span<byte> bytes,
+bool measuring) {
     if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 5) {
         return Result::Error(NativeError::MalformedPatch);
     }
@@ -344,7 +348,8 @@ Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFix
     if (source.offset < 0 or source.size < 5 or source.offset > image.byteCount or source.size > image.byteCount - source.offset) {
         return Result::Error(NativeError::MalformedPatch);
     }
-    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or bytes[fixup.callOffset] as int != 232) {
+    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or
+    (not measuring and bytes[fixup.callOffset] as int != 232)) {
         return Result::Error(NativeError::MalformedPatch);
     }
     return Result::Ok();
@@ -352,6 +357,10 @@ Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFix
 // Validate all patch sites and targets before touching bytes. Both forward and
 // backward calls use this single pass after declaration-order body emission.
 Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref NativeImage image, Span<byte> bytes) {
+    return ResolveNativeCallsMode(ref const reader, ref image, bytes, false);
+}
+Result<void, NativeError> ResolveNativeCallsMode(ref const BridgeReader reader, ref NativeImage image,
+Span<byte> bytes, bool measuring) {
     if (image.finalized or image.symbolCount < 0 or image.symbolCount > 128 or image.fixupCount < 0 or image.fixupCount > 512 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
         return Result::Error(NativeError::InvalidInput);
     }
@@ -368,7 +377,7 @@ Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref 
     int[128] counts =[0 ...];
     for (i in 0 .. image.fixupCount) {
         CallFixup fixup = image.fixups[i];
-        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        ValidateCallPatchMode(ref const image, fixup, bytes, measuring) ?;
         counts[fixup.sourceOrdinal] += 1;
         int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
         if (fixup.resolved or source != fixup.sourceOrdinal) {
@@ -380,19 +389,22 @@ Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref 
             }
         }
         for (b in 0 .. 4) {
-            if (bytes[fixup.patchOffset + b] != 0) {
+            if (not measuring and bytes[fixup.patchOffset + b] != 0) {
                 return Result::Error(NativeError::MalformedPatch);
             }
         }
         int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
         CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
     }
-    ByteWriter writer = ByteWriter{bytes, image.byteCount};
+    ByteWriter writer = ByteWriter{bytes, image.byteCount, false};
     for (i in 0 .. image.symbolCount) {
         if (counts[i] != image.symbols[i].calls) {
             return Result::Error(NativeError::UnresolvedFixup);
         }
     }
+    // Count-only encoding has already selected every opcode and patch site.
+    // Do not publish a measured image as finalized executable code.
+    if (measuring) { return Result::Ok(); }
     for (i in 0 .. image.fixupCount) {
         CallFixup fixup = image.fixups[i];
         int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
@@ -528,7 +540,7 @@ Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> outp
         return Result::Error(NativeError::CapacityExceeded);
     }
     reader.offset = document.Functions.offset;
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodingPlan branches = EmptyEncodingPlan();
     EncodingWorkspace workspace = EncodingWorkspace {
         Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
@@ -1112,7 +1124,7 @@ bool conditional) {
     return Result::Ok();
 }
 Result<int, BackendError> EmitScalarNativeFunction(ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output) {
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodeScalarNativeFunctionIntoWriter(artifact, ordinal, ref writer) ?;
     return Result::Ok(writer.offset);
 }
@@ -1256,7 +1268,7 @@ Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Spa
         }
     }
     image = EmptyNativeImage();
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodingPlan branches = EmptyEncodingPlan();
     EncodingWorkspace workspace = EncodingWorkspace {
         Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
@@ -1611,6 +1623,14 @@ ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allo
     WireObjectModule document = NativeObjectDocument(artifact) ?;
     WireObjectFunction owner = NativeObjectAt<WireObjectFunction>(ref const reader, document.Functions,
     ordinal) ?;
+    if (ObjectModuleHasAggregateABI(ref const reader, document)) {
+        AggregateFunctionPlan plan = EmptyAggregateFunctionPlan();
+        return match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame, ref plan)) {
+            Result::Ok => Result::Ok(),
+            Result::Error(error) => Result::Error(BackendError::BridgeInvalid)
+        };
+    }
     return PrepareObjectFunction(ref const reader, document, owner, ref function, ref placement, ref allocation,
     ref frame);
 }
@@ -1618,11 +1638,23 @@ Result<void, BackendError> EncodeObjectFunction(ref ByteWriter writer, ref const
 WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
 ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
 ref EncodingWorkspace workspace) {
+    AggregateFunctionPlan unused = EmptyAggregateFunctionPlan();
+    return EncodeObjectFunctionPlan(ref writer, ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref workspace, false, ref const unused);
+}
+Result<void, BackendError> EncodeObjectFunctionPlan(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionPlan aggregatePlan) {
     if (frame.byteCount >= 4096) { return Result::Error(BackendError::CapacityExceeded); }
     for (i in 0 .. frame.prologueCount) {
         EmitFrameAction(ref writer, frame.prologue[i]) ?;
     }
     WriteScalarEntry(ref writer, ref const function, ref const allocation, ref const frame) ?;
+    if (aggregateABI) {
+        EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+        AggregateTransferPhase::Entry, 0, ref const allocation, ref const frame) ?;
+    }
     Liveness live = EmptyLiveness();
     ComputeLiveness(ref const function, ref live) ?;
     EncodingPlan branches = EmptyEncodingPlan();
@@ -1634,8 +1666,32 @@ ref EncodingWorkspace workspace) {
             WireObjectInstruction instruction = NativeObjectAt<WireObjectInstruction>(ref const reader,
             block.Instructions, ii) ?;
             if (instruction.Op == ObjectOpcode::Call) {
-                EmitAllocatedCall(ref writer, ref const function, ref const allocation, ref const live,
-                placement.positions[cursor], ref const frame, ref workspace) ?;
+                int position = placement.positions[cursor];
+                if (aggregateABI) {
+                    EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                    AggregateTransferPhase::BeforeCall, position - 1, ref const allocation, ref const frame) ?;
+                    CallSiteActions site = EmptyCallSiteActions();
+                    match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+                    position,
+                    ref const frame, ref site)) {
+                        Result::Ok => { }
+                        Result::Error(error) => {
+                            return Result::Error(BackendError::InvalidEncoding);
+                        }
+                    }
+                    for (a in 0 .. site.count) {
+                        if (a == site.callIndex) {
+                            WriteCallPlaceholder(ref writer, ref workspace, function.identity, site.abi.target) ?;
+                            EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                            AggregateTransferPhase::AfterCall, position + 1, ref const allocation, ref const frame) ?;
+                        } else {
+                            EmitScalarCallAction(ref writer, ref const site, a, ref const frame) ?;
+                        }
+                    }
+                } else {
+                    EmitAllocatedCall(ref writer, ref const function, ref const allocation, ref const live,
+                    position, ref const frame, ref workspace) ?;
+                }
             } else {
                 EncodeObjectInstruction(ref writer, ref const reader, document, owner, instruction, ref const placement,
                 ref const function, ref const allocation, ref const frame) ?;
@@ -1644,7 +1700,11 @@ ref EncodingWorkspace workspace) {
         }
         match (block.Term.Op) {
             ObjectTerminator::Return => {
-                if (function.scalarResult != ScalarRepresentation::Void) {
+                if (aggregateABI and AggregateUsesStorage(aggregatePlan.result.category)) {
+                    int point = function.blocks[bi].firstInstruction + function.blocks[bi].instructionCount;
+                    EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                    AggregateTransferPhase::Return, point, ref const allocation, ref const frame) ?;
+                } else if (function.scalarResult != ScalarRepresentation::Void) {
                     int id = placement.registers[block.Term.Value];
                     if (ScalarFloating(function.scalarResult)) {
                         WriteSelectedScalar(ref writer, ScalarOpcode::Load, function.scalarResult, ScalarRegisterOperand(XMMRegister::XMM0,
@@ -1680,6 +1740,21 @@ ref EncodingWorkspace workspace) {
     }
     return Result::Ok();
 }
+Result<void, NativeError> EncodeCheckedAggregateFunction(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref EncodingWorkspace workspace, ref const AggregateFunctionPlan plan) {
+    match (ValidateAggregateFunctionPlan(ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref const plan)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateNativeError(error)); }
+    }
+    return match (EncodeObjectFunctionPlan(ref writer, ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref workspace, true, ref const plan)) {
+        Result::Ok => Result::Ok(),
+        Result::Error(error) => Result::Error(ScalarBackendError(error))
+    };
+}
 Result<int, NativeError> EmitObjectNativeModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
     BridgeReader reader = BridgeReader{artifact, 0};
     match (ReadObjectBridgeIdentity(ref reader)) {
@@ -1708,19 +1783,7 @@ Span<byte> output, ref NativeImage image, bool references) {
     FinalizedFrame frame = EmptyFinalizedFrame();
     bool aggregateABI = ObjectModuleHasAggregateABI(ref const reader, document);
     if (aggregateABI) {
-        AggregateFunctionPlan aggregatePlan = EmptyAggregateFunctionPlan();
-        for (i in 0 .. document.Functions.count) {
-            WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
-            i) ?;
-            match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
-            ref allocation, ref frame, ref aggregatePlan)) {
-                Result::Ok => { }
-                Result::Error(error) => {
-                    return Result::Error(AggregateNativeError(error));
-                }
-            }
-        }
-        return Result::Error(NativeError::UnsupportedAggregateCallEmission);
+        return EmitAggregateNativeDocument(ref const reader, document, output, ref image);
     }
     for (i in 0 .. document.Functions.count) {
         WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
@@ -1754,7 +1817,7 @@ Span<byte> output, ref NativeImage image, bool references) {
         }
     }
     image = EmptyNativeImage();
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodingPlan branches = EmptyEncodingPlan();
     EncodingWorkspace workspace = EncodingWorkspace {
         Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
@@ -1783,6 +1846,54 @@ Span<byte> output, ref NativeImage image, bool references) {
     image.byteCount = writer.offset;
     image.fixupCount = workspace.callCount;
     ResolveNativeCalls(ref const reader, ref image, output) ?;
+    return Result::Ok(writer.offset);
+}
+// A count-only pass runs the same opcode, transfer, frame and branch selectors
+// before either caller output is touched. It also resolves the full symbol /
+// call graph using the existing fixup validator, without examining stale bytes.
+Result<void, NativeError> EncodeAggregateDocumentPass(ref ByteWriter writer, ref NativeImage image,
+ref const BridgeReader reader, WireObjectModule document) {
+    BackendFunction function = EmptyFunction();
+    ObjectPlacement placement = EmptyObjectPlacement();
+    Allocation allocation = EmptyAllocation();
+    FinalizedFrame frame = EmptyFinalizedFrame();
+    AggregateFunctionPlan plan = EmptyAggregateFunctionPlan();
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame, ref plan)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateNativeError(error)); }
+        }
+        int begin = writer.offset;
+        int calls = workspace.callCount;
+        workspace.functionOrdinal = i;
+        EncodeCheckedAggregateFunction(ref writer, ref const reader, document, owner, ref const function,
+        ref const placement, ref const allocation, ref const frame, ref workspace, ref const plan) ?;
+        image.symbols[i] = NativeSymbol {
+            owner.Identity, owner.Name, i, begin, writer.offset - begin, workspace.callCount - calls
+        };
+        image.symbolCount += 1;
+    }
+    image.byteCount = writer.offset;
+    image.fixupCount = workspace.callCount;
+    return ResolveNativeCallsMode(ref const reader, ref image, writer.bytes, writer.measuring);
+}
+Result<int, NativeError> EmitAggregateNativeDocument(ref const BridgeReader reader, WireObjectModule document,
+Span<byte> output, ref NativeImage image) {
+    NativeImage candidate = EmptyNativeImage();
+    ByteWriter writer = ByteWriter{output, 0, true};
+    EncodeAggregateDocumentPass(ref writer, ref candidate, ref const reader, document) ?;
+    candidate = EmptyNativeImage();
+    writer.offset = 0;
+    writer.measuring = false;
+    EncodeAggregateDocumentPass(ref writer, ref candidate, ref const reader, document) ?;
+    image = candidate;
     return Result::Ok(writer.offset);
 }
 void NativeScalarSSEFacts() {

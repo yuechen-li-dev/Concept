@@ -1,0 +1,152 @@
+module Standard.Backend.AMD64.AggregateEmission;
+profile Core;
+import Standard.Backend.AMD64.Aggregates;
+
+enum AggregateTransferPhase {
+    Entry, BeforeCall, AfterCall, Return, LifetimeEnd
+}
+AggregateTransferPhase TransferPhase(AggregateTransferKind kind) {
+    return match (kind) {
+        AggregateTransferKind::UnpackParameter => AggregateTransferPhase::Entry,
+        AggregateTransferKind::CopyParameter => AggregateTransferPhase::Entry,
+        AggregateTransferKind::InitializeArgument => AggregateTransferPhase::BeforeCall,
+        AggregateTransferKind::PackArgument => AggregateTransferPhase::BeforeCall,
+        AggregateTransferKind::BindResult => AggregateTransferPhase::BeforeCall,
+        AggregateTransferKind::CaptureDirect => AggregateTransferPhase::AfterCall,
+        AggregateTransferKind::CaptureHidden => AggregateTransferPhase::AfterCall,
+        AggregateTransferKind::ReturnDirect => AggregateTransferPhase::Return,
+        AggregateTransferKind::ReturnHidden => AggregateTransferPhase::Return,
+        AggregateTransferKind::EndArgument => AggregateTransferPhase::LifetimeEnd
+    };
+}
+// Reuse the existing frame-owned scalar scratch. The field copier touches
+// RAX/RDX/R10 only; XMM registers remain intact. Scratch zero stages a carrier.
+Result<void, BackendError> SaveAggregateScratch(ref ByteWriter writer, ref const FinalizedFrame frame) {
+    WriteRSPReg(ref writer, false, Register::RAX, NativeScalarTemporary(ref const frame, 1) ?, 8) ?;
+    WriteRSPReg(ref writer, false, Register::RDX, NativeScalarTemporary(ref const frame, 2) ?, 8) ?;
+    return WriteRSPReg(ref writer, false, Register::R10, NativeScalarTemporary(ref const frame, 3) ?,
+    8);
+}
+Result<void, BackendError> RestoreAggregateScratch(ref ByteWriter writer, ref const FinalizedFrame frame,
+Register result) {
+    if (result != Register::RAX) {
+        WriteRSPReg(ref writer, true, Register::RAX, NativeScalarTemporary(ref const frame, 1) ?, 8) ?;
+    }
+    if (result != Register::RDX) {
+        WriteRSPReg(ref writer, true, Register::RDX, NativeScalarTemporary(ref const frame, 2) ?, 8) ?;
+    }
+    if (result != Register::R10) {
+        WriteRSPReg(ref writer, true, Register::R10, NativeScalarTemporary(ref const frame, 3) ?, 8) ?;
+    }
+    return Result::Ok();
+}
+Result<Register, BackendError> StoreAggregateCarrier(ref ByteWriter writer, int carrier,
+ref const Allocation allocation) {
+    if (carrier < 0 or carrier >= 128) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    ScalarLocation target = allocation.scalarLocations[carrier];
+    if (target.kind != ScalarLocationKind::Physical or target.registerClass != RegisterClass::GPR) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    WriteRegReg(ref writer, 137, target.gpr, Register::RAX, 8) ?;
+    return Result::Ok(target.gpr);
+}
+Result<void, BackendError> PackAggregateFields(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, int type, int sourceSlot, ref const FinalizedFrame frame) {
+    int scratch = NativeScalarTemporary(ref const frame, 0) ?;
+    // Initialize the entire physical carrier, then copy meaningful fields only.
+    // No padding or bytes beyond the logical object are read from source storage.
+    WriteMovImmediate(ref writer, Register::RAX, 0, 4) ?;
+    WriteRSPReg(ref writer, false, Register::RAX, scratch, 8) ?;
+    ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[sourceSlot]) ?;
+    ObjectStackAddress(ref writer, Register::RDX, scratch) ?;
+    CopyObjectFields(ref writer, ref const reader, document, type, 0, 0) ?;
+    return WriteRSPReg(ref writer, true, Register::RAX, scratch, 8);
+}
+Result<void, BackendError> UnpackAggregateFields(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, int type, int storage, ref const FinalizedFrame frame) {
+    int scratch = NativeScalarTemporary(ref const frame, 0) ?;
+    WriteRSPReg(ref writer, false, Register::RAX, scratch, 8) ?;
+    ObjectStackAddress(ref writer, Register::RAX, scratch) ?;
+    ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[storage]) ?;
+    return CopyObjectFields(ref writer, ref const reader, document, type, 0, 0);
+}
+// Requires the admitted EVT2g4 plan. Type/layout, copy eligibility, private slot
+// identity, physical carrier and lifetime are checked before this selector.
+Result<void, BackendError> EmitAggregateTransfer(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, AggregateTransfer transfer, ref const Allocation allocation,
+ref const FinalizedFrame frame) {
+    if (transfer.kind == AggregateTransferKind::EndArgument) { return Result::Ok(); }
+    SaveAggregateScratch(ref writer, ref const frame) ?;
+    Register result = Register::RSP;
+    match (transfer.kind) {
+        AggregateTransferKind::UnpackParameter => {
+            LoadObjectGPR(ref writer, Register::RAX, transfer.carrier, 8, ref const allocation, ref const frame) ?;
+            UnpackAggregateFields(ref writer, ref const reader, document, transfer.type, transfer.storage,
+            ref const frame) ?;
+        }
+        AggregateTransferKind::CopyParameter => {
+            LoadObjectGPR(ref writer, Register::RAX, transfer.carrier, 8, ref const allocation, ref const frame) ?;
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[transfer.storage]) ?;
+            CopyObjectFields(ref writer, ref const reader, document, transfer.type, 0, 0) ?;
+        }
+        AggregateTransferKind::InitializeArgument => {
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[transfer.sourceSlot]) ?;
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[transfer.storage]) ?;
+            CopyObjectFields(ref writer, ref const reader, document, transfer.type, 0, 0) ?;
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[transfer.storage]) ?;
+            result = StoreAggregateCarrier(ref writer, transfer.carrier, ref const allocation) ?;
+        }
+        AggregateTransferKind::PackArgument => {
+            PackAggregateFields(ref writer, ref const reader, document, transfer.type, transfer.sourceSlot,
+            ref const frame) ?;
+            result = StoreAggregateCarrier(ref writer, transfer.carrier, ref const allocation) ?;
+        }
+        AggregateTransferKind::BindResult => {
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[transfer.storage]) ?;
+            result = StoreAggregateCarrier(ref writer, transfer.carrier, ref const allocation) ?;
+        }
+        AggregateTransferKind::CaptureDirect => {
+            UnpackAggregateFields(ref writer, ref const reader, document, transfer.type, transfer.storage,
+            ref const frame) ?;
+        }
+        AggregateTransferKind::CaptureHidden => {
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[transfer.storage]) ?;
+            WriteRegReg(ref writer, 57, Register::RAX, Register::RDX, 8) ?;
+            WriteByte(ref writer, 116) ?;
+            WriteByte(ref writer, 2) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 11) ?;
+        }
+        AggregateTransferKind::ReturnDirect => {
+            PackAggregateFields(ref writer, ref const reader, document, transfer.type, transfer.sourceSlot,
+            ref const frame) ?;
+            result = Register::RAX;
+        }
+        AggregateTransferKind::ReturnHidden => {
+            LoadObjectGPR(ref writer, Register::RDX, transfer.carrier, 8, ref const allocation, ref const frame) ?;
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[transfer.sourceSlot]) ?;
+            CopyObjectFields(ref writer, ref const reader, document, transfer.type, 0, 0) ?;
+            LoadObjectGPR(ref writer, Register::RAX, transfer.carrier, 8, ref const allocation, ref const frame) ?;
+            result = Register::RAX;
+        }
+        AggregateTransferKind::EndArgument => { }
+    }
+    return RestoreAggregateScratch(ref writer, ref const frame, result);
+}
+Result<void, BackendError> EmitAggregatePhase(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, ref const AggregateFunctionPlan plan, AggregateTransferPhase phase,
+int point, ref const Allocation allocation, ref const FinalizedFrame frame) {
+    for (i in 0 .. plan.transferCount) {
+        AggregateTransfer transfer = plan.transfers[i];
+        if (TransferPhase(transfer.kind) == phase and transfer.point == point) {
+            EmitAggregateTransfer(ref writer, ref const reader, document, transfer, ref const allocation,
+            ref const frame) ?;
+        }
+    }
+    return Result::Ok();
+}
+void AggregateEmissionFacts() {
+    Assert.Concept<NoAllocation>(EmitAggregatePhase, "bounded realization of checked aggregate transfers");
+}
