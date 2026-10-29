@@ -1,0 +1,7 @@
+profile Core;
+enum A {
+    One, Two,
+}
+A Nine(A a, A b, A c, A d, A e, A f, A g, A h, A i) {
+    return i;
+}

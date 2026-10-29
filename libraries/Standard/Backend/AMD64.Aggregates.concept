@@ -1,7 +1,6 @@
 module Standard.Backend.AMD64.Aggregates;
 profile Core;
 import Standard.Backend.AMD64.Objects;
-
 NativeError AggregateNativeError(AggregateABIError error) {
     return match (error) {
         AggregateABIError::Malformed => NativeError::AggregateMalformed,
@@ -65,7 +64,6 @@ bool ObjectModuleHasAggregateABI(ref const BridgeReader reader, WireObjectModule
     }
     return false;
 }
-
 enum AggregateTransferKind {
     UnpackParameter, CopyParameter, InitializeArgument, PackArgument,
     BindResult, CaptureDirect, CaptureHidden, ReturnDirect, ReturnHidden, EndArgument
@@ -189,7 +187,12 @@ WireObjectModule document, WireObjectFunction owner) {
 }
 Result<WireObjectModule, AggregateABIError> AdmittedAggregateDocument(ReadOnlySpan<byte> artifact) {
     if (Len(artifact) < 8) { return Result::Error(AggregateABIError::Malformed); }
-    if (artifact[7] == 54) {
+    if (artifact[7] == 55) {
+        match (ValidateEnumMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }
+        }
+    } else if (artifact[7] == 54) {
         match (ValidateBorrowMachineBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }

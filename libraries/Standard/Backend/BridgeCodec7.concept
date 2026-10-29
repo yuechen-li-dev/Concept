@@ -1,0 +1,59 @@
+// Code generated from checked BridgeSchema metadata; DO NOT EDIT.
+module Standard.Backend.BridgeCodec7;
+profile Core;
+import Standard.Backend.BridgeCodec5;
+import Standard.Backend.BridgeSchema7;
+string EnumMachineBridgeSchemaHash() {
+    return "74992e3d74be0581484be7f3c6341b7e75654d59b76255f075771367858d33c2";
+}
+uint8[32] EnumMachineBridgeSchemaHashBytes() {
+    uint8[32] value =[116u, 153u, 46u, 61u, 116u, 190u, 5u, 129u, 72u, 75u, 231u, 243u, 198u, 52u, 27u,
+    126u, 117u, 101u, 77u, 89u, 183u, 98u, 85u, 240u, 117u, 119u, 19u, 103u, 133u, 141u, 51u, 194u];
+    return value;
+}
+derive DeriveBridgeRead reflect<WireEnumVariant>;
+derive DeriveBridgeWrite reflect<WireEnumVariant>;
+derive DeriveBridgeRead reflect<WireEnumDomain>;
+derive DeriveBridgeWrite reflect<WireEnumDomain>;
+derive DeriveBridgeRead reflect<WireEnumModule>;
+derive DeriveBridgeWrite reflect<WireEnumModule>;
+Result<BridgeSequence<WireEnumVariant>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireEnumVariant>> type) {
+    return ReadBridgeSequence<WireEnumVariant>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireEnumVariant> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireEnumVariant>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireEnumDomain>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireEnumDomain>> type) {
+    return ReadBridgeSequence<WireEnumDomain>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireEnumDomain> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireEnumDomain>(ref const value, ref const source, ref writer);
+}
+Result<int, BackendError> EnumBridgeRoundTrip(ReadOnlySpan<byte> payload, Span<byte> output) {
+    BridgeReader reader = BridgeReader{payload, 0};
+    WireEnumModule value = ReadWire(ref reader, BridgeType<WireEnumModule>{0}) ?;
+    if (reader.offset != Len(payload)) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeWriter writer = BridgeWriter{output, 0};
+    WriteWire(ref const value, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> ReadEnumBridgeIdentity(ref BridgeReader reader) {
+    WireHeader header = ReadWire(ref reader, BridgeType<WireHeader>{0}) ?;
+    for (i in 0 .. Len(header.magic)) {
+        if (header.magic[i] !=(EnumBridgeMagic[i] as uint8)) {
+            return Result::Error(BackendError::BridgeVersion);
+        }
+    }
+    if (header.version != EnumBridgeVersion) {
+        return Result::Error(BackendError::BridgeVersion);
+    }
+    uint8[32] expected = EnumMachineBridgeSchemaHashBytes();
+    for (i in 0 .. Len(header.schemaHash)) {
+        if (header.schemaHash[i] != expected[i]) {
+            return Result::Error(BackendError::BridgeSchemaMismatch);
+        }
+    }
+    return Result::Ok();
+}

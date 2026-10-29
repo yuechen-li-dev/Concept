@@ -92,6 +92,13 @@ Result<void, ObjectError> ValidateObjectTypes(ref const BridgeReader source, Wir
 }
 Result<void, ObjectError> ValidateObjectTypeContract(ref const BridgeReader source, WireObjectModule document,
 bool requireAggregate) {
+    bool[256] aliases =[false ...];
+    return ValidateObjectTypeAliases(ref const source, document, requireAggregate, aliases);
+}
+// Only the versioned v7 validator supplies independently admitted enum aliases.
+// The frozen v5/v6 entrypoints always pass an empty set.
+Result<void, ObjectError> ValidateObjectTypeAliases(ref const BridgeReader source, WireObjectModule document,
+bool requireAggregate, bool[256] aliases) {
     int[256] depths =[0 ...];
     int aggregateCount = 0;
     for (i in 0 .. document.Types.count) {
@@ -169,9 +176,11 @@ bool requireAggregate) {
             if (alignment == 0) {
                 alignment = 1;
             }
-            if (type.Size != width or type.Align != alignment or type.Representation != ObjectRepresentation::Scalar or type.Element != - 1 or type.Extent != 0 or type.Stride != 0 or type.Immutable or type.Fields.count != 0 or not TextEquals(ref const source,
-            type.Identity, ScalarTypeName(scalar)) or not TextEquals(ref const source, type.LayoutIdentity,
-            ScalarTypeName(scalar))) { return Result::Error(ObjectError::Geometry); }
+            bool identityValid = aliases[i] or(TextEquals(ref const source, type.Identity, ScalarTypeName(scalar)) and TextEquals(ref const source,
+            type.LayoutIdentity, ScalarTypeName(scalar)));
+            if (type.Size != width or type.Align != alignment or type.Representation != ObjectRepresentation::Scalar or type.Element != - 1 or type.Extent != 0 or type.Stride != 0 or type.Immutable or type.Fields.count != 0 or not identityValid) {
+                return Result::Error(ObjectError::Geometry);
+            }
             if (type.Kind == ObjectKind::Void and type.Copy != ObjectCopyKind::None) {
                 return Result::Error(ObjectError::CopyEligibility);
             }

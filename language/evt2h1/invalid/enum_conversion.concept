@@ -1,0 +1,3 @@
+profile Core;
+enum A { One, Two, }
+int Main() { return A::One as int; }

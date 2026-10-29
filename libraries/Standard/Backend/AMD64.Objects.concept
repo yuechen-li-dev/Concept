@@ -21,6 +21,11 @@ ObjectPlacement EmptyObjectPlacement() {
 }
 Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
+    if (Len(artifact) >= 8 and artifact[7] == 55) {
+        ReadEnumBridgeIdentity(ref reader) ?;
+        WireEnumModule document = ReadWire(ref reader, BridgeType<WireEnumModule>{0}) ?;
+        return Result::Ok(document.Objects);
+    }
     if (Len(artifact) >= 8 and artifact[7] == 54) {
         ReadBorrowBridgeIdentity(ref reader) ?;
         WireBorrowModule document = ReadWire(ref reader, BridgeType<WireBorrowModule>{0}) ?;

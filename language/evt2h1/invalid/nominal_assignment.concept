@@ -1,0 +1,4 @@
+profile Core;
+enum A { One, Two, }
+enum B { One, Two, }
+int Main() { A a = A::One; B b = B::One; a = b; return 0; }

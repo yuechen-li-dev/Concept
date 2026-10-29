@@ -9,6 +9,7 @@ import (
 // LIR is target independent. Computations define one value; mutable source
 // variables use explicit slots until a later promotion pass exists.
 type LIRModule struct {
+	Enums         []LIREnum `json:",omitempty"`
 	PlanID        string
 	SemanticFacts []MIRSemanticFact
 	Aggregates    []LIRAggregateLayout       // Checked source layout snapshots; never native storage plans.
@@ -133,6 +134,9 @@ type LIRMachineState struct {
 
 func (m LIRModule) String() string {
 	var out strings.Builder
+	for _, e := range m.Enums {
+		fmt.Fprintf(&out, "enum %s identity=%q size=%d align=%d variants=%v\n", e.Type, e.Identity, e.Size, e.Alignment, e.Variants)
+	}
 	if m.PlanID != "" {
 		fmt.Fprintf(&out, "plan %s\n", m.PlanID)
 	}
@@ -280,6 +284,9 @@ func (m LIRModule) String() string {
 // VerifyLIR rejects malformed lowering before any later MachineIR consumer.
 // Non-parameter values are block-local; cross-block state goes through slots.
 func VerifyLIR(m LIRModule) error {
+	if err := verifyLIREnums(m); err != nil {
+		return err
+	}
 	layouts, err := verifyLIRAggregateLayouts(m.Aggregates)
 	if err != nil {
 		return err
@@ -526,7 +533,7 @@ func VerifyLIR(m LIRModule) error {
 						return fmt.Errorf("LIR_BAD_FLOAT_NEGATION b%d", b.ID)
 					}
 				case "eq", "ne", "lt", "le", "gt", "ge":
-					if in.Result < 0 || len(in.Args) != 2 || argType(0) != argType(1) || (!lirInteger(argType(0)) && !lirFloating(argType(0)) && argType(0) != "bool") || in.Type != "bool" {
+					if in.Result < 0 || len(in.Args) != 2 || argType(0) != argType(1) || (!lirInteger(argType(0)) && !lirFloating(argType(0)) && argType(0) != "bool" && !(lirEnumType(argType(0)) && (in.Op == "eq" || in.Op == "ne"))) || in.Type != "bool" {
 						return fmt.Errorf("LIR_BAD_COMPARE b%d", b.ID)
 					}
 				case "check_index":
@@ -727,8 +734,10 @@ func lirInteger(t LIRType) bool {
 	return false
 }
 
-func lirFloating(t LIRType) bool   { return t == "float32" || t == "float64" }
-func lirCallScalar(t LIRType) bool { return t == "bool" || lirInteger(t) || lirFloating(t) }
+func lirFloating(t LIRType) bool { return t == "float32" || t == "float64" }
+func lirCallScalar(t LIRType) bool {
+	return t == "bool" || lirInteger(t) || lirFloating(t) || lirEnumType(t)
+}
 
 // Fixed-width, lowercase hexadecimal IEEE bits include signed zero and every
 // NaN payload. Decimal strings are not a floating LIR constant representation.

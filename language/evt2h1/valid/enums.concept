@@ -1,0 +1,120 @@
+module EVT2h1;
+profile Core;
+
+enum Phase {
+    Ready, Active, Done,
+}
+enum Color {
+    Red, Green, Blue,
+}
+enum Only {
+    Sole,
+}
+
+Phase Identity(Phase value) {
+    return value;
+}
+Color ColorIdentity(Color value) {
+    return value;
+}
+Only Single() {
+    return Only::Sole;
+}
+Phase Ready() {
+    return Phase::Ready;
+}
+Phase Active() {
+    return Phase::Active;
+}
+Phase Done() {
+    return Phase::Done;
+}
+Color Red() {
+    return Color::Red;
+}
+Color Green() {
+    return Color::Green;
+}
+Color Blue() {
+    return Color::Blue;
+}
+Phase Next(Phase value) {
+    if (value == Phase::Ready) { return Phase::Active; }
+    if (value == Phase::Active) { return Phase::Done; }
+    return Phase::Ready;
+}
+Phase Choose(bool first, Phase left, Phase right) {
+    Phase result = right;
+    if (first) {
+        result = left;
+    }
+    return Identity(result);
+}
+Phase Loop(int count, Phase initial) {
+    Phase current = initial;
+    for (i in 0 .. count) {
+        Phase snapshot = current;
+        current = Identity(Next(snapshot));
+    }
+    return current;
+}
+Phase Eight(Phase a, Phase b, Phase c, Phase d, Phase e, Phase f, Phase g, Phase h) {
+    if (a != Phase::Ready) { return b; }
+    if (c != Phase::Done) { return d; }
+    if (e != Phase::Active) { return f; }
+    if (g != Phase::Ready) { return a; }
+    return h;
+}
+Phase Mixed(int first, Phase second, double third, Color fourth, Phase fifth, float sixth, bool seventh,
+Phase eighth) {
+    if (first < 0) { return second; }
+    if (third < 0.0) { return fifth; }
+    if (fourth != Color::Green) { return second; }
+    if (sixth < 0.0) { return fifth; }
+    if (seventh) { return eighth; }
+    return second;
+}
+Phase Recur(int depth, Phase value) {
+    if (depth < 1) { return value; }
+    return Recur(depth - 1, Next(value));
+}
+Phase Pressure(Phase a, Phase b, Phase c, Phase d, Phase e, Phase f, Phase g, Phase h) {
+    Phase next = Next(a);
+    if (b != Phase::Active) { return b; }
+    if (c != Phase::Done) { return c; }
+    if (d != Phase::Ready) { return d; }
+    if (e != Phase::Active) { return e; }
+    if (f != Phase::Done) { return f; }
+    if (g != Phase::Ready) { return g; }
+    if (h != a) { return h; }
+    return next;
+}
+int Scenario(int count) {
+    Phase original = Phase::Ready;
+    Phase copy = original;
+    original = Phase::Done;
+    if (copy != Phase::Ready) { return 1; }
+    Phase looped = Loop(count, copy);
+    Phase expected = Phase::Ready;
+    for (i in 0 .. count) {
+        expected = Next(expected);
+    }
+    if (looped != expected) { return 2; }
+    Phase selected = Choose(true, original, copy);
+    if (selected != Phase::Done) { return 3; }
+    Color color = ColorIdentity(Color::Blue);
+    if (color != Color::Blue) { return 4; }
+    Only only = Single();
+    if (only != Only::Sole) { return 5; }
+    Phase eight = Eight(Phase::Ready, Phase::Active, Phase::Done, Phase::Ready, Phase::Active, Phase::Done,
+    Phase::Ready, looped);
+    if (eight != looped) { return 6; }
+    Phase mixed = Mixed(1, Phase::Ready, 2.0, Color::Green, Phase::Active, 3.0, true, eight);
+    if (mixed != looped) { return 7; }
+    Phase recursive = Recur(count, copy);
+    if (recursive != looped) { return 8; }
+    Phase pressure = Pressure(looped, Phase::Active, Phase::Done, Phase::Ready, Phase::Active, Phase::Done,
+    Phase::Ready, looped);
+    if (pressure != Next(looped)) { return 9; }
+    return 0;
+}

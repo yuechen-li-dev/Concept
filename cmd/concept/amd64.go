@@ -13,32 +13,56 @@ import (
 // The temporary C executable is the bootstrap host for the Concept module.
 // Go only transports verified MachineIR and displays the bytes it returns.
 func printConceptAMD64(machine concept.MachineModule, artifact []byte) error {
-	backendPath, err := findAMD64BackendSource()
+	session, err := newAMD64BackendSession()
 	if err != nil {
 		return err
 	}
+	defer session.close()
+	output, err := session.emit(machine, artifact)
+	if err == nil {
+		fmt.Print(output)
+	}
+	return err
+}
+
+// One immutable bootstrap executable serves a batch. Every artifact still gets
+// its own backend process, admission, plans and emitted bytes. Nothing persists
+// beyond the invocation, and no native decisions are made in Go.
+type amd64BackendSession struct{ dir, executable string }
+
+func (s *amd64BackendSession) close() { os.RemoveAll(s.dir) }
+
+func newAMD64BackendSession() (_ *amd64BackendSession, err error) {
+	backendPath, err := findAMD64BackendSource()
+	if err != nil {
+		return nil, err
+	}
 	source, err := os.ReadFile(backendPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// The backend is an ordinary Concept library with imports. Build those
 	// dependencies from the checkout's library root before generating C.
 	libraryRoot := filepath.Dir(filepath.Dir(filepath.Dir(backendPath)))
 	module, err := concept.ParseWithBuiltSemanticModuleRoots(backendPath, string(source), []string{libraryRoot})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	outputs, err := concept.Generate(module, source)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	dir, err := os.MkdirTemp("", "concept-amd64-*")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		if err != nil {
+			os.RemoveAll(dir)
+		}
+	}()
 	if err := concept.Write(dir, outputs); err != nil {
-		return err
+		return nil, err
 	}
 	var generatedC string
 	for name := range outputs {
@@ -47,41 +71,42 @@ func printConceptAMD64(machine concept.MachineModule, artifact []byte) error {
 		}
 	}
 	if generatedC == "" {
-		return fmt.Errorf("EVT2D_BACKEND_C_MISSING")
-	}
-	bridgePath := filepath.Join(dir, "module.cmir")
-	if err := os.WriteFile(bridgePath, artifact, 0600); err != nil {
-		return err
+		return nil, fmt.Errorf("EVT2D_BACKEND_C_MISSING")
 	}
 	harnessPath := filepath.Join(dir, "backend_host.c")
-	scalarCount := 0
-	if machine.Scalar != nil {
-		scalarCount = len(machine.Scalar.Functions)
-	}
-	host := strings.ReplaceAll(amd64BootstrapHost, "/* SCALAR_COUNT */", fmt.Sprint(scalarCount))
-	if err := os.WriteFile(harnessPath, []byte(host), 0600); err != nil {
-		return err
+	if err := os.WriteFile(harnessPath, []byte(amd64BootstrapHost), 0600); err != nil {
+		return nil, err
 	}
 	compiler, err := exec.LookPath("gcc")
 	if err != nil {
 		compiler, err = exec.LookPath("clang")
 	}
 	if err != nil {
-		return fmt.Errorf("EVT2D_C11_COMPILER_MISSING: %w", err)
+		return nil, fmt.Errorf("EVT2D_C11_COMPILER_MISSING: %w", err)
 	}
 	backendExe := filepath.Join(dir, "concept-amd64-backend.exe")
 	cmd := exec.Command(compiler, "-std=c11", "-pedantic-errors", "-O2", "-I", dir, generatedC, harnessPath, "-o", backendExe)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("EVT2D_BACKEND_BOOTSTRAP: %w\n%s", err, output)
+		return nil, fmt.Errorf("EVT2D_BACKEND_BOOTSTRAP: %w\n%s", err, output)
 	}
-	_ = machine // Semantic identities and layout are consumed by Concept.
-	cmd = exec.Command(backendExe, bridgePath)
+	return &amd64BackendSession{dir: dir, executable: backendExe}, nil
+}
+
+func (s *amd64BackendSession) emit(machine concept.MachineModule, artifact []byte) (string, error) {
+	bridgePath := filepath.Join(s.dir, "module.cmir")
+	if err := os.WriteFile(bridgePath, artifact, 0600); err != nil {
+		return "", err
+	}
+	scalarCount := 0
+	if machine.Scalar != nil {
+		scalarCount = len(machine.Scalar.Functions)
+	}
+	cmd := exec.Command(s.executable, bridgePath, fmt.Sprint(scalarCount))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("EVT2E_NATIVE_BACKEND: %w\n%s", err, output)
+		return "", fmt.Errorf("EVT2E_NATIVE_BACKEND: %w\n%s", err, output)
 	}
-	fmt.Print(string(output))
-	return nil
+	return string(output), nil
 }
 func findAMD64BackendSource() (string, error) {
 	dir, err := os.Getwd()
@@ -278,15 +303,17 @@ static int print_aggregate_plans(concept_readonly_span_byte source) {
   return 0;
 }
 int main(int argc, char** argv) {
-  if(argc!=2)return 2;
+  if(argc!=3)return 2;
+  int scalar_count=atoi(argv[2]);if(scalar_count<0||scalar_count>128)return 2;
   FILE *file=fopen(argv[1],"rb");if(!file)return 3;
   if(fseek(file,0,SEEK_END))return 4;long size=ftell(file);
   if(size<=0||size>10000000||fseek(file,0,SEEK_SET))return 5;
   unsigned char *input=malloc((size_t)size);if(!input||fread(input,1,(size_t)size,file)!=(size_t)size)return 6;fclose(file);
   unsigned char bytes[65536];concept_readonly_span_byte source={input,(size_t)size};concept_span_byte output={bytes,sizeof bytes};
   concept_native_image image=concept_standard__backend__amd64_empty_native_image();
-  if(size>=8 && !memcmp(input,"CMIRAMD4",8)){for(int i=0;i</* SCALAR_COUNT */;i++){if(print_scalar_plans(source,i)){free(input);return 8;}}}
+  if(size>=8 && !memcmp(input,"CMIRAMD4",8)){for(int i=0;i<scalar_count;i++){if(print_scalar_plans(source,i)){free(input);return 8;}}}
   if(size>=8 && !memcmp(input,"CMIRAMD6",8)){concept_result_void_borrow_error admitted=concept_standard__backend__amd64_validate_borrow_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_borrow_error(admitted.payload.error.error));concept_result_wire_borrow_module_backend_error decoded=concept_standard__backend__amd64_native_borrow_document(source);if(!decoded.tag){concept_bridge_reader reader={source,0};for(int i=0;i<decoded.payload.ok.value.Objects.Functions.count;i++){concept_result_void_borrow_error checked=concept_standard__backend__amd64_validate_borrow_function(&reader,decoded.payload.ok.value,i);if(checked.tag)fprintf(stderr,"function %d: %s\n",i,concept_standard__backend__amd64_describe_borrow_error(checked.payload.error.error));}}free(input);return 7;}}
+  if(size>=8 && !memcmp(input,"CMIRAMD7",8)){concept_result_void_enum_error admitted=concept_standard__backend__amd64_validate_enum_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_enum_error(admitted.payload.error.error));free(input);return 7;}}
   if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8))){if(print_aggregate_plans(source)){free(input);return 8;}}
   concept_result_int_native_error result=concept_standard__backend__amd64_emit_module(source,output,&image);
   if(result.tag){fflush(stdout);fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_native_error(result.payload.error.error));free(input);return 7;}
@@ -294,7 +321,7 @@ int main(int argc, char** argv) {
   for(int i=0;i<image.symbolCount;++i){concept_native_symbol symbol=image.symbols.data[i];
     printf("fn %.*s [%.*s] offset=%d size=%d\n",symbol.name.length,(const char*)input+symbol.name.offset,symbol.identity.length,(const char*)input+symbol.identity.offset,symbol.offset,symbol.size);
     printf("  %04x: ",symbol.offset);for(int b=0;b<symbol.size;++b)printf("%02x",bytes[symbol.offset+b]);printf("\n");
-    if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8))){if(print_object_plans(source,i)){free(input);return 8;}}
+    if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8)||!memcmp(input,"CMIRAMD7",8))){if(print_object_plans(source,i)){free(input);return 8;}}
     concept_backend_function function=concept_standard__backend__amd64_empty_function();
     if(!concept_standard__backend__amd64_decode_function(source,i,&function).tag){
       int calls=0;for(int p=0;p<function.instructionCount;++p)if(function.instructions.data[p].op.tag==16)calls++;

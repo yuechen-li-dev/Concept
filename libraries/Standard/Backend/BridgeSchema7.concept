@@ -1,0 +1,35 @@
+module Standard.Backend.BridgeSchema7;
+profile Core;
+import Standard.Backend.BridgeSchema5;
+
+// Ordinary domains qualify nominal U32 carriers. No v5 artifact admits aliases.
+comptime string EnumBridgeMagic = "CMIRAMD7";
+comptime uint EnumBridgeVersion = 7u;
+comptime uint EnumBridgeMaxItems = 1048576u;
+comptime string EnumBridgeRepresentation = "little-endian;CMIRAMD5=7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60;ordinary-enum-domains;checked-u32-tags;nominal-values;no-payload;no-reference-or-aggregate-types";
+
+[[reflect]] record struct WireEnumHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireEnumVariant {
+    BridgeText Name;
+    int Tag;
+}
+[[reflect]] record struct WireEnumDomain {
+    int Type;
+    BridgeText Identity;
+    BridgeText LayoutIdentity;
+    int Size;
+    int Align;
+    BridgeSequence<WireEnumVariant> Variants;
+}
+[[reflect]] record struct WireEnumModule {
+    WireObjectModule Objects;
+    BridgeSequence<WireEnumDomain> Domains;
+}
+reflect<WireEnumHeader>;
+reflect<WireEnumVariant>;
+reflect<WireEnumDomain>;
+reflect<WireEnumModule>;

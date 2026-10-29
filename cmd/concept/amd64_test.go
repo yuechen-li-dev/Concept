@@ -10,6 +10,27 @@ import (
 	"github.com/yuechen-li-dev/Concept/internal/concept"
 )
 
+func TestEVT2h1CLI(t *testing.T) {
+	fixture := "../../language/evt2h1/valid/enums.concept"
+	for _, command := range []string{"lir", "machineir", "amd64"} {
+		output, err := exec.Command("go", "run", ".", command, fixture).CombinedOutput()
+		text := string(output)
+		want := "enum:"
+		if command == "machineir" {
+			want = "CMIRAMD7"
+		}
+		if command == "amd64" {
+			want = "functions=17"
+		}
+		if err != nil || !strings.Contains(text, want) {
+			t.Fatalf("%s: %v\n%s", command, err, output)
+		}
+		if command == "amd64" && !strings.Contains(text, "frame size=") {
+			t.Fatal("missing Cathedral frame inspection")
+		}
+	}
+}
+
 // The CLI must compile the imported backend library from source, not just
 // transport MachineIR successfully in the internal native harness.
 func TestAMD64BootstrapLoadsBackendImports(t *testing.T) {

@@ -1,0 +1,4 @@
+profile Core;
+enum A { One, Two, }
+enum B { One, Two, }
+bool Equal(A a, B b) { return a == b; }

@@ -26,7 +26,7 @@ Usage:
   concept lir <file>
   concept machineir <file>
   concept machineir-bin <file> > out.cmir
-  concept amd64 <file>
+  concept amd64 <file> [file ...]
   concept plan <file> [--verify]
   concept explain <file>[:line] [--json] [--verbose]
   concept explain <file> --generated <symbol> [--json] [--verbose]
@@ -75,6 +75,12 @@ const testUsage = `Usage:
 `
 
 func main() {
+	if len(os.Args) > 3 && os.Args[1] == "amd64" && !strings.HasPrefix(os.Args[3], "-") {
+		if err := printConceptAMD64Batch(os.Args[2:]); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if len(os.Args) == 2 && (os.Args[1] == "--help" || os.Args[1] == "-h" || os.Args[1] == "help") {
 		fmt.Print(usage)
 		return

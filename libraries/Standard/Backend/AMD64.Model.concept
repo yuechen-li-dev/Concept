@@ -3,6 +3,7 @@ profile Core;
 import Standard.Backend.BridgeValidate4;
 import Standard.Backend.BridgeValidate5;
 import Standard.Backend.BridgeValidate6;
+import Standard.Backend.BridgeValidate7;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.Win64ABI;
 import Standard.Backend.Win64AggregateABI;
