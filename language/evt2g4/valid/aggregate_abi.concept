@@ -1,0 +1,169 @@
+module EVT2g4.AggregateABI;
+profile Core;
+
+[[repr(C)]] record struct One {
+    byte value;
+}
+[[repr(C)]] record struct Two {
+    uint16 value;
+}
+[[repr(C)]] record struct Four {
+    int value;
+}
+[[repr(C)]] record struct Eight {
+    uint64 value;
+}
+[[repr(C)]] record struct Three {
+    byte a;
+    byte b;
+    byte c;
+}
+[[repr(C)]] record struct Five {
+    byte<array>[5] values;
+}
+[[repr(C)]] record struct Six {
+    byte<array>[6] values;
+}
+[[repr(C)]] record struct Seven {
+    byte<array>[7] values;
+}
+[[repr(C)]] record struct Twelve {
+    int a;
+    int b;
+    int c;
+}
+[[repr(C)]] record struct Sixteen {
+    double a;
+    double b;
+}
+[[repr(C)]] record struct TwentyFour {
+    double a;
+    double b;
+    double c;
+}
+[[repr(C)]] record struct Padded {
+    byte tag;
+    uint64 value;
+}
+[[repr(C)]] record struct Nested {
+    Four first;
+    Four second;
+}
+[[repr(C)]] record struct ArrayEight {
+    byte<array>[8] values;
+}
+struct NativeSmall {
+    int value;
+}
+struct MutableValue {
+    double a;
+    double b;
+    double c;
+}
+
+One RoundOne(One value) {
+    return value;
+}
+Two RoundTwo(Two value) {
+    return value;
+}
+Four RoundFour(Four value) {
+    return value;
+}
+Eight RoundEight(Eight value) {
+    return value;
+}
+Three RoundThree(Three value) {
+    return value;
+}
+Five RoundFive(Five value) {
+    return value;
+}
+Six RoundSix(Six value) {
+    return value;
+}
+Seven RoundSeven(Seven value) {
+    return value;
+}
+Twelve RoundTwelve(Twelve value) {
+    return value;
+}
+Sixteen RoundSixteen(Sixteen value) {
+    return value;
+}
+TwentyFour RoundTwentyFour(TwentyFour value) {
+    return value;
+}
+Padded RoundPadded(Padded value) {
+    return value;
+}
+Nested RoundNested(Nested value) {
+    return value;
+}
+ArrayEight RoundArray(ArrayEight value) {
+    return value;
+}
+NativeSmall RoundNative(NativeSmall value) {
+    return value;
+}
+
+TwentyFour Shifted(int a, double b, int c, float d) {
+    return TwentyFour{1.0, b, 3.0};
+}
+TwentyFour Blend(Eight small, TwentyFour large, double scale, ref const Four view, float bias, int count) {
+    return large;
+}
+int Mixed(int a, bool flag, float b, double c, Eight small, TwentyFour large, ref int mutable, ref const Four view) {
+    mutable = a;
+    return view.value;
+}
+int FivePlus(One a, Two b, Four c, Eight d, Eight e, TwentyFour f) {
+    return c.value;
+}
+int MutateValue(MutableValue value) {
+    value.a = 91.0;
+    return 7;
+}
+TwentyFour Early(bool flag, TwentyFour value) {
+    if (flag) { return value; }
+    return TwentyFour{4.0, 5.0, 6.0};
+}
+int Consume(TwentyFour value) {
+    return 9;
+}
+TwentyFour Produce() {
+    return TwentyFour{1.0, 2.0, 3.0};
+}
+int Chain() {
+    return Consume(Produce());
+}
+int Driver() {
+    Four four = Four{4};
+    Eight small = Eight{8};
+    TwentyFour large = TwentyFour{1.0, 2.0, 3.0};
+    TwentyFour first = Shifted(1, 2.0, 3, 4.0);
+    TwentyFour second = Blend(small, large, 2.0, ref const four, 1.0, 2);
+    TwentyFour third = Early(true, second);
+    int a = Consume(first);
+    int b = Consume(third);
+    return a + b;
+}
+int Isolation() {
+    MutableValue original = MutableValue{1.0, 2.0, 3.0};
+    int result = MutateValue(original);
+    return result;
+}
+int DirectChain() {
+    Four value = RoundFour(Four{4});
+    Eight other = RoundEight(Eight{8});
+    return value.value;
+}
+int StackArguments() {
+    return FivePlus(One{1}, Two{2}, Four{3}, Eight{4}, Eight{5}, TwentyFour{1.0, 2.0, 3.0});
+}
+int CallMixed() {
+    int mutable = 0;
+    Four view = Four{4};
+    int result = Mixed(1, true, 2.0, 3.0, Eight{8}, TwentyFour{1.0, 2.0, 3.0}, ref mutable, ref const view);
+    return result;
+}

@@ -1,6 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
-import Standard.Backend.AMD64.Objects;
+import Standard.Backend.AMD64.Aggregates;
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -1706,6 +1706,22 @@ Span<byte> output, ref NativeImage image, bool references) {
     ObjectPlacement placement = EmptyObjectPlacement();
     Allocation allocation = EmptyAllocation();
     FinalizedFrame frame = EmptyFinalizedFrame();
+    bool aggregateABI = ObjectModuleHasAggregateABI(ref const reader, document);
+    if (aggregateABI) {
+        AggregateFunctionPlan aggregatePlan = EmptyAggregateFunctionPlan();
+        for (i in 0 .. document.Functions.count) {
+            WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+            i) ?;
+            match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+            ref allocation, ref frame, ref aggregatePlan)) {
+                Result::Ok => { }
+                Result::Error(error) => {
+                    return Result::Error(AggregateNativeError(error));
+                }
+            }
+        }
+        return Result::Error(NativeError::UnsupportedAggregateCallEmission);
+    }
     for (i in 0 .. document.Functions.count) {
         WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
         i) ?;

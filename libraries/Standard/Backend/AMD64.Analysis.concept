@@ -801,6 +801,22 @@ string DescribeNativeError(NativeError error) {
         NativeError::ReferenceCall => "AMD64_REFERENCE_CALL_SIGNATURE",
         NativeError::ReferenceNotLive => "AMD64_REFERENCE_TARGET_NOT_LIVE",
         NativeError::UnsupportedAggregateABI => "AMD64_UNSUPPORTED_AGGREGATE_ABI",
+        NativeError::UnsupportedAggregateCallEmission => "AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION",
+        NativeError::AggregateMalformed => DescribeAggregateABIError(AggregateABIError::Malformed),
+        NativeError::AggregateMissingLayout => DescribeAggregateABIError(AggregateABIError::MissingLayout),
+        NativeError::AggregateStaleLayout => DescribeAggregateABIError(AggregateABIError::StaleLayout),
+        NativeError::AggregateRepresentation => DescribeAggregateABIError(AggregateABIError::Representation),
+        NativeError::AggregateCopyEligibility => DescribeAggregateABIError(AggregateABIError::CopyEligibility),
+        NativeError::AggregateDirectWidth => DescribeAggregateABIError(AggregateABIError::DirectWidth),
+        NativeError::AggregateReturnEligibility => DescribeAggregateABIError(AggregateABIError::ReturnEligibility),
+        NativeError::AggregatePosition => DescribeAggregateABIError(AggregateABIError::Position),
+        NativeError::AggregateTemporary => DescribeAggregateABIError(AggregateABIError::Temporary),
+        NativeError::AggregateAlignment => DescribeAggregateABIError(AggregateABIError::Alignment),
+        NativeError::AggregateLifetime => DescribeAggregateABIError(AggregateABIError::Lifetime),
+        NativeError::AggregateHiddenResult => DescribeAggregateABIError(AggregateABIError::HiddenResult),
+        NativeError::AggregateCapacity => DescribeAggregateABIError(AggregateABIError::Capacity),
+        NativeError::AggregateFrame => DescribeAggregateABIError(AggregateABIError::Frame),
+        NativeError::AggregateMoves => DescribeAggregateABIError(AggregateABIError::Moves),
         NativeError::FrameFailure => "AMD64_FRAME_QUALIFICATION_FAILED",
         NativeError::StackProbeRequired => "AMD64_STACK_PROBE_REQUIRED",
     };
@@ -1064,13 +1080,12 @@ Result<void, BackendError> AllocateScalarRegisters(ref const BackendFunction fun
         for (id in 0 .. function.virtualRegCount) {
             if (allocation.start[id] == position) {
                 bool floating = ScalarFloating(function.scalarTypes[id]);
-                int candidates = 5;
+                // Leaf entry materialization can require more than five live
+                // GPRs too. First choices stay stable; fallback registers are
+                // saved/restored by the same finalized frame as call owners.
+                int candidates = 13;
                 if (floating) {
                     candidates = 6;
-                } else {
-                    if (allocation.callCount>0) {
-                        candidates = 13;
-                    }
                 }
                 bool found = false;
                 ScalarLocation choice = GPRLocation(Register::RAX);

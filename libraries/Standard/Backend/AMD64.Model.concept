@@ -5,6 +5,7 @@ import Standard.Backend.BridgeValidate5;
 import Standard.Backend.BridgeValidate6;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.Win64ABI;
+import Standard.Backend.Win64AggregateABI;
 import Standard.Semantic.Vocabulary;
 record struct MachineOperand
 {
@@ -248,7 +249,11 @@ enum NativeError {
     UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
     StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation, UnsupportedAggregateStorage,
     UnsupportedAggregateABI, ReferenceTarget, ReferenceAuthority, ReferenceLifetime, ReferenceEscape,
-    ReferenceCall, ReferenceNotLive
+    ReferenceCall, ReferenceNotLive, UnsupportedAggregateCallEmission,
+    AggregateMalformed, AggregateMissingLayout, AggregateStaleLayout, AggregateRepresentation,
+    AggregateCopyEligibility, AggregateDirectWidth, AggregateReturnEligibility, AggregatePosition,
+    AggregateTemporary, AggregateAlignment, AggregateLifetime, AggregateHiddenResult, AggregateCapacity,
+    AggregateFrame, AggregateMoves
 }
 struct NativeImage {
     NativeSymbol[128] symbols;

@@ -366,7 +366,7 @@ func TestEVT2g3bBridgeAdmission(t *testing.T) {
 	if err := os.WriteFile(abiPath, abiData, 0644); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Fprintf(&c, "file=fopen(%q,\"rb\");if(!file)return 96;n=fread(input,1,sizeof input,file);fclose(file);src=(concept_readonly_span_byte){input,n};concept_result_void_borrow_error admitted=F(validate_borrow_machine_bridge)(src);if(admitted.tag)return 97;concept_result_int_native_error abi=F(emit_module)(src,dst,&image);if(!abi.tag||strcmp(F(describe_native_error)(abi.payload.error.error),\"AMD64_UNSUPPORTED_AGGREGATE_ABI\")||memcmp(&before,&image,sizeof image))return 98;for(size_t j=0;j<sizeof out;j++){if(out[j]!=0xa5)return 99;}\n", filepath.ToSlash(abiPath))
+	fmt.Fprintf(&c, "file=fopen(%q,\"rb\");if(!file)return 96;n=fread(input,1,sizeof input,file);fclose(file);src=(concept_readonly_span_byte){input,n};concept_result_void_borrow_error admitted=F(validate_borrow_machine_bridge)(src);if(admitted.tag)return 97;concept_result_int_native_error abi=F(emit_module)(src,dst,&image);if(!abi.tag||strcmp(F(describe_native_error)(abi.payload.error.error),\"AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION\")||memcmp(&before,&image,sizeof image))return 98;for(size_t j=0;j<sizeof out;j++){if(out[j]!=0xa5)return 99;}\n", filepath.ToSlash(abiPath))
 	fmt.Fprintf(&c, "puts(\"100 artifact-only roundtrips and %d malformed reference cases passed; aggregate ABI remains gated\");return 0;}\n", len(cases))
 	for _, verify := range []bool{false, true} {
 		runFoundationNativeHarnessOutput(t, backendTestOutputs(t, verify), "reference_admission.c", c.String(), "-pedantic-errors", "-O2")
