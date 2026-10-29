@@ -21,6 +21,7 @@ func TestIntegerMatchContextAndExecution(t *testing.T) {
 			t.Fatalf("integer match MIR omitted %s", needle)
 		}
 	}
+	assertR8cStrictC11(t, outputs, "integermatch.generated.c")
 }
 
 func TestIntegerMatchDiagnostics(t *testing.T) {

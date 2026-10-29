@@ -66,6 +66,7 @@ func TestContextualArrayLiteralLowering(t *testing.T) {
 	if strings.Contains(c, "concept_array_4_int") {
 		t.Fatalf("array literal lost uint8 element context:\n%s", c)
 	}
+	assertR8cStrictC11(t, outputs, "r8g_arrays.generated.c")
 }
 
 func TestContextualFloatLiterals(t *testing.T) {
@@ -91,6 +92,7 @@ func TestContextualFloatLiterals(t *testing.T) {
 			t.Fatalf("%s: expected %s, got %v", tc.source, tc.code, err)
 		}
 	}
+	assertR8cStrictC11(t, outputs, "r8g_floats.generated.c")
 }
 
 func TestPayloadFreeEnumGeometry(t *testing.T) {
@@ -111,6 +113,7 @@ func TestPayloadFreeEnumGeometry(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "CV4573") {
 		t.Fatalf("payload enum unexpectedly acquired scalar geometry: %v", err)
 	}
+	assertR8cStrictC11(t, outputs, "r8g_enums.generated.c")
 }
 
 func TestBorrowedResultErrorRemap(t *testing.T) {
@@ -148,6 +151,7 @@ func TestBorrowedResultErrorRemap(t *testing.T) {
 			t.Fatalf("%s: expected %s, got %v", tc.source, tc.diagnostic, err)
 		}
 	}
+	assertR8cStrictC11(t, outputs, "r8g_remap.generated.c")
 }
 
 func TestContextualTypingArtifactsDeterministic(t *testing.T) {
