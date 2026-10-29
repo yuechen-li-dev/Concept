@@ -1,0 +1,168 @@
+module EVT2g.Objects;
+profile Core;
+
+struct Position {
+    double x;
+    double y;
+}
+
+struct Particle {
+    Position position;
+    double mass;
+}
+
+struct Samples {
+    double<array>[4] values;
+}
+
+struct Padded {
+    bool enabled;
+    double value;
+}
+
+[[repr(C)]] record struct Small {
+    int value;
+}
+
+record struct RecordPair {
+    double x;
+    double y;
+}
+
+record struct RecordParticle {
+    RecordPair position;
+    double mass;
+}
+
+record struct RecordSamples {
+    double<array>[4] values;
+}
+
+double With(double x) {
+    RecordPair a = RecordPair{x, 2.0};
+    RecordPair b = a with {
+        x = 9.0;
+    };
+    return a.x + b.x + b.y;
+}
+
+double NestedWith(double x) {
+    RecordParticle a = RecordParticle {
+        RecordPair{x, 2.0}, 3.0
+    };
+    RecordParticle b = a with {
+        position = a.position with {
+            y = 5.0;
+        };
+    };
+    return a.position.y + b.position.x + b.position.y + b.mass;
+}
+
+double ArrayWith(int index) {
+    RecordSamples a = RecordSamples{[1.0 ...]};
+    RecordSamples b = a with {
+        values =[2.0, 3.0, 4.0, 5.0];
+    };
+    return a.values[index] + b.values[index];
+}
+
+RecordPair WithBase(double x) {
+    return RecordPair{x, 2.0};
+}
+
+double WithFirst(double x) {
+    return x + 1.0;
+}
+
+double WithSecond(double x) {
+    return x + 2.0;
+}
+
+RecordPair WithCalls(double x) {
+    return WithBase(x) with {
+        y = WithFirst(x);
+        x = WithSecond(x);
+    };
+}
+
+double RecordCopy(double x) {
+    RecordPair a = RecordPair{x, 2.0};
+    RecordPair b = a;
+    a = b;
+    return a.x + b.y;
+}
+
+double RepeatField(int index) {
+    Samples s = Samples{[2.0 ...]};
+    return s.values[index];
+}
+
+double Read(double x, double y) {
+    Position p = Position{x, y};
+    return p.x + p.y;
+}
+
+double Nested(double x) {
+    Particle p = Particle {
+        Position{x, 2.0}, 3.0
+    };
+    p.position.x = p.position.x + 1.0;
+    p.mass = 12.0;
+    return p.position.x + p.mass;
+}
+
+double ArrayField(int index) {
+    Samples s = Samples{[1.0, 2.0, 3.0, 4.0]};
+    s.values[index] = 9.0;
+    return s.values[index];
+}
+
+double Copy(double value) {
+    Particle a = Particle {
+        Position{value, 2.0}, 3.0
+    };
+    Particle b = a;
+    b.position.x = 99.0;
+    a = a;
+    a = b;
+    return a.position.x + b.mass;
+}
+
+double Padding(bool enabled, double value) {
+    Padded a = Padded{enabled, value};
+    Padded b = a;
+    b.enabled = false;
+    if (a.enabled) { return b.value; }
+    return 0.0;
+}
+
+Position Make(double x) {
+    return Position{x, 2.0};
+}
+
+double ByValue(Position p) {
+    p.x = p.x + 10.0;
+    return p.x;
+}
+
+double Calls(double x) {
+    Position p = Make(x);
+    double changed = ByValue(p);
+    return changed + p.x;
+}
+
+double Early(bool stop, double x) {
+    Position p = Position{x, 2.0};
+    if (stop) { return p.x; }
+    p.x = 7.0;
+    return p.x;
+}
+
+int SmallValue(int x) {
+    Small s = Small{x};
+    return s.value;
+}
+
+Position Named(double x) {
+    return Position{y = 2.0, x = x};
+}

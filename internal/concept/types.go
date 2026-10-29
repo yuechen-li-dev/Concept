@@ -656,10 +656,11 @@ type Module struct {
 	// ImportedFactAuthority records artifact-owned operations even when an older
 	// artifact has no value summary. Consumers must degrade those results to
 	// Unknown instead of re-deriving a stronger contract from the payload body.
-	ImportedFactAuthority   []string                              `json:"-"`
-	ImportedABIRequired     []string                              `json:"-"`
-	ImportedABIEvidence     []NativeABIEvidence                   `json:"-"`
-	ImportedHardwareEffects []SemanticModuleHardwareEffectSummary `json:"-"`
+	ImportedFactAuthority    []string                              `json:"-"`
+	ImportedABIRequired      []string                              `json:"-"`
+	ImportedABIEvidence      []NativeABIEvidence                   `json:"-"`
+	ImportedHardwareEffects  []SemanticModuleHardwareEffectSummary `json:"-"`
+	ImportedModuleIdentities []SemanticModuleDependency            `json:"-"` // verified import provenance, not source syntax
 }
 
 type NamespaceSymbol struct {
@@ -1187,6 +1188,7 @@ func (*MoveExpr) evt1Expr()        {}
 func (e *MoveExpr) exprSpan() Span { return e.Span }
 
 type RefExpr struct {
+	checkedBorrow       *checkedBorrowOrigin
 	Value               Expr   `json:"value"`
 	Const               bool   `json:"const,omitempty"`
 	DynInterface        string `json:"dyn_interface,omitempty"`

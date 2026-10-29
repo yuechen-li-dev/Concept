@@ -1,10 +1,12 @@
 module Standard.Backend.AMD64.Model;
 profile Core;
 import Standard.Backend.BridgeValidate4;
+import Standard.Backend.BridgeValidate5;
+import Standard.Backend.BridgeValidate6;
 import Standard.Backend.BridgeValidate;
 import Standard.Backend.Win64ABI;
+import Standard.Backend.Win64AggregateABI;
 import Standard.Semantic.Vocabulary;
-
 record struct MachineOperand
 {
     OperandKind kind;
@@ -197,6 +199,7 @@ Liveness EmptyLiveness()
 struct ByteWriter {
     Span<byte> bytes;
     int offset;
+    bool measuring;
 }
 record struct BranchFixup {
     int patchOffset;
@@ -208,7 +211,6 @@ struct EncodingPlan
     BranchFixup[256] fixups;
     int fixupCount;
 }
-
 // Scratch storage belongs to the caller; no phase allocates a hidden heap.
 struct EncodingWorkspace
 {
@@ -246,7 +248,13 @@ enum NativeError {
     UnresolvedFixup, UnsupportedEncoding, FrameFailure, StackProbeRequired, UnsupportedXMMAllocation,
     UnsupportedSSEEncoding, ScalarPlanningFailure, RegisterExhausted, InvalidABILocation, UnsupportedABIClass,
     UnsupportedABIForm, UnsupportedABIConvention, ReservedXMM, IncompatibleMove, SpillCapacityExceeded,
-    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation
+    StaleFlags, UnsupportedFloatCallEmission, UnsupportedScalarOperation, UnsupportedAggregateStorage,
+    UnsupportedAggregateABI, ReferenceTarget, ReferenceAuthority, ReferenceLifetime, ReferenceEscape,
+    ReferenceCall, ReferenceNotLive, UnsupportedAggregateCallEmission,
+    AggregateMalformed, AggregateMissingLayout, AggregateStaleLayout, AggregateRepresentation,
+    AggregateCopyEligibility, AggregateDirectWidth, AggregateReturnEligibility, AggregatePosition,
+    AggregateTemporary, AggregateAlignment, AggregateLifetime, AggregateHiddenResult, AggregateCapacity,
+    AggregateFrame, AggregateMoves
 }
 struct NativeImage {
     NativeSymbol[128] symbols;
@@ -269,7 +277,6 @@ NativeImage EmptyNativeImage() {
         ...], 0,[EmptyCallFixup() ...], 0, 0, false
     };
 }
-
 // Native stack storage is distinct from persistent automata MachineFrame state.
 enum FrameError {
     CapacityExceeded, InvalidAlignment, UnsupportedWidth, Overlap, InvalidOffset, UnresolvedSpill, UnresolvedTemporary,
@@ -381,9 +388,6 @@ EncodingPlan EmptyEncodingPlan()
         ...], 0
     };
 }
-
-
-
 // Derived scalar SSE2 encoding. No physical or byte state enters CMIRAMD4.
 enum SSEError {
     UnsupportedRepresentation, UnsupportedOperation, InvalidOperand, RepresentationMismatch, InvalidDisplacement,
@@ -393,7 +397,6 @@ record struct ScalarSSESelection {
     int prefix;
     int opcode;
 }
-
 // A memory operand refers to finalized post-prologue RSP storage. The offset
 // is supplied by the frame owner; the encoder does not allocate a stack slot.
 record struct ScalarSSEOperand {
@@ -403,8 +406,6 @@ record struct ScalarSSEOperand {
     int offset;
     int width;
 }
-
-
 ScalarSSEOperand ScalarRegisterOperand(XMMRegister register, ScalarRepresentation type) {
     return ScalarSSEOperand{false, XMMLocation(register), type, - 1, ScalarWidth(type)};
 }

@@ -1,0 +1,9 @@
+module EVT2g4.StackProbe;
+profile Core;
+
+[[repr(C)]] record struct Large {
+    double<array>[256] values;
+}
+Large Identity(Large value) {
+    return value;
+}

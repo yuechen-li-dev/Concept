@@ -1,5 +1,8 @@
 # Cathedral authority ledger (R9c)
 
+Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
+Earlier milestone tables below retain their historical qualification boundaries.
+
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
 migration matrix records the fuller subsystem inventory and prerequisites.
 
@@ -155,3 +158,139 @@ entry alignment, volatile XMM clobbers and observable void calls. Controlled
 foreign stubs are test-only RW-stage integration, not production linkage.
 External/indirect/variadic/aggregate calls, XMM6–XMM15 allocation, object output
 and unwind remain deferred. See [EVT2f5 qualification](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
+
+## EVT2g checked aggregate input authority
+
+| Changed surface | R9c classification | Authority and replacement condition |
+| --- | --- | --- |
+| `lir_aggregate.go`, aggregate additions in `lir_lower.go` | SHARED checked input / BOOTSTRAP_ONLY MIR-to-LIR construction | Existing checked types, geometry, copyability and places supply the snapshot and typed operations; migrates with the frontend/LIR producer, not into a second native engine |
+| `lir.go`, `lir_aggregate_verify.go` | BOOTSTRAP_ONLY producer consistency/lifetime checks | Validate layout identity, complete initialization, bounded typed locations and immutable authority; future Concept bridge independently validates transported evidence |
+| `machineir_lower.go` aggregate gate | BOOTSTRAP_ONLY contract admission | Frozen scalar contracts cannot encode objects; replace the named stop only after a new checked Concept schema and generated codecs exist |
+| `generate.go` expected field type for `with` replacements | BOOTSTRAP_ONLY portable C path correctness | Reuse existing contextual initializer lowering; preserve the durable C seed path |
+| `lir_aggregate_test.go`, EVT2g fixtures | INDEPENDENT_ORACLE / qualification | Source C11 values/geometry, malformed input, semantic artifacts and deterministic LIR; no native aggregate/ABI claim |
+
+All native aggregate layout consumption, address realization, copying,
+references, stack placement and Win64 aggregate classification remain
+NOT_YET_QUALIFIED and Cathedral-owned. No production Go native aggregate
+classifier, frame planner, copier or encoder was introduced. The checked LIR
+snapshot is not a new competing source-language type/layout model.
+
+## EVT2g2 CMIRAMD5 contract authority (historical stage boundary)
+
+Source and semantic checking establish object layout. MachineIR transports
+checked layout facts. Cathedral verifies and consumes them. It does not
+independently derive record geometry. The preceding EVT2g bridge-stop statement
+is historical: aggregate `machineir` now succeeds and native admission stops at
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE`.
+
+| Changed surface | Stage-0 classification | Authority |
+| --- | --- | --- |
+| `lir_aggregate.go`, `lir_lower.go`, `types.go`, `module_artifact.go` | Checked semantic production | Snapshot existing semantic geometry/copyability, array extent/stride and verified dependency identities; no packing or native placement algorithm |
+| `BridgeSchema5` | Concept authoritative | Sole CMIRAMD5/version-5 schema, field order, tags, representation and schema identity |
+| `machineir_bridge_generate.go`, `cmd/machinebridgegen`, generated Go/Concept codecs | Artifact transport | Checked reflection derives both codec sides; v3/v4 remain frozen |
+| `machineir_object.go`, dispatch in `machineir*.go` | Artifact transport / compatibility seam | Project checked values/storage/locations and semantic calls; normalize `with` into logical copy/member replacements and readonly scalar initialization |
+| `machineir_object_verify.go`, added logical LIR operation checks | Bridge verifier | Bootstrap consistency with checked LIR identities/operations; no production ABI or native object algorithm |
+| `BridgeValidate5` | Concept authoritative | Artifact-only bounded type/geometry/copy/lifetime/provenance/call admission; typed Result diagnostics; consumes supplied field offsets |
+| `AMD64`, `AMD64.Model`, `AMD64.Analysis` | Concept authoritative / CLI diagnostic boundary | Recognize and independently validate v5, then return precise pending-storage error without touching output/image |
+| `generate.go` assignment expected-type repair | Compatibility seam | Portable C bootstrap contextual fixed-array assignments; necessary for ordinary validator liveness arrays, independently tested |
+| `machineir_object_test.go`, exact hex artifacts and fixtures | Test oracle | Semantic geometry, independent C layout probes, source-free Concept roundtrip, malformed inputs, determinism and unchanged native boundaries |
+
+There is no new CLI native algorithm and no Go aggregate frame allocator,
+copier, field encoder or Win64 classifier. Source references and raw/owned/Drop
+states remain outside this admitted input slice. Internal live-slot locations
+are not a source-reference ABI. Aggregate copy eligibility is logical value
+semantics, not permission to copy padding bytes or ignore lifetime.
+
+Layout digests identify the checked producer snapshot; the Concept validator
+checks relationships and geometry without recomputing JSON hashes. This is
+consistency validation, not artifact authentication. PlainData stays separate
+from CAbiValue and from native realization. The next Cathedral owners remain
+native complete-object placement, address/copy realization, and aggregate ABI
+classification. See [EVT2g2 evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).
+
+## EVT2g3 native object authority
+
+This table retains the EVT2g3 stage boundary; the reference rows are superseded below.
+
+The preceding native-storage stop is superseded for scalar-signature local
+objects. Source semantic checking still establishes layout/copyability and
+borrow legality; frozen CMIRAMD5 transports checked local object intent.
+
+| Changed surface / decision | Classification and current owner | Evidence / next transition |
+| --- | --- | --- |
+| Complete-object placement, snapshots, field/array copy traversal | CONCEPT_AUTHORITATIVE: `AMD64.Objects` | Native contiguous source/private slots; consumes supplied geometry, skips padding; no duplicate record layout |
+| Object operations, frame verification, module preflight and emission | CONCEPT_AUTHORITATIVE: `AMD64` | Real v5 dispatch; shared allocator/call/frame/fixup path; malformed input and unprobed frames fail before output mutation |
+| Memory operands and typed scalar transfer | CONCEPT_AUTHORITATIVE: shared `AMD64.Encoding` | Existing ModRM/SIB/REX writer factored for checked addresses; width-2 support and 11 exact byte goldens |
+| Native frame geometry and local-slot lookup | CONCEPT_AUTHORITATIVE: existing `AMD64.Frame` | Whole size/alignment enters one frame; local slots resolved by existing category-aware lookup |
+| Aggregate-array/index LIR and scalar aliases | GO_AUTHORITATIVE checked-input production | Existing semantic element layout and bounds decisions retained; no native placement/copy decisions |
+| Short-circuit RHS prelude placement and generated range declaration guard | BOOTSTRAP_ONLY portable C correctness | Independent Normal/Verify guarded bounds/side-effect tests; backend/oracle C headers coexist |
+| `cmd/concept/amd64.go` object plan printing | Bootstrap orchestration / presentation | Calls actual Concept `PlanObjectNativeFunction`; does not duplicate planning |
+| `native_object_test.go`, fixtures, updated older stop assertion | Test oracles | Artifact-only native, independent C, malformed/frame failures, bounds traps, exact bytes and 100-run determinism |
+| Source reference LIR/transport/native realization | NOT_YET_QUALIFIED | Explicit source-authority stop; versioned borrow origin/access/lifetime contract required before location parameters/calls |
+| Aggregate Win64 ABI classification | NOT_YET_QUALIFIED, Cathedral intended owner | Explicit `AMD64_UNSUPPORTED_AGGREGATE_ABI`; EVT2g4 remains separate |
+
+The native copy algorithm realizes admitted value-copy permission; it does not
+grant PlainData, CAbiValue, raw relocation, ownership or Drop authority. Source
+borrow validity is not inferred from integer addresses or local-slot locations.
+CMIRAMD3/4/5 schema/codecs remain frozen. See [EVT2g3 qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b reference authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Source borrow typing, liveness, mutability, lexical provenance and escape | GO_AUTHORITATIVE existing frontend | Existing place/lifetime/destructive-access checks retained; legal aliases remain legal |
+| Checked reference-origin witness and typed LIR | Stage-0 checked semantic production | Internal witness follows existing validation; ref/ref_const types, source roots, scopes and canonical target digests; no native algorithm |
+| CMIRAMD6 schema and metadata identity | CONCEPT_AUTHORITATIVE `BridgeSchema6` | Frozen v5 payload plus explicit authority tables; generated transport; v3/v4/v5 unchanged |
+| Generated bridge support / `machineir_borrow.go` | Bootstrap artifact transport and verifier | Reuse frozen codecs; project checked identities; verify consistency; no physical pointers, GPR choices or caller offsets |
+| Artifact reference admission | CONCEPT_AUTHORITATIVE `BridgeValidate6`, shared object consistency helpers | Source-free type/root/authority/scope/call preservation, typed Result errors, bounded arrays, NoAllocation; not a second source borrow checker |
+| Native reference representation, dereference and calls | CONCEPT_AUTHORITATIVE `AMD64.Objects` / `AMD64` and existing allocator/Win64ABI/frame/encoder | Address virtuals after admission, existing positional ABI, stable source slots, original-object mutation; no Go native reference backend |
+| Shared object validation / emission | CONCEPT_AUTHORITATIVE existing owners | Explicit v6 authority context; v5 public admission keeps empty context; one allocator/frame/memory/call/fixup path |
+| RefExpr MIR child traversal / void LIR terminators | Stage-0 checked-input correctness | Preserve indexed-borrow bounds operations and canonical no-value returns; independent regression coverage |
+| CLI inspection and diagnostics | Bootstrap presentation | Prints Concept plans and typed admission failures; no policy duplication |
+| Trusted semantic facts | Existing registry, unchanged | User concepts cannot manufacture the checker-owned witness or grant liveness/outlives/NoAlias; metadata digests are not authentication |
+| Reference-return / raw / owned / Drop / escaping reference semantics | NOT_YET_QUALIFIED at native boundary | Preserve explicit source/LIR stops; no weakening of memory ontology |
+| Aggregate by-value/indirect/sret ABI | NOT_YET_QUALIFIED, Cathedral intended owner | Still `AMD64_UNSUPPORTED_AGGREGATE_ABI` in v5 and v6; EVT2g4 separate |
+
+The native reference copy preserves an admitted address/capability; it does not
+copy the aggregate value. Explicit source value copies retain the existing
+fieldwise policy. Reference types do not gain PlainData or CAbiValue from pointer
+width. See [EVT2g3b qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 aggregate ABI authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Aggregate argument classification | CONCEPT_AUTHORITATIVE `Win64AggregateABI` | Exact 1/2/4/8-byte integer carriers; other record sizes indirect; checked copy evidence required |
+| Aggregate return classification | CONCEPT_AUTHORITATIVE `Win64AggregateABI` | Separate C structural eligibility for direct RAX; hidden caller storage otherwise |
+| Hidden pointer insertion and physical position shifts | CONCEPT_AUTHORITATIVE `AMD64.Objects`, existing `Win64ABI` | One ordered physical sequence; GPR/XMM and stack positions share the same ordinal |
+| Caller argument temporaries / callee materialization | CONCEPT_AUTHORITATIVE `AMD64.Objects` / `AMD64.Aggregates` | Distinct storage identities, checked field-copy transfers, align 16 and call-covering lifetime; references remain separate |
+| Result storage / capture / early-return transfers | CONCEPT_AUTHORITATIVE `AMD64.Aggregates` | Checked type/layout, stable storage, direct payload versus designated sret pointer, capture before preservation reload |
+| Aggregate frame geometry | CONCEPT_AUTHORITATIVE existing `AMD64.Frame` | Shared locals/outgoing/saves/spills/move temps; maximum outgoing area, nonoverlap, align 16, stack-probe stop |
+| Carrier allocation and parallel moves | CONCEPT_AUTHORITATIVE existing `AMD64.Analysis` / `Win64ABI` | Shared allocator and move replay; leaf GPR pressure may use existing callee-save pool |
+| Checked source layouts, copy and borrow semantics | Existing Stage-0 authoritative semantic input | No packing calculator, ownership checker, fact registry change or ABI classifier added in Go |
+| CMIRAMD6 and earlier schemas/codecs | Existing Concept schemas, unchanged | Existing semantic aggregate values/calls/results suffice; derived ABI state stays out of the artifact |
+| CLI plan printing | BOOTSTRAP_ONLY presentation | Prints actual Concept classifications, placements, storage, moves and transfers |
+| Classification tables, compiled Win64 C/LLVM probes and structural replay | Test oracles | Independent C record classifications; no production Go classifier |
+| Aggregate call encoding / generated caller-callee execution / external conformance | NOT_YET_QUALIFIED | `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`; EVT2g5 |
+
+Static `layout` remains useful for bounded metadata and explicit storage maps;
+it does not prove object initialization, copy permission or borrow authority.
+Dynamic frame geometry continues to come from the single existing finalizer.
+
+## EVT2g5 aggregate emission authority
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Aggregate ABI classification and physical plan | Existing CONCEPT_AUTHORITATIVE `Win64AggregateABI` / `AMD64.Aggregates` | EVT2g4 rules unchanged; separate argument/return eligibility; same typed plan validator |
+| Direct carrier packing and parameter/result materialization | CONCEPT_AUTHORITATIVE `AMD64.AggregateEmission` | Zero physical carrier, copy meaningful fields through existing `CopyObjectFields`; no object padding read or packing inference |
+| Indirect argument initialization and pointer placement | CONCEPT_AUTHORITATIVE transfer selector and existing scalar call machinery | Distinct typed temporary, actual pointer alignment 16, existing parallel moves and positional destinations |
+| Hidden result binding / construction / RAX identity | CONCEPT_AUTHORITATIVE transfer selector | Stable caller result storage; shifted physical arguments; all return paths copy fields and return the designated pointer; call result pointer checked |
+| Call encoding / preservation / fixups | Existing Concept `RealizeAllocatedCall`, scalar actions, placeholder writer and resolver | Aggregate transfers surround the same call actions; direct result capture precedes reload; forward/backward/recursive calls qualified |
+| Frame and scratch storage | Existing Concept frame owner | One frame, fixed RSP, one shadow area, existing scratch/spill/save slots; observed 4088-byte native frame, larger probing requirement rejected |
+| Failure preflight | CONCEPT_AUTHORITATIVE existing byte/fixup writers with count-only mode | Same opcode selectors and capacity checks before writes; checked plans before emission; measured images are never finalized/published |
+| Go production change | BOOTSTRAP_ONLY generated C header correctness | Natural built-in array typedef guards allow backend/oracle headers to coexist; nominal and layout-strengthened declarations remain separately owned |
+| Independent C ABI qualification | Test oracles: separately compiled MSVC/Clang C DLLs plus independent ml64 boundary observer | Both directions, positional GPR/XMM/stack, sret RAX, shadow/RSP, temporary pointers, GPR/XMM nonvolatiles; test-only tail thunks, no production external linker |
+| Wire contract / source semantics | Existing checked source and CMIRAMD3/4/5/6 owners, unchanged | No new schema/hash/tags/codecs, source borrow rule, copy permission, CAbiValue or NoAlias grant |
+| Owned/Drop, escaping reference returns, general storage views, varargs/indirect calls, object output | NOT_YET_QUALIFIED | Explicit existing boundaries retained; no EVT2h or object-file work begun |
+
+See [EVT2g5 execution and ABI evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).

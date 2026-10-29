@@ -224,6 +224,59 @@ static int print_scalar_plans(concept_readonly_span_byte source,int ordinal) {
   }
   return 0;
 }
+static int print_object_plans(concept_readonly_span_byte source,int ordinal) {
+  concept_backend_function f=concept_standard__backend__amd64_empty_function();
+  concept_object_placement p=concept_standard__backend__amd64_empty_object_placement();
+  concept_allocation a=concept_standard__backend__amd64_empty_allocation();
+  concept_finalized_frame frame=concept_standard__backend__amd64_empty_finalized_frame();
+  if(concept_standard__backend__amd64_plan_object_native_function(source,ordinal,&f,&p,&a,&frame).tag)return 1;
+  printf("  object frame size=%d locals=%d base=post-prologue-RSP\n",frame.byteCount,frame.regions.data[2].size);
+  for(int i=0;i<f.slotCount;i++){concept_machine_slot slot=f.slots.data[i];printf("    storage s%d %.*s -> [rsp+%d] size=%d align=%d\n",i,slot.source.length,(const char*)source.data+slot.source.offset,frame.slotOffsets.data[i],slot.size,slot.alignment);}
+  for(int v=0;v<512;v++){if(p.values.data[v]>=0)printf("    aggregate v%d -> storage s%d\n",v,p.values.data[v]);}
+  return 0;
+}
+static void print_aggregate_type(concept_readonly_span_byte source,concept_aggregate_abitype type) {
+  printf("%.*s size=%d align=%d layout=%.*s %s",type.identity.length,(const char*)source.data+type.identity.offset,type.size,type.alignment,type.layout.length,(const char*)source.data+type.layout.offset,concept_standard__backend__amd64_aggregate_abiclass_name(type.category));
+}
+static int print_aggregate_plans(concept_readonly_span_byte source) {
+  concept_result_wire_object_module_aggregate_abierror decoded=concept_standard__backend__amd64_admitted_aggregate_document(source);
+  if(decoded.tag)return 0;
+  concept_bridge_reader reader={source,0};
+  if(!concept_standard__backend__amd64_object_module_has_aggregate_abi(&reader,decoded.payload.ok.value))return 0;
+  static concept_backend_function f;
+  static concept_object_placement p;
+  static concept_allocation a;
+  static concept_finalized_frame frame;
+  static concept_aggregate_function_plan plan;
+  for(int i=0;i<decoded.payload.ok.value.Functions.count;i++) {
+    concept_result_void_aggregate_abierror r=concept_standard__backend__amd64_plan_aggregate_function(source,i,&f,&p,&a,&frame,&plan);
+    if(r.tag){fprintf(stderr,"function %d: %s\n",i,concept_standard__backend__amd64_describe_aggregate_abierror(r.payload.error.error));return 1;}
+    printf("fn %.*s Win64 default aggregate ABI\n  return ",f.name.length,(const char*)source.data+f.name.offset);
+    print_aggregate_type(source,plan.result);
+    if(plan.result.category.tag==6)printf(" caller-provided storage: RCX; same pointer -> RAX; carrier v%d",plan.hiddenPointer);
+    if(plan.result.category.tag==5)printf(" payload -> RAX");
+    puts("");
+    for(int j=0;j<plan.parameterCount;j++) {
+      concept_aggregate_argument_plan x=plan.parameters.data[j];
+      printf("  parameter%d physical%d v%d ",j,x.physicalIndex,x.value);print_aggregate_type(source,x.type);printf(" -> ");
+      print_scalar_location(concept_standard__backend__amd64_win64scalar_argument(x.physicalIndex,x.type.carrier));printf(" private-storage=s%d\n",x.storage);
+    }
+    printf("  frame size=%d locals=%d shadow=%d spills=%d saves=%d temps=%d base=post-prologue-RSP\n",frame.byteCount,frame.regions.data[2].size,frame.regions.data[0].size,frame.regions.data[4].size,frame.regions.data[3].size,frame.regions.data[5].size);
+    for(int j=0;j<plan.callCount;j++) {
+      concept_aggregate_call_plan c=plan.calls.data[j];
+      printf("  call @%.*s b%d/i%d hidden-result=s%d pointer=v%d; return ",c.physical.target.length,(const char*)source.data+c.physical.target.offset,c.block,c.instruction,c.resultStorage,c.hiddenPointer);print_aggregate_type(source,c.result);puts("");
+      for(int k=0;k<c.argumentCount;k++) {
+        concept_aggregate_argument_plan x=c.arguments.data[k];
+        printf("    arg%d physical%d v%d ",k,x.physicalIndex,x.value);print_aggregate_type(source,x.type);printf(" -> ");print_scalar_location(c.physical.scalar.destinations.data[x.physicalIndex]);
+        if(x.storage>=0)printf(" storage=s%d [rsp+%d] lifetime=%d..%d",x.storage,frame.slotOffsets.data[x.storage],x.start,x.end);puts("");
+      }
+      printf("    shadow=%d outgoing=%d moves=%d cycle-temps=%d\n",c.physical.shadowSpaceBytes,c.physical.stackArgumentBytes,c.physical.moveCount,c.physical.temporaryCount);
+      for(int k=0;k<c.physical.moveCount;k++){concept_scalar_move m=c.physical.scalar.moves.data[k];printf("    move ");print_scalar_location(m.source);printf(" -> ");print_scalar_location(m.destination);printf(" %s\n",concept_standard__backend__amd64_scalar_type_name(m.representation));}
+    }
+    for(int j=0;j<plan.transferCount;j++){concept_aggregate_transfer t=plan.transfers.data[j];printf("  transfer %s t%d v%d source=s%d storage=s%d carrier=v%d point=%d end=%d\n",concept_standard__backend__amd64_aggregate_transfer_name(t.kind),t.type,t.value,t.sourceSlot,t.storage,t.carrier,t.point,t.end);}
+  }
+  return 0;
+}
 int main(int argc, char** argv) {
   if(argc!=2)return 2;
   FILE *file=fopen(argv[1],"rb");if(!file)return 3;
@@ -233,12 +286,15 @@ int main(int argc, char** argv) {
   unsigned char bytes[65536];concept_readonly_span_byte source={input,(size_t)size};concept_span_byte output={bytes,sizeof bytes};
   concept_native_image image=concept_standard__backend__amd64_empty_native_image();
   if(size>=8 && !memcmp(input,"CMIRAMD4",8)){for(int i=0;i</* SCALAR_COUNT */;i++){if(print_scalar_plans(source,i)){free(input);return 8;}}}
+  if(size>=8 && !memcmp(input,"CMIRAMD6",8)){concept_result_void_borrow_error admitted=concept_standard__backend__amd64_validate_borrow_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_borrow_error(admitted.payload.error.error));concept_result_wire_borrow_module_backend_error decoded=concept_standard__backend__amd64_native_borrow_document(source);if(!decoded.tag){concept_bridge_reader reader={source,0};for(int i=0;i<decoded.payload.ok.value.Objects.Functions.count;i++){concept_result_void_borrow_error checked=concept_standard__backend__amd64_validate_borrow_function(&reader,decoded.payload.ok.value,i);if(checked.tag)fprintf(stderr,"function %d: %s\n",i,concept_standard__backend__amd64_describe_borrow_error(checked.payload.error.error));}}free(input);return 7;}}
+  if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8))){if(print_aggregate_plans(source)){free(input);return 8;}}
   concept_result_int_native_error result=concept_standard__backend__amd64_emit_module(source,output,&image);
   if(result.tag){fflush(stdout);fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_native_error(result.payload.error.error));free(input);return 7;}
   printf("native image bytes=%d functions=%d calls=%d finalized=%d\n",image.byteCount,image.symbolCount,image.fixupCount,image.finalized);
   for(int i=0;i<image.symbolCount;++i){concept_native_symbol symbol=image.symbols.data[i];
     printf("fn %.*s [%.*s] offset=%d size=%d\n",symbol.name.length,(const char*)input+symbol.name.offset,symbol.identity.length,(const char*)input+symbol.identity.offset,symbol.offset,symbol.size);
     printf("  %04x: ",symbol.offset);for(int b=0;b<symbol.size;++b)printf("%02x",bytes[symbol.offset+b]);printf("\n");
+    if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8))){if(print_object_plans(source,i)){free(input);return 8;}}
     concept_backend_function function=concept_standard__backend__amd64_empty_function();
     if(!concept_standard__backend__amd64_decode_function(source,i,&function).tag){
       int calls=0;for(int p=0;p<function.instructionCount;++p)if(function.instructions.data[p].op.tag==16)calls++;

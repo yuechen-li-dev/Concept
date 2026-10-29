@@ -1,6 +1,6 @@
 module Standard.Backend.AMD64;
 profile Core;
-import Standard.Backend.AMD64.Encoding;
+import Standard.Backend.AMD64.AggregateEmission;
 Result<void, BackendError> EmitInstruction(
 ref ByteWriter writer, ref const BridgeReader reader,
 ref const Allocation allocation, ref const FinalizedFrame frame,
@@ -231,7 +231,7 @@ ref const Allocation allocation, ref const FinalizedFrame frame, ref EncodingWor
 }
 Result<int, BackendError> EncodeFunctionWithWorkspace(ref const BridgeReader reader, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame, Span<byte> output, ref EncodingWorkspace plan) {
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodeFunctionIntoWriter(ref writer, ref const reader, ref const function, ref const allocation,
     ref const frame, ref plan) ?;
     return Result::Ok(writer.offset);
@@ -333,6 +333,10 @@ BridgeText identity) {
     return Result::Ok(found);
 }
 Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFixup fixup, Span<byte> bytes) {
+    return ValidateCallPatchMode(ref const image, fixup, bytes, false);
+}
+Result<void, NativeError> ValidateCallPatchMode(ref const NativeImage image, CallFixup fixup, Span<byte> bytes,
+bool measuring) {
     if (image.symbolCount < 0 or image.symbolCount > 128 or image.byteCount < 5) {
         return Result::Error(NativeError::MalformedPatch);
     }
@@ -344,7 +348,8 @@ Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFix
     if (source.offset < 0 or source.size < 5 or source.offset > image.byteCount or source.size > image.byteCount - source.offset) {
         return Result::Error(NativeError::MalformedPatch);
     }
-    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or bytes[fixup.callOffset] as int != 232) {
+    if (fixup.callOffset < source.offset or fixup.callOffset > source.offset + source.size - 5 or
+    (not measuring and bytes[fixup.callOffset] as int != 232)) {
         return Result::Error(NativeError::MalformedPatch);
     }
     return Result::Ok();
@@ -352,6 +357,10 @@ Result<void, NativeError> ValidateCallPatch(ref const NativeImage image, CallFix
 // Validate all patch sites and targets before touching bytes. Both forward and
 // backward calls use this single pass after declaration-order body emission.
 Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref NativeImage image, Span<byte> bytes) {
+    return ResolveNativeCallsMode(ref const reader, ref image, bytes, false);
+}
+Result<void, NativeError> ResolveNativeCallsMode(ref const BridgeReader reader, ref NativeImage image,
+Span<byte> bytes, bool measuring) {
     if (image.finalized or image.symbolCount < 0 or image.symbolCount > 128 or image.fixupCount < 0 or image.fixupCount > 512 or image.byteCount < 0 or image.byteCount > Len(bytes)) {
         return Result::Error(NativeError::InvalidInput);
     }
@@ -368,7 +377,7 @@ Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref 
     int[128] counts =[0 ...];
     for (i in 0 .. image.fixupCount) {
         CallFixup fixup = image.fixups[i];
-        ValidateCallPatch(ref const image, fixup, bytes) ?;
+        ValidateCallPatchMode(ref const image, fixup, bytes, measuring) ?;
         counts[fixup.sourceOrdinal] += 1;
         int source = FindNativeSymbol(ref const reader, ref const image, fixup.source) ?;
         if (fixup.resolved or source != fixup.sourceOrdinal) {
@@ -380,19 +389,22 @@ Result<void, NativeError> ResolveNativeCalls(ref const BridgeReader reader, ref 
             }
         }
         for (b in 0 .. 4) {
-            if (bytes[fixup.patchOffset + b] != 0) {
+            if (not measuring and bytes[fixup.patchOffset + b] != 0) {
                 return Result::Error(NativeError::MalformedPatch);
             }
         }
         int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
         CallDisplacement(image.symbols[target].offset as uint64, fixup.callOffset as uint64) ?;
     }
-    ByteWriter writer = ByteWriter{bytes, image.byteCount};
+    ByteWriter writer = ByteWriter{bytes, image.byteCount, false};
     for (i in 0 .. image.symbolCount) {
         if (counts[i] != image.symbols[i].calls) {
             return Result::Error(NativeError::UnresolvedFixup);
         }
     }
+    // Count-only encoding has already selected every opcode and patch site.
+    // Do not publish a measured image as finalized executable code.
+    if (measuring) { return Result::Ok(); }
     for (i in 0 .. image.fixupCount) {
         CallFixup fixup = image.fixups[i];
         int target = FindNativeSymbol(ref const reader, ref const image, fixup.target) ?;
@@ -469,6 +481,29 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        match (ValidateBorrowMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(NativeBorrowError(error)); }
+        }
+        BridgeReader source = BridgeReader{artifact, 0};
+        WireObjectModule document = AdmittedObjectDocument(artifact) ?;
+        return EmitObjectNativeDocument(ref const source, document, output, ref image, true);
+    }
+    if (Len(artifact) >= 8) {
+        bool object = true;
+        for (i in 0 .. 8) {
+            if (artifact[i] != ObjectBridgeMagic[i]) {
+                object = false;
+            }
+        }
+        if (object) {
+            match (ValidateObjectMachineBridge(artifact)) {
+                Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+                Result::Ok => { return EmitObjectNativeModule(artifact, output, ref image); }
+            }
+        }
+    }
     if (Len(artifact) >= 8) {
         bool scalar = true;
         for (i in 0 .. 8) {
@@ -505,7 +540,7 @@ Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> outp
         return Result::Error(NativeError::CapacityExceeded);
     }
     reader.offset = document.Functions.offset;
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodingPlan branches = EmptyEncodingPlan();
     EncodingWorkspace workspace = EncodingWorkspace {
         Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
@@ -571,12 +606,6 @@ Result<WireMachineFunction, NativeError> ReadNativeFunction(ref BridgeReader rea
         Result::Error(error) => Result::Error(NativeError::InvalidInput),
     };
 }
-void NativeFacts() {
-    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
-    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
-    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
-    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
-}
 // This pins self-contained in-memory records, independently of the explicit
 // field-by-field wire codec above. PlainData is not the wire representation.
 void CheckBridgeRepresentation()
@@ -600,6 +629,18 @@ ref const FinalizedFrame frame) {
     }
     if (instruction.Args.count>1) {
         right = ReadWire(ref args, BridgeType<WireScalarValueUse>{0}) ?.Value;
+    }
+    return EncodeScalarOperands(ref writer, ref const reader, instruction, left, right,
+    ref const function, ref const allocation, ref const frame);
+}
+// Both scalar wire formats and typed object projections use this selector.
+// Object value IDs are mapped to scalar IDs before entering it.
+Result<void, BackendError> EncodeScalarOperands(ref ByteWriter writer, ref const BridgeReader reader,
+WireScalarMachineInstruction instruction, int left, int right, ref const BackendFunction function,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    ScalarRepresentation type = instruction.Representation;
+    if (left >= 0 and ScalarFloating(function.scalarTypes[left])) {
+        type = function.scalarTypes[left];
     }
     if (instruction.Op == ScalarOpcode::CheckIndex or instruction.Op == ScalarOpcode::IndexAddress) {
         return WriteScalarIndex(ref writer, instruction, left, ref const function, ref const allocation,
@@ -800,19 +841,23 @@ ref const Allocation allocation, ref const FinalizedFrame frame) {
     bool comparison = false;
     match (input.Op) {
         ScalarOpcode::Const => {
-            int value = 0;
-            if (TextEquals(ref const reader, input.Literal, "true")) {
-                value = 1;
-            }
-            else {
-                if (not TextEquals(ref const reader, input.Literal, "false")) {
-                    value = ParseI32Literal(ref const reader, input.Literal) ?;
+            if (type != ScalarRepresentation::I32 and type != ScalarRepresentation::Bool) {
+                WriteScalarIntegerLiteral(ref writer, ref const reader, input.Literal, type) ?;
+            } else {
+                int value = 0;
+                if (TextEquals(ref const reader, input.Literal, "true")) {
+                    value = 1;
                 }
+                else {
+                    if (not TextEquals(ref const reader, input.Literal, "false")) {
+                        value = ParseI32Literal(ref const reader, input.Literal) ?;
+                    }
+                }
+                if (width != 4 and type != ScalarRepresentation::Bool) {
+                    return Result::Error(BackendError::UnsupportedInstruction);
+                }
+                WriteMovImmediate(ref writer, Register::RAX, value, 4) ?;
             }
-            if (width != 4 and type != ScalarRepresentation::Bool) {
-                return Result::Error(BackendError::UnsupportedInstruction);
-            }
-            WriteMovImmediate(ref writer, Register::RAX, value, 4) ?;
         }
         ScalarOpcode::LoadSlot => {
             WriteRSPReg(ref writer, true, Register::RAX, frame.slotOffsets[input.Slot], width) ?;
@@ -983,24 +1028,6 @@ MachineInstruction ScalarGPRInstruction(Opcode operation, Condition condition, i
         operation, accumulator, source, second, 2, width, - 1, - 1, condition, 0, 0, 0, 0, EmptyProjectedCall()
     };
 }
-Result<void, BackendError> LoadScalarGPR(ref ByteWriter writer, Register target, int value, int width,
-ref const Allocation allocation, ref const FinalizedFrame frame) {
-    ScalarLocation source = allocation.scalarLocations[value];
-    if (source.kind != ScalarLocationKind::Physical or source.registerClass != RegisterClass::GPR) {
-        return Result::Error(BackendError::InvalidEncoding);
-    }
-    if (source.gpr == Register::RAX) {
-        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 1) ?, width);
-    }
-    if (source.gpr == Register::RDX) {
-        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 2) ?, width);
-    }
-    int opcode = 137;
-    if (width == 1) {
-        opcode = 136;
-    }
-    return WriteRegReg(ref writer, opcode, target, source.gpr, width);
-}
 Result<void, BackendError> WriteScalarEntry(ref ByteWriter writer, ref const BackendFunction function,
 ref const Allocation allocation, ref const FinalizedFrame frame) {
     for (i in 0 .. function.argCount) {
@@ -1097,7 +1124,7 @@ bool conditional) {
     return Result::Ok();
 }
 Result<int, BackendError> EmitScalarNativeFunction(ReadOnlySpan<byte> artifact, int ordinal, Span<byte> output) {
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodeScalarNativeFunctionIntoWriter(artifact, ordinal, ref writer) ?;
     return Result::Ok(writer.offset);
 }
@@ -1241,7 +1268,7 @@ Result<int, NativeError> EmitScalarNativeModule(ReadOnlySpan<byte> artifact, Spa
         }
     }
     image = EmptyNativeImage();
-    ByteWriter writer = ByteWriter{output, 0};
+    ByteWriter writer = ByteWriter{output, 0, false};
     EncodingPlan branches = EmptyEncodingPlan();
     EncodingWorkspace workspace = EncodingWorkspace {
         Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
@@ -1293,8 +1320,601 @@ ref const FinalizedFrame frame, ref EncodingWorkspace workspace) {
     }
     return Result::Ok();
 }
+Result<void, BackendError> EncodeObjectMemoryInstruction(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input,
+ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
+ref const FinalizedFrame frame) {
+    WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
+    int left = - 1;
+    int right = - 1;
+    if (input.Args.count > 0) {
+        left = NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args, 0) ?.Value;
+    }
+    if (input.Args.count > 1) {
+        right = NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args, 1) ?.Value;
+    }
+    int t0 = NativeScalarTemporary(ref const frame, 0) ?;
+    int t1 = NativeScalarTemporary(ref const frame, 1) ?;
+    int t2 = NativeScalarTemporary(ref const frame, 2) ?;
+    int t3 = NativeScalarTemporary(ref const frame, 3) ?;
+    WriteRSPReg(ref writer, false, Register::RAX, t1, 8) ?;
+    WriteRSPReg(ref writer, false, Register::RDX, t2, 8) ?;
+    WriteRSPReg(ref writer, false, Register::R10, t3, 8) ?;
+    WriteSelectedScalar(ref writer, ScalarOpcode::Store, ScalarRepresentation::Float64, ScalarStackOperand(t0,
+    ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
+    bool scalarResult = false;
+    bool floatingResult = false;
+    if (input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) {
+        LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
+        ref const frame) ?;
+        scalarResult = true;
+    } else if (input.Op == ObjectOpcode::MakeAggregate or input.Op == ObjectOpcode::MakeArray) {
+        int destination = frame.slotOffsets[placement.values[input.Result]];
+        for (i in 0 .. input.Args.count) {
+            int offset = i * type.Stride;
+            if (type.Kind == ObjectKind::Aggregate) {
+                offset = NativeObjectAt<WireObjectField>(ref const reader, type.Fields, i) ?.Offset;
+            }
+            ObjectStackAddress(ref writer, Register::RDX, destination + offset) ?;
+            int value = NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args, i) ?.Value;
+            WriteObjectValue(ref writer, ref const reader, document, owner, value, ref const placement,
+            ref const function, ref const allocation, ref const frame) ?;
+        }
+    } else if (input.Op == ObjectOpcode::CopyValue or input.Op == ObjectOpcode::ReplaceMember or
+    input.Op == ObjectOpcode::LoadSlot or input.Op == ObjectOpcode::StoreSlot or input.Op == ObjectOpcode::InitializeSlot or
+    (ObjectAggregate(type.Kind) and(input.Op == ObjectOpcode::Load or input.Op == ObjectOpcode::Store))) {
+        if (input.Op == ObjectOpcode::LoadSlot) {
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[input.Slot]) ?;
+        } else if (input.Op == ObjectOpcode::Load) {
+            LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
+            ref const frame) ?;
+        } else {
+            int source = left;
+            if (input.Op == ObjectOpcode::Store) {
+                source = right;
+            }
+            ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[placement.values[source]]) ?;
+        }
+        if (input.Op == ObjectOpcode::StoreSlot or input.Op == ObjectOpcode::InitializeSlot) {
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[input.Slot]) ?;
+        } else if (input.Op == ObjectOpcode::Store) {
+            LoadObjectGPR(ref writer, Register::RDX, placement.registers[left], 8, ref const allocation,
+            ref const frame) ?;
+        } else {
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[placement.values[input.Result]]) ?;
+        }
+        CopyObjectFields(ref writer, ref const reader, document, input.Type, 0, 0) ?;
+        if (input.Op == ObjectOpcode::ReplaceMember) {
+            WireObjectField field = NativeObjectAt<WireObjectField>(ref const reader, type.Fields, input.Member) ?;
+            ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[placement.values[input.Result]] + field.Offset) ?;
+            WriteObjectValue(ref writer, ref const reader, document, owner, right, ref const placement,
+            ref const function, ref const allocation, ref const frame) ?;
+        }
+    } else if (input.Op == ObjectOpcode::Store) {
+        LoadObjectGPR(ref writer, Register::RDX, placement.registers[left], 8, ref const allocation,
+        ref const frame) ?;
+        WriteObjectValue(ref writer, ref const reader, document, owner, right, ref const placement, ref const function,
+        ref const allocation, ref const frame) ?;
+    } else if (input.Op == ObjectOpcode::Load) {
+        LoadObjectGPR(ref writer, Register::RDX, placement.registers[left], 8, ref const allocation,
+        ref const frame) ?;
+        ScalarRepresentation scalar = ObjectScalar(type.Kind);
+        if (ScalarFloating(scalar)) {
+            WriteScalarAddressSSE(ref writer, false, scalar, XMMRegister::XMM5, Register::RDX) ?;
+            floatingResult = true;
+        } else {
+            int opcode = 139;
+            if (type.Size == 1) {
+                opcode = 138;
+            }
+            WriteAddressReg(ref writer, opcode, Register::RAX, RegisterEncoding(Register::RDX), - 1,
+            0, 0, type.Size) ?;
+            ExtendObjectInteger(ref writer, Register::RAX, scalar) ?;
+            scalarResult = true;
+        }
+    } else if (input.Op == ObjectOpcode::SlotAddress) {
+        ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[input.Slot]) ?;
+        scalarResult = true;
+    } else if (input.Op == ObjectOpcode::FieldAddress) {
+        LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
+        ref const frame) ?;
+        WriteAddressReg(ref writer, 141, Register::RAX, RegisterEncoding(Register::RAX), - 1, 0, input.Offset,
+        8) ?;
+        scalarResult = true;
+    } else if (input.Op == ObjectOpcode::CheckIndex or input.Op == ObjectOpcode::IndexAddress) {
+        int index = left;
+        if (input.Op == ObjectOpcode::IndexAddress) {
+            index = right;
+        }
+        int id = placement.registers[index];
+        ScalarRepresentation scalar = function.scalarTypes[id];
+        Register target = Register::RAX;
+        if (input.Op == ObjectOpcode::IndexAddress) {
+            target = Register::RDX;
+        }
+        LoadObjectGPR(ref writer, target, id, ScalarWidth(scalar), ref const allocation, ref const frame) ?;
+        ExtendObjectInteger(ref writer, target, scalar) ?;
+        if (input.Op == ObjectOpcode::CheckIndex) {
+            // Full-width unsigned compare also rejects negative signed indices.
+            WriteByte(ref writer, 72) ?;
+            WriteByte(ref writer, 61) ?;
+            WriteI32LE(ref writer, input.Extent) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 130) ?;
+            WriteI32LE(ref writer, 2) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 11) ?;
+        } else {
+            LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
+            ref const frame) ?;
+            // Guarded index and transported stride bound this product to the
+            // checked array's byte extent. Stride 12/24 need no layout rule.
+            WriteByte(ref writer, 72) ?;
+            WriteByte(ref writer, 105) ?;
+            WriteByte(ref writer, 210) ?;
+            WriteI32LE(ref writer, input.Stride) ?;
+            WriteAddressReg(ref writer, 141, Register::RAX, RegisterEncoding(Register::RAX), RegisterEncoding(Register::RDX),
+            0, 0, 8) ?;
+            scalarResult = true;
+        }
+    } else { return Result::Error(BackendError::UnsupportedInstruction); }
+    Register resultRegister = Register::RSP;
+    bool resultXMM5 = false;
+    if (scalarResult) {
+        int id = placement.registers[input.Result];
+        resultRegister = allocation.scalarLocations[id].gpr;
+        // Integer field reads were sign/zero extended above. Preserve the
+        // complete extended register rather than restoring stale upper bits.
+        int width = 8;
+        int opcode = 137;
+        if (width == 1) {
+            opcode = 136;
+        }
+        WriteRegReg(ref writer, opcode, resultRegister, Register::RAX, width) ?;
+    }
+    if (floatingResult) {
+        int id = placement.registers[input.Result];
+        ScalarRepresentation scalar = ObjectScalar(type.Kind);
+        ScalarLocation result = allocation.scalarLocations[id];
+        if (result.kind == ScalarLocationKind::Spill) {
+            WriteSelectedScalar(ref writer, ScalarOpcode::Store, scalar, ScalarStackOperand(frame.slots[frame.spillSlots[id]].offset,
+            scalar), ScalarRegisterOperand(XMMRegister::XMM5, scalar)) ?;
+        } else {
+            WriteSelectedScalar(ref writer, ScalarOpcode::Load, scalar, ScalarRegisterOperand(result.xmm,
+            scalar), ScalarRegisterOperand(XMMRegister::XMM5, scalar)) ?;
+            resultXMM5 = result.xmm == XMMRegister::XMM5;
+        }
+    }
+    if (resultRegister != Register::RAX) {
+        WriteRSPReg(ref writer, true, Register::RAX, t1, 8) ?;
+    }
+    if (resultRegister != Register::RDX) {
+        WriteRSPReg(ref writer, true, Register::RDX, t2, 8) ?;
+    }
+    if (resultRegister != Register::R10) {
+        WriteRSPReg(ref writer, true, Register::R10, t3, 8) ?;
+    }
+    if (not resultXMM5) {
+        WriteSelectedScalar(ref writer, ScalarOpcode::Load, ScalarRepresentation::Float64, ScalarRegisterOperand(XMMRegister::XMM5,
+        ScalarRepresentation::Float64), ScalarStackOperand(t0, ScalarRepresentation::Float64)) ?;
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> EncodeObjectInstruction(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input,
+ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
+ref const FinalizedFrame frame) {
+    WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
+    if ((input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) or ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
+    input.Op == ObjectOpcode::IndexAddress or input.Op == ObjectOpcode::CheckIndex or input.Op == ObjectOpcode::Load or input.Op == ObjectOpcode::Store) {
+        return EncodeObjectMemoryInstruction(ref writer, ref const reader, document, owner, input, ref const placement,
+        ref const function, ref const allocation, ref const frame);
+    }
+    int left = - 1;
+    int right = - 1;
+    if (input.Args.count > 0) {
+        left = placement.registers[NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args, 0) ?.Value];
+    }
+    if (input.Args.count > 1) {
+        right = placement.registers[NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args,
+        1) ?.Value];
+    }
+    ScalarRepresentation scalar = ObjectScalar(type.Kind);
+    ScalarRepresentation operand = scalar;
+    if (left >= 0) {
+        operand = function.scalarTypes[left];
+    }
+    ScalarOpcode op = ObjectScalarOperation(input.Op, operand) ?;
+    int result = - 1;
+    if (input.Result >= 0) {
+        result = placement.registers[input.Result];
+    }
+    WireScalarMachineInstruction adapted = WireScalarMachineInstruction {
+        op, result, scalar, BridgeSequence<WireScalarValueUse>{0, 0}, input.Slot, input.Literal, input.Extent,
+        input.Stride, input.LIRBlock, input.LIRInstruction, WireScalarSpan {
+            input.Source.Line, input.Source.Column
+        }, input.Decision, input.Facts, BridgeSequence<WireScalarMachineCall>{0, 0}
+    };
+    return EncodeScalarOperands(ref writer, ref const reader, adapted, left, right, ref const function,
+    ref const allocation, ref const frame);
+}
+Result<void, BackendError> PrepareObjectFunction(ref const BridgeReader reader, WireObjectModule document,
+WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation,
+ref FinalizedFrame frame) {
+    ProjectObjectFunction(ref const reader, document, owner, ref function, ref placement) ?;
+    allocation = EmptyAllocation();
+    AllocateRegisters(ref const function, ref allocation) ?;
+    PlanFunctionCalls(ref const function, ref allocation) ?;
+    match (QualifyScalarNativeFrame(ref function, ref const allocation, ref frame)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    return ValidateObjectFrame(ref const reader, document, owner, ref const function, ref const placement,
+    ref const frame);
+}
+Result<void, BackendError> ValidateObjectFrame(ref const BridgeReader reader, WireObjectModule document,
+WireObjectFunction owner, ref const BackendFunction function, ref const ObjectPlacement placement,
+ref const FinalizedFrame frame) {
+    ValidateObjectFrameSlots(ref const function, ref const frame) ?;
+    bool[64] seenObjects =[false ...];
+    bool[128] seenScalars =[false ...];
+    // Bind storage-backed value IDs to the supplied checked object geometry.
+    for (i in 0 .. owner.Values.count) {
+        WireObjectValue value = NativeObjectAt<WireObjectValue>(ref const reader, owner.Values, i) ?;
+        if (value.Class == ObjectValueClass::Aggregate) {
+            int id = placement.values[i];
+            if (id < owner.Slots.count or id >= function.slotCount or placement.registers[i] != - 1) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            if (seenObjects[id]) { return Result::Error(BackendError::InvalidEncoding); }
+            seenObjects[id] = true;
+            WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, value.Type) ?;
+            MachineSlot slot = function.slots[id];
+            if (slot.size != type.Size or slot.alignment != type.Align or frame.slotOffsets[slot.id] < 0) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+        } else {
+            int id = placement.registers[i];
+            if (id < 0 or id >= function.virtualRegCount or placement.values[i] != - 1) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            if (seenScalars[id]) { return Result::Error(BackendError::InvalidEncoding); }
+            seenScalars[id] = true;
+        }
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction function, ref const FinalizedFrame frame) {
+    match (ValidateFrame(ref const frame, function.hasCalls)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+    }
+    for (i in 0 .. function.slotCount) {
+        int actual = - 1;
+        match (ResolveFrameSlot(ref const frame, FrameRegionKind::LocalSlots, i)) {
+            Result::Ok(value) => {
+                actual = value;
+            }
+            Result::Error(error) => { return Result::Error(BackendError::InvalidEncoding); }
+        }
+        FrameSlot stored = frame.slots[actual];
+        MachineSlot expected = function.slots[i];
+        if (stored.size != expected.size or stored.alignment != expected.alignment or stored.offset != frame.slotOffsets[i]) {
+            return Result::Error(BackendError::InvalidEncoding);
+        }
+    }
+    return Result::Ok();
+}
+// Inspection uses the same production projection, allocator and finalizer.
+Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
+ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        match (ValidateBorrowMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    } else {
+        match (ValidateObjectMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    WireObjectModule document = NativeObjectDocument(artifact) ?;
+    WireObjectFunction owner = NativeObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+    ordinal) ?;
+    if (ObjectModuleHasAggregateABI(ref const reader, document)) {
+        AggregateFunctionPlan plan = EmptyAggregateFunctionPlan();
+        return match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame, ref plan)) {
+            Result::Ok => Result::Ok(),
+            Result::Error(error) => Result::Error(BackendError::BridgeInvalid)
+        };
+    }
+    return PrepareObjectFunction(ref const reader, document, owner, ref function, ref placement, ref allocation,
+    ref frame);
+}
+Result<void, BackendError> EncodeObjectFunction(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref EncodingWorkspace workspace) {
+    AggregateFunctionPlan unused = EmptyAggregateFunctionPlan();
+    return EncodeObjectFunctionPlan(ref writer, ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref workspace, false, ref const unused);
+}
+Result<void, BackendError> EncodeObjectFunctionPlan(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionPlan aggregatePlan) {
+    if (frame.byteCount >= 4096) { return Result::Error(BackendError::CapacityExceeded); }
+    for (i in 0 .. frame.prologueCount) {
+        EmitFrameAction(ref writer, frame.prologue[i]) ?;
+    }
+    WriteScalarEntry(ref writer, ref const function, ref const allocation, ref const frame) ?;
+    if (aggregateABI) {
+        EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+        AggregateTransferPhase::Entry, 0, ref const allocation, ref const frame) ?;
+    }
+    Liveness live = EmptyLiveness();
+    ComputeLiveness(ref const function, ref live) ?;
+    EncodingPlan branches = EmptyEncodingPlan();
+    int cursor = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = NativeObjectAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        branches.blockOffsets[bi] = writer.offset;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction instruction = NativeObjectAt<WireObjectInstruction>(ref const reader,
+            block.Instructions, ii) ?;
+            if (instruction.Op == ObjectOpcode::Call) {
+                int position = placement.positions[cursor];
+                if (aggregateABI) {
+                    EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                    AggregateTransferPhase::BeforeCall, position - 1, ref const allocation, ref const frame) ?;
+                    CallSiteActions site = EmptyCallSiteActions();
+                    match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+                    position,
+                    ref const frame, ref site)) {
+                        Result::Ok => { }
+                        Result::Error(error) => {
+                            return Result::Error(BackendError::InvalidEncoding);
+                        }
+                    }
+                    for (a in 0 .. site.count) {
+                        if (a == site.callIndex) {
+                            WriteCallPlaceholder(ref writer, ref workspace, function.identity, site.abi.target) ?;
+                            EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                            AggregateTransferPhase::AfterCall, position + 1, ref const allocation, ref const frame) ?;
+                        } else {
+                            EmitScalarCallAction(ref writer, ref const site, a, ref const frame) ?;
+                        }
+                    }
+                } else {
+                    EmitAllocatedCall(ref writer, ref const function, ref const allocation, ref const live,
+                    position, ref const frame, ref workspace) ?;
+                }
+            } else {
+                EncodeObjectInstruction(ref writer, ref const reader, document, owner, instruction, ref const placement,
+                ref const function, ref const allocation, ref const frame) ?;
+            }
+            cursor += 1;
+        }
+        match (block.Term.Op) {
+            ObjectTerminator::Return => {
+                if (aggregateABI and AggregateUsesStorage(aggregatePlan.result.category)) {
+                    int point = function.blocks[bi].firstInstruction + function.blocks[bi].instructionCount;
+                    EmitAggregatePhase(ref writer, ref const reader, document, ref const aggregatePlan,
+                    AggregateTransferPhase::Return, point, ref const allocation, ref const frame) ?;
+                } else if (function.scalarResult != ScalarRepresentation::Void) {
+                    int id = placement.registers[block.Term.Value];
+                    if (ScalarFloating(function.scalarResult)) {
+                        WriteSelectedScalar(ref writer, ScalarOpcode::Load, function.scalarResult, ScalarRegisterOperand(XMMRegister::XMM0,
+                        function.scalarResult), NativeScalarSource(id, function.scalarResult, ref const allocation,
+                        ref const frame, false) ?) ?;
+                    } else {
+                        int width = ScalarWidth(function.scalarResult);
+                        if (width < 4) {
+                            width = 4;
+                        }
+                        WriteRegReg(ref writer, 137, Register::RAX, allocation.scalarLocations[id].gpr,
+                        width) ?;
+                    }
+                }
+                for (i in 0 .. frame.epilogueCount) {
+                    EmitFrameAction(ref writer, frame.epilogue[i]) ?;
+                }
+            }
+            ObjectTerminator::Jump => {
+                WriteScalarBranch(ref writer, ref branches, block.Term.True, false) ?;
+            }
+            ObjectTerminator::Branch => {
+                Register condition = allocation.scalarLocations[placement.registers[block.Term.Value]].gpr;
+                WriteRegReg(ref writer, 133, condition, condition, 4) ?;
+                WriteScalarBranch(ref writer, ref branches, block.Term.False, true) ?;
+                WriteScalarBranch(ref writer, ref branches, block.Term.True, false) ?;
+            }
+        }
+    }
+    for (i in 0 .. branches.fixupCount) {
+        BranchFixup fixup = branches.fixups[i];
+        PatchI32LE(ref writer, fixup.patchOffset, branches.blockOffsets[fixup.targetBlock] -(fixup.patchOffset + 4)) ?;
+    }
+    return Result::Ok();
+}
+Result<void, NativeError> EncodeCheckedAggregateFunction(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref EncodingWorkspace workspace, ref const AggregateFunctionPlan plan) {
+    match (ValidateAggregateFunctionPlan(ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref const plan)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateNativeError(error)); }
+    }
+    return match (EncodeObjectFunctionPlan(ref writer, ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref workspace, true, ref const plan)) {
+        Result::Ok => Result::Ok(),
+        Result::Error(error) => Result::Error(ScalarBackendError(error))
+    };
+}
+Result<int, NativeError> EmitObjectNativeModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadObjectBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    WireObjectModule document = WireObjectModule {
+        BridgeSequence<WireObjectDependency>{0, 0}, BridgeSequence<WireObjectType>{0, 0}, BridgeSequence<WireObjectFunction>{
+            0, 0
+        }
+    };
+    match (ReadWire(ref reader, BridgeType<WireObjectModule>{0})) {
+        Result::Ok(value) => {
+            document = value;
+        }
+        Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+    }
+    return EmitObjectNativeDocument(ref const reader, document, output, ref image, false);
+}
+Result<int, NativeError> EmitObjectNativeDocument(ref const BridgeReader reader, WireObjectModule document,
+Span<byte> output, ref NativeImage image, bool references) {
+    // Whole-module ABI and frame admission precedes output/image mutation.
+    BackendFunction function = EmptyFunction();
+    ObjectPlacement placement = EmptyObjectPlacement();
+    Allocation allocation = EmptyAllocation();
+    FinalizedFrame frame = EmptyFinalizedFrame();
+    bool aggregateABI = ObjectModuleHasAggregateABI(ref const reader, document);
+    if (aggregateABI) {
+        return EmitAggregateNativeDocument(ref const reader, document, output, ref image);
+    }
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        WireObjectType result = AdmittedObjectAt<WireObjectType>(ref const reader, document.Types, owner.ResultType) ?;
+        if (ObjectAggregate(result.Kind)) {
+            return Result::Error(NativeError::UnsupportedAggregateABI);
+        }
+        for (p in 0 .. owner.Params.count) {
+            WireObjectParameter parameter = AdmittedObjectAt<WireObjectParameter>(ref const reader, owner.Params,
+            p) ?;
+            WireObjectType type = AdmittedObjectAt<WireObjectType>(ref const reader, document.Types,
+            parameter.Type) ?;
+            WireObjectValue value = AdmittedObjectAt<WireObjectValue>(ref const reader, owner.Values,
+            parameter.Value) ?;
+            if (ObjectAggregate(type.Kind) and not(references and value.Class == ObjectValueClass::Location)) {
+                return Result::Error(NativeError::UnsupportedAggregateABI);
+            }
+        }
+    }
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        match (PrepareObjectFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        if (frame.byteCount >= 4096) {
+            return Result::Error(NativeError::StackProbeRequired);
+        }
+    }
+    image = EmptyNativeImage();
+    ByteWriter writer = ByteWriter{output, 0, false};
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        match (PrepareObjectFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        int begin = writer.offset;
+        int calls = workspace.callCount;
+        workspace.functionOrdinal = i;
+        match (EncodeObjectFunction(ref writer, ref const reader, document, owner, ref const function,
+        ref const placement, ref const allocation, ref const frame, ref workspace)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(ScalarBackendError(error)); }
+        }
+        image.symbols[i] = NativeSymbol {
+            owner.Identity, owner.Name, i, begin, writer.offset - begin, workspace.callCount - calls
+        };
+        image.symbolCount += 1;
+    }
+    image.byteCount = writer.offset;
+    image.fixupCount = workspace.callCount;
+    ResolveNativeCalls(ref const reader, ref image, output) ?;
+    return Result::Ok(writer.offset);
+}
+// A count-only pass runs the same opcode, transfer, frame and branch selectors
+// before either caller output is touched. It also resolves the full symbol /
+// call graph using the existing fixup validator, without examining stale bytes.
+Result<void, NativeError> EncodeAggregateDocumentPass(ref ByteWriter writer, ref NativeImage image,
+ref const BridgeReader reader, WireObjectModule document) {
+    BackendFunction function = EmptyFunction();
+    ObjectPlacement placement = EmptyObjectPlacement();
+    Allocation allocation = EmptyAllocation();
+    FinalizedFrame frame = EmptyFinalizedFrame();
+    AggregateFunctionPlan plan = EmptyAggregateFunctionPlan();
+    EncodingPlan branches = EmptyEncodingPlan();
+    EncodingWorkspace workspace = EncodingWorkspace {
+        Span(branches.blockOffsets), Span(branches.fixups), 0, Span(image.fixups), 0, 0, true
+    };
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction owner = AdmittedObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        match (PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+        ref allocation, ref frame, ref plan)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateNativeError(error)); }
+        }
+        int begin = writer.offset;
+        int calls = workspace.callCount;
+        workspace.functionOrdinal = i;
+        EncodeCheckedAggregateFunction(ref writer, ref const reader, document, owner, ref const function,
+        ref const placement, ref const allocation, ref const frame, ref workspace, ref const plan) ?;
+        image.symbols[i] = NativeSymbol {
+            owner.Identity, owner.Name, i, begin, writer.offset - begin, workspace.callCount - calls
+        };
+        image.symbolCount += 1;
+    }
+    image.byteCount = writer.offset;
+    image.fixupCount = workspace.callCount;
+    return ResolveNativeCallsMode(ref const reader, ref image, writer.bytes, writer.measuring);
+}
+Result<int, NativeError> EmitAggregateNativeDocument(ref const BridgeReader reader, WireObjectModule document,
+Span<byte> output, ref NativeImage image) {
+    NativeImage candidate = EmptyNativeImage();
+    ByteWriter writer = ByteWriter{output, 0, true};
+    EncodeAggregateDocumentPass(ref writer, ref candidate, ref const reader, document) ?;
+    candidate = EmptyNativeImage();
+    writer.offset = 0;
+    writer.measuring = false;
+    EncodeAggregateDocumentPass(ref writer, ref candidate, ref const reader, document) ?;
+    image = candidate;
+    return Result::Ok(writer.offset);
+}
 void NativeScalarSSEFacts() {
     Assert.Concept<NoAllocation>(EmitScalarNativeModule, "bounded native scalar image in caller-owned storage");
     Assert.Concept<NoAllocation>(EncodeScalarNativeFunctionIntoWriter, "shared writer and frame-owned scratch");
     Assert.Concept<NoAllocation>(EmitAllocatedCall, "shared checked integer and mixed call actions");
+    Assert.Concept<NoAllocation>(EmitObjectNativeModule, "typed objects use the existing frame and caller-owned backend stores");
+    Assert.Concept<NoAllocation>(EncodeObjectMemoryInstruction, "scalar field transfers and bounded snapshots");
+}
+void NativeFacts() {
+    Assert.Concept<PlainData>(CallFixup, "transient semantic-identity call patch");
+    Assert.Concept<PlainData>(NativeSymbol, "declaration-order code layout");
+    Assert.Concept<NoAllocation>(EmitModule, "bounded symbols/fixups and caller-owned bytes");
+    Assert.Concept<NoAllocation>(ResolveNativeCalls, "no bootstrap linker policy");
+}
+NativeError NativeBorrowError(BorrowError error) {
+    if (error == BorrowError::Target) { return NativeError::ReferenceTarget; }
+    if (error == BorrowError::Authority) { return NativeError::ReferenceAuthority; }
+    if (error == BorrowError::Lifetime) { return NativeError::ReferenceLifetime; }
+    if (error == BorrowError::Escape) { return NativeError::ReferenceEscape; }
+    if (error == BorrowError::Call) { return NativeError::ReferenceCall; }
+    if (error == BorrowError::NotLive) { return NativeError::ReferenceNotLive; }
+    return NativeError::InvalidInput;
 }

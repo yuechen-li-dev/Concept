@@ -1,0 +1,251 @@
+module EVT2g5.Calls;
+profile Core;
+
+[[repr(C)]] record struct One {
+    byte value;
+}
+[[repr(C)]] record struct Two {
+    uint16 value;
+}
+[[repr(C)]] record struct Four {
+    int value;
+}
+[[repr(C)]] record struct Eight {
+    double value;
+}
+[[repr(C)]] record struct Three {
+    byte a;
+    byte b;
+    byte c;
+}
+[[repr(C)]] record struct PaddedEight {
+    byte tag;
+    int value;
+}
+[[repr(C)]] record struct PaddedSixteen {
+    byte tag;
+    uint64 value;
+}
+[[repr(C)]] record struct Large {
+    double a;
+    double b;
+    double c;
+}
+[[repr(C)]] record struct ArrayThree {
+    int<array>[3] values;
+}
+[[repr(C)]] record struct Nested {
+    PaddedEight head;
+    ArrayThree tail;
+}
+struct MutableLarge {
+    double a;
+    double b;
+    double c;
+}
+struct NativeSmall {
+    int value;
+}
+
+One RoundOne(One value) {
+    return value;
+}
+Two RoundTwo(Two value) {
+    return value;
+}
+Four RoundFour(Four value) {
+    return value;
+}
+Eight RoundEight(Eight value) {
+    return value;
+}
+Three RoundThree(Three value) {
+    return value;
+}
+PaddedEight RoundPaddedEight(PaddedEight value) {
+    return value;
+}
+PaddedSixteen RoundPaddedSixteen(PaddedSixteen value) {
+    return value;
+}
+Large RoundLarge(Large value) {
+    return value;
+}
+Nested RoundNested(Nested value) {
+    return value;
+}
+NativeSmall RoundNative(NativeSmall value) {
+    return value;
+}
+int NativeDriver(int seed) {
+    NativeSmall value = RoundNative(NativeSmall{seed});
+    return value.value;
+}
+Large Shifted(int a, double b, int c, float d) {
+    if (a > c) {
+        return Large{b, 1.0, 2.0};
+    }
+    if (d > 0.0) {
+        return Large{b, 3.0, 4.0};
+    }
+    return Large{b, 5.0, 6.0};
+}
+Large Mixed(Four small, Large large, double delta, ref int count, float bias, ref const Four view) {
+    count = count + small.value + view.value;
+    if (bias > 0.0) {
+        return large with {
+            a = large.a + delta;
+            c = large.c + 1.0;
+        };
+    }
+    return large with {
+        b = large.b + delta;
+    };
+}
+Large PairValues(Large left, Large right) {
+    return Large{left.a + right.a, left.b + right.b, left.c + right.c};
+}
+Four EightPositions(Four a, Four b, Four c, Four d, Four e, Four f, Four g, Four h) {
+    return Four {
+        a.value + b.value + c.value + d.value + e.value + f.value + g.value + h.value
+    };
+}
+Four PositionOne(Four value) {
+    return value;
+}
+Four PositionTwo(int a, Four value) {
+    return value with {
+        value = value.value + a;
+    };
+}
+Four PositionThree(int a, double b, Four value) {
+    return value with {
+        value = value.value + a;
+    };
+}
+Four PositionFour(int a, double b, float c, Four value) {
+    return value with {
+        value = value.value + a;
+    };
+}
+Four SmallForward(int depth, Four value) {
+    if (depth <= 0) { return value; }
+    Four next = value with {
+        value = value.value + 1;
+    };
+    return SmallForward(depth - 1, next);
+}
+Large Forward(int depth, Large value) {
+    if (depth <= 0) { return value; }
+    Large next = value with {
+        a = value.a + 1.0;
+    };
+    return Forward(depth - 1, next);
+}
+int At(ArrayThree value, int index) {
+    return value.values[index];
+}
+Nested Edit(Nested value, int seed) {
+    PaddedEight head = value.head with {
+        value = seed;
+    };
+    return value with {
+        head = head;
+    };
+}
+int ValueMutation(MutableLarge value, ref MutableLarge original) {
+    value.a = 91.0;
+    original.b = original.b + 2.0;
+    if (value.a == original.a) { return 0; }
+    return 1;
+}
+int Isolation(double seed) {
+    MutableLarge original = MutableLarge{seed, 2.0, 3.0};
+    int isolated = ValueMutation(original, ref original);
+    if (original.a == seed) {
+        if (original.b == 4.0) { return isolated; }
+    }
+    return 0;
+}
+double Consume(Large value) {
+    return value.a + value.b + value.c;
+}
+double Chain(double seed) {
+    Large value = Large{seed, seed + 1.0, seed + 2.0};
+    return Consume(Forward(3, RoundLarge(value)));
+}
+double Live(double seed) {
+    double a = seed + 1.0;
+    double b = seed + 2.0;
+    double c = seed + 3.0;
+    double d = seed + 4.0;
+    double e = seed + 5.0;
+    double f = seed + 6.0;
+    double g = seed + 7.0;
+    double h = seed + 8.0;
+    Large left = Large{seed, 1.0, 2.0};
+    Large result = PairValues(left, left);
+    return a + b + c + d + e + f + g + h + result.a;
+}
+float FloatLive(float value, Large input) {
+    double ignored = Consume(input);
+    return value * 2.0;
+}
+double Scenario(double seed, int count) {
+    Four small = Four{3};
+    Four view = Four{4};
+    Large input = Large{seed, seed + 1.0, seed + 2.0};
+    int observed = count;
+    Large result = Mixed(small, input, 0.5, ref observed, 1.0, ref const view);
+    if (observed == count + 7) { return Consume(result); }
+    return - 9.0;
+}
+int DirectDriver(int seed) {
+    Four value = Four{seed};
+    Four result = EightPositions(value, value, value, value, value, value, value, value);
+    return result.value;
+}
+Large CallShifted(int a, double b, int c, float d) {
+    return Shifted(a, b, c, d);
+}
+Large CallMixed(Four small, Large large, double delta, ref int count, float bias, ref const Four view) {
+    return Mixed(small, large, delta, ref count, bias, ref const view);
+}
+double SumMany(double a, double b, double c, double d, double e, double f, double g, double h) {
+    return a + b + c + d + e + f + g + h;
+}
+double Pressure(double seed) {
+    return SumMany(seed + 1.0, seed + 2.0, seed + 3.0, seed + 4.0,
+    seed + 5.0, seed + 6.0, seed + 7.0,
+    Consume(Forward(2, Large{seed, seed + 1.0, seed + 2.0})));
+}
+int TinyDriver(One a, Two b, Eight c) {
+    One first = RoundOne(a);
+    Two second = RoundTwo(b);
+    Eight third = RoundEight(c);
+    if (first.value == a.value) {
+        if (second.value == b.value) {
+            if (third.value == c.value) { return 1; }
+        }
+    }
+    return 0;
+}
+Four BoolMix(bool flag, int delta, Four a, float f, Four b, double d, ref int count, ref const Four view) {
+    if (flag) {
+        count = count + delta;
+        return Four{a.value + b.value + view.value};
+    }
+    count = count - delta;
+    return Four{a.value - b.value};
+}
+int BoolDriver(int seed) {
+    Four view = Four{seed};
+    int count = 0;
+    Four result = BoolMix(seed > 0, seed, Four{2}, 1.0, Four{3}, 2.0, ref count, ref const view);
+    if (seed > 0) {
+        if (count == seed) { return result.value; }
+    } else {
+        if (count == 0 - seed) { return result.value; }
+    }
+    return 999;
+}

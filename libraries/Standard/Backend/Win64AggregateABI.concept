@@ -1,0 +1,220 @@
+module Standard.Backend.Win64AggregateABI;
+profile Core;
+import Standard.Backend.Win64ABI;
+import Standard.Backend.BridgeValidate6;
+
+// Derived Win64 default ABI state. No physical placement enters MachineIR.
+enum AggregateABIClass {
+    Void, Scalar, Reference, DirectArgument, IndirectArgument, DirectReturn, HiddenReturn
+}
+enum AggregateABIError {
+    Malformed, MissingLayout, StaleLayout, Representation, CopyEligibility, DirectWidth,
+    ReturnEligibility, Position, Temporary, Alignment, Lifetime, HiddenResult, Capacity,
+    Frame, StackProbe, Moves
+}
+string DescribeAggregateABIError(AggregateABIError error) {
+    return match (error) {
+        AggregateABIError::Malformed => "AMD64_AGGREGATE_ABI_MALFORMED",
+        AggregateABIError::MissingLayout => "AMD64_AGGREGATE_ABI_MISSING_LAYOUT",
+        AggregateABIError::StaleLayout => "AMD64_AGGREGATE_ABI_STALE_LAYOUT",
+        AggregateABIError::Representation => "AMD64_AGGREGATE_ABI_UNSUPPORTED_REPRESENTATION",
+        AggregateABIError::CopyEligibility => "AMD64_AGGREGATE_ABI_COPY_INELIGIBLE",
+        AggregateABIError::DirectWidth => "AMD64_AGGREGATE_ABI_INVALID_DIRECT_WIDTH",
+        AggregateABIError::ReturnEligibility => "AMD64_AGGREGATE_ABI_RETURN_INELIGIBLE",
+        AggregateABIError::Position => "AMD64_AGGREGATE_ABI_INVALID_POSITION",
+        AggregateABIError::Temporary => "AMD64_AGGREGATE_ABI_INVALID_TEMPORARY",
+        AggregateABIError::Alignment => "AMD64_AGGREGATE_ABI_TEMPORARY_ALIGNMENT",
+        AggregateABIError::Lifetime => "AMD64_AGGREGATE_ABI_TEMPORARY_LIFETIME",
+        AggregateABIError::HiddenResult => "AMD64_AGGREGATE_ABI_INVALID_HIDDEN_RESULT",
+        AggregateABIError::Capacity => "AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED",
+        AggregateABIError::Frame => "AMD64_AGGREGATE_ABI_INVALID_FRAME",
+        AggregateABIError::StackProbe => "AMD64_STACK_PROBE_REQUIRED",
+        AggregateABIError::Moves => "AMD64_AGGREGATE_ABI_INVALID_MOVES"
+    };
+}
+string AggregateABIClassName(AggregateABIClass category) {
+    return match (category) {
+        AggregateABIClass::Void => "void",
+        AggregateABIClass::Scalar => "scalar",
+        AggregateABIClass::Reference => "checked-reference",
+        AggregateABIClass::DirectArgument => "direct-integer-aggregate",
+        AggregateABIClass::IndirectArgument => "indirect-by-value-aggregate",
+        AggregateABIClass::DirectReturn => "direct-aggregate-return",
+        AggregateABIClass::HiddenReturn => "hidden-aggregate-return"
+    };
+}
+record struct AggregateABIType {
+    int type;
+    BridgeText identity;
+    BridgeText layout;
+    int size;
+    int alignment;
+    AggregateABIClass category;
+    ScalarRepresentation carrier;
+}
+AggregateABIType EmptyAggregateABIType() {
+    return AggregateABIType {
+        - 1, BridgeText{0, 0}, BridgeText{0, 0}, 0, 1,
+        AggregateABIClass::Void, ScalarRepresentation::Void
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, AggregateABIError> AggregateABIAt(ref const BridgeReader reader, BridgeSequence<T> sequence,
+int index) {
+    if (index < 0 or index >= sequence.count) {
+        return Result::Error(AggregateABIError::MissingLayout);
+    }
+    return match (ObjectAt<T>(ref const reader, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(AggregateABIError::Malformed)
+    };
+}
+// Checked copy eligibility is mandatory for every meaningful member. C return
+// eligibility additionally requires recursively checked C record structure.
+// This consumes geometry; it never computes field offsets or record packing.
+Result<bool, AggregateABIError> AggregateCReturnShape(ref const BridgeReader reader,
+WireObjectModule document, int typeID, int depth) {
+    if (typeID < 0 or typeID >= 256 or depth != 0) {
+        return Result::Error(AggregateABIError::Capacity);
+    }
+    bool[256] eligible =[false ...];
+    // Semantic types are already checked in dependency order. A bounded pass
+    // also makes the allocation-free summary closed across module imports.
+    for (id in 0 .. typeID + 1) {
+        WireObjectType type = AggregateABIAt<WireObjectType>(ref const reader, document.Types, id) ?;
+        if (type.Kind != ObjectKind::Void and type.Copy != ObjectCopyKind::CheckedValue) {
+            return Result::Error(AggregateABIError::CopyEligibility);
+        }
+        if (type.Kind == ObjectKind::Aggregate) {
+            eligible[id] = type.Representation == ObjectRepresentation::C;
+            for (i in 0 .. type.Fields.count) {
+                WireObjectField field = AggregateABIAt<WireObjectField>(ref const reader, type.Fields,
+                i) ?;
+                if (field.Type < 0 or field.Type >= id) {
+                    return Result::Error(AggregateABIError::StaleLayout);
+                }
+                eligible[id] = eligible[id] and eligible[field.Type];
+            }
+        } else if (type.Kind == ObjectKind::Array) {
+            if (type.Element < 0 or type.Element >= id) {
+                return Result::Error(AggregateABIError::StaleLayout);
+            }
+            eligible[id] = eligible[type.Element];
+        } else {
+            eligible[id] = type.Kind != ObjectKind::Bool and type.Kind != ObjectKind::Void;
+        }
+    }
+    return Result::Ok(eligible[typeID]);
+}
+Result<AggregateABIType, AggregateABIError> ClassifyWin64Object(ref const BridgeReader reader,
+WireObjectModule document, int typeID, ObjectValueClass valueClass, bool result) {
+    WireObjectType type = AggregateABIAt<WireObjectType>(ref const reader, document.Types, typeID) ?;
+    if (type.ID != typeID or type.LayoutIdentity.length == 0 or type.Identity.length == 0) {
+        return Result::Error(AggregateABIError::StaleLayout);
+    }
+    AggregateABIType plan = AggregateABIType {
+        typeID, type.Identity, type.LayoutIdentity, type.Size,
+        type.Align, AggregateABIClass::Scalar, ObjectScalar(type.Kind)
+    };
+    if (valueClass == ObjectValueClass::Location) {
+        if (result) { return Result::Error(AggregateABIError::Representation); }
+        plan = plan with {
+            category = AggregateABIClass::Reference;
+            carrier = ScalarRepresentation::Address;
+        };
+        return Result::Ok(plan);
+    }
+    if (not ObjectAggregate(type.Kind)) {
+        if (type.Kind == ObjectKind::Void) {
+            if (not result) { return Result::Error(AggregateABIError::Representation); }
+            plan = plan with {
+                category = AggregateABIClass::Void;
+            };
+        }
+        return Result::Ok(plan);
+    }
+    // Standalone array ABI remains outside this slice. Fixed arrays in checked
+    // records are covered recursively by the same meaningful-field semantics.
+    if (type.Kind != ObjectKind::Aggregate or valueClass != ObjectValueClass::Aggregate or
+    (type.Representation != ObjectRepresentation::C and type.Representation != ObjectRepresentation::Native)) {
+        return Result::Error(AggregateABIError::Representation);
+    }
+    bool returnShape = AggregateCReturnShape(ref const reader, document, typeID, 0) ?;
+    ScalarRepresentation direct = ScalarRepresentation::Void;
+    if (type.Size == 1) {
+        direct = ScalarRepresentation::U8;
+    }
+    if (type.Size == 2) {
+        direct = ScalarRepresentation::U16;
+    }
+    if (type.Size == 4) {
+        direct = ScalarRepresentation::U32;
+    }
+    if (type.Size == 8) {
+        direct = ScalarRepresentation::U64;
+    }
+    if (result) {
+        // Native records lack C return-structure evidence in the semantic
+        // contract. They conservatively use caller storage even when small.
+        if (returnShape and direct != ScalarRepresentation::Void) {
+            plan = plan with {
+                category = AggregateABIClass::DirectReturn;
+                carrier = direct;
+            };
+        } else {
+            plan = plan with {
+                category = AggregateABIClass::HiddenReturn;
+                carrier = ScalarRepresentation::Address;
+            };
+        }
+    } else {
+        if (direct != ScalarRepresentation::Void) {
+            plan = plan with {
+                category = AggregateABIClass::DirectArgument;
+                carrier = direct;
+            };
+        } else {
+            plan = plan with {
+                category = AggregateABIClass::IndirectArgument;
+                carrier = ScalarRepresentation::Address;
+            };
+        }
+    }
+    return Result::Ok(plan);
+}
+bool AggregateUsesStorage(AggregateABIClass category) {
+    return match (category) {
+        AggregateABIClass::Void => false, AggregateABIClass::Scalar => false,
+        AggregateABIClass::Reference => false, AggregateABIClass::DirectArgument => true,
+        AggregateABIClass::IndirectArgument => true, AggregateABIClass::DirectReturn => true,
+        AggregateABIClass::HiddenReturn => true
+    };
+}
+Result<void, AggregateABIError> ValidateAggregateCarrier(AggregateABIType type) {
+    return match (type.category) {
+        AggregateABIClass::DirectArgument => ValidateDirectAggregateCarrier(type),
+        AggregateABIClass::DirectReturn => ValidateDirectAggregateCarrier(type),
+        AggregateABIClass::IndirectArgument => ValidateAggregatePointerCarrier(type),
+        AggregateABIClass::HiddenReturn => ValidateAggregatePointerCarrier(type),
+        AggregateABIClass::Reference => ValidateAggregatePointerCarrier(type),
+        AggregateABIClass::Scalar => Result::Ok(),
+        AggregateABIClass::Void => Result::Ok()
+    };
+}
+Result<void, AggregateABIError> ValidateDirectAggregateCarrier(AggregateABIType type) {
+    if ((type.size != 1 and type.size != 2 and type.size != 4 and type.size != 8) or
+    ScalarWidth(type.carrier) != type.size or ScalarFloating(type.carrier) or
+    type.carrier == ScalarRepresentation::Address) {
+        return Result::Error(AggregateABIError::DirectWidth);
+    }
+    return Result::Ok();
+}
+Result<void, AggregateABIError> ValidateAggregatePointerCarrier(AggregateABIType type) {
+    if (type.carrier != ScalarRepresentation::Address) {
+        return Result::Error(AggregateABIError::Position);
+    }
+    return Result::Ok();
+}
+void AggregateClassificationFacts() {
+    Assert.Concept<NoAllocation>(ClassifyWin64Object, "bounded checked-layout classification");
+}

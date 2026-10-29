@@ -1,0 +1,12 @@
+module EVT2g.PlainData;
+profile Core;
+import Standard.Semantic.Vocabulary;
+
+record struct Flags {
+    bool enabled;
+}
+
+int Check() {
+    Assert.Concept<PlainData>(Flags, "self-contained object; foreign ABI requires separate evidence");
+    return 1;
+}

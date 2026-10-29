@@ -13,7 +13,10 @@ typedef struct concept_descriptor_binding {
   bool write;
 } concept_descriptor_binding;
 
+#ifndef CONCEPT_ARRAY_2_INT_NATURAL_DEFINED
+#define CONCEPT_ARRAY_2_INT_NATURAL_DEFINED
 typedef struct { int32_t data[2]; } concept_array_2_int;
+#endif
 
 typedef struct { concept_descriptor_binding data[3]; } concept_array_3_descriptor_binding;
 

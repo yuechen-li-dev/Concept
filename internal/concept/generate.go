@@ -1469,6 +1469,7 @@ func collectExprMIROps(env *semanticEnv, expr Expr, fn *MIRFunction, templateInf
 			op.NoCopy, op.NoAllocation, op.NoOwnershipTransfer = true, true, true
 		}
 		fn.Operations = append(fn.Operations, op)
+		collectExprMIROps(env, e.Value, fn, templateInfo)
 	case *BindExpr:
 		if e.BindKind == "layout" || e.BindKind == "stream" {
 			kind := e.BindKind + "_bind"
@@ -2363,7 +2364,16 @@ func (l *lowering) writeRuntimeStorageAndTypeDecls(out *strings.Builder, typeDec
 				if len(l.module.Layouts) > 0 {
 					return fmt.Sprintf("typedef struct { _Alignas(%d) %s data[%d]; } %s;\n\n", evt1InlineStorageAlignment, evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
 				}
-				return fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				definition := fmt.Sprintf("typedef struct { %s data[%d]; } %s;\n", evt1CType(*current.ArrayElem), evt1StorageElementCount(current), evt1StorageCName(current))
+				// Natural built-in array wrappers have one canonical C shape and
+				// may be required by several independent generated headers.
+				// Keep nominal element types and layout-strengthened storage out
+				// of this sharing rule: those require their own declaration owner.
+				if current.ArrayElem.Kind == TypeBuiltin && !current.ArrayElem.isBorrowLike() && !current.ArrayElem.isOwned() {
+					guard := strings.ToUpper(evt1StorageCName(current)) + "_NATURAL_DEFINED"
+					return fmt.Sprintf("#ifndef %s\n#define %s\n%s#endif\n\n", guard, guard, definition)
+				}
+				return definition + "\n"
 			},
 		})
 	}
@@ -3264,7 +3274,7 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
 		}
 		prelude, target, targetType, _ := f.lowerLValue(s.Target, indent)
-		rhsPrelude, value, valueType := f.lowerExpr(s.Value, indent)
+		rhsPrelude, value, valueType := f.lowerExprExpected(s.Value, targetType, indent)
 		replacementDrop := ""
 		if name, ok := s.Target.(*NameExpr); ok {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
@@ -4109,6 +4119,30 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if e.Tensor != nil && e.Tensor.Kind == "tensor_scalar_contract" {
 			return f.lowerScalarTensorContract(e, indent)
 		}
+		if e.Op == "and" || e.Op == "or" {
+			leftPrelude, left, _ := f.lowerExpr(e.Left, indent)
+			rightPrelude, right, _ := f.lowerExpr(e.Right, indent+1)
+			boolType, _ := evt1BuiltinType("bool", e.Span)
+			op := "&&"
+			if e.Op == "or" {
+				op = "||"
+			}
+			if rightPrelude == "" {
+				return leftPrelude, fmt.Sprintf("(%s %s %s)", left, op, right), boolType
+			}
+			// Bounds checks and other RHS preludes belong to the conditional
+			// evaluation, just as the RHS value does. Never hoist them past
+			// a guard that makes the RHS safe to evaluate.
+			temporary := f.nextTemp("short_circuit")
+			condition := temporary
+			if e.Op == "or" {
+				condition = "!" + temporary
+			}
+			prelude := leftPrelude + ind(indent) + fmt.Sprintf("bool %s = %s;\n", temporary, left)
+			prelude += ind(indent) + fmt.Sprintf("if (%s) {\n", condition) + rightPrelude
+			prelude += ind(indent+1) + fmt.Sprintf("%s = %s;\n", temporary, right) + ind(indent) + "}\n"
+			return prelude, temporary, boolType
+		}
 		leftPrelude, left, leftType := f.lowerExpr(e.Left, indent)
 		rightPrelude, right, rightType := f.lowerExpr(e.Right, indent)
 		if literal, ok := e.Left.(*FloatLiteral); ok && evt1IsFloating(rightType) {
@@ -4787,8 +4821,16 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		b.WriteString(basePrelude)
 		b.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(baseType), resultTemp, baseExpr))
 		bitsDecl := f.l.env.structs[baseType.Name]
+		structDecl, _ := evt1StructView(f.l.env, baseType)
 		for _, update := range e.Updates {
-			valuePrelude, valueExpr, _ := f.lowerExpr(update.Value, indent)
+			fieldType := Type{}
+			for _, field := range structDecl.Fields {
+				if field.Name == update.Name {
+					fieldType = field.Type
+					break
+				}
+			}
+			valuePrelude, valueExpr, _ := f.lowerExprExpected(update.Value, fieldType, indent)
 			b.WriteString(valuePrelude)
 			if bit, ok := evt1BitField(bitsDecl, update.Name); ok {
 				valueTemp := f.nextTemp("bit_value")

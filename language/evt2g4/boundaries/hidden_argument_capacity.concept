@@ -1,0 +1,10 @@
+module EVT2g4.HiddenArgumentCapacity;
+profile Core;
+
+[[repr(C)]] record struct Large {
+    double a;
+    double b;
+}
+Large TooMany(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return Large{1.0, 2.0};
+}

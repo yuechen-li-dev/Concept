@@ -1,0 +1,20 @@
+module EVT2g3.SourceReferences;
+profile Core;
+
+// Historical EVT2g3 boundary. EVT2g3b admits this checked source through
+// CMIRAMD6 and executes its borrows natively; Main returns 9.
+struct Position {
+    double x;
+    double y;
+}
+void Change(ref Position p) {
+    p.x = 7.0;
+}
+double Read(ref const Position p) {
+    return p.x + p.y;
+}
+double Main() {
+    Position p = Position{1.0, 2.0};
+    Change(ref p);
+    return Read(ref const p);
+}

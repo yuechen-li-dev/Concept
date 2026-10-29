@@ -543,7 +543,15 @@ Result<int, FrameError> ResolveFrameSlot(ref const FinalizedFrame frame, FrameRe
                 slot = frame.outgoingSlots[identity];
             }
         }
-        FrameRegionKind::LocalSlots => { }
+        FrameRegionKind::LocalSlots => {
+            if (identity >= 0 and identity < 64) {
+                for (i in 0 .. frame.slotCount) {
+                    if (frame.slots[i].category == category and frame.slots[i].identity == identity) {
+                        slot = i;
+                    }
+                }
+            }
+        }
         FrameRegionKind::OutgoingShadow => { }
         FrameRegionKind::AlignmentPadding => { }
     }

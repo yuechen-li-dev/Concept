@@ -1,5 +1,8 @@
 # Cathedral migration matrix (R9c)
 
+Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
+Earlier stage tables retain their historical qualification boundaries.
+
 This inventory is a decision map, not a schedule to delete Stage-0. `Current`
 classifies implementation as Go, Concept, or Shared. `Desired` means Stage-0
 permanent, Cathedral, or Shared bootstrap seam. `Ready` means an existing
@@ -100,3 +103,124 @@ remains checked input/transport, bootstrap host and diagnostics. No Go mixed-cal
 backend was introduced. CMIRAMD3/4 remain frozen; external linkage,
 indirect/variadic/aggregate calls, XMM6-XMM15 allocation and additional targets
 remain separate work.
+
+## EVT2g aggregate input progression
+
+| Capability | Current authority/state | Next switch condition |
+| --- | --- | --- |
+| Source aggregate layout/copyability/place semantics | Existing checked Stage-0 frontend; retained without a second type model | Future frontend migration only |
+| Typed aggregate LIR and immutable `with` | Stage-0 checked MIR/LIR construction; qualified bounded input | New checked aggregate bridge must preserve layout, object and copy/update intent |
+| Complete local initialization / derived locations | Stage-0 producer verifier; bounded, nonescaping value-object evidence | Concept artifact validator independently admits transported lifetime/provenance evidence |
+| Aggregate MachineIR artifact | NOT_YET_QUALIFIED; CMIRAMD3/4 frozen | Checked Concept schema plus generated codecs/readers and artifact-only malformed-input tests |
+| Native aggregate memory/copy/reference/ABI | NOT_YET_QUALIFIED; Cathedral intended owner | Ordinary Concept implementation, native execution, independent Win64 ABI probes |
+
+The normal aggregate path stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5`, including
+small and unused aggregate locals. Existing scalar native qualification is
+unchanged. C bootstrap `with` array replacements use the existing expected-type
+initializer seam; this is portable C seed correctness, not native copy policy.
+
+## EVT2g2 checked object contract (historical stage boundary)
+
+The EVT2g1 table/stop above is retained as history. CMIRAMD5 now carries checked
+objects; CMIRAMD3/4 continue serving their frozen scalar subsets.
+
+| Capability | Current owner/state | Next switch condition |
+| --- | --- | --- |
+| Source aggregate type/layout/copyability | Existing checked frontend, qualified bounded input | Frontend migration retains the same canonical semantic layout observations |
+| Typed aggregate MachineIR and explicit geometry | Concept schema authoritative; generated transport qualified | Preserve version/hash, typed values/storage/locations, nested identities and array geometry |
+| Artifact-only consistency admission | Concept `BridgeValidate5`, qualified | Preserve source-free Normal/Verify exact roundtrip, typed errors, bounds and no-allocation proofs |
+| Immutable `with` | Checked frontend evaluation order, ordinary logical v5 copy/member operations | Later Cathedral chooses realization without a WITH instruction |
+| Semantic aggregate calls/results | V5 unclassified argument/result types, qualified | Concept Win64 aggregate classifier, separate from byte width and CAbiValue |
+| Native aggregate complete-object storage | Cathedral, pending EVT2g3 | Native placement consumes supplied size/alignment; no field layout recalculation |
+| Native aggregate field access/copy | Cathedral, pending | Typed address/instruction and copy strategies with real execution evidence |
+| Source-reference/raw/owned/Drop aggregate transport | Existing explicit checked-input stop | Separate admitted semantics and lifetime evidence; no fabrication from internal locations |
+| Aggregate Win64 register/indirect/sret/stack placement | Cathedral, pending | Dedicated semantic/layout ABI plan and independent ABI probes |
+
+`concept lir` and `concept machineir` succeed on the bounded object corpus.
+`concept amd64` validates its artifact then returns
+`AMD64_UNSUPPORTED_AGGREGATE_STORAGE` before changing output/image. Native
+scalar, SSE, direct calls and automata frames retain their earlier qualification.
+Mixing aggregate objects with automata activation frames remains an explicit
+v5 input boundary. EVT2g2 does not begin physical aggregate lowering.
+
+## EVT2g3 native local-object progression
+
+This is the historical EVT2g3 boundary; current reference status follows below.
+
+| Capability | Current owner/state | Next switch condition |
+| --- | --- | --- |
+| Complete local objects and private aggregate values | Concept `AMD64.Objects`, qualified | Preserve contiguous typed slots and checked size/alignment; retain existing unified frame |
+| Nested field/array addresses and typed memory operations | Concept `AMD64` / shared `Encoding`, qualified | Preserve transported offset/stride/type/authority and bounds checks; no source/C-layout reconstruction |
+| Value copies, assignment and immutable updates | Concept fieldwise traversal, qualified bounded local path | Copy meaningful fields only; disjoint private snapshots and self-assignment; arbitrary partial overlap is unqualified |
+| Scalar calls with live objects | Existing Concept allocator/Win64ABI/frame path, qualified | Scalar signature only; includes outgoing stack arguments and existing clobber preservation |
+| Source reference LIR and transport | Stage-0 checked-input boundary, NOT_YET_QUALIFIED | Add checked borrow identity/access/lifetime and explicitly version transport; v5 locations cannot cross function boundaries |
+| Source mutable/const/field/array-element native references | Cathedral intended owner, NOT_YET_QUALIFIED | Consume the admitted borrow contract, preserve original storage identity; native escape/alias tests |
+| Aggregate Win64 register/indirect/sret/stack placement | Cathedral intended owner, NOT_YET_QUALIFIED | EVT2g4 classifier and independent ABI probes; current explicit ABI stop |
+
+Go input changes preserve checked aggregate-array places and existing numeric
+representations. Portable C fixes preserve short-circuit RHS bounds/side-effect
+ordering and permit generated headers to share built-in range types. The CLI
+prints Concept plans. No Go native object algorithm or second frame/layout
+model is introduced. CMIRAMD3/4/5 remain unchanged. The normal native object
+path now executes 34 scalar-signature functions in artifact-only Normal/Verify
+tests, with separate C semantic comparisons and deterministic native bytes.
+See [the current support and limit inventory](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b checked references
+
+| Capability | Current owner/state | Next transition |
+| --- | --- | --- |
+| Source borrow/lifetime/exclusivity rules | Existing Stage-0 checker, authoritative | Frontend migration only through explicit parity; no native-side rule replacement |
+| Reference LIR and checked source-origin projection | Stage-0 checked input, qualified | Preserve target/authority/root/scope/provenance; do not turn refs into unrestricted integers |
+| Reference artifact | Concept `BridgeSchema6` and generated codecs, qualified | Preserve version/hash, exact bytes and frozen v3/v4/v5 dependencies |
+| Reference consistency admission | Concept `BridgeValidate6`, qualified bounded noescape slice | Source-free malformed/roundtrip checks; explicit capacity; no general proof graph reconstruction |
+| Reference representation and typed memory | Existing Concept AMD64 allocator/encoder, qualified | Reuse Address virtuals and checked fields/strides; no new layout engine |
+| Reference parameter ABI / stable frames | Existing Concept Win64ABI/frame/call infrastructure, qualified | Original storage mutation and register/stack pointer probes; no by-value aggregate reinterpretation |
+| Reference returns / ownership-bearing or general layout views | Explicit checked/native boundary, unqualified | Separate lifetime/return/view contract before admission |
+| Aggregate by-value/indirect/sret ABI | Cathedral intended owner, deferred | EVT2g4 semantic classifier and independent ABI probes |
+
+The local reference/parameter blocker recorded in EVT2g3 is removed. The same
+source now executes natively through a versioned artifact with the domain source
+absent. Legal aliases remain observable, and source copy versus borrow behavior
+differs as specified. Go additions provide checked input, generated transport,
+consistency, orchestration and independent tests. New physical reference policy
+remains in Concept. See [current evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 aggregate ABI planning
+
+| Capability | Current owner/state | Next transition |
+| --- | --- | --- |
+| Direct/indirect aggregate argument selection | Concept `Win64AggregateABI`, structurally qualified | Preserve checked representation/copy contract while encoding carriers |
+| Direct RAX versus hidden aggregate return | Concept classifier, structurally qualified | Encode meaningful-field construction and designated sret pointer return |
+| Hidden result physical argument shift | Concept object projection and existing positional Win64 planner, qualified plans | Execute generated mixed caller/callee paths in EVT2g5 |
+| Explicit reference versus indirect value argument | Existing checked reference path plus typed Concept aggregate plan | Retain original-object authority versus isolated caller temporary semantics |
+| Argument temporary / result object storage | Concept object projection and shared frame owner, qualified plans | Encode initialization, capture and lifetime actions without broad Drop elaboration |
+| Alignment / shadow / outgoing maximum / nonoverlap / save-spill interaction | Existing Concept frame, allocation and replay owners, structurally qualified | Preserve shared geometry; frames requiring probing remain explicit stops |
+| Leaf GPR pressure | Existing Concept allocator, shared correction | Real scalar encoder regression; same callee-save frame policy |
+| Semantic aggregate/reference artifact | CMIRAMD6 unchanged; v3/v4/v5 frozen | No new schema required; no physical ABI serialization |
+| Stage-0 native ABI logic | None added | Keep checked input, generated transport and orchestration; no classifier retirement needed |
+| Aggregate call native encoding and external ABI probes | Explicit emission stop, unqualified | EVT2g5; do not infer completion from structural replay or C compiler classifications |
+
+The earlier aggregate-ABI planning blocker is removed for the bounded copyable
+record slice. The next boundary is native call emission, diagnosed before byte
+or image mutation. Source ownership, reference-return and general layout-view
+boundaries remain unchanged. See [the current contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).
+
+## EVT2g5 native aggregate calls
+
+| Capability | Current owner/state | Remaining boundary |
+| --- | --- | --- |
+| Direct aggregate arguments and direct RAX results | Concept `AMD64.AggregateEmission`, native-qualified bounded slice | EVT2g4 structural eligibility retained; no arbitrary same-sized type admission |
+| Indirect value arguments and callee-private parameters | Concept transfer selector and existing field copier, native-qualified | Checked copyable objects only; no ownership/Drop extension |
+| Hidden result construction, argument shifts and pointer return | Concept transfer selector / existing Win64 call actions, native-qualified | No source reference or escape authority inferred from sret pointers |
+| Mixed scalar/reference/aggregate calls, recursion and fixups | Existing Concept allocation/frame/call/fixup stack, native-qualified | Eight physical arguments including hidden pointers; existing bounded resources |
+| Frame alignment / shadow / saves / spills | Existing unified frame, native-qualified | Actual outgoing align 16; 4088-byte unprobed frame tested; probing remains unsupported |
+| Native module rejection atomicity | Count-only shared writer / fixup preflight and existing typed plan verifier | Unsupported contracts, capacities and geometry reject before byte/image mutation |
+| Independent Microsoft x64 ABI evidence | MSVC and Clang C callers/callees, qualified tested C record slice | Test-only tail thunks; no general external linker, C++ ABI, varargs or indirect calls |
+| Bootstrap header coexistence | Go C emitter, BOOTSTRAP_ONLY correction | Canonical natural built-in arrays share guarded definitions; no native ABI policy added |
+| Semantic contracts and frozen transport | Existing Stage-0 source checks and CMIRAMD3/4/5/6, unchanged | Layout identity consistency is not producer authentication |
+| Ownership/Drop, broader reference/storage forms and object output | Deferred | Separate explicit mission; EVT2h and object-file output not begun |
+
+The aggregate emission gate is removed for admitted signatures. Actual native
+execution, checked-source C parity and independent C ABI probes now qualify the
+bounded planner/emitter composition. See [the execution contract](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).

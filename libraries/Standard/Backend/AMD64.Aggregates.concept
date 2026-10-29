@@ -1,0 +1,724 @@
+module Standard.Backend.AMD64.Aggregates;
+profile Core;
+import Standard.Backend.AMD64.Objects;
+
+NativeError AggregateNativeError(AggregateABIError error) {
+    return match (error) {
+        AggregateABIError::Malformed => NativeError::AggregateMalformed,
+        AggregateABIError::MissingLayout => NativeError::AggregateMissingLayout,
+        AggregateABIError::StaleLayout => NativeError::AggregateStaleLayout,
+        AggregateABIError::Representation => NativeError::AggregateRepresentation,
+        AggregateABIError::CopyEligibility => NativeError::AggregateCopyEligibility,
+        AggregateABIError::DirectWidth => NativeError::AggregateDirectWidth,
+        AggregateABIError::ReturnEligibility => NativeError::AggregateReturnEligibility,
+        AggregateABIError::Position => NativeError::AggregatePosition,
+        AggregateABIError::Temporary => NativeError::AggregateTemporary,
+        AggregateABIError::Alignment => NativeError::AggregateAlignment,
+        AggregateABIError::Lifetime => NativeError::AggregateLifetime,
+        AggregateABIError::HiddenResult => NativeError::AggregateHiddenResult,
+        AggregateABIError::Capacity => NativeError::AggregateCapacity,
+        AggregateABIError::Frame => NativeError::AggregateFrame,
+        AggregateABIError::StackProbe => NativeError::StackProbeRequired,
+        AggregateABIError::Moves => NativeError::AggregateMoves
+    };
+}
+AggregateABIError AggregateFrameError(FrameError error) {
+    return match (error) {
+        FrameError::CapacityExceeded => AggregateABIError::Capacity,
+        FrameError::InvalidAlignment => AggregateABIError::Alignment,
+        FrameError::UnsupportedWidth => AggregateABIError::DirectWidth,
+        FrameError::Overlap => AggregateABIError::Frame,
+        FrameError::InvalidOffset => AggregateABIError::Frame,
+        FrameError::UnresolvedSpill => AggregateABIError::Frame,
+        FrameError::UnresolvedTemporary => AggregateABIError::Temporary,
+        FrameError::InvalidSaveRestore => AggregateABIError::Frame,
+        FrameError::InvalidActions => AggregateABIError::Frame,
+        FrameError::InvalidInput => AggregateABIError::Frame
+    };
+}
+bool ObjectModuleHasAggregateABI(ref const BridgeReader reader, WireObjectModule document) {
+    for (i in 0 .. document.Functions.count) {
+        match (ObjectAt<WireObjectFunction>(ref const reader, document.Functions, i)) {
+            Result::Error(error) => { return true; }
+            Result::Ok(owner) => {
+                match (ObjectAt<WireObjectType>(ref const reader, document.Types, owner.ResultType)) {
+                    Result::Error(error) => { return true; }
+                    Result::Ok(type) => {
+                        if (ObjectAggregate(type.Kind)) { return true; }
+                    }
+                }
+                for (p in 0 .. owner.Params.count) {
+                    match (ObjectAt<WireObjectParameter>(ref const reader, owner.Params, p)) {
+                        Result::Error(error) => { return true; }
+                        Result::Ok(parameter) => {
+                            match (ObjectAt<WireObjectValue>(ref const reader, owner.Values, parameter.Value)) {
+                                Result::Error(error) => { return true; }
+                                Result::Ok(value) => {
+                                    if (value.Class == ObjectValueClass::Aggregate) { return true; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+enum AggregateTransferKind {
+    UnpackParameter, CopyParameter, InitializeArgument, PackArgument,
+    BindResult, CaptureDirect, CaptureHidden, ReturnDirect, ReturnHidden, EndArgument
+}
+string AggregateTransferName(AggregateTransferKind kind) {
+    return match (kind) {
+        AggregateTransferKind::UnpackParameter => "unpack-meaningful-fields",
+        AggregateTransferKind::CopyParameter => "copy-parameter-fields-to-private-object",
+        AggregateTransferKind::InitializeArgument => "initialize-temporary-by-checked-field-copy",
+        AggregateTransferKind::PackArgument => "pack-meaningful-fields-zero-carrier-padding",
+        AggregateTransferKind::BindResult => "begin-typed-result-storage",
+        AggregateTransferKind::CaptureDirect => "capture-RAX-before-preservation-reload",
+        AggregateTransferKind::CaptureHidden => "check-RAX-is-designated-result-pointer",
+        AggregateTransferKind::ReturnDirect => "pack-meaningful-fields-to-RAX",
+        AggregateTransferKind::ReturnHidden => "construct-result-fields-and-return-designated-pointer",
+        AggregateTransferKind::EndArgument => "end-argument-temporary-lifetime"
+    };
+}
+record struct AggregateTransfer {
+    AggregateTransferKind kind;
+    int type;
+    int value;
+    int sourceSlot;
+    int storage;
+    int carrier;
+    int point;
+    int end;
+}
+record struct AggregateArgumentPlan {
+    AggregateABIType type;
+    int semanticIndex;
+    int physicalIndex;
+    int value;
+    int carrier;
+    int storage;
+    int start;
+    int end;
+}
+AggregateArgumentPlan EmptyAggregateArgumentPlan() {
+    return AggregateArgumentPlan {
+        EmptyAggregateABIType(), - 1, - 1, - 1, - 1, - 1, - 1, - 1
+    };
+}
+struct AggregateCallPlan {
+    int block;
+    int instruction;
+    int position;
+    int resultValue;
+    int resultStorage;
+    int hiddenPointer;
+    AggregateABIType result;
+    AggregateArgumentPlan[8] arguments;
+    int argumentCount;
+    CallPlan physical;
+}
+AggregateCallPlan EmptyAggregateCallPlan() {
+    return AggregateCallPlan {
+        - 1, - 1, - 1, - 1, - 1, - 1, EmptyAggregateABIType(),
+        [EmptyAggregateArgumentPlan() ...], 0, EmptyCallPlan()
+    };
+}
+struct AggregateFunctionPlan {
+    BridgeText identity;
+    AggregateABIType result;
+    int hiddenPointer;
+    AggregateArgumentPlan[8] parameters;
+    int parameterCount;
+    AggregateCallPlan[32] calls;
+    int callCount;
+    AggregateTransfer[256] transfers;
+    int transferCount;
+    int returnCount;
+}
+AggregateFunctionPlan EmptyAggregateFunctionPlan() {
+    return AggregateFunctionPlan {
+        BridgeText{0, 0}, EmptyAggregateABIType(), - 1,
+        [EmptyAggregateArgumentPlan() ...], 0,[EmptyAggregateCallPlan() ...], 0,
+        [AggregateTransfer {
+            AggregateTransferKind::EndArgument, - 1, - 1, - 1, - 1, - 1, - 1, - 1
+        }
+        ...], 0, 0
+    };
+}
+Result<void, AggregateABIError> AppendAggregateTransfer(ref AggregateFunctionPlan plan, AggregateTransfer transfer) {
+    if (plan.transferCount >= Len(plan.transfers)) {
+        return Result::Error(AggregateABIError::Capacity);
+    }
+    plan.transfers[plan.transferCount] = transfer;
+    plan.transferCount += 1;
+    return Result::Ok();
+}
+// Fixed-type inspection entry points share the generated bridge reader.
+Result<WireObjectFunction, AggregateABIError> AggregatePlanOwner(ref const BridgeReader reader,
+WireObjectModule document, int ordinal) {
+    return AggregateABIAt<WireObjectFunction>(ref const reader, document.Functions, ordinal);
+}
+Result<WireObjectType, AggregateABIError> AggregatePlanType(ref const BridgeReader reader,
+WireObjectModule document, int typeID) {
+    return AggregateABIAt<WireObjectType>(ref const reader, document.Types, typeID);
+}
+Result<WireObjectField, AggregateABIError> AggregatePlanField(ref const BridgeReader reader,
+WireObjectType type, int ordinal) {
+    return AggregateABIAt<WireObjectField>(ref const reader, type.Fields, ordinal);
+}
+Result<void, AggregateABIError> ValidateAggregateSignatures(ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner) {
+    AggregateABIType result = ClassifyWin64Object(ref const reader, document, owner.ResultType,
+    ObjectValueClass::Aggregate, true) ?;
+    int count = owner.Params.count;
+    if (result.category == AggregateABIClass::HiddenReturn) {
+        count += 1;
+    }
+    if (count > 8) { return Result::Error(AggregateABIError::Capacity); }
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter parameter = AggregateABIAt<WireObjectParameter>(ref const reader, owner.Params,
+        i) ?;
+        WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values, parameter.Value) ?;
+        ClassifyWin64Object(ref const reader, document, parameter.Type, value.Class, false) ?;
+    }
+    return Result::Ok();
+}
+Result<WireObjectModule, AggregateABIError> AdmittedAggregateDocument(ReadOnlySpan<byte> artifact) {
+    if (Len(artifact) < 8) { return Result::Error(AggregateABIError::Malformed); }
+    if (artifact[7] == 54) {
+        match (ValidateBorrowMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }
+        }
+    } else {
+        match (ValidateObjectMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }
+        }
+    }
+    return match (NativeObjectDocument(artifact)) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(AggregateABIError::Malformed)
+    };
+}
+// Stage-0 never supplies physical positions or storage decisions. The existing
+// object projection, scalar allocator, move planner and frame finalizer own
+// the carriers. This layer retains their aggregate meanings and lifetimes.
+Result<void, AggregateABIError> PrepareAggregateFunction(ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref BackendFunction function,
+ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame,
+ref AggregateFunctionPlan plan) {
+    ValidateAggregateSignatures(ref const reader, document, owner) ?;
+    match (ProjectObjectFunctionABI(ref const reader, document, owner, ref function, ref placement, true)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Capacity); }
+    }
+    allocation = EmptyAllocation();
+    match (AllocateRegisters(ref const function, ref allocation)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Capacity); }
+    }
+    match (PlanFunctionCallsChecked(ref const function, ref allocation)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Moves); }
+    }
+    match (QualifyScalarNativeFrame(ref function, ref const allocation, ref frame)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateFrameError(error)); }
+    }
+    if (frame.byteCount >= 4096) { return Result::Error(AggregateABIError::StackProbe); }
+    plan = EmptyAggregateFunctionPlan();
+    plan.identity = owner.Identity;
+    plan.result = ClassifyWin64Object(ref const reader, document, owner.ResultType,
+    ObjectValueClass::Aggregate, true) ?;
+    plan.hiddenPointer = placement.hiddenResult;
+    int shift = 0;
+    if (plan.result.category == AggregateABIClass::HiddenReturn) {
+        shift = 1;
+    }
+    plan.parameterCount = owner.Params.count;
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter parameter = AggregateABIAt<WireObjectParameter>(ref const reader, owner.Params,
+        i) ?;
+        WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values, parameter.Value) ?;
+        AggregateABIType type = ClassifyWin64Object(ref const reader, document, parameter.Type, value.Class,
+        false) ?;
+        int storage = placement.values[parameter.Value];
+        int carrier = placement.parameterCarriers[i];
+        plan.parameters[i] = AggregateArgumentPlan {
+            type, i, i + shift, parameter.Value, carrier, storage, 0, function.instructionCount
+        };
+        if (AggregateUsesStorage(type.category)) {
+            AggregateTransferKind kind = AggregateTransferKind::UnpackParameter;
+            if (type.category == AggregateABIClass::IndirectArgument) {
+                kind = AggregateTransferKind::CopyParameter;
+            }
+            AppendAggregateTransfer(ref plan, AggregateTransfer {
+                kind, type.type, parameter.Value, - 1, storage,
+                carrier, 0, function.instructionCount
+            }) ?;
+        }
+    }
+    Liveness live = EmptyLiveness();
+    match (ComputeLiveness(ref const function, ref live)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Frame); }
+    }
+    int cursor = 0;
+    int temporary = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = AggregateABIAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction input = AggregateABIAt<WireObjectInstruction>(ref const reader, block.Instructions,
+            ii) ?;
+            int position = placement.positions[cursor];
+            cursor += 1;
+            if (input.Op == ObjectOpcode::Call) {
+                if (plan.callCount >= Len(plan.calls)) {
+                    return Result::Error(AggregateABIError::Capacity);
+                }
+                WireObjectCall source = AggregateABIAt<WireObjectCall>(ref const reader, input.Calls,
+                0) ?;
+                AggregateCallPlan call = EmptyAggregateCallPlan();
+                call.block = bi;
+                call.instruction = ii;
+                call.position = position;
+                call.resultValue = input.Result;
+                call.result = ClassifyWin64Object(ref const reader, document, source.ResultType,
+                ObjectValueClass::Aggregate, true) ?;
+                call.argumentCount = source.Arguments.count;
+                Preservation[512] records =[Preservation {
+                    0, 0, false, Register::RAX, 0, 0, 0,
+                    PreservationClass::OutsideClobbers, GPRLocation(Register::RAX), ScalarRepresentation::Void
+                }
+                ...];
+                int count = 0;
+                match (PlanAllocatedCall(ref const function, ref const allocation, ref const live, position,
+                ref call.physical, Span(records), ref count)) {
+                    Result::Ok => { }
+                    Result::Error(error) => {
+                        return Result::Error(AggregateABIError::Moves);
+                    }
+                }
+                int callShift = 0;
+                if (AggregateUsesStorage(call.result.category)) {
+                    call.resultStorage = placement.values[input.Result];
+                    AggregateTransferKind capture = AggregateTransferKind::CaptureDirect;
+                    if (call.result.category == AggregateABIClass::HiddenReturn) {
+                        callShift = 1;
+                        call.hiddenPointer = function.instructions[position].call.values[0];
+                        capture = AggregateTransferKind::CaptureHidden;
+                        AppendAggregateTransfer(ref plan, AggregateTransfer {
+                            AggregateTransferKind::BindResult,
+                            call.result.type, input.Result, - 1, call.resultStorage, call.hiddenPointer,
+                            position - 1, function.instructionCount
+                        }) ?;
+                    }
+                    // Capture precedes any caller-preservation reload. For sret,
+                    // RAX must denote this exact storage, not another payload.
+                    AppendAggregateTransfer(ref plan, AggregateTransfer {
+                        capture, call.result.type, input.Result,
+                        - 1, call.resultStorage, function.instructions[position].destination.id,
+                        position + 1, function.instructionCount
+                    }) ?;
+                }
+                for (ai in 0 .. source.Arguments.count) {
+                    WireObjectCallArgument argument = AggregateABIAt<WireObjectCallArgument>(ref const reader,
+                    source.Arguments, ai) ?;
+                    WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values,
+                    argument.Value) ?;
+                    AggregateABIType type = ClassifyWin64Object(ref const reader, document, argument.Type,
+                    value.Class, false) ?;
+                    int storage = - 1;
+                    int carrier = function.instructions[position].call.values[ai + callShift];
+                    if (AggregateUsesStorage(type.category)) {
+                        storage = placement.values[argument.Value];
+                        AggregateTransferKind kind = AggregateTransferKind::PackArgument;
+                        if (type.category == AggregateABIClass::IndirectArgument) {
+                            kind = AggregateTransferKind::InitializeArgument;
+                            storage = placement.argumentTemps[temporary];
+                            temporary += 1;
+                        }
+                        AppendAggregateTransfer(ref plan, AggregateTransfer {
+                            kind, type.type, argument.Value,
+                            placement.values[argument.Value], storage, carrier, position - 1, position + 1
+                        }) ?;
+                        if (kind == AggregateTransferKind::InitializeArgument) {
+                            AppendAggregateTransfer(ref plan, AggregateTransfer {
+                                AggregateTransferKind::EndArgument,
+                                type.type, argument.Value, - 1, storage, carrier, position + 1, position + 1
+                            }) ?;
+                        }
+                    }
+                    call.arguments[ai] = AggregateArgumentPlan {
+                        type, ai, ai + callShift, argument.Value, carrier,
+                        storage, position - 1, position + 1
+                    };
+                }
+                plan.calls[plan.callCount] = call;
+                plan.callCount += 1;
+            }
+        }
+        if (block.Term.Op == ObjectTerminator::Return) {
+            plan.returnCount += 1;
+            if (AggregateUsesStorage(plan.result.category)) {
+                AggregateTransferKind kind = AggregateTransferKind::ReturnDirect;
+                if (plan.result.category == AggregateABIClass::HiddenReturn) {
+                    kind = AggregateTransferKind::ReturnHidden;
+                }
+                int point = function.blocks[bi].firstInstruction + function.blocks[bi].instructionCount;
+                AppendAggregateTransfer(ref plan, AggregateTransfer {
+                    kind, plan.result.type, block.Term.Value,
+                    placement.values[block.Term.Value], - 1, placement.returnCarriers[bi], point, point
+                }) ?;
+            }
+        }
+    }
+    return ValidateAggregateFunctionPlan(ref const reader, document, owner, ref const function,
+    ref const placement, ref const allocation, ref const frame, ref const plan);
+}
+Result<void, AggregateABIError> PlanAggregateFunction(ReadOnlySpan<byte> artifact, int ordinal,
+ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation,
+ref FinalizedFrame frame, ref AggregateFunctionPlan plan) {
+    WireObjectModule document = AdmittedAggregateDocument(artifact) ?;
+    BridgeReader reader = BridgeReader{artifact, 0};
+    WireObjectFunction owner = AggregateABIAt<WireObjectFunction>(ref const reader, document.Functions,
+    ordinal) ?;
+    return PrepareAggregateFunction(ref const reader, document, owner, ref function, ref placement,
+    ref allocation, ref frame, ref plan);
+}
+bool SameAggregateABIType(ref const BridgeReader reader, AggregateABIType a, AggregateABIType b) {
+    return a.type == b.type and ObjectSame(ref const reader, a.identity, b.identity) and
+    ObjectSame(ref const reader, a.layout, b.layout) and a.size == b.size and a.alignment == b.alignment and
+    a.category == b.category and a.carrier == b.carrier;
+}
+Result<void, AggregateABIError> RequireAggregateTransfer(ref const AggregateFunctionPlan plan,
+AggregateTransfer expected, ref int required) {
+    int matches = 0;
+    for (i in 0 .. plan.transferCount) {
+        AggregateTransfer actual = plan.transfers[i];
+        if (actual.kind == expected.kind and actual.type == expected.type and actual.value == expected.value and
+        actual.sourceSlot == expected.sourceSlot and actual.storage == expected.storage and
+        actual.carrier == expected.carrier and actual.point == expected.point and actual.end == expected.end) {
+            matches += 1;
+        }
+    }
+    if (matches != 1) { return Result::Error(AggregateABIError::Lifetime); }
+    required += 1;
+    return Result::Ok();
+}
+Result<void, AggregateABIError> ValidateAggregateStorage(ref const BackendFunction function,
+ref const FinalizedFrame frame, int slot, AggregateABIType type, bool argumentTemporary) {
+    if (slot < 0 or slot >= function.slotCount) {
+        return Result::Error(AggregateABIError::Temporary);
+    }
+    MachineSlot storage = function.slots[slot];
+    int alignment = type.alignment;
+    if (argumentTemporary) {
+        alignment = 16;
+    }
+    if (storage.size != type.size) { return Result::Error(AggregateABIError::Temporary); }
+    if (storage.alignment != alignment or frame.slotOffsets[slot] < 0 or frame.slotOffsets[slot] % alignment != 0) {
+        return Result::Error(AggregateABIError::Alignment);
+    }
+    return Result::Ok();
+}
+Result<void, AggregateABIError> ValidateAggregateFunctionPlan(ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, ref const BackendFunction function,
+ref const ObjectPlacement placement, ref const Allocation allocation, ref const FinalizedFrame frame,
+ref const AggregateFunctionPlan plan) {
+    if (plan.parameterCount != owner.Params.count or plan.callCount < 0 or plan.callCount > 32 or
+    plan.transferCount < 0 or plan.transferCount > 256 or not ObjectSame(ref const reader, plan.identity,
+    owner.Identity)) { return Result::Error(AggregateABIError::Capacity); }
+    AggregateABIType result = ClassifyWin64Object(ref const reader, document, owner.ResultType, ObjectValueClass::Aggregate,
+    true) ?;
+    ValidateAggregateCarrier(plan.result) ?;
+    if (not SameAggregateABIType(ref const reader, result, plan.result)) {
+        return Result::Error(AggregateABIError::ReturnEligibility);
+    }
+    if (function.scalarResult != result.carrier or not ObjectSame(ref const reader, function.identity,
+    owner.Identity)) { return Result::Error(AggregateABIError::ReturnEligibility); }
+    int shift = 0;
+    if (result.category == AggregateABIClass::HiddenReturn) {
+        shift = 1;
+    }
+    if (plan.hiddenPointer != placement.hiddenResult or(shift == 1 and
+    (plan.hiddenPointer < 0 or function.args[0].virtualReg != plan.hiddenPointer or
+    function.scalarTypes[plan.hiddenPointer] != ScalarRepresentation::Address))) {
+        return Result::Error(AggregateABIError::HiddenResult);
+    }
+    if (function.argCount != plan.parameterCount + shift) {
+        return Result::Error(AggregateABIError::Position);
+    }
+    if (placement.argumentTempCount < 0 or placement.argumentTempCount > 512) {
+        return Result::Error(AggregateABIError::Capacity);
+    }
+    for (i in 0 .. placement.argumentTempCount) {
+        int slot = placement.argumentTemps[i];
+        if (slot < 0 or slot >= function.slotCount) {
+            return Result::Error(AggregateABIError::Temporary);
+        }
+        if (function.slots[slot].alignment != 16 or frame.slotOffsets[slot] < 0 or frame.slotOffsets[slot] % 16 != 0) {
+            return Result::Error(AggregateABIError::Alignment);
+        }
+    }
+    Liveness live = EmptyLiveness();
+    match (ComputeLiveness(ref const function, ref live)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Frame); }
+    }
+    match (ValidateScalarFunctionFrame(ref const function, ref const allocation, ref const live, ref const frame)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(AggregateABIError::Frame); }
+    }
+    if (frame.byteCount >= 4096) { return Result::Error(AggregateABIError::StackProbe); }
+    int required = 0;
+    for (i in 0 .. owner.Slots.count) {
+        WireObjectSlot source = AggregateABIAt<WireObjectSlot>(ref const reader, owner.Slots, i) ?;
+        WireObjectType type = AggregateABIAt<WireObjectType>(ref const reader, document.Types, source.Type) ?;
+        if (i >= function.slotCount or function.slots[i].id != i or function.slots[i].size != type.Size or
+        function.slots[i].alignment != type.Align or not ObjectSame(ref const reader, source.LayoutIdentity,
+        type.LayoutIdentity)) { return Result::Error(AggregateABIError::StaleLayout); }
+    }
+    for (i in 0 .. owner.Values.count) {
+        WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values, i) ?;
+        if (value.Class == ObjectValueClass::Aggregate) {
+            if (placement.values[i] < owner.Slots.count or placement.registers[i] != - 1) {
+                return Result::Error(AggregateABIError::Temporary);
+            }
+            WireObjectType raw = AggregateABIAt<WireObjectType>(ref const reader, document.Types, value.Type) ?;
+            AggregateABIType type = AggregateABIType {
+                raw.ID, raw.Identity, raw.LayoutIdentity, raw.Size, raw.Align,
+                AggregateABIClass::IndirectArgument, ScalarRepresentation::Address
+            };
+            ValidateAggregateStorage(ref const function, ref const frame, placement.values[i], type,
+            false) ?;
+            for (j in 0 .. i) {
+                if (placement.values[j] >= 0 and placement.values[j] == placement.values[i]) {
+                    return Result::Error(AggregateABIError::Temporary);
+                }
+            }
+        }
+    }
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter parameter = AggregateABIAt<WireObjectParameter>(ref const reader, owner.Params,
+        i) ?;
+        WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values, parameter.Value) ?;
+        AggregateABIType type = ClassifyWin64Object(ref const reader, document, parameter.Type, value.Class,
+        false) ?;
+        AggregateArgumentPlan actual = plan.parameters[i];
+        ValidateAggregateCarrier(actual.type) ?;
+        if (not SameAggregateABIType(ref const reader, type, actual.type)) {
+            return Result::Error(AggregateABIError::StaleLayout);
+        }
+        if (actual.semanticIndex != i or actual.physicalIndex != i + shift or actual.value != parameter.Value or
+        actual.carrier != function.args[i + shift].virtualReg or actual.carrier != placement.parameterCarriers[i] or
+        function.scalarTypes[actual.carrier] != type.carrier or actual.storage != placement.values[parameter.Value] or
+        actual.start != 0 or actual.end != function.instructionCount) {
+            return Result::Error(AggregateABIError::Position);
+        }
+        if (AggregateUsesStorage(type.category)) {
+            AggregateTransferKind kind = AggregateTransferKind::UnpackParameter;
+            if (type.category == AggregateABIClass::IndirectArgument) {
+                kind = AggregateTransferKind::CopyParameter;
+            }
+            RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                kind, type.type, parameter.Value, - 1,
+                actual.storage, actual.carrier, 0, function.instructionCount
+            }, ref required) ?;
+        }
+    }
+    int callIndex = 0;
+    int cursor = 0;
+    int temporary = 0;
+    int returns = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = AggregateABIAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction input = AggregateABIAt<WireObjectInstruction>(ref const reader, block.Instructions,
+            ii) ?;
+            int position = placement.positions[cursor];
+            cursor += 1;
+            if (input.Op == ObjectOpcode::Call) {
+                if (callIndex >= plan.callCount) {
+                    return Result::Error(AggregateABIError::Position);
+                }
+                AggregateCallPlan call = plan.calls[callIndex];
+                callIndex += 1;
+                WireObjectCall source = AggregateABIAt<WireObjectCall>(ref const reader, input.Calls,
+                0) ?;
+                AggregateABIType output = ClassifyWin64Object(ref const reader, document, source.ResultType,
+                ObjectValueClass::Aggregate, true) ?;
+                ValidateAggregateCarrier(call.result) ?;
+                if (not SameAggregateABIType(ref const reader, output, call.result)) {
+                    return Result::Error(AggregateABIError::ReturnEligibility);
+                }
+                if (call.block != bi or call.instruction != ii or call.position != position or
+                call.resultValue != input.Result or call.argumentCount != source.Arguments.count or
+                not ObjectSame(ref const reader, source.Target, call.physical.target)) {
+                    return Result::Error(AggregateABIError::Position);
+                }
+                match (ValidateScalarCallPlan(ref const call.physical)) {
+                    Result::Ok => { }
+                    Result::Error(error) => {
+                        return Result::Error(AggregateABIError::Position);
+                    }
+                }
+                match (ValidateScalarArgumentMoves(ref const call.physical)) {
+                    Result::Ok => { }
+                    Result::Error(error) => {
+                        return Result::Error(AggregateABIError::Moves);
+                    }
+                }
+                CallSiteActions actions = EmptyCallSiteActions();
+                match (RealizeAllocatedCall(ref const function, ref const allocation, ref const live,
+                position,
+                ref const frame, ref actions)) {
+                    Result::Ok => { }
+                    Result::Error(error) => {
+                        return Result::Error(AggregateABIError::Frame);
+                    }
+                }
+                int callShift = 0;
+                if (output.category == AggregateABIClass::HiddenReturn) {
+                    callShift = 1;
+                }
+                if (call.physical.argumentCount != call.argumentCount + callShift or
+                call.physical.instruction != position or call.physical.scalar.result != output.carrier or
+                call.physical.hasResult !=(output.category != AggregateABIClass::Void) or
+                (call.physical.hasResult and call.physical.result.value != function.instructions[position].destination.id)) {
+                    return Result::Error(AggregateABIError::Position);
+                }
+                if (AggregateUsesStorage(output.category)) {
+                    if (call.resultStorage != placement.values[input.Result]) {
+                        return Result::Error(AggregateABIError::HiddenResult);
+                    }
+                    ValidateAggregateStorage(ref const function, ref const frame, call.resultStorage,
+                    output, false) ?;
+                    AggregateTransferKind capture = AggregateTransferKind::CaptureDirect;
+                    if (callShift == 1) {
+                        capture = AggregateTransferKind::CaptureHidden;
+                        if (call.hiddenPointer != function.instructions[position].call.values[0] or
+                        call.physical.arguments[0].source.value != call.hiddenPointer or
+                        call.physical.scalar.arguments[0] != ScalarRepresentation::Address) {
+                            return Result::Error(AggregateABIError::HiddenResult);
+                        }
+                        RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                            AggregateTransferKind::BindResult,
+                            output.type, input.Result, - 1, call.resultStorage, call.hiddenPointer, position - 1,
+                            function.instructionCount
+                        }, ref required) ?;
+                    } else {
+                        if (call.hiddenPointer != - 1) {
+                            return Result::Error(AggregateABIError::HiddenResult);
+                        }
+                    }
+                    RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                        capture, output.type, input.Result, - 1,
+                        call.resultStorage, function.instructions[position].destination.id, position + 1,
+                        function.instructionCount
+                    }, ref required) ?;
+                } else {
+                    if (call.hiddenPointer != - 1 or call.resultStorage != - 1) {
+                        return Result::Error(AggregateABIError::HiddenResult);
+                    }
+                }
+                for (ai in 0 .. source.Arguments.count) {
+                    WireObjectCallArgument argument = AggregateABIAt<WireObjectCallArgument>(ref const reader,
+                    source.Arguments, ai) ?;
+                    WireObjectValue value = AggregateABIAt<WireObjectValue>(ref const reader, owner.Values,
+                    argument.Value) ?;
+                    AggregateABIType type = ClassifyWin64Object(ref const reader, document, argument.Type,
+                    value.Class, false) ?;
+                    AggregateArgumentPlan actual = call.arguments[ai];
+                    ValidateAggregateCarrier(actual.type) ?;
+                    int physical = ai + callShift;
+                    if (not SameAggregateABIType(ref const reader, type, actual.type)) {
+                        return Result::Error(AggregateABIError::StaleLayout);
+                    }
+                    if (actual.semanticIndex != ai or actual.physicalIndex != physical or actual.value != argument.Value or
+                    actual.carrier != function.instructions[position].call.values[physical] or
+                    call.physical.arguments[physical].source.value != actual.carrier or
+                    call.physical.scalar.arguments[physical] != type.carrier or
+                    not SameScalarLocation(call.physical.scalar.sources[physical], allocation.scalarLocations[actual.carrier])) {
+                        return Result::Error(AggregateABIError::Position);
+                    }
+                    if (actual.start != position - 1 or actual.end != position + 1) {
+                        return Result::Error(AggregateABIError::Lifetime);
+                    }
+                    if (AggregateUsesStorage(type.category)) {
+                        int storage = placement.values[argument.Value];
+                        AggregateTransferKind kind = AggregateTransferKind::PackArgument;
+                        if (type.category == AggregateABIClass::IndirectArgument) {
+                            if (temporary >= placement.argumentTempCount) {
+                                return Result::Error(AggregateABIError::Temporary);
+                            }
+                            storage = placement.argumentTemps[temporary];
+                            for (j in 0 .. owner.Values.count) {
+                                if (placement.values[j] == storage) {
+                                    return Result::Error(AggregateABIError::Temporary);
+                                }
+                            }
+                            for (j in 0 .. temporary) {
+                                if (placement.argumentTemps[j] == storage) {
+                                    return Result::Error(AggregateABIError::Temporary);
+                                }
+                            }
+                            temporary += 1;
+                            ValidateAggregateStorage(ref const function, ref const frame, storage, type,
+                            true) ?;
+                            kind = AggregateTransferKind::InitializeArgument;
+                            RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                                AggregateTransferKind::EndArgument,
+                                type.type, argument.Value, - 1, storage, actual.carrier, position + 1,
+                                position + 1
+                            }, ref required) ?;
+                        }
+                        if (actual.storage != storage) {
+                            return Result::Error(AggregateABIError::Temporary);
+                        }
+                        RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                            kind, type.type, argument.Value,
+                            placement.values[argument.Value], storage, actual.carrier, position - 1,
+                            position + 1
+                        }, ref required) ?;
+                    } else {
+                        if (actual.storage != - 1) {
+                            return Result::Error(AggregateABIError::Temporary);
+                        }
+                    }
+                }
+            }
+        }
+        if (block.Term.Op == ObjectTerminator::Return) {
+            returns += 1;
+            if (AggregateUsesStorage(result.category)) {
+                AggregateTransferKind kind = AggregateTransferKind::ReturnDirect;
+                if (result.category == AggregateABIClass::HiddenReturn) {
+                    kind = AggregateTransferKind::ReturnHidden;
+                    if (placement.returnCarriers[bi] != plan.hiddenPointer) {
+                        return Result::Error(AggregateABIError::HiddenResult);
+                    }
+                }
+                int point = function.blocks[bi].firstInstruction + function.blocks[bi].instructionCount;
+                RequireAggregateTransfer(ref const plan, AggregateTransfer {
+                    kind, result.type, block.Term.Value,
+                    placement.values[block.Term.Value], - 1, placement.returnCarriers[bi], point, point
+                }, ref required) ?;
+            }
+        }
+    }
+    if (required != plan.transferCount or callIndex != plan.callCount or returns != plan.returnCount or returns != frame.returnCount or
+    temporary != placement.argumentTempCount) {
+        return Result::Error(AggregateABIError::Lifetime);
+    }
+    return Result::Ok();
+}
+void AggregatePlanningFacts() {
+    Assert.Concept<PlainData>(AggregateABIType, "typed ABI description does not grant CAbiValue");
+    Assert.Concept<NoAllocation>(PlanAggregateFunction, "bounded artifact-only derived physical planning");
+}

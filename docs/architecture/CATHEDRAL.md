@@ -1,5 +1,8 @@
 # Cathedral transition (R9c)
 
+Current aggregate ABI stage: [EVT2g5 native execution](#evt2g5-native-aggregate-emission).
+Earlier milestone sections preserve their historical qualification boundaries.
+
 Cathedral is the self-hosted Concept compiler and compiler-library stack. It
 grows upward from MachineIR by replacing semantic authority piecemeal, not by
 rewriting Stage-0 wholesale. The current checkout has Concept-authored AMD64
@@ -35,11 +38,13 @@ target:    Concept source -> Cathedral frontend/semantic libraries -> Planner
 ```
 
 The target path is a roadmap, not a currently runnable pipeline. The current
-Concept-authored slice consumes Stage-0-produced MachineIR through CMIRAMD2.
-Its present conceptual entrypoint is the composition of
-`Standard.Backend.Bridge{Schema,Derive,Read}` with
-`Standard.Backend.AMD64`, invoked by the Stage-0 `concept amd64` host. There is
-no Cathedral executable or `Standard.Compiler` umbrella module yet.
+Concept-authored slice consumes Stage-0-produced semantic MachineIR through
+versioned bridges. Qualified native integer, scalar, object and reference input
+uses CMIRAMD3/4/5/6. EVT2g4 derives aggregate ABI plans from v5/v6 without a new
+schema. The entrypoint is `Standard.Backend.AMD64`, composed with generated
+bridge readers and validators; EVT2g5 realizes aggregate plans as native calls
+and returns. It is invoked by the Stage-0 `concept amd64` host.
+There is no Cathedral executable or `Standard.Compiler` umbrella module yet.
 The C backend is a portable bootstrap and potentially long-lived fallback.
 Native Cathedral output is the intended normal path once qualified. Object
 emission is future Cathedral ownership. Neither a native object writer nor an
@@ -221,3 +226,139 @@ not provide production external linkage. Indirect/variadic/aggregate calls,
 nonvolatile XMM allocation, SIMD/AVX, binary16, numeric conversions, object output
 and unwind/SEH remain outside this qualification. See the
 [EVT2f5 evidence](../conformance/EVT2F-CONFORMANCE.md#evt2f5--mixed-win64-floating-calls).
+
+## EVT2g1 checked aggregate input (historical)
+
+Stage-0 now constructs target-independent typed aggregate LIR from the existing
+checked layout/copyability/place contracts. Numeric structs, immutable records,
+nested fields, fixed scalar array fields, complete locals, typed value copies,
+aggregate calls/results and immutable `record_with` intent retain their evidence.
+Record projections remain readonly; mutable fixtures use ordinary structs.
+
+This is input progression, not native aggregate qualification. CMIRAMD3/4 remain
+frozen, and aggregate input stops at `MIR_AGGREGATE_REQUIRES_CMIRAMD5` before
+scalar projection. A new checked Concept bridge and Cathedral-owned object,
+copy, reference, frame and Win64 aggregate ABI realization remain required.
+No native algorithm moved into Go. See [EVT2g conformance](../conformance/EVT2G-CONFORMANCE.md).
+
+## EVT2g2 typed aggregate contract (historical stage boundary)
+
+CMIRAMD5/version 5 now transports checked type/layout identities, exact object
+geometry, field and array descriptors, typed values/storage/internal locations,
+logical copies and member replacements, and semantic aggregate calls/results.
+Its Concept schema derives both codecs; the Concept validator admits artifacts
+without domain source or AST access. It checks supplied geometry and lifetime
+relationships without calculating field packing. CMIRAMD3/4 remain frozen.
+
+`concept machineir` succeeds for the bounded aggregate corpus. `concept amd64`
+validates v5 then stops at `AMD64_UNSUPPORTED_AGGREGATE_STORAGE` before output
+or native-image mutation. Native storage, addresses, copy realization and
+Win64 aggregate classification remain Cathedral-owned later stages. Source
+borrows, raw/owned/Drop states remain outside this input slice; internal
+locations do not fabricate those semantics. See the
+[contract and qualification evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g2--typed-aggregate-and-explicit-layout-contract).
+
+## EVT2g3 native local objects
+
+The reference stop below records the EVT2g3 boundary; EVT2g3b supersedes it.
+
+The current v5 path emits native aggregate locals, nested/array fields, typed
+loads/stores, fieldwise value copies, self-assignment and immutable `with`
+updates. `AMD64.Objects` consumes checked size/alignment/offset/extent/stride;
+it allocates complete contiguous objects in the existing unified frame. Private
+aggregate snapshots remain memory objects, while compact scalar/location values
+use the existing allocator, Win64 scalar-call planner and shared encoder.
+Padding is skipped by copy traversal. No record packing algorithm or Go native
+object backend was added. Frames requiring probing reject before output mutation.
+
+CMIRAMD3/4/5 and their generated codecs are unchanged. Artifact-only Normal/Verify
+Win64 execution qualifies 34 functions independently of domain source; separate
+strict C11 comparisons and 100-run byte determinism pass. Source `ref`/`ref const`
+still stop at `EVT2_UNSUPPORTED_OBJECT_AUTHORITY`: v5 internal locations require
+local slot roots and prohibit location parameters/call arguments/returns. Native
+source-borrow qualification needs checked LIR and a versioned authority/lifetime
+contract. Aggregate parameters/results stop at `AMD64_UNSUPPORTED_AGGREGATE_ABI`;
+EVT2g4 is not begun. This is meaningful progression rather than full EVT2g3
+reference closure. See [support, evidence and limits](../conformance/EVT2G-CONFORMANCE.md#evt2g3--native-object-storage-progression).
+
+## EVT2g3b checked borrow authority and native references
+
+An address locates storage; a reference names a live object with checked access
+authority. The frontend retains existing authority over reference typing,
+liveness, mutability, lexical lifetimes and escape rules. Its checked witness
+feeds typed reference LIR and CMIRAMD6, rather than an unqualified integer address.
+No new borrow checker or user-proposition trust path is introduced.
+
+V6 wraps the frozen v5 object payload with reference roots, canonical semantic
+targets, authority, lexical scopes, provenance and non-escape metadata. Its
+Concept schema derives transport; v3/v4/v5 stay frozen. Concept verifies the
+relationships and realizes admitted references using the existing Address/GPR,
+frame, memory and Win64 scalar-call machinery. Callee parameter roots do not
+contain caller frame offsets. Separate parameter IDs never imply disjointness.
+
+Native qualification covers local/field/nested/array-element references,
+mutable/const direct parameters, legal aliases, nested calls, stable storage,
+snapshots and whole-object replacement. Artifact-only and separate C-oracle
+Normal/Verify runs execute 29 functions / 23,820 bytes; the original three-function
+borrow boundary returns 9 natively. Reference returns, raw/owned/Drop lifetimes,
+general layout/bind views and aggregate by-value/indirect/sret ABI remain outside
+the qualification. The aggregate ABI stop is retained in v6; EVT2g4 is not begun.
+See [the reference contract and evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g3b--checked-borrow-authority-and-native-references).
+
+## EVT2g4 Win64 aggregate ABI planning
+
+`Standard.Backend.Win64AggregateABI` now owns the Microsoft default x64 aggregate
+classification. It consumes checked identities, representation, size, alignment
+and copy eligibility from the existing object document. It never computes record
+packing or field offsets, and PlainData does not grant CAbiValue. Argument and
+return classes are separate: exact 1/2/4/8-byte qualified records use integer
+argument carriers; other sizes use caller temporaries. Direct RAX returns also
+require recursively checked C record structure. Native records without that
+evidence conservatively use hidden result storage, including small records.
+
+`AMD64.Aggregates` retains typed parameter, argument, temporary, result and
+transfer identities while `AMD64.Objects` projects physical carriers into the
+existing scalar allocator, Win64 positional ABI, move planner and frame owner.
+One hidden pointer occupies physical position zero and shifts both GPR and XMM
+positions. Explicit references retain checked borrow semantics; indirect value
+arguments instead receive distinct, 16-byte-aligned caller temporaries and
+callee-private materialization. Field-copy transfers use the admitted object
+type and existing meaningful-field copy policy; padding is not semantic data.
+
+All source slots, private values, argument temporaries, result objects, saves,
+spills, cycle temporaries and outgoing arguments share `FinalizedFrame`.
+Aggregate storage uses its existing `LocalSlots` region, with explicit roles in
+the aggregate plan; there is no second call stack or frame finalizer. The shared
+allocator now also admits callee-saved GPR fallback for leaf entry pressure.
+
+CMIRAMD6 and the frozen CMIRAMD3/4/5 schema/codecs are unchanged. No derived
+RCX/RAX, stack offset or ABI class is serialized into semantic MachineIR. Go
+changes only present the Concept plans and provide independent test oracles.
+Artifact-only classification, frame planning and typed transfer verification
+advance supported signatures to `AMD64_UNSUPPORTED_AGGREGATE_CALL_EMISSION`
+before output mutation. This qualifies planning, not aggregate call encoding,
+generated caller/callee execution, general external linkage, ownership/Drop or
+complete external ABI conformance. See [the stage-specific evidence](../conformance/EVT2G-CONFORMANCE.md#evt2g4--win64-aggregate-abi-planning).
+
+## EVT2g5 native aggregate emission
+
+`AMD64.AggregateEmission` now realizes EVT2g4's typed entry, argument, result and
+return transfers. It packs direct carriers through initialized frame scratch,
+copies meaningful fields with the existing object copier, initializes isolated
+indirect temporaries, materializes private value parameters and writes typed
+result storage. `AMD64` surrounds existing scalar call actions with these
+transfers; physical placement, parallel moves, frame geometry and rel32 fixups
+retain their existing owners. Hidden returns write the designated result object
+and return its pointer in RAX; callers check that identity.
+
+The byte writer has a count-only mode. Aggregate module preflight uses the same
+selectors, bounds and fixup geometry before publishing bytes or `NativeImage`.
+Actual emission follows only after all bodies and call targets pass. This adds
+no second emitter, frame allocator or shadow area. Native execution and separate
+MSVC/Clang C ABI probes now qualify the bounded copyable-record slice; reference-return,
+ownership/Drop, general external linkage and object-file exclusions remain.
+
+The sole Go production correction shares canonical natural built-in array C
+typedefs across generated headers. It unblocks independent backend/oracle
+compilation and adds no native ABI policy. Frozen CMIRAMD3/4/5/6 schemas, codecs,
+hashes and byte specimens remain unchanged. See [the qualification](../conformance/EVT2G-CONFORMANCE.md#evt2g5--native-aggregate-calls-and-win64-abi-closeout).

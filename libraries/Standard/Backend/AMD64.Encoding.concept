@@ -239,7 +239,9 @@ Result<void, BackendError> WriteByte(ref ByteWriter writer, int value)
 {
     if (value < 0 or value > 255 or writer.offset < 0 or writer.offset >= Len(writer.bytes))
     { return Result::Error(BackendError::BufferFull); }
-    writer.bytes[writer.offset] = value as byte;
+    if (not writer.measuring) {
+        writer.bytes[writer.offset] = value as byte;
+    }
     writer.offset = writer.offset + 1;
     return Result::Ok();
 }
@@ -390,7 +392,19 @@ int opcode, Register reg, MachineOperand memory, int width)
         if (index == 4) { return Result::Error(BackendError::InvalidEncoding); }
     }
     int scale = ScaleBits(memory.scale);
-    if (scale < 0) { return Result::Error(BackendError::InvalidEncoding); }
+    return WriteAddressReg(ref writer, opcode, reg, base, index, scale, memory.displacement, width);
+}
+// Shared ModRM/SIB writer. The caller supplies an admitted base/index and
+// checked displacement; field geometry is never reconstructed here.
+Result<void, BackendError> WriteAddressReg(ref ByteWriter writer, int opcode, Register reg,
+int base, int index, int scale, int displacement, int width) {
+    if (base < 0 or base > 15 or index > 15 or index < - 1 or not ScalarStorageWidth(width)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (scale < 0 or scale > 3) { return Result::Error(BackendError::InvalidEncoding); }
+    if (width == 2) {
+        WriteByte(ref writer, 102) ?;
+    }
     int regCode = RegisterEncoding(reg);
     int rex = 64;
     if (width == 8) {
@@ -410,9 +424,9 @@ int opcode, Register reg, MachineOperand memory, int width)
     }
     WriteByte(ref writer, opcode) ?;
     int mode = 0;
-    if (memory.displacement != 0 or base % 8 == 5)
+    if (displacement != 0 or base % 8 == 5)
     {
-        if (memory.displacement >= - 128 and memory.displacement <= 127)
+        if (displacement >= - 128 and displacement <= 127)
         {
             mode = 1;
         }
@@ -436,14 +450,14 @@ int opcode, Register reg, MachineOperand memory, int width)
     }
     if (mode == 1)
     {
-        int displacement = memory.displacement % 256;
-        if (displacement < 0) {
-            displacement = displacement + 256;
+        int digit = displacement % 256;
+        if (digit < 0) {
+            digit = digit + 256;
         }
-        WriteByte(ref writer, displacement) ?;
+        WriteByte(ref writer, digit) ?;
     }
     if (mode == 2) {
-        WriteI32LE(ref writer, memory.displacement) ?;
+        WriteI32LE(ref writer, displacement) ?;
     }
     return Result::Ok();
 }
@@ -1081,4 +1095,54 @@ BackendError ScalarSSEBackendError(SSEError error) {
         SSEError::RepresentationMismatch => BackendError::InvalidEncoding,
         SSEError::InvalidDisplacement => BackendError::InvalidEncoding,
     };
+}
+Result<void, BackendError> LoadScalarGPR(ref ByteWriter writer, Register target, int value, int width,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    ScalarLocation source = allocation.scalarLocations[value];
+    if (source.kind != ScalarLocationKind::Physical or source.registerClass != RegisterClass::GPR) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    if (source.gpr == Register::RAX) {
+        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 1) ?, width);
+    }
+    if (source.gpr == Register::RDX) {
+        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 2) ?, width);
+    }
+    int opcode = 137;
+    if (width == 1) {
+        opcode = 136;
+    }
+    return WriteRegReg(ref writer, opcode, target, source.gpr, width);
+}
+
+// Exact checked integer bits, including full-width unsigned constants. The
+// existing scalar selector supplies RAX and preserves its normal result path.
+Result<void, BackendError> WriteScalarIntegerLiteral(ref ByteWriter writer, ref const BridgeReader reader,
+BridgeText literal, ScalarRepresentation type) {
+    if (not ScalarIntegerBits(ref const reader, literal, type)) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    int first = 0;
+    bool negative = reader.data[literal.offset] == 45;
+    if (negative) {
+        first = 1;
+    }
+    uint64 value = 0u;
+    for (i in first .. literal.length) {
+        value = value * 10u +((reader.data[literal.offset + i] - 48) as uint64);
+    }
+    if (negative) {
+        value = 18446744073709551615u - value + 1u;
+    }
+    int bytes = 4;
+    if (ScalarWidth(type) == 8) {
+        bytes = 8;
+        WriteByte(ref writer, 72) ?;
+    }
+    WriteByte(ref writer, 184) ?;
+    for (i in 0 .. bytes) {
+        WriteByte(ref writer,(value % 256u) as int) ?;
+        value = value / 256u;
+    }
+    return Result::Ok();
 }

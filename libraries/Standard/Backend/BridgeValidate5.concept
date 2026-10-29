@@ -1,0 +1,836 @@
+module Standard.Backend.BridgeValidate5;
+profile Core;
+import Standard.Backend.BridgeCodec5;
+import Standard.Backend.BridgeValidate4;
+import Standard.Semantic.Vocabulary;
+enum ObjectError {
+    Malformed, Version, SchemaMismatch, Capacity, TypeIdentity, Geometry,
+    FieldIdentity, FieldGeometry, NestedLayout, ArrayGeometry, CopyEligibility,
+    ValueType, StorageState, ImmutableAccess, Provenance, Operation, CallSignature, ControlFlow
+}
+string DescribeObjectError(ObjectError error) {
+    return match (error) {
+        ObjectError::Malformed => "CMIRAMD5_MALFORMED",
+        ObjectError::Version => "CMIRAMD5_VERSION_MISMATCH",
+        ObjectError::SchemaMismatch => "CMIRAMD5_SCHEMA_HASH_MISMATCH",
+        ObjectError::Capacity => "CMIRAMD5_CAPACITY_EXCEEDED",
+        ObjectError::TypeIdentity => "CMIRAMD5_TYPE_IDENTITY",
+        ObjectError::Geometry => "CMIRAMD5_LAYOUT_GEOMETRY",
+        ObjectError::FieldIdentity => "CMIRAMD5_FIELD_IDENTITY",
+        ObjectError::FieldGeometry => "CMIRAMD5_FIELD_GEOMETRY",
+        ObjectError::NestedLayout => "CMIRAMD5_NESTED_LAYOUT_IDENTITY",
+        ObjectError::ArrayGeometry => "CMIRAMD5_ARRAY_GEOMETRY",
+        ObjectError::CopyEligibility => "CMIRAMD5_COPY_ELIGIBILITY",
+        ObjectError::ValueType => "CMIRAMD5_VALUE_TYPE",
+        ObjectError::StorageState => "CMIRAMD5_OBJECT_NOT_LIVE",
+        ObjectError::ImmutableAccess => "CMIRAMD5_IMMUTABLE_ACCESS",
+        ObjectError::Provenance => "CMIRAMD5_LOCATION_PROVENANCE",
+        ObjectError::Operation => "CMIRAMD5_TYPED_OPERATION",
+        ObjectError::CallSignature => "CMIRAMD5_CALL_SIGNATURE",
+        ObjectError::ControlFlow => "CMIRAMD5_CONTROL_FLOW"
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, ObjectError> ReadObject(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<T>{0})) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(ObjectError::Malformed)
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, ObjectError> ObjectAt(ref const BridgeReader source, BridgeSequence<T> values, int index) {
+    if (index < 0 or index >= values.count) { return Result::Error(ObjectError::ValueType); }
+    BridgeReader reader = BridgeReader{source.data, values.offset};
+    for (i in 0 .. index) {
+        ReadObject<T>(ref reader) ?;
+    }
+    return ReadObject<T>(ref reader);
+}
+bool ObjectSame(ref const BridgeReader source, BridgeText a, BridgeText b) {
+    return ScalarTextSame(ref const source, a, b);
+}
+bool ObjectDigest(ref const BridgeReader source, BridgeText text) {
+    if (text.length != 64) { return false; }
+    for (i in 0 .. text.length) {
+        byte c = source.data[text.offset + i];
+        if (not((c >= 48 and c <= 57) or(c >= 97 and c <= 102))) { return false; }
+    }
+    return true;
+}
+bool ObjectFieldOwner(ref const BridgeReader source, BridgeText owner, BridgeText name, BridgeText identity) {
+    if (identity.length != owner.length + 1 + name.length) { return false; }
+    for (i in 0 .. owner.length) {
+        if (source.data[identity.offset + i] != source.data[owner.offset + i]) { return false; }
+    }
+    if (source.data[identity.offset + owner.length] != 124) { return false; }
+    for (i in 0 .. name.length) {
+        if (source.data[identity.offset + owner.length + 1 + i] != source.data[name.offset + i]) {
+            return false;
+        }
+    }
+    return true;
+}
+bool ObjectAlignment(int alignment) {
+    return alignment == 1 or alignment == 2 or alignment == 4 or alignment == 8 or alignment == 16;
+}
+bool ObjectAggregate(ObjectKind kind) {
+    return kind == ObjectKind::Aggregate or kind == ObjectKind::Array;
+}
+ScalarRepresentation ObjectScalar(ObjectKind kind) {
+    return match (kind) {
+        ObjectKind::Void => ScalarRepresentation::Void, ObjectKind::Bool => ScalarRepresentation::Bool,
+        ObjectKind::I8 => ScalarRepresentation::I8, ObjectKind::U8 => ScalarRepresentation::U8,
+        ObjectKind::I16 => ScalarRepresentation::I16, ObjectKind::U16 => ScalarRepresentation::U16,
+        ObjectKind::I32 => ScalarRepresentation::I32, ObjectKind::U32 => ScalarRepresentation::U32,
+        ObjectKind::I64 => ScalarRepresentation::I64, ObjectKind::U64 => ScalarRepresentation::U64,
+        ObjectKind::Float32 => ScalarRepresentation::Float32, ObjectKind::Float64 => ScalarRepresentation::Float64,
+        ObjectKind::Aggregate => ScalarRepresentation::Void, ObjectKind::Array => ScalarRepresentation::Void
+    };
+}
+Result<void, ObjectError> ValidateObjectTypes(ref const BridgeReader source, WireObjectModule document) {
+    return ValidateObjectTypeContract(ref const source, document, true);
+}
+Result<void, ObjectError> ValidateObjectTypeContract(ref const BridgeReader source, WireObjectModule document,
+bool requireAggregate) {
+    int[256] depths =[0 ...];
+    int aggregateCount = 0;
+    for (i in 0 .. document.Types.count) {
+        WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, i) ?;
+        if (type.ID != i or type.Identity.length == 0 or type.LayoutIdentity.length == 0 or type.Name.length == 0) {
+            return Result::Error(ObjectError::TypeIdentity);
+        }
+        for (j in 0 .. i) {
+            WireObjectType prior = ObjectAt<WireObjectType>(ref const source, document.Types, j) ?;
+            if (ObjectSame(ref const source, type.Identity, prior.Identity)) {
+                return Result::Error(ObjectError::TypeIdentity);
+            }
+        }
+        if (type.Kind != ObjectKind::Void and type.Copy != ObjectCopyKind::CheckedValue) {
+            return Result::Error(ObjectError::CopyEligibility);
+        }
+        if (type.Kind == ObjectKind::Aggregate) {
+            aggregateCount += 1;
+            if (aggregateCount > 128 or type.Fields.count < 1 or type.Fields.count > 64) {
+                return Result::Error(ObjectError::Capacity);
+            }
+            if ((type.Representation != ObjectRepresentation::Native and type.Representation != ObjectRepresentation::C) or type.Size <= 0 or type.Size > 1048576 or not ObjectAlignment(type.Align) or type.Size % type.Align != 0 or type.Element != - 1 or type.Extent != 0 or type.Stride != 0) {
+                return Result::Error(ObjectError::Geometry);
+            }
+            int end = 0;
+            int depth = 1;
+            for (j in 0 .. type.Fields.count) {
+                WireObjectField field = ObjectAt<WireObjectField>(ref const source, type.Fields, j) ?;
+                if (field.ID != j or field.Name.length == 0 or not ObjectFieldOwner(ref const source,
+                type.Identity, field.Name, field.Identity) or not ObjectDigest(ref const source, field.SemanticType)) {
+                    return Result::Error(ObjectError::FieldIdentity);
+                }
+                for (k in 0 .. j) {
+                    WireObjectField prior = ObjectAt<WireObjectField>(ref const source, type.Fields,
+                    k) ?;
+                    if (ObjectSame(ref const source, field.Identity, prior.Identity) or ObjectSame(ref const source,
+                    field.Name, prior.Name)) {
+                        return Result::Error(ObjectError::FieldIdentity);
+                    }
+                }
+                if (field.Type < 0 or field.Type >= i) {
+                    return Result::Error(ObjectError::NestedLayout);
+                }
+                WireObjectType child = ObjectAt<WireObjectType>(ref const source, document.Types, field.Type) ?;
+                if (not ObjectSame(ref const source, field.LayoutIdentity, child.LayoutIdentity)) {
+                    return Result::Error(ObjectError::NestedLayout);
+                }
+                if (child.Kind == ObjectKind::Void or field.Size != child.Size or field.Align != child.Align or field.Align > type.Align or field.Offset < end or field.Size > type.Size or field.Offset > type.Size - field.Size or field.Offset % field.Align != 0) {
+                    return Result::Error(ObjectError::FieldGeometry);
+                }
+                end = field.Offset + field.Size;
+                if (depths[field.Type] + 1 > depth) {
+                    depth = depths[field.Type] + 1;
+                }
+            }
+            if (depth > 16) { return Result::Error(ObjectError::Capacity); }
+            depths[i] = depth;
+        } else if (type.Kind == ObjectKind::Array) {
+            if (type.Element < 0 or type.Element >= i or type.Extent <= 0 or type.Extent > 256 or type.Size <= 0 or type.Size > 1048576 or type.Stride <= 0 or type.Representation != ObjectRepresentation::FixedArray or type.Fields.count != 0 or type.Immutable) {
+                return Result::Error(ObjectError::ArrayGeometry);
+            }
+            WireObjectType child = ObjectAt<WireObjectType>(ref const source, document.Types, type.Element) ?;
+            if (not ObjectSame(ref const source, type.Identity, type.LayoutIdentity)) {
+                return Result::Error(ObjectError::TypeIdentity);
+            }
+            if (child.Kind == ObjectKind::Void or type.Stride != child.Size or type.Align != child.Align or type.Size / type.Extent != type.Stride or type.Size % type.Extent != 0) {
+                return Result::Error(ObjectError::ArrayGeometry);
+            }
+            depths[i] = depths[type.Element] + 1;
+            if (depths[i] > 16) { return Result::Error(ObjectError::Capacity); }
+        } else {
+            ScalarRepresentation scalar = ObjectScalar(type.Kind);
+            int width = ScalarWidth(scalar);
+            int alignment = width;
+            if (alignment == 0) {
+                alignment = 1;
+            }
+            if (type.Size != width or type.Align != alignment or type.Representation != ObjectRepresentation::Scalar or type.Element != - 1 or type.Extent != 0 or type.Stride != 0 or type.Immutable or type.Fields.count != 0 or not TextEquals(ref const source,
+            type.Identity, ScalarTypeName(scalar)) or not TextEquals(ref const source, type.LayoutIdentity,
+            ScalarTypeName(scalar))) { return Result::Error(ObjectError::Geometry); }
+            if (type.Kind == ObjectKind::Void and type.Copy != ObjectCopyKind::None) {
+                return Result::Error(ObjectError::CopyEligibility);
+            }
+        }
+    }
+    if (requireAggregate and aggregateCount == 0) {
+        return Result::Error(ObjectError::Geometry);
+    }
+    return Result::Ok();
+}
+// Optional checked v6 location context. The legacy entrypoints always use the
+// empty context; no CMIRAMD5 wire or admission capability is widened.
+struct ObjectBlockMask {
+    bool[128] items;
+}
+struct ObjectAuthorityContext {
+    bool enabled;
+    bool[512] valid;
+    int[512] roots;
+    bool[512] writable;
+    int[512] definitionBlocks;
+    ObjectBlockMask[128] dominators;
+}
+ObjectAuthorityContext EmptyObjectAuthority() {
+    return ObjectAuthorityContext {
+        false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask{[false ...]}
+        ...]
+    };
+}
+Result<void, ObjectError> ValidateObjectCall(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, WireObjectInstruction instruction) {
+    return ValidateObjectCallContract(ref const source, document, owner, instruction, false);
+}
+Result<void, ObjectError> ValidateObjectCallContract(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, WireObjectInstruction instruction, bool references) {
+    if (instruction.Calls.count != 1) { return Result::Error(ObjectError::CallSignature); }
+    WireObjectCall call = ObjectAt<WireObjectCall>(ref const source, instruction.Calls, 0) ?;
+    if (not TextEquals(ref const source, call.Convention, "win64") or call.ResultType != instruction.Type or call.Arguments.count != instruction.Args.count or call.Arguments.count > 32) {
+        return Result::Error(ObjectError::CallSignature);
+    }
+    int selected = - 1;
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction target = ObjectAt<WireObjectFunction>(ref const source, document.Functions,
+        i) ?;
+        if (ObjectSame(ref const source, target.Identity, call.Target)) {
+            if (selected != - 1) { return Result::Error(ObjectError::CallSignature); }
+            selected = i;
+        }
+    }
+    if (selected < 0) { return Result::Error(ObjectError::CallSignature); }
+    WireObjectFunction target = ObjectAt<WireObjectFunction>(ref const source, document.Functions, selected) ?;
+    if (target.ResultType != call.ResultType or target.Params.count != call.Arguments.count) {
+        return Result::Error(ObjectError::CallSignature);
+    }
+    for (i in 0 .. call.Arguments.count) {
+        WireObjectCallArgument argument = ObjectAt<WireObjectCallArgument>(ref const source, call.Arguments,
+        i) ?;
+        WireObjectValueUse use = ObjectAt<WireObjectValueUse>(ref const source, instruction.Args, i) ?;
+        WireObjectParameter parameter = ObjectAt<WireObjectParameter>(ref const source, target.Params,
+        i) ?;
+        WireObjectValue value = ObjectAt<WireObjectValue>(ref const source, owner.Values, argument.Value) ?;
+        WireObjectValue declared = ObjectAt<WireObjectValue>(ref const source, target.Values, parameter.Value) ?;
+        if ((declared.Class == ObjectValueClass::Location) !=(value.Class == ObjectValueClass::Location)) {
+            return Result::Error(ObjectError::CallSignature);
+        }
+        if (argument.Value != use.Value or argument.Type != parameter.Type or argument.Type != value.Type or(value.Class == ObjectValueClass::Location and not references)) {
+            return Result::Error(ObjectError::CallSignature);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ObjectError> ValidateObjectFunction(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner) {
+    ObjectAuthorityContext authority = EmptyObjectAuthority();
+    return ValidateObjectFunctionContract(ref const source, document, owner, ref const authority);
+}
+Result<void, ObjectError> ValidateObjectFunctionContract(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
+    if (owner.Values.count > 512 or owner.Slots.count > 64 or owner.Blocks.count <= 0 or owner.Blocks.count > 128 or owner.Params.count > 32) {
+        return Result::Error(ObjectError::Capacity);
+    }
+    if (owner.Identity.length == 0 or owner.Name.length == 0 or owner.Source.Line <= 0 or owner.Source.Column <= 0 or not TextEquals(ref const source,
+    owner.Target, "amd64-windows") or not TextEquals(ref const source, owner.ABI, "win64")) {
+        return Result::Error(ObjectError::Provenance);
+    }
+    WireObjectType resultType = ObjectAt<WireObjectType>(ref const source, document.Types, owner.ResultType) ?;
+    int[512] definitions =[0 ...];
+    int[512] valueTypes =[- 1 ...];
+    ObjectValueClass[512] classes =[ObjectValueClass::Scalar ...];
+    for (i in 0 .. owner.Values.count) {
+        WireObjectValue value = ObjectAt<WireObjectValue>(ref const source, owner.Values, i) ?;
+        WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, value.Type) ?;
+        if (value.ID != i or type.Kind == ObjectKind::Void or not ObjectSame(ref const source, value.LayoutIdentity,
+        type.LayoutIdentity)) { return Result::Error(ObjectError::ValueType); }
+        if (value.Class != ObjectValueClass::Location and((value.Class == ObjectValueClass::Aggregate) != ObjectAggregate(type.Kind))) {
+            return Result::Error(ObjectError::ValueType);
+        }
+        valueTypes[i] = value.Type;
+        classes[i] = value.Class;
+    }
+    bool[512] parameters =[false ...];
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter parameter = ObjectAt<WireObjectParameter>(ref const source, owner.Params,
+        i) ?;
+        if (parameter.Index != i or parameter.Value < 0 or parameter.Value >= owner.Values.count) {
+            return Result::Error(ObjectError::ValueType);
+        }
+        if (parameter.Type != valueTypes[parameter.Value] or(classes[parameter.Value] == ObjectValueClass::Location and not authority.enabled) or parameters[parameter.Value]) {
+            return Result::Error(ObjectError::ValueType);
+        }
+        parameters[parameter.Value] = true;
+        definitions[parameter.Value] += 1;
+    }
+    int[64] slotTypes =[- 1 ...];
+    bool[64] slotReadonly =[false ...];
+    for (i in 0 .. owner.Slots.count) {
+        WireObjectSlot slot = ObjectAt<WireObjectSlot>(ref const source, owner.Slots, i) ?;
+        WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, slot.Type) ?;
+        if (slot.ID != i or type.Kind == ObjectKind::Void or slot.ParamValue != - 1 or not ObjectSame(ref const source,
+        slot.LayoutIdentity, type.LayoutIdentity)) {
+            return Result::Error(ObjectError::ValueType);
+        }
+        slotTypes[i] = slot.Type;
+        slotReadonly[i] = slot.Readonly;
+    }
+    int instructionCount = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks, bi) ?;
+        if (block.ID != bi) { return Result::Error(ObjectError::ControlFlow); }
+        bool[512] known = parameters;
+        int[512] roots = authority.roots;
+        bool[512] writable = authority.writable;
+        if (authority.enabled) {
+            for (v in 0 .. owner.Values.count) {
+                int defined = authority.definitionBlocks[v];
+                if (authority.valid[v] and defined >= 0 and defined != bi and authority.dominators[bi].items[defined]) {
+                    known[v] = true;
+                }
+            }
+        }
+        int[512] guards =[0 ...];
+        BridgeReader instructions = BridgeReader{source.data, block.Instructions.offset};
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction in = ReadObject<WireObjectInstruction>(ref instructions) ?;
+            instructionCount += 1;
+            if (instructionCount > 1024 or in.Args.count > 256) {
+                return Result::Error(ObjectError::Capacity);
+            }
+            if (in.Source.Line <= 0 or in.Source.Column <= 0 or in.LIRBlock != bi or in.LIRInstruction < 0) {
+                return Result::Error(ObjectError::Provenance);
+            }
+            WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, in.Type) ?;
+            int[256] args =[- 1 ...];
+            for (ai in 0 .. in.Args.count) {
+                WireObjectValueUse use = ObjectAt<WireObjectValueUse>(ref const source, in.Args, ai) ?;
+                if (use.Value < 0 or use.Value >= owner.Values.count) {
+                    return Result::Error(ObjectError::ValueType);
+                }
+                if (not known[use.Value]) { return Result::Error(ObjectError::ValueType); }
+                args[ai] = use.Value;
+            }
+            bool referenceCopy = authority.enabled and in.Op == ObjectOpcode::CopyValue and in.Result >= 0 and in.Result < owner.Values.count and classes[in.Result] == ObjectValueClass::Location;
+            bool aggregateCopy = not referenceCopy and ObjectAggregate(type.Kind) and(in.Op == ObjectOpcode::CopyValue or in.Op == ObjectOpcode::ReplaceMember or in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::LoadSlot or in.Op == ObjectOpcode::StoreSlot or in.Op == ObjectOpcode::Load or in.Op == ObjectOpcode::Store);
+            if (aggregateCopy !=(in.Copy == ObjectCopyKind::CheckedValue)) {
+                return Result::Error(ObjectError::CopyEligibility);
+            }
+            if (in.Op != ObjectOpcode::Call and in.Calls.count != 0) {
+                return Result::Error(ObjectError::CallSignature);
+            }
+            bool produces = in.Op != ObjectOpcode::InitializeSlot and in.Op != ObjectOpcode::StoreSlot and in.Op != ObjectOpcode::Store and in.Op != ObjectOpcode::CheckIndex;
+            if (in.Op == ObjectOpcode::Call and type.Kind == ObjectKind::Void) {
+                produces = false;
+            }
+            if (produces) {
+                if (in.Result < 0 or in.Result >= owner.Values.count) {
+                    return Result::Error(ObjectError::ValueType);
+                }
+                if (valueTypes[in.Result] != in.Type or known[in.Result]) {
+                    return Result::Error(ObjectError::ValueType);
+                }
+                bool location = in.Op == ObjectOpcode::SlotAddress or in.Op == ObjectOpcode::FieldAddress or in.Op == ObjectOpcode::IndexAddress or referenceCopy;
+                if (location !=(classes[in.Result] == ObjectValueClass::Location)) {
+                    return Result::Error(ObjectError::Provenance);
+                }
+                definitions[in.Result] += 1;
+            } else if (in.Result != - 1) { return Result::Error(ObjectError::ValueType); }
+            bool operandsAreValues = true;
+            for (ai in 0 .. in.Args.count) {
+                if (classes[args[ai]] == ObjectValueClass::Location) {
+                    operandsAreValues = false;
+                }
+            }
+            match (in.Op) {
+                ObjectOpcode::Const => {
+                    if (in.Args.count != 0 or ObjectAggregate(type.Kind) or type.Kind == ObjectKind::Void) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    ScalarRepresentation scalar = ObjectScalar(type.Kind);
+                    if (ScalarFloating(scalar)) {
+                        if (not ScalarFloatBits(ref const source, in.Literal, scalar)) {
+                            return Result::Error(ObjectError::Operation);
+                        }
+                    }
+                    else if (not ScalarIntegerBits(ref const source, in.Literal, scalar)) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                }
+                ObjectOpcode::MakeAggregate => {
+                    if (type.Kind != ObjectKind::Aggregate or in.Args.count != type.Fields.count or not operandsAreValues) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    for (ai in 0 .. in.Args.count) {
+                        WireObjectField field = ObjectAt<WireObjectField>(ref const source, type.Fields,
+                        ai) ?;
+                        if (valueTypes[args[ai]] != field.Type) {
+                            return Result::Error(ObjectError::ValueType);
+                        }
+                    }
+                }
+                ObjectOpcode::MakeArray => {
+                    if (type.Kind != ObjectKind::Array or in.Args.count != type.Extent or not operandsAreValues) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    for (ai in 0 .. in.Args.count) {
+                        if (valueTypes[args[ai]] != type.Element) {
+                            return Result::Error(ObjectError::ValueType);
+                        }
+                    }
+                }
+                ObjectOpcode::CopyValue => {
+                    if (referenceCopy) {
+                        if (in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type or(authority.writable[in.Result] and not writable[args[0]])) {
+                            return Result::Error(ObjectError::ImmutableAccess);
+                        }
+                        roots[in.Result] = roots[args[0]];
+                        writable[in.Result] = authority.writable[in.Result];
+                    } else if (not ObjectAggregate(type.Kind) or in.Args.count != 1 or not operandsAreValues or valueTypes[args[0]] != in.Type) {
+                        return Result::Error(ObjectError::CopyEligibility);
+                    }
+                }
+                ObjectOpcode::ReplaceMember => {
+                    if (type.Kind != ObjectKind::Aggregate or in.Args.count != 2 or not operandsAreValues or valueTypes[args[0]] != in.Type) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    WireObjectField field = ObjectAt<WireObjectField>(ref const source, type.Fields,
+                    in.Member) ?;
+                    if (valueTypes[args[1]] != field.Type) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                }
+                ObjectOpcode::InitializeSlot => {
+                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 1 or not operandsAreValues or type.Kind == ObjectKind::Void) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    if (slotTypes[in.Slot] != in.Type or valueTypes[args[0]] != in.Type) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                }
+                ObjectOpcode::LoadSlot => {
+                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 0) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    if (slotTypes[in.Slot] != in.Type) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                }
+                ObjectOpcode::StoreSlot => {
+                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 1 or not operandsAreValues) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                    if (slotTypes[in.Slot] != in.Type or valueTypes[args[0]] != in.Type) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                }
+                ObjectOpcode::SlotAddress => {
+                    if (in.Slot < 0 or in.Slot >= owner.Slots.count or in.Args.count != 0 or(type.Kind != ObjectKind::Aggregate and not authority.enabled) or type.Kind == ObjectKind::Void) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                    if (slotTypes[in.Slot] != in.Type) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                    roots[in.Result] = in.Slot;
+                    writable[in.Result] = not slotReadonly[in.Slot];
+                }
+                ObjectOpcode::FieldAddress => {
+                    if (in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.ParentType) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                    WireObjectType parent = ObjectAt<WireObjectType>(ref const source, document.Types,
+                    in.ParentType) ?;
+                    WireObjectField field = ObjectAt<WireObjectField>(ref const source, parent.Fields,
+                    in.Member) ?;
+                    if (parent.Kind != ObjectKind::Aggregate or field.Type != in.Type or field.Offset != in.Offset) {
+                        return Result::Error(ObjectError::FieldGeometry);
+                    }
+                    roots[in.Result] = roots[args[0]];
+                    writable[in.Result] = writable[args[0]] and not parent.Immutable and not field.Readonly;
+                }
+                ObjectOpcode::Load => {
+                    if (in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                }
+                ObjectOpcode::Store => {
+                    if (in.Args.count != 2 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type or valueTypes[args[1]] != in.Type or classes[args[1]] == ObjectValueClass::Location) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                    if (not writable[args[0]]) {
+                        return Result::Error(ObjectError::ImmutableAccess);
+                    }
+                }
+                ObjectOpcode::CheckIndex => {
+                    if (in.Args.count != 1 or not operandsAreValues or in.Extent <= 0 or in.Extent > 256 or type.Kind != ObjectKind::Void) {
+                        return Result::Error(ObjectError::ArrayGeometry);
+                    }
+                    WireObjectType index = ObjectAt<WireObjectType>(ref const source, document.Types,
+                    valueTypes[args[0]]) ?;
+                    if (not ScalarInteger(ObjectScalar(index.Kind))) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                    guards[args[0]] = in.Extent;
+                }
+                ObjectOpcode::IndexAddress => {
+                    if (in.Args.count != 2 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or classes[args[1]] == ObjectValueClass::Location) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                    WireObjectType array = ObjectAt<WireObjectType>(ref const source, document.Types,
+                    valueTypes[args[0]]) ?;
+                    if (array.Kind != ObjectKind::Array or array.Element != in.Type or array.Extent != in.Extent or array.Stride != in.Stride or in.Offset != 0 or guards[args[1]] != in.Extent) {
+                        return Result::Error(ObjectError::ArrayGeometry);
+                    }
+                    roots[in.Result] = roots[args[0]];
+                    writable[in.Result] = writable[args[0]];
+                }
+                ObjectOpcode::Call => {
+                    ValidateObjectCallContract(ref const source, document, owner, in, authority.enabled) ?;
+                }
+                ObjectOpcode::FloatNeg => {
+                    if (in.Args.count != 1 or not operandsAreValues or valueTypes[args[0]] != in.Type or not ScalarFloating(ObjectScalar(type.Kind))) {
+                        return Result::Error(ObjectError::Operation);
+                    }
+                }
+                ObjectOpcode::FloatAdd => {
+                    ValidateObjectBinary(ref const source, document, owner, in, true, false) ?;
+                }
+                ObjectOpcode::FloatSub => {
+                    ValidateObjectBinary(ref const source, document, owner, in, true, false) ?;
+                }
+                ObjectOpcode::FloatMul => {
+                    ValidateObjectBinary(ref const source, document, owner, in, true, false) ?;
+                }
+                ObjectOpcode::FloatDiv => {
+                    ValidateObjectBinary(ref const source, document, owner, in, true, false) ?;
+                }
+                ObjectOpcode::CheckedAdd => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::CheckedSub => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::CheckedMul => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::Add => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::Sub => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::Mul => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
+                }
+                ObjectOpcode::Equal => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+                ObjectOpcode::NotEqual => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+                ObjectOpcode::Less => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+                ObjectOpcode::LessEqual => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+                ObjectOpcode::Greater => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+                ObjectOpcode::GreaterEqual => {
+                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                }
+            }
+            if (produces) {
+                if (authority.enabled and classes[in.Result] == ObjectValueClass::Location) {
+                    if (not authority.valid[in.Result] or roots[in.Result] != authority.roots[in.Result] or writable[in.Result] != authority.writable[in.Result]) {
+                        return Result::Error(ObjectError::Provenance);
+                    }
+                }
+                known[in.Result] = true;
+            }
+        }
+        match (block.Term.Op) {
+            ObjectTerminator::Return => {
+                if (resultType.Kind == ObjectKind::Void) {
+                    if (block.Term.Value != - 1) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                } else {
+                    int value = block.Term.Value;
+                    if (value < 0 or value >= owner.Values.count) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                    if (not known[value] or valueTypes[value] != owner.ResultType or classes[value] == ObjectValueClass::Location) {
+                        return Result::Error(ObjectError::ValueType);
+                    }
+                }
+            }
+            ObjectTerminator::Jump => {
+                if (block.Term.True < 0 or block.Term.True >= owner.Blocks.count) {
+                    return Result::Error(ObjectError::ControlFlow);
+                }
+            }
+            ObjectTerminator::Branch => {
+                int value = block.Term.Value;
+                if (value < 0 or value >= owner.Values.count) {
+                    return Result::Error(ObjectError::ControlFlow);
+                }
+                if (not known[value] or classes[value] != ObjectValueClass::Scalar) {
+                    return Result::Error(ObjectError::ControlFlow);
+                }
+                WireObjectType condition = ObjectAt<WireObjectType>(ref const source, document.Types,
+                valueTypes[value]) ?;
+                if (condition.Kind != ObjectKind::Bool or block.Term.True < 0 or block.Term.True >= owner.Blocks.count or block.Term.False < 0 or block.Term.False >= owner.Blocks.count) {
+                    return Result::Error(ObjectError::ControlFlow);
+                }
+            }
+        }
+    }
+    for (i in 0 .. owner.Values.count) {
+        if (definitions[i] != 1) { return Result::Error(ObjectError::ValueType); }
+    }
+    return ValidateObjectLifetimes(ref const source, document, owner);
+}
+Result<void, ObjectError> ValidateObjectBinary(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner, WireObjectInstruction in, bool floating, bool comparison) {
+    if (in.Args.count != 2) { return Result::Error(ObjectError::Operation); }
+    WireObjectValueUse a = ObjectAt<WireObjectValueUse>(ref const source, in.Args, 0) ?;
+    WireObjectValueUse b = ObjectAt<WireObjectValueUse>(ref const source, in.Args, 1) ?;
+    WireObjectValue left = ObjectAt<WireObjectValue>(ref const source, owner.Values, a.Value) ?;
+    WireObjectValue right = ObjectAt<WireObjectValue>(ref const source, owner.Values, b.Value) ?;
+    WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, left.Type) ?;
+    WireObjectType result = ObjectAt<WireObjectType>(ref const source, document.Types, in.Type) ?;
+    if (left.Type != right.Type or left.Class != ObjectValueClass::Scalar or right.Class != ObjectValueClass::Scalar) {
+        return Result::Error(ObjectError::ValueType);
+    }
+    ScalarRepresentation scalar = ObjectScalar(type.Kind);
+    if (comparison) {
+        if (result.Kind != ObjectKind::Bool or(not ScalarInteger(scalar) and not ScalarFloating(scalar) and scalar != ScalarRepresentation::Bool)) {
+            return Result::Error(ObjectError::Operation);
+        }
+    }
+    else if (left.Type != in.Type or(floating and not ScalarFloating(scalar)) or(not floating and not ScalarInteger(scalar))) {
+        return Result::Error(ObjectError::Operation);
+    }
+    return Result::Ok();
+}
+// A bounded forward must analysis. Entry starts empty; reachable joins
+// intersect predecessor live sets. There are no Drop/move/reference states.
+struct ObjectLiveSet {
+    bool[64] slots;
+}
+Result<void, ObjectError> ValidateObjectLifetimes(ref const BridgeReader source, WireObjectModule document,
+WireObjectFunction owner) {
+    bool[128] reachable =[false ...];
+    reachable[0] = true;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (i in 0 .. owner.Blocks.count) {
+            if (reachable[i]) {
+                WireObjectBlock block = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks, i) ?;
+                if (block.Term.Op != ObjectTerminator::Return) {
+                    if (not reachable[block.Term.True]) {
+                        reachable[block.Term.True] = true;
+                        changed = true;
+                    }
+                }
+                if (block.Term.Op == ObjectTerminator::Branch) {
+                    if (not reachable[block.Term.False]) {
+                        reachable[block.Term.False] = true;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    ObjectLiveSet[128] exits =[ObjectLiveSet{[true ...]}
+    ...];
+    changed = true;
+    while (changed) {
+        changed = false;
+        for (i in 0 .. owner.Blocks.count) {
+            if (reachable[i]) {
+                bool[64] live =[true ...];
+                if (i == 0) {
+                    live =[false ...];
+                }
+                else {
+                    for (p in 0 .. owner.Blocks.count) {
+                        if (reachable[p]) {
+                            WireObjectBlock prior = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks,
+                            p) ?;
+                            bool predecessor =(prior.Term.Op != ObjectTerminator::Return and prior.Term.True == i) or(prior.Term.Op == ObjectTerminator::Branch and prior.Term.False == i);
+                            if (predecessor) {
+                                for (s in 0 .. owner.Slots.count) {
+                                    live[s] = live[s] and exits[p].slots[s];
+                                }
+                            }
+                        }
+                    }
+                }
+                WireObjectBlock block = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks, i) ?;
+                BridgeReader instructions = BridgeReader {
+                    source.data, block.Instructions.offset
+                };
+                for (ii in 0 .. block.Instructions.count) {
+                    WireObjectInstruction in = ReadObject<WireObjectInstruction>(ref instructions) ?;
+                    if (in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::StoreSlot) {
+                        live[in.Slot] = true;
+                    }
+                }
+                for (s in 0 .. owner.Slots.count) {
+                    if (live[s] != exits[i].slots[s]) {
+                        exits[i].slots[s] = live[s];
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    for (i in 0 .. owner.Blocks.count) {
+        bool[64] live =[false ...];
+        if (i != 0 and reachable[i]) {
+            live =[true ...];
+            for (p in 0 .. owner.Blocks.count) {
+                if (reachable[p]) {
+                    WireObjectBlock prior = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks,
+                    p) ?;
+                    bool predecessor =(prior.Term.Op != ObjectTerminator::Return and prior.Term.True == i) or(prior.Term.Op == ObjectTerminator::Branch and prior.Term.False == i);
+                    if (predecessor) {
+                        for (s in 0 .. owner.Slots.count) {
+                            live[s] = live[s] and exits[p].slots[s];
+                        }
+                    }
+                }
+            }
+        }
+        WireObjectBlock block = ObjectAt<WireObjectBlock>(ref const source, owner.Blocks, i) ?;
+        BridgeReader instructions = BridgeReader{source.data, block.Instructions.offset};
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction in = ReadObject<WireObjectInstruction>(ref instructions) ?;
+            if (in.Op == ObjectOpcode::SlotAddress or in.Op == ObjectOpcode::LoadSlot) {
+                if (not live[in.Slot]) { return Result::Error(ObjectError::StorageState); }
+            }
+            if (in.Op == ObjectOpcode::StoreSlot) {
+                WireObjectType type = ObjectAt<WireObjectType>(ref const source, document.Types, in.Type) ?;
+                WireObjectSlot slot = ObjectAt<WireObjectSlot>(ref const source, owner.Slots, in.Slot) ?;
+                if (slot.Readonly and live[in.Slot]) {
+                    return Result::Error(ObjectError::ImmutableAccess);
+                }
+                if (ObjectAggregate(type.Kind) and not live[in.Slot]) {
+                    return Result::Error(ObjectError::StorageState);
+                }
+                live[in.Slot] = true;
+            }
+            if (in.Op == ObjectOpcode::InitializeSlot) {
+                live[in.Slot] = true;
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, ObjectError> ValidateObjectMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadObjectBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(ObjectTransportError(error)); }
+    }
+    WireObjectModule document = ReadObject<WireObjectModule>(ref reader) ?;
+    if (reader.offset != Len(artifact)) { return Result::Error(ObjectError::Malformed); }
+    if (document.Types.count <= 0 or document.Types.count > 256 or document.Functions.count <= 0 or document.Functions.count > 128 or document.Dependencies.count > 128) {
+        return Result::Error(ObjectError::Capacity);
+    }
+    for (i in 0 .. document.Dependencies.count) {
+        WireObjectDependency dependency = ObjectAt<WireObjectDependency>(ref const reader, document.Dependencies,
+        i) ?;
+        if (dependency.Identity.length == 0 or not ObjectDigest(ref const reader, dependency.Digest)) {
+            return Result::Error(ObjectError::TypeIdentity);
+        }
+        for (j in 0 .. i) {
+            WireObjectDependency prior = ObjectAt<WireObjectDependency>(ref const reader, document.Dependencies,
+            j) ?;
+            if (ObjectSame(ref const reader, dependency.Identity, prior.Identity)) {
+                return Result::Error(ObjectError::TypeIdentity);
+            }
+        }
+    }
+    ValidateObjectTypes(ref const reader, document) ?;
+    for (i in 0 .. document.Functions.count) {
+        WireObjectFunction function = ObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+        i) ?;
+        for (j in 0 .. i) {
+            WireObjectFunction prior = ObjectAt<WireObjectFunction>(ref const reader, document.Functions,
+            j) ?;
+            if (ObjectSame(ref const reader, function.Identity, prior.Identity)) {
+                return Result::Error(ObjectError::CallSignature);
+            }
+        }
+        ValidateObjectFunction(ref const reader, document, function) ?;
+    }
+    return Result::Ok();
+}
+ObjectError ObjectTransportError(BackendError error) {
+    return match (error) {
+        BackendError::BridgeVersion => ObjectError::Version,
+        BackendError::BridgeSchemaMismatch => ObjectError::SchemaMismatch,
+        BackendError::BridgeInvalid => ObjectError::Malformed,
+        BackendError::CapacityExceeded => ObjectError::Capacity,
+        BackendError::UnsupportedInstruction => ObjectError::Malformed,
+        BackendError::RegisterExhausted => ObjectError::Malformed,
+        BackendError::BufferFull => ObjectError::Malformed,
+        BackendError::InvalidEncoding => ObjectError::Malformed,
+        BackendError::UnsupportedCallLowering => ObjectError::Malformed
+    };
+}
+Result<int, ObjectError> ValidatedObjectBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidateObjectMachineBridge(artifact) ?;
+    if (Len(output) < Len(artifact)) { return Result::Error(ObjectError::Capacity); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadObjectBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(ObjectTransportError(error)); }
+    }
+    int headerSize = reader.offset;
+    WireObjectModule document = ReadObject<WireObjectModule>(ref reader) ?;
+    for (i in 0 .. headerSize) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, headerSize};
+    match (WriteWire(ref const document, ref const reader, ref writer)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(ObjectTransportError(error)); }
+    }
+    return Result::Ok(writer.offset);
+}
+void ObjectContractFacts() {
+    Assert.Concept<PlainData>(WireObjectField, "self-contained checked field descriptor");
+    Assert.Concept<PlainData>(WireObjectValue, "typed value metadata, no object reference");
+    Assert.Concept<NoAllocation>(ValidateObjectMachineBridge, "bounded artifact views and fixed metadata; no native object allocation");
+    Assert.Concept<NoAllocation>(ValidatedObjectBridgeRoundTrip, "caller-provided output and bounded artifact views");
+    Assert.Concept<StaticExtent<64>>(ObjectSlotLiveness, "one-dimensional slot liveness bound");
+}
+using ObjectSlotLiveness = bool<array>[64];

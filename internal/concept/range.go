@@ -119,12 +119,13 @@ func evt1RangeCName(element Type) string {
 
 func evt1RangeCDeclarations() string {
 	var b strings.Builder
+	b.WriteString("#ifndef CONCEPT_BUILTIN_RANGE_TYPES_DEFINED\n#define CONCEPT_BUILTIN_RANGE_TYPES_DEFINED\n")
 	for _, name := range []string{"int", "uint", "uint8", "byte", "uint64", "usize", "isize"} {
 		element, _ := evt1BuiltinType(name, Span{})
 		cType := evt1CType(element)
 		fmt.Fprintf(&b, "typedef struct { %s start, end, step; bool descending; } %s;\n", cType, evt1RangeCName(element))
 	}
-	return b.String() + "\n"
+	return b.String() + "#endif\n\n"
 }
 
 func evt1ModuleUsesRange(l *lowering) bool {

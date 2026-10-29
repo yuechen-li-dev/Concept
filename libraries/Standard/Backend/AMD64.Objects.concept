@@ -1,0 +1,488 @@
+module Standard.Backend.AMD64.Objects;
+profile Core;
+import Standard.Backend.AMD64.Encoding;
+// Aggregate values are private typed frame objects, never scalar virtuals.
+// Scalar/location IDs alone enter the existing register allocator.
+struct ObjectPlacement {
+    int[512] registers;
+    int[512] values;
+    int[512] positions;
+    int[8] parameterCarriers;
+    int hiddenResult;
+    int[128] returnCarriers;
+    // Per-call argument temporaries are separate from source/value storage.
+    int[512] argumentTemps;
+    int argumentTempCount;
+}
+ObjectPlacement EmptyObjectPlacement() {
+    return ObjectPlacement {
+        [- 1 ...],[- 1 ...],[- 1 ...],[- 1 ...], - 1,[- 1 ...],[- 1 ...], 0
+    };
+}
+Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    if (Len(artifact) >= 8 and artifact[7] == 54) {
+        ReadBorrowBridgeIdentity(ref reader) ?;
+        WireBorrowModule document = ReadWire(ref reader, BridgeType<WireBorrowModule>{0}) ?;
+        return Result::Ok(document.Objects);
+    }
+    ReadObjectBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WireObjectModule>{0});
+}
+Result<WireBorrowModule, BackendError> NativeBorrowDocument(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    ReadBorrowBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WireBorrowModule>{0});
+}
+Result<WireObjectModule, NativeError> AdmittedObjectDocument(ReadOnlySpan<byte> artifact) {
+    return match (NativeObjectDocument(artifact)) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput)
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, BackendError> NativeObjectAt(ref const BridgeReader reader, BridgeSequence<T> sequence, int index) {
+    return match (ObjectAt<T>(ref const reader, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(BackendError::BridgeInvalid)
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, NativeError> AdmittedObjectAt(ref const BridgeReader reader, BridgeSequence<T> sequence, int index) {
+    return match (NativeObjectAt<T>(ref const reader, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(NativeError::InvalidInput)
+    };
+}
+Result<int, BackendError> AddObjectSlot(ref BackendFunction function, WireObjectType type, BridgeText name) {
+    return AddObjectSlotWithAlignment(ref function, type, name, type.Align);
+}
+// A native storage requirement may strengthen alignment without modifying the
+// checked semantic layout or pretending it has a different natural alignment.
+Result<int, BackendError> AddObjectSlotWithAlignment(ref BackendFunction function, WireObjectType type,
+BridgeText name, int storageAlignment) {
+    if (function.slotCount >= 64 or type.Size <= 0 or not FrameAlignmentValid(type.Align) or
+    not FrameAlignmentValid(storageAlignment) or storageAlignment < type.Align) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    int id = function.slotCount;
+    function.slots[id] = MachineSlot{id, type.Size, storageAlignment, false, - 1, name};
+    function.slotTypes[id] = ObjectScalar(type.Kind);
+    function.slotCount += 1;
+    match (AlignFrameBytes(function.frameLocalSize, storageAlignment)) {
+        Result::Ok(value) => {
+            function.frameLocalSize = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::CapacityExceeded); }
+    }
+    match (AddFrameBytes(function.frameLocalSize, type.Size)) {
+        Result::Ok(value) => {
+            function.frameLocalSize = value;
+        }
+        Result::Error(error) => { return Result::Error(BackendError::CapacityExceeded); }
+    }
+    return Result::Ok(id);
+}
+Result<ScalarOpcode, BackendError> ObjectScalarOperation(ObjectOpcode op, ScalarRepresentation type) {
+    if (ScalarFloating(type)) {
+        if (op == ObjectOpcode::Const) { return Result::Ok(ScalarOpcode::FloatConst); }
+        if (op == ObjectOpcode::Equal) { return Result::Ok(ScalarOpcode::FloatEqual); }
+        if (op == ObjectOpcode::NotEqual) { return Result::Ok(ScalarOpcode::FloatNotEqual); }
+        if (op == ObjectOpcode::Less) { return Result::Ok(ScalarOpcode::FloatLess); }
+        if (op == ObjectOpcode::LessEqual) {
+            return Result::Ok(ScalarOpcode::FloatLessEqual);
+        }
+        if (op == ObjectOpcode::Greater) { return Result::Ok(ScalarOpcode::FloatGreater); }
+        if (op == ObjectOpcode::GreaterEqual) {
+            return Result::Ok(ScalarOpcode::FloatGreaterEqual);
+        }
+    }
+    return match (op) {
+        ObjectOpcode::Const => Result::Ok(ScalarOpcode::Const),
+        ObjectOpcode::InitializeSlot => Result::Ok(ScalarOpcode::StoreSlot),
+        ObjectOpcode::LoadSlot => Result::Ok(ScalarOpcode::LoadSlot),
+        ObjectOpcode::StoreSlot => Result::Ok(ScalarOpcode::StoreSlot),
+        ObjectOpcode::CheckIndex => Result::Ok(ScalarOpcode::CheckIndex),
+        ObjectOpcode::CheckedAdd => Result::Ok(ScalarOpcode::CheckedAdd),
+        ObjectOpcode::CheckedSub => Result::Ok(ScalarOpcode::CheckedSub),
+        ObjectOpcode::CheckedMul => Result::Ok(ScalarOpcode::CheckedMul),
+        ObjectOpcode::Add => Result::Ok(ScalarOpcode::Add), ObjectOpcode::Sub => Result::Ok(ScalarOpcode::Sub),
+        ObjectOpcode::Mul => Result::Ok(ScalarOpcode::Mul),
+        ObjectOpcode::FloatAdd => Result::Ok(ScalarOpcode::FloatAdd), ObjectOpcode::FloatSub => Result::Ok(ScalarOpcode::FloatSub),
+        ObjectOpcode::FloatMul => Result::Ok(ScalarOpcode::FloatMul), ObjectOpcode::FloatDiv => Result::Ok(ScalarOpcode::FloatDiv),
+        ObjectOpcode::FloatNeg => Result::Ok(ScalarOpcode::FloatNeg),
+        ObjectOpcode::Equal => Result::Ok(ScalarOpcode::Equal), ObjectOpcode::NotEqual => Result::Ok(ScalarOpcode::NotEqual),
+        ObjectOpcode::Less => Result::Ok(ScalarOpcode::Less), ObjectOpcode::LessEqual => Result::Ok(ScalarOpcode::LessEqual),
+        ObjectOpcode::Greater => Result::Ok(ScalarOpcode::Greater), ObjectOpcode::GreaterEqual => Result::Ok(ScalarOpcode::GreaterEqual),
+        ObjectOpcode::Call => Result::Ok(ScalarOpcode::Call),
+        ObjectOpcode::MakeAggregate => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::MakeArray => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::CopyValue => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::ReplaceMember => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::SlotAddress => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::FieldAddress => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::Load => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::Store => Result::Error(BackendError::UnsupportedInstruction),
+        ObjectOpcode::IndexAddress => Result::Error(BackendError::UnsupportedInstruction)
+    };
+}
+Result<void, BackendError> ProjectObjectFunction(ref const BridgeReader reader, WireObjectModule document,
+WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement placement) {
+    return ProjectObjectFunctionABI(ref const reader, document, owner, ref function, ref placement, false);
+}
+Result<AggregateABIType, BackendError> ProjectObjectABIType(ref const BridgeReader reader,
+WireObjectModule document, int type, ObjectValueClass category, bool result) {
+    return match (ClassifyWin64Object(ref const reader, document, type, category, result)) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(BackendError::UnsupportedCallLowering)
+    };
+}
+Result<int, BackendError> AddObjectCarrier(ref BackendFunction function, ScalarRepresentation type) {
+    if (function.virtualRegCount >= 128) {
+        return Result::Error(BackendError::CapacityExceeded);
+    }
+    int id = function.virtualRegCount;
+    function.virtualRegCount += 1;
+    function.scalarTypes[id] = type;
+    function.virtualRegs[id] = MachineVReg {
+        id, ScalarWidth(type), type == ScalarRepresentation::Address
+    };
+    return Result::Ok(id);
+}
+Result<void, BackendError> DefineObjectCarrier(ref BackendFunction function, int id) {
+    MachineInstruction def = EmptyInstruction();
+    def = def with {
+        destination = ScalarVirtualOperand(id, ref const function);
+    };
+    return AppendScalarInstruction(ref function, def, ScalarOpcode::Const);
+}
+Result<void, BackendError> ProjectObjectFunctionABI(ref const BridgeReader reader, WireObjectModule document,
+WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement placement, bool aggregateABI) {
+    function = EmptyFunction();
+    placement = EmptyObjectPlacement();
+    function.scalar = true;
+    function.identity = owner.Identity;
+    function.name = owner.Name;
+    WireObjectType result = NativeObjectAt<WireObjectType>(ref const reader, document.Types, owner.ResultType) ?;
+    if ((ObjectAggregate(result.Kind) and not aggregateABI) or owner.Params.count > 8) {
+        return Result::Error(BackendError::UnsupportedCallLowering);
+    }
+    function.scalarResult = ObjectScalar(result.Kind);
+    AggregateABIType returnedType = EmptyAggregateABIType();
+    if (aggregateABI) {
+        returnedType = ProjectObjectABIType(ref const reader, document, owner.ResultType,
+        ObjectValueClass::Aggregate, true) ?;
+        function.scalarResult = returnedType.carrier;
+    }
+    for (i in 0 .. owner.Slots.count) {
+        WireObjectSlot slot = NativeObjectAt<WireObjectSlot>(ref const reader, owner.Slots, i) ?;
+        WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, slot.Type) ?;
+        AddObjectSlot(ref function, type, slot.Name) ?;
+    }
+    for (i in 0 .. owner.Values.count) {
+        WireObjectValue value = NativeObjectAt<WireObjectValue>(ref const reader, owner.Values, i) ?;
+        WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, value.Type) ?;
+        if (value.Class == ObjectValueClass::Aggregate) {
+            placement.values[i] = AddObjectSlot(ref function, type, type.Name) ?;
+        } else {
+            if (function.virtualRegCount >= 128) {
+                return Result::Error(BackendError::CapacityExceeded);
+            }
+            int id = function.virtualRegCount;
+            function.virtualRegCount += 1;
+            placement.registers[i] = id;
+            ScalarRepresentation scalar = ObjectScalar(type.Kind);
+            if (value.Class == ObjectValueClass::Location) {
+                scalar = ScalarRepresentation::Address;
+            }
+            function.scalarTypes[id] = scalar;
+            function.virtualRegs[id] = MachineVReg {
+                id, ScalarWidth(scalar), value.Class == ObjectValueClass::Location
+            };
+        }
+    }
+    int shift = 0;
+    if (aggregateABI and returnedType.category == AggregateABIClass::HiddenReturn) {
+        shift = 1;
+        placement.hiddenResult = AddObjectCarrier(ref function, ScalarRepresentation::Address) ?;
+        function.args[0] = MachineArg {
+            BridgeText{0, 0}, 0, 8, true, Register::RCX, 0, false, placement.hiddenResult
+        };
+        DefineObjectCarrier(ref function, placement.hiddenResult) ?;
+    }
+    function.argCount = owner.Params.count + shift;
+    if (function.argCount > 8) { return Result::Error(BackendError::CapacityExceeded); }
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter param = NativeObjectAt<WireObjectParameter>(ref const reader, owner.Params,
+        i) ?;
+        int id = placement.registers[param.Value];
+        if (aggregateABI and id < 0) {
+            AggregateABIType argument = ProjectObjectABIType(ref const reader, document, param.Type,
+            ObjectValueClass::Aggregate, false) ?;
+            id = AddObjectCarrier(ref function, argument.carrier) ?;
+        }
+        if (id < 0) { return Result::Error(BackendError::UnsupportedCallLowering); }
+        placement.parameterCarriers[i] = id;
+        function.args[i + shift] = MachineArg {
+            BridgeText{0, 0}, i + shift, ScalarWidth(function.scalarTypes[id]), false, Register::RAX,
+            0, i + shift >= 4,
+            id
+        };
+        MachineInstruction def = EmptyInstruction();
+        def = def with {
+            destination = ScalarVirtualOperand(id, ref const function);
+        };
+        AppendScalarInstruction(ref function, def, ScalarOpcode::Const) ?;
+    }
+    function.blockCount = owner.Blocks.count;
+    int cursor = 0;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = NativeObjectAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        int begin = function.instructionCount;
+        if (bi == 0) {
+            begin = 0;
+        }
+        for (ii in 0 .. block.Instructions.count) {
+            if (cursor >= 512) { return Result::Error(BackendError::CapacityExceeded); }
+            WireObjectInstruction input = NativeObjectAt<WireObjectInstruction>(ref const reader, block.Instructions,
+            ii) ?;
+            // Every scalar operand contributes to shared liveness, including
+            // all fields of a construction, without fake aggregate registers.
+            if (input.Op != ObjectOpcode::Call) {
+                for (ai in 0 .. input.Args.count) {
+                    WireObjectValueUse arg = NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args,
+                    ai) ?;
+                    int id = placement.registers[arg.Value];
+                    if (id >= 0) {
+                        MachineInstruction use = EmptyInstruction();
+                        use = use with {
+                            source0 = ScalarVirtualOperand(id, ref const function);
+                            sourceCount = 1;
+                        };
+                        AppendScalarInstruction(ref function, use, ScalarOpcode::Load) ?;
+                    }
+                }
+            }
+            placement.positions[cursor] = function.instructionCount;
+            cursor += 1;
+            MachineInstruction projected = EmptyInstruction();
+            projected = projected with {
+                lirBlock = bi;
+                lirInstruction = ii;
+                sourceLine = input.Source.Line;
+                sourceColumn = input.Source.Column;
+            };
+            if (input.Result >= 0 and placement.registers[input.Result] >= 0) {
+                projected = projected with {
+                    destination = ScalarVirtualOperand(placement.registers[input.Result], ref const function);
+                };
+            }
+            if (input.Op == ObjectOpcode::Call) {
+                function.hasCalls = true;
+                WireObjectCall call = NativeObjectAt<WireObjectCall>(ref const reader, input.Calls, 0) ?;
+                if (call.Arguments.count > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                ProjectedCall site = EmptyProjectedCall();
+                site.target = call.Target;
+                site.argumentCount = call.Arguments.count;
+                WireObjectType returned = NativeObjectAt<WireObjectType>(ref const reader, document.Types,
+                call.ResultType) ?;
+                site.result = LegacyScalarType(ObjectScalar(returned.Kind));
+                int callShift = 0;
+                if (aggregateABI) {
+                    AggregateABIType output = ProjectObjectABIType(ref const reader, document, call.ResultType,
+                    ObjectValueClass::Aggregate, true) ?;
+                    site.result = LegacyScalarType(output.carrier);
+                    if (AggregateUsesStorage(output.category)) {
+                        int carrier = AddObjectCarrier(ref function, output.carrier) ?;
+                        projected = projected with {
+                            destination = ScalarVirtualOperand(carrier, ref const function);
+                        };
+                        if (output.category == AggregateABIClass::HiddenReturn) {
+                            callShift = 1;
+                            int pointer = AddObjectCarrier(ref function, ScalarRepresentation::Address) ?;
+                            DefineObjectCarrier(ref function, pointer) ?;
+                            site.values[0] = pointer;
+                            site.types[0] = CallValueType::U64;
+                        }
+                    }
+                }
+                site.argumentCount += callShift;
+                if (site.argumentCount > 8) {
+                    return Result::Error(BackendError::CapacityExceeded);
+                }
+                for (ai in 0 .. call.Arguments.count) {
+                    WireObjectCallArgument arg = NativeObjectAt<WireObjectCallArgument>(ref const reader,
+                    call.Arguments, ai) ?;
+                    int id = placement.registers[arg.Value];
+                    if (aggregateABI and id < 0) {
+                        AggregateABIType argument = ProjectObjectABIType(ref const reader, document,
+                        arg.Type,
+                        ObjectValueClass::Aggregate, false) ?;
+                        id = AddObjectCarrier(ref function, argument.carrier) ?;
+                        DefineObjectCarrier(ref function, id) ?;
+                        if (argument.category == AggregateABIClass::IndirectArgument) {
+                            if (placement.argumentTempCount >= 512) {
+                                return Result::Error(BackendError::CapacityExceeded);
+                            }
+                            WireObjectType temporary = NativeObjectAt<WireObjectType>(ref const reader,
+                            document.Types, arg.Type) ?;
+                            placement.argumentTemps[placement.argumentTempCount] = AddObjectSlotWithAlignment(ref function,
+                            temporary, temporary.Name, 16) ?;
+                            placement.argumentTempCount += 1;
+                        }
+                    }
+                    if (id < 0) {
+                        return Result::Error(BackendError::UnsupportedCallLowering);
+                    }
+                    site.values[ai + callShift] = id;
+                    site.types[ai + callShift] = LegacyScalarType(function.scalarTypes[id]);
+                }
+                projected = projected with {
+                    op = Opcode::Call;
+                    call = site;
+                };
+                // Carrier definitions precede the actual call point.
+                placement.positions[cursor - 1] = function.instructionCount;
+            }
+            AppendScalarInstruction(ref function, projected, ScalarOpcode::Const) ?;
+        }
+        int returnCarrier = - 1;
+        if (aggregateABI and block.Term.Op == ObjectTerminator::Return and AggregateUsesStorage(returnedType.category)) {
+            returnCarrier = placement.hiddenResult;
+            if (returnedType.category == AggregateABIClass::DirectReturn) {
+                returnCarrier = AddObjectCarrier(ref function, returnedType.carrier) ?;
+                DefineObjectCarrier(ref function, returnCarrier) ?;
+            }
+            placement.returnCarriers[bi] = returnCarrier;
+        }
+        if (block.Term.Op == ObjectTerminator::Branch or(block.Term.Op == ObjectTerminator::Return and function.scalarResult != ScalarRepresentation::Void)) {
+            int usedCarrier = returnCarrier;
+            if (usedCarrier < 0) {
+                usedCarrier = placement.registers[block.Term.Value];
+            }
+            MachineInstruction use = EmptyInstruction();
+            use = use with {
+                source0 = ScalarVirtualOperand(usedCarrier, ref const function);
+                sourceCount = 1;
+            };
+            AppendScalarInstruction(ref function, use, ScalarOpcode::Load) ?;
+        }
+        Opcode terminal = match (block.Term.Op) {
+            ObjectTerminator::Return => Opcode::Ret, ObjectTerminator::Jump => Opcode::Jmp, ObjectTerminator::Branch => Opcode::Jcc
+        };
+        function.blocks[bi] = MachineBlock {
+            bi, bi, begin, function.instructionCount - begin, terminal, block.Term.True, block.Term.False,
+            Condition::None, - 1, block.Term.Source.Line, block.Term.Source.Column
+        };
+    }
+    return Result::Ok();
+}
+Result<void, BackendError> ObjectStackAddress(ref ByteWriter writer, Register target, int offset) {
+    if (offset < 0 or offset >= 4096) { return Result::Error(BackendError::InvalidEncoding); }
+    return WriteAddressReg(ref writer, 141, target, 4, - 1, 0, offset, 8);
+}
+// Copy meaningful scalar fields only. Padding is neither read nor written.
+// Private value snapshots and source slots are disjoint; self-copy is a no-op.
+Result<void, BackendError> CopyObjectFields(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, int typeID, int offset, int depth) {
+    if (depth > 16 or offset < 0 or offset > 1048576) {
+        return Result::Error(BackendError::InvalidEncoding);
+    }
+    WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, typeID) ?;
+    if (type.Copy != ObjectCopyKind::CheckedValue) {
+        return Result::Error(BackendError::BridgeInvalid);
+    }
+    if (type.Kind == ObjectKind::Aggregate) {
+        for (i in 0 .. type.Fields.count) {
+            WireObjectField field = NativeObjectAt<WireObjectField>(ref const reader, type.Fields, i) ?;
+            if (field.Offset > 1048576 - offset) {
+                return Result::Error(BackendError::InvalidEncoding);
+            }
+            CopyObjectFields(ref writer, ref const reader, document, field.Type, offset + field.Offset,
+            depth + 1) ?;
+        }
+    } else if (type.Kind == ObjectKind::Array) {
+        for (i in 0 .. type.Extent) {
+            CopyObjectFields(ref writer, ref const reader, document, type.Element, offset + i * type.Stride,
+            depth + 1) ?;
+        }
+    } else {
+        int load = 139;
+        int store = 137;
+        if (type.Size == 1) {
+            load = 138;
+            store = 136;
+        }
+        WriteAddressReg(ref writer, load, Register::R10, RegisterEncoding(Register::RAX), - 1, 0, offset,
+        type.Size) ?;
+        WriteAddressReg(ref writer, store, Register::R10, RegisterEncoding(Register::RDX), - 1, 0, offset,
+        type.Size) ?;
+    }
+    return Result::Ok();
+}
+void ObjectStorageFacts() {
+    Assert.Concept<PlainData>(FrameSlot, "checked native object placement descriptor");
+    Assert.Concept<NoAllocation>(ProjectObjectFunction, "bounded shared allocator/frame input");
+    Assert.Concept<NoAllocation>(CopyObjectFields, "bounded emitted scalar transfers, no runtime memcpy");
+}
+Result<void, BackendError> ExtendObjectInteger(ref ByteWriter writer, Register reg, ScalarRepresentation type) {
+    int width = ScalarWidth(type);
+    if (width == 8) { return Result::Ok(); }
+    if (width == 4 and not ScalarSigned(type)) {
+        return WriteRegReg(ref writer, 137, reg, reg, 4);
+    }
+    int code = RegisterEncoding(reg);
+    WriteRex(ref writer, true, code, code) ?;
+    if (width == 4) {
+        WriteByte(ref writer, 99) ?;
+    }
+    else {
+        WriteByte(ref writer, 15) ?;
+        int opcode = 182;
+        if (width == 2) {
+            opcode = 183;
+        }
+        if (ScalarSigned(type)) {
+            opcode += 8;
+        }
+        WriteByte(ref writer, opcode) ?;
+    }
+    return WriteByte(ref writer, 192 +(code % 8) * 8 + code % 8);
+}
+Result<void, BackendError> LoadObjectGPR(ref ByteWriter writer, Register target, int id, int width,
+ref const Allocation allocation, ref const FinalizedFrame frame) {
+    if (id < 0 or id >= 128) { return Result::Error(BackendError::InvalidEncoding); }
+    if (allocation.scalarLocations[id].gpr == Register::R10) {
+        return WriteRSPReg(ref writer, true, target, NativeScalarTemporary(ref const frame, 3) ?, width);
+    }
+    // RAX/RDX are saved using the scalar selector's canonical scratch slots.
+    return LoadScalarGPR(ref writer, target, id, width, ref const allocation, ref const frame);
+}
+// Destination RDX is a checked live object/field address. A source aggregate
+// is a private snapshot slot; a scalar is read through shared allocation.
+Result<void, BackendError> WriteObjectValue(ref ByteWriter writer, ref const BridgeReader reader,
+WireObjectModule document, WireObjectFunction owner, int valueID, ref const ObjectPlacement placement,
+ref const BackendFunction function, ref const Allocation allocation, ref const FinalizedFrame frame) {
+    WireObjectValue value = NativeObjectAt<WireObjectValue>(ref const reader, owner.Values, valueID) ?;
+    WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, value.Type) ?;
+    if (value.Class == ObjectValueClass::Aggregate) {
+        ObjectStackAddress(ref writer, Register::RAX, frame.slotOffsets[placement.values[valueID]]) ?;
+        return CopyObjectFields(ref writer, ref const reader, document, value.Type, 0, 0);
+    }
+    int id = placement.registers[valueID];
+    ScalarRepresentation scalar = ObjectScalar(type.Kind);
+    if (ScalarFloating(scalar)) {
+        WriteSelectedScalar(ref writer, ScalarOpcode::Load, scalar, ScalarRegisterOperand(XMMRegister::XMM5,
+        scalar), NativeScalarSource(id, scalar, ref const allocation, ref const frame, true) ?) ?;
+        return WriteScalarAddressSSE(ref writer, true, scalar, XMMRegister::XMM5, Register::RDX);
+    }
+    LoadObjectGPR(ref writer, Register::R10, id, type.Size, ref const allocation, ref const frame) ?;
+    int opcode = 137;
+    if (type.Size == 1) {
+        opcode = 136;
+    }
+    return WriteAddressReg(ref writer, opcode, Register::R10, RegisterEncoding(Register::RDX), - 1, 0,
+    0, type.Size);
+}

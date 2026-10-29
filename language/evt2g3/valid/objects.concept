@@ -1,0 +1,288 @@
+module EVT2g3.Objects;
+profile Core;
+
+struct Position {
+    double x;
+    double y;
+}
+struct Particle {
+    Position position;
+    double mass;
+}
+struct Samples {
+    double<array>[4] values;
+}
+struct Padded {
+    bool enabled;
+    double value;
+    int tail;
+}
+record struct Pair {
+    double x;
+    double y;
+}
+record struct Group {
+    Pair position;
+    double mass;
+}
+record struct RecordSamples {
+    double<array>[4] values;
+}
+struct PositionSet {
+    Position<array>[3] positions;
+}
+struct Flag {
+    bool value;
+}
+struct Short {
+    uint16 value;
+}
+struct UnsignedShort {
+    uint16 value;
+}
+struct BytePair {
+    uint8 first;
+    uint8 last;
+}
+struct WordPair {
+    uint16 first;
+    uint16 last;
+}
+struct Wide {
+    isize value;
+}
+struct UnsignedWide {
+    uint64 value;
+}
+struct Triple {
+    int first;
+    int second;
+    int third;
+}
+struct TripleSet {
+    Triple<array>[2] values;
+}
+struct MixedFields {
+    int code;
+    bool enabled;
+    float weight;
+    double mass;
+}
+struct Count4 {
+    int value;
+}
+struct Unsigned4 {
+    uint value;
+}
+record struct OrderPair {
+    int x;
+    int y;
+}
+
+double Simple(double x) {
+    Position p = Position{x, 2.0};
+    p.y = 7.0;
+    return p.x + p.y;
+}
+double Nested(double x) {
+    Particle p = Particle {
+        Position{x, 2.0}, 3.0
+    };
+    p.position.y = 5.0;
+    p.mass = p.position.x + p.position.y;
+    return p.mass;
+}
+double Array(int index) {
+    Samples s = Samples{[1.0, 2.0, 3.0, 4.0]};
+    s.values[index] = 9.0;
+    return s.values[0] + s.values[index];
+}
+double Copy(double x) {
+    Particle a = Particle {
+        Position{x, 2.0}, 3.0
+    };
+    Particle b = a;
+    b.position.x = 12.0;
+    a = a;
+    return a.position.x + b.position.x + a.mass;
+}
+double Padding(bool enabled, double value, int tail) {
+    Padded p = Padded{enabled, value, tail};
+    Padded b = p;
+    b.value = 9.0;
+    if (p.enabled) {
+        if (p.tail == tail) { return p.value + b.value; }
+    }
+    return 0.0;
+}
+double With(double x) {
+    Pair a = Pair{x, 2.0};
+    Pair b = a with {
+        y = 5.0;
+        x = 9.0;
+    };
+    return a.x + a.y + b.x + b.y;
+}
+double NestedWith(double x) {
+    Group a = Group {
+        Pair{x, 2.0}, 3.0
+    };
+    Group b = a with {
+        position = a.position with {
+            y = 7.0;
+        };
+    };
+    return a.position.y + b.position.x + b.position.y + b.mass;
+}
+double ArrayWith(int index) {
+    RecordSamples a = RecordSamples{[1.0 ...]};
+    RecordSamples b = a with {
+        values =[2.0, 3.0, 4.0, 5.0];
+    };
+    return a.values[index] + b.values[index];
+}
+double Scale(double x) {
+    return x * 2.0;
+}
+double ScalarCall(double x) {
+    Particle p = Particle {
+        Position{x, 2.0}, 3.0
+    };
+    double result = Scale(x);
+    p.position.y = result;
+    return p.position.x + p.position.y + p.mass;
+}
+double Early(bool stop, double x) {
+    Position p = Position{x, 2.0};
+    if (stop) { return p.x; }
+    p.y = 8.0;
+    return p.x + p.y;
+}
+double NestedArray(int index, double x) {
+    PositionSet p = PositionSet {
+        [Position{x, 1.0}, Position{2.0, 3.0}, Position{4.0, 5.0}]
+    };
+    PositionSet b = p;
+    b.positions[index].y = 9.0;
+    return p.positions[index].y + b.positions[index].y;
+}
+bool Copy1(bool value) {
+    Flag a = Flag{value};
+    Flag b = a;
+    b.value = false;
+    if (a.value) { return b.value; }
+    return true;
+}
+uint16 Copy2(uint16 value) {
+    Short a = Short{value};
+    Short b = a;
+    return b.value;
+}
+uint16 CopyUnsigned2(uint16 value) {
+    UnsignedShort a = UnsignedShort{value};
+    UnsignedShort b = a;
+    return b.value;
+}
+uint8 FirstByte(uint8 first, uint8 last) {
+    BytePair a = BytePair{first, last};
+    BytePair b = a;
+    b.last = last;
+    return b.first;
+}
+uint8 UnsignedByte(uint8 first, uint8 last) {
+    BytePair a = BytePair{first, last};
+    a.first = first;
+    return a.last;
+}
+uint16 FirstWord(uint16 first, uint16 last) {
+    WordPair a = WordPair{first, last};
+    WordPair b = a;
+    return b.first;
+}
+uint16 UnsignedWord(uint16 first, uint16 last) {
+    WordPair a = WordPair{first, last};
+    a.first = first;
+    return a.last;
+}
+int Copy4(int value) {
+    Count4 a = Count4{value};
+    Count4 b = a;
+    return b.value;
+}
+isize Copy8(isize value) {
+    Wide a = Wide{value};
+    Wide b = a;
+    return b.value;
+}
+uint64 CopyUnsigned8(uint64 value) {
+    UnsignedWide a = UnsignedWide{value};
+    UnsignedWide b = a;
+    return b.value;
+}
+int Copy12(int a, int b, int c) {
+    Triple original = Triple{a, b, c};
+    Triple copy = original;
+    copy.second = a;
+    return original.second + copy.first + copy.second + copy.third;
+}
+double Mixed(int code, bool enabled, float weight, double mass) {
+    MixedFields p = MixedFields{code, enabled, weight, mass};
+    p.weight = weight + 1.0;
+    if (p.enabled) {
+        if (p.code == code) {
+            if (p.weight>weight) { return p.mass + p.mass; }
+        }
+    }
+    return 0.0;
+}
+int Tick(int tag) {
+    return tag;
+}
+int WithOrder() {
+    OrderPair b = OrderPair{Tick(1), Tick(2)}
+    with {
+        y = Tick(3);
+        x = Tick(4);
+    };
+    return b.x * 10 + b.y;
+}
+double Loop(int count, double x) {
+    double total = 0.0;
+    for (i in 0 .. count) {
+        Position p = Position{x, 2.0};
+        total = total + p.x + p.y;
+    }
+    return total;
+}
+double Array64(isize index) {
+    Samples s = Samples{[1.0, 2.0, 3.0, 4.0]};
+    return s.values[index];
+}
+uint64 WideConstant() {
+    UnsignedWide a = UnsignedWide{18446744073709551615u};
+    UnsignedWide b = a;
+    return b.value;
+}
+uint UnsignedConstant() {
+    Unsigned4 a = Unsigned4{4294967295u};
+    return a.value;
+}
+int ArrayStride12(int index, int value) {
+    TripleSet s = TripleSet {
+        [Triple{value, value, value}, Triple{value, value, value}]
+    };
+    s.values[index].second = 9;
+    return s.values[index].second + s.values[index].third;
+}
+int Pass(int value) {
+    return value;
+}
+int Sum8(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return Pass(a + b + c + d + e + f + g + h);
+}
+double LiveStackCall(double value) {
+    Position p = Position{value, 2.0};
+    int sum = Sum8(1, 2, 3, 4, 5, 6, 7, 8);
+    if (sum == 36) { return p.x + p.y; }
+    return 0.0;
+}

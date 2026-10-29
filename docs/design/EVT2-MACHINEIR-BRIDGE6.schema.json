@@ -1,0 +1,302 @@
+{
+  "module": "Standard.Backend.BridgeSchema6",
+  "magic": "CMIRAMD6",
+  "version": 6,
+  "max_items": 1048576,
+  "representation": "little-endian;CMIRAMD5=7925f9d6ccb54c2af7ca32322bcd59748916f3310e4d95fcf15a5f5ad32c9b60;checked-reference-capabilities;lexical-scopes;SystemMemory;noescape;no-reference-returns",
+  "records": [
+    {
+      "name": "BorrowRoot",
+      "cases": [
+        {
+          "name": "Local",
+          "tag": 0,
+          "go_value": "local"
+        },
+        {
+          "name": "Parameter",
+          "tag": 1,
+          "go_value": "parameter"
+        }
+      ]
+    },
+    {
+      "name": "BorrowEvidence",
+      "cases": [
+        {
+          "name": "Place",
+          "tag": 0,
+          "go_value": "checked_place"
+        },
+        {
+          "name": "Borrow",
+          "tag": 1,
+          "go_value": "checked_borrow"
+        },
+        {
+          "name": "Parameter",
+          "tag": 2,
+          "go_value": "checked_parameter"
+        }
+      ]
+    },
+    {
+      "name": "BorrowEscape",
+      "cases": [
+        {
+          "name": "NoEscape",
+          "tag": 0,
+          "go_value": "noescape"
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowScope",
+      "fields": [
+        {
+          "name": "ID",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Parent",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "WireObjectSpan"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowReference",
+      "fields": [
+        {
+          "name": "Value",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Target",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "SemanticTarget",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "LayoutIdentity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "RootKind",
+          "type": {
+            "name": "BorrowRoot"
+          }
+        },
+        {
+          "name": "Root",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Parent",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Mutable",
+          "type": {
+            "name": "bool"
+          }
+        },
+        {
+          "name": "Lifetime",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Evidence",
+          "type": {
+            "name": "BorrowEvidence"
+          }
+        },
+        {
+          "name": "Provenance",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Escape",
+          "type": {
+            "name": "BorrowEscape"
+          }
+        },
+        {
+          "name": "Space",
+          "type": {
+            "name": "ObjectAddressSpace"
+          }
+        },
+        {
+          "name": "Source",
+          "type": {
+            "name": "WireObjectSpan"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowSite",
+      "fields": [
+        {
+          "name": "Block",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Instruction",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scope",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowFunction",
+      "fields": [
+        {
+          "name": "Identity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Scopes",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireBorrowScope"
+              }
+            ]
+          }
+        },
+        {
+          "name": "SlotScopes",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "int"
+              }
+            ]
+          }
+        },
+        {
+          "name": "References",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireBorrowReference"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Sites",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireBorrowSite"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireBorrowModule",
+      "fields": [
+        {
+          "name": "Objects",
+          "type": {
+            "name": "WireObjectModule"
+          }
+        },
+        {
+          "name": "Authority",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireBorrowFunction"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

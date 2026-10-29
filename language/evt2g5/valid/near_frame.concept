@@ -1,0 +1,10 @@
+module EVT2g5.NearFrame;
+profile Core;
+
+[[repr(C)]] record struct Near {
+    double<array>[168] values;
+    byte tag;
+}
+Near Identity(Near value) {
+    return value;
+}
