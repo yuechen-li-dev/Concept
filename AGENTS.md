@@ -43,3 +43,16 @@ Any partial work must leave the codebase in a cleaner, more legible, and more di
   and 100-run gates plus vet. Neither is the default edit loop. Do not replace
   independent oracles or cache test results to make these gates faster.
 
+## Branch integration
+
+- Treat current `main` as the integration baseline. Fetch and inspect its
+  relationship to HEAD before starting work; milestone hashes are historical
+  evidence, not instructions to discard newer changes.
+- Use a task branch when isolation is needed. After an authorized merge, verify
+  that its commits are reachable from main and remove obsolete branch refs.
+- Check patch equivalence and checkpoint history before replaying old divergent
+  work. Preserve newer implementations when older changes are already included.
+- Preserve worktree files during branch cleanup. Retain historical checkouts as
+  detached snapshots when appropriate; never discard uncommitted work to tidy
+  the branch list.
+
