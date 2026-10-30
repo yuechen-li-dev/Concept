@@ -37,15 +37,7 @@ func TestRangeInvalid(t *testing.T) {
 }
 
 func TestRangeMIRComparisonAndDeterminism(t *testing.T) {
-	source := `profile Core;
-int Main()
-{
-    int total = 0;
-    for (i in 0..10) { total += i; }
-    int cursor = 0;
-    while (cursor < 10) bounded(10) { total += cursor; cursor++; }
-    return total;
-}`
+	source := runtimeTestSource(t, "range_compare.concept_test")
 	module, err := Parse("range_compare.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +65,6 @@ int Main()
 	if strings.Count(c, "while (") < 2 || strings.Contains(c, "malloc(") || strings.Contains(c, "MoveNext(") {
 		t.Fatal("range and bounded while did not lower to inline C loops")
 	}
-	runFoundationNativeHarness(t, first, "range_compare_harness.c", "#include \"range_compare.generated.h\"\nint main(void) { return concept_range_compare_main() == 90 ? 0 : 1; }\n")
 	for i := 0; i < determinismRuns(); i++ {
 		again, err := Generate(module, []byte(source))
 		if err != nil || !reflect.DeepEqual(first, again) {

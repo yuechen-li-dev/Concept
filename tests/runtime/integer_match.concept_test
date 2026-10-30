@@ -1,0 +1,44 @@
+module Matching.IntegerMatch;
+profile Core;
+enum State {
+    Ready, Stopped
+}
+int Decode(uint8 code) {
+    return match (code) {
+        0 => 10, 1 => 20, 2 => 30, _ => - 1
+    };
+}
+int Signed(int code)
+{
+    match (code)
+    {
+        - 1 => { return 4; }
+        0 => { return 5; }
+        _ => { return 6; }
+    }
+}
+uint64 Large(uint64 code) {
+    return match (code) {
+        0xffffffffffffffff => 7, _ => 0
+    };
+}
+int ExistingEnum(State state) {
+    return match (state) {
+        State::Ready => 1, State::Stopped => 2
+    };
+}
+
+[[fact]] void IntegerMatchArms() {
+    Assert.Equal(Decode(0), 10, "first integer arm matches");
+    Assert.Equal(Decode(2), 30, "last integer arm matches");
+    Assert.Equal(Decode(255), - 1, "wildcard handles remaining byte values");
+    Assert.Equal(Signed(- 1), 4, "negative integer pattern matches");
+    Assert.Equal(Signed(8), 6, "signed wildcard matches");
+}
+[[fact]] void WideAndEnumMatchArms() {
+    uint64 maximum = 0xffffffffffffffff;
+    Assert.Equal(Large(maximum), 7, "maximum unsigned pattern matches");
+    Assert.Equal(Large(3), 0, "wide wildcard matches");
+    Assert.Equal(ExistingEnum(State::Ready), 1, "ordinary enum matching remains distinct from integer matching");
+    Assert.Equal(ExistingEnum(State::Stopped), 2, "all enum arms remain executable");
+}

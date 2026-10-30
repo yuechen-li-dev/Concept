@@ -1,0 +1,63 @@
+module Contextual.Arrays;
+profile Core;
+struct Inner {
+    uint8[4] bytes;
+    int count;
+}
+struct Outer {
+    Inner inner;
+}
+template <typename T> struct Box {
+    T[4] values;
+}
+enum Packet {
+    Bytes(uint8[4] bytes), Empty
+}
+Inner Make() {
+    return Inner{[0, 1, 2, 3], 4};
+}
+Outer Nested() {
+    return Outer {
+        Inner{[7 ... 4], 9}
+    };
+}
+Box<uint8> Generic() {
+    return Box<uint8>{[1, 2, 3, 4]};
+}
+int GenericFirst() {
+    Box<uint8> box = Generic();
+    return box.values[0] as int;
+}
+int First(uint8[4] bytes) {
+    return bytes[0] as int;
+}
+int DirectArrayArgument() {
+    return First([9, 8, 7, 6]);
+}
+Packet MakePacket() {
+    return Packet::Bytes([5, 4, 3, 2]);
+}
+int PacketFirst() {
+    Packet packet = MakePacket();
+    return match (packet) {
+        Packet::Bytes(bytes) => bytes[0] as int, Packet::Empty => 0
+    };
+}
+int Sum(Inner value) {
+    return(value.bytes[0] as int) +(value.bytes[1] as int) +(value.bytes[2] as int) +(value.bytes[3] as int) + value.count;
+}
+int Pass() {
+    return Sum(Inner{[4, 5, 6, 7], 8});
+}
+
+[[fact]] void AggregateArrayContext() {
+    Assert.Equal(Sum(Make()), 10, "record array literal uses uint8 context");
+    Assert.Equal(Pass(), 30, "aggregate argument preserves all array elements");
+    Outer nested = Nested();
+    Assert.Equal(nested.inner.bytes[0], 7, "repeated nested array literal retains its element type");
+}
+[[fact]] void ArrayArgumentsAndPayloads() {
+    Assert.Equal(GenericFirst(), 1, "generic array context is retained");
+    Assert.Equal(DirectArrayArgument(), 9, "direct array arguments use their parameter type");
+    Assert.Equal(PacketFirst(), 5, "payload array context is retained");
+}

@@ -6,21 +6,7 @@ import (
 )
 
 func TestIntegerMatchContextAndExecution(t *testing.T) {
-	const source = `module Matching.IntegerMatch; profile Core;
-enum State { Ready, Stopped }
-int Decode(uint8 code) { return match (code) { 0 => 10, 1 => 20, 2 => 30, _ => -1 }; }
-int Signed(int code)
-{
-    match (code)
-    {
-        -1 => { return 4; }
-        0 => { return 5; }
-        _ => { return 6; }
-    }
-}
-uint64 Large(uint64 code) { return match (code) { 0xffffffffffffffff => 7, _ => 0 }; }
-int ExistingEnum(State state) { return match (state) { State::Ready => 1, State::Stopped => 2 }; }
-`
+	source := runtimeTestSource(t, "integer_match.concept_test")
 	module, err := Parse("R8g/IntegerMatch.concept", source)
 	if err != nil {
 		t.Fatal(err)
@@ -29,25 +15,13 @@ int ExistingEnum(State state) { return match (state) { State::Ready => 1, State:
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertR8cStrictC11(t, outputs, "integermatch.generated.c")
-	runFoundationNativeHarness(t, outputs, "integermatch_harness.c", `#include "integermatch.generated.h"
-#include <stdint.h>
-int main(void) {
-  if (concept_matching__integer_match_decode(0) != 10) return 1;
-  if (concept_matching__integer_match_decode(2) != 30) return 2;
-  if (concept_matching__integer_match_decode(255) != -1) return 3;
-  if (concept_matching__integer_match_signed(-1) != 4) return 4;
-  if (concept_matching__integer_match_signed(8) != 6) return 5;
-  if (concept_matching__integer_match_large(UINT64_MAX) != 7) return 6;
-  if (concept_matching__integer_match_large(3) != 0) return 7;
-  return 0;
-}`)
 	mir := string(outputs["integermatch.mir.json"])
 	for _, needle := range []string{`"detail": "0"`, `"detail": "_"`, `"detail": "-1"`} {
 		if !strings.Contains(mir, needle) {
 			t.Fatalf("integer match MIR omitted %s", needle)
 		}
 	}
+	assertR8cStrictC11(t, outputs, "integermatch.generated.c")
 }
 
 func TestIntegerMatchDiagnostics(t *testing.T) {

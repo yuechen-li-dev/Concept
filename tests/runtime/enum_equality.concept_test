@@ -1,0 +1,16 @@
+module EnumEquality;
+profile Core;
+enum Status {
+    Ready, Done,
+}
+int Main() {
+    Status first = Status::Ready;
+    Status second = Status::Done;
+    if (first == second) { return 1; }
+    if (first != Status::Ready) { return 2; }
+    return 0;
+}
+
+[[fact]] void OrdinaryEnumEquality() {
+    Assert.Equal(Main(), 0, "ordinary enum equality compares tags within a nominal type");
+}

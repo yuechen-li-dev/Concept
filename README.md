@@ -47,9 +47,18 @@ go run ./cmd/concept emit-c examples/evt1/core_language.concept
 go run ./cmd/concept package build Standard
 go run ./cmd/concept package test DragonGod
 oct make Test --file Make.oct
-go test ./...
-go vet ./...
+./test.ps1
 ```
+
+`./test.ps1` is the default edit/test loop: Concept-owned runtime and backend
+component facts in Normal and Verify, with lightweight workflow checks.
+Write behavior expectations in `.concept_test` files. Use
+`./test.ps1 -Lane Runtime -Filter <fact>` for one behavior, or
+`-Path tests/backend -Filter <fact>` for a backend component.
+The broader Go compiler sweep is `./test.ps1 -Lane Compiler`; full native,
+ABI, corpus, determinism and vet qualification is
+`./test.ps1 -Lane Qualification`. See [testing](docs/tooling/TESTING.md) for
+ownership rules and batch native CLI usage.
 
 The full Go suite includes the pinned TinyXML2 native companion when its Git
 submodule is present. After a fresh clone or worktree creation, run

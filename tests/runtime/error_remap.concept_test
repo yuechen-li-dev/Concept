@@ -1,0 +1,38 @@
+module Contextual.Remap;
+profile Core;
+enum SourceError {
+    Missing
+}
+enum TargetError {
+    Unavailable
+}
+struct Page {
+    int value;
+}
+TargetError Map(ref int calls) {
+    calls++;
+    return TargetError::Unavailable;
+}
+Result<ref Page, SourceError> Find(ref Page page, bool fail) {
+    if (fail) { return Result::Error(SourceError::Missing); }
+    return Result::Ok(ref page);
+}
+Result<ref Page, TargetError> Access(ref Page page, bool fail, ref int calls) {
+    ref Page found = Find(ref page, fail) ? else Map(ref calls);
+    return Result::Ok(ref found);
+}
+int Check(bool fail) {
+    Page page = Page{17};
+    int calls = 0;
+    Result<ref Page, TargetError> result = Access(ref page, fail, ref calls);
+    int answer = match (result) {
+        Result::Ok(found) => found.value,
+        Result::Error(error) => - 1,
+    };
+    return answer - calls * 100;
+}
+
+[[fact]] void BorrowedResultRemap() {
+    Assert.Equal(Check(false), 17, "successful borrowing does not evaluate the error mapper");
+    Assert.Equal(Check(true), - 101, "failure maps the error exactly once");
+}

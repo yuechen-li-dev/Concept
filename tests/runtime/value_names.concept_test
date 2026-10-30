@@ -1,0 +1,14 @@
+module ValueNames;
+profile Core;
+template<usize N> int Cell(Span<int> cv_parameter_value_01) {
+    int cv_parameter_value_02 = 7;
+    return cv_parameter_value_01[0] + cv_parameter_value_02;
+}
+int Run(Span<int> values) {
+    return Cell<1>(values);
+}
+
+[[fact]] void GeneratedNamesDoNotCaptureBindings() {
+    int[1] values =[5];
+    Assert.Equal(Run(Span(values)), 12, "generated snapshot names do not capture source parameters or locals");
+}

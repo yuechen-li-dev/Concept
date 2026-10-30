@@ -45,6 +45,7 @@ func nativeCommandTimeout(t testing.TB) time.Duration {
 // On expiry the process is killed and the test log records which command hung.
 func nativeCommand(t testing.TB, name string, args ...string) *exec.Cmd {
 	t.Helper()
+	requireNativeQualification(t)
 	timeout := nativeCommandTimeout(t)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
@@ -58,6 +59,16 @@ func nativeCommand(t testing.TB, name string, args ...string) *exec.Cmd {
 	// Do not wait forever on pipes held open by grandchildren after a kill.
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
+}
+
+// Native toolchains, machine-code execution and external ABI probes belong to
+// qualification. Concept runtime facts use RunTests and remain in the quick
+// lane. A skip is visible; the full suite still executes every probe.
+func requireNativeQualification(t testing.TB) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("native qualification; run ./test.ps1 -Lane Qualification")
+	}
 }
 
 // determinismRuns is the repetition count for artifact/plan/output

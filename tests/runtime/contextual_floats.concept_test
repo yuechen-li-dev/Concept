@@ -1,0 +1,69 @@
+module Contextual.Floats;
+profile Core;
+struct Sample {
+    double value;
+    double[2] pair;
+}
+enum Choice {
+    Left, Right
+}
+enum ChoiceError {
+    Rejected
+}
+double Identity(double x) {
+    return x;
+}
+double UnitCircle(double c, double s) {
+    return c * c + s * s - 1.0;
+}
+double Negative() {
+    double value = - 1.0;
+    return value;
+}
+bool IsTwenty(double x) {
+    return x == 20.0;
+}
+Sample MakeSample() {
+    return Sample{1.25,[2.5, - 3.75]};
+}
+double Call() {
+    return Identity(1.0);
+}
+double TensorLiteral() {
+    tensor<double> values[2] =[1.0, 2.0];
+    return values[1];
+}
+double MatchFloat(Choice choice) {
+    return match (choice) {
+        Choice::Left => 1.0, Choice::Right => - 2.0
+    };
+}
+double MatchFloatValue() {
+    return MatchFloat(Choice::Left);
+}
+Result<double, ChoiceError> MatchResult(Choice choice) {
+    return match (choice) {
+        Choice::Left => Result::Ok(1.0), Choice::Right => Result::Error(ChoiceError::Rejected)
+    };
+}
+double MatchResultValue() {
+    return MatchResult(Choice::Left)!;
+}
+
+[[fact]] void ScalarDoubleContext() {
+    Assert.Equal(Call(), 1.0, "call literal is binary64");
+    Assert.Equal(Negative(), - 1.0, "negative literal keeps binary64 context");
+    Assert.True(IsTwenty(20.0), "comparison keeps binary64 context");
+    Assert.Equal(UnitCircle(1.0, 0.0), 0.0, "arithmetic literals keep binary64 context");
+}
+[[fact]] void TensorAndMatchContext() {
+    Assert.Equal(TensorLiteral(), 2.0, "tensor literal keeps its element representation");
+    Assert.Equal(MatchFloatValue(), 1.0, "match arms retain binary64 context");
+    Assert.Equal(MatchResultValue(), 1.0, "result payload retains binary64 context");
+}
+[[fact]] void AggregateDoubleContext() {
+    Sample sample = MakeSample();
+    Assert.Equal(sample.value, 1.25, "record field is binary64");
+    Assert.Equal(sample.pair[0], 2.5, "first array element is binary64");
+    Assert.Equal(sample.pair[1], - 3.75, "second array element is binary64");
+}

@@ -118,11 +118,7 @@ static int replay(const concept_call_plan *p,const concept_array_8_register *sou
 }
 int main(void){
  concept_abiregister_tables tables=F(win64registers)();
- REQUIRE(tables.integerArguments.data[0].tag==2&&tables.integerArguments.data[1].tag==3&&tables.integerArguments.data[2].tag==8&&tables.integerArguments.data[3].tag==9);
- const unsigned caller[]={0,2,3,8,9,10,11},callee[]={1,6,4,5,12,13,14,15};
- for(int i=0;i<7;++i)REQUIRE(tables.callerSaved.data[i].tag==caller[i]);
- for(int i=0;i<8;++i)REQUIRE(tables.calleeSaved.data[i].tag==callee[i]);
- REQUIRE(!F(is_value_register)(concept_register_make_rsp()));
+ /* Pure register-table and clobber expectations live in tests/backend/win64_abi.concept_test. */
  concept_call_plan p=F(empty_call_plan)();
  concept_array_8_register sources={0};
  for(int i=0;i<8;++i)sources.data[i]=concept_register_make_rax();

@@ -1,5 +1,66 @@
 # Concept testing
 
+## Start here
+
+```powershell
+./test.ps1                                           # default quick loop
+./test.ps1 -Lane Runtime -Filter Enum                 # one group of Concept facts
+./test.ps1 -Lane Runtime -Path tests/backend -Filter Argument
+./test.ps1 -Lane Runtime -Filter Enum -Verify
+./test.ps1 -Lane Compiler                             # broad short Go conformance sweep
+./test.ps1 -Lane Qualification                        # complete Go/native gates and vet
+```
+
+The quick loop runs Concept runtime specifications and leaf backend component
+facts in both Normal and Verify, then the lightweight CLI/workflow checks. It
+does not compile the whole Cathedral backend. `-short` alone is still a broad
+compiler/corpus/determinism sweep and can take minutes; it is the Compiler lane,
+not the default edit loop. Qualification retains native execution, external ABI
+and independent C oracles, every full determinism repetition, corpus and Golden
+checks. Skipped native checks in the Compiler lane are reported explicitly.
+
+Use `.concept_test` for runtime expectations, including tests of Concept-authored
+compiler algorithms. Group related facts in a module: its C compilation is shared
+across facts and theory rows. `tests/runtime` owns language behavior;
+`tests/backend` owns leaf backend component behavior. Source imports for those
+components use the normal `--module-root libraries` path. The quick workflow
+rejects imports of the full `Standard.Backend.AMD64` graph.
+
+Go retains parser/type diagnostics, AST/MIR/LIR and generated-code inspection,
+artifact mutation, orchestration, determinism and independent native/ABI oracles.
+Compile-negative specimens remain `.concept` inputs; an invalid program cannot
+be a runnable fact. A Go compiler-inspection check reads the same authoritative
+`.concept_test` source instead of maintaining another embedded program and C
+runtime expectation. Source-level facts compiled through C do not replace
+Cathedral machine-code execution or independent ABI probes.
+
+### Native CLI: batch the work
+
+```powershell
+go run ./cmd/concept amd64 first.concept second.concept third.concept
+```
+
+Multiple inputs share one immutable compiled Cathedral executable within the
+invocation. Each input has independent checked LIR/MachineIR generation, admission,
+native plans/bytes and a fresh backend child process. The session and temporary
+files are destroyed afterwards; no result cache, persistent build cache or
+background service is introduced. Single-input output remains unchanged; batch
+output has `source <path>` section headers.
+
+Add native CLI qualification cases to `TestAMD64CLIBatch`, which tests the real
+multi-input entrypoint. One separate cold single-input smoke retains its entrypoint
+coverage. A source-policy test rejects new per-case `amd64` launches elsewhere.
+Runtime source ownership and quick-lane import checks likewise prevent the
+migrated expectations from quietly returning to embedded Go/C harnesses.
+
+The current migration adds thirteen language facts to the existing six and four
+Win64 ABI component facts. It removes the corresponding Go-owned runtime
+assertions while retaining generated-code, diagnostics and foreign aliasing/
+descriptor mutation probes. New migrations should preserve that distinction.
+
+The [2026-10-29 workflow record](TEST-WORKFLOW-2026-10-29.md) records the audit,
+migrated coverage, build reuse, measured timings and qualification boundaries.
+
 Test-only runtime reflection with `[[reflect]]` is not yet implemented. Type-level `[[reflect]]` is a compile-time cross-module structural permission and does not enable test runtime metadata.
 
 Concept tests are ordinary Concept functions in `.concept_test` files. Test

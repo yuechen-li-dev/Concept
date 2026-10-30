@@ -1,0 +1,35 @@
+module ValueParameter;
+profile Core;
+struct Pair {
+    double x;
+    double y;
+}
+template<usize N> double Value(Pair pair, Span<double> out) {
+    double old = pair.x;
+    out[0] = 9.0;
+    if (pair.x != old) { return - 1.0; }
+    pair.x = 5.0;
+    return pair.x + pair.y;
+}
+template<usize N> double Alias(ReadOnlySpan<double> input, Span<double> out) {
+    double old = input[0];
+    out[0] = old + 1.0;
+    return input[0];
+}
+double Run(Pair pair, Span<double> out) {
+    return Value<1>(pair, out);
+}
+double Shared(ReadOnlySpan<double> input, Span<double> out) {
+    return Alias<1>(input, out);
+}
+
+[[fact]] void ValueSnapshotsAndSharedSpanBacking() {
+    Pair pair = Pair{1.0, 2.0};
+    double[1] output =[0.0];
+    Assert.Equal(Run(pair, Span(output)), 7.0, "by-value mutation does not change the caller record");
+    Assert.Equal(pair.x, 1.0, "caller record retains its original field");
+    Assert.Equal(output[0], 9.0, "explicit output writes remain visible");
+    double[1] backing =[6.0];
+    Assert.Equal(Shared(ReadOnlySpan(backing), Span(backing)), 7.0, "span copies retain their shared backing");
+    Assert.Equal(backing[0], 7.0, "shared backing mutation remains visible");
+}

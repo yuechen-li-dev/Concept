@@ -1,0 +1,18 @@
+profile Core;
+int Main()
+{
+    int total = 0;
+    for (i in 0 .. 10) {
+        total += i;
+    }
+    int cursor = 0;
+    while (cursor < 10) bounded(10) {
+        total += cursor;
+        cursor++;
+    }
+    return total;
+}
+
+[[fact]] void RangeAgreesWithBoundedWhile() {
+    Assert.Equal(Main(), 90, "range and bounded while preserve the same sum");
+}

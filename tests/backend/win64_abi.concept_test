@@ -1,0 +1,87 @@
+module Testing.BackendABI;
+profile Core;
+import Standard.Backend.Win64ABI;
+
+CallRequest Request(int count, bool result) {
+    CallRequest request = EmptyCallRequest();
+    request.argumentCount = count;
+    request.instruction = 4;
+    for (i in 0 .. count) {
+        request.arguments[i] = ABIValue{i, CallValueType::I32, ABIClass::Integer, 4};
+    }
+    request.hasResult = result;
+    if (result) {
+        request.result = ABIValue{100, CallValueType::I32, ABIClass::Integer, 4};
+    }
+    return request;
+}
+
+[[fact]] void RegisterTablesAndClobbers() {
+    ABIRegisterTables tables = Win64Registers();
+    Register[4] arguments =[Register::RCX, Register::RDX, Register::R8, Register::R9];
+    Register[7] caller =[Register::RAX, Register::RCX, Register::RDX, Register::R8, Register::R9, Register::R10,
+    Register::R11];
+    Register[8] callee =[Register::RBX, Register::RBP, Register::RSI, Register::RDI, Register::R12, Register::R13,
+    Register::R14, Register::R15];
+    for (i in 0 .. 4) {
+        Assert.True(tables.integerArguments[i] == arguments[i], "Windows integer argument registers are positional");
+    }
+    for (i in 0 .. 7) {
+        Assert.True(tables.callerSaved[i] == caller[i], "caller clobber set is explicit");
+    }
+    for (i in 0 .. 8) {
+        Assert.True(tables.calleeSaved[i] == callee[i], "callee preservation set is explicit");
+    }
+    Assert.False(IsValueRegister(Register::RSP), "stack pointer is not an allocatable value register");
+}
+
+[[fact]] void ArgumentPositionsAndShadowSpace() {
+    for (count in 0 .. 9) {
+        CallRequest request = Request(count, true);
+        CallPlan plan = EmptyCallPlan();
+        Assert.LGTM(PlanWin64Call(ref const request, ref plan), "bounded direct integer call has a plan");
+        Assert.LGTM(ValidateCallPlan(ref const plan), "the derived call plan validates independently");
+        Assert.Equal(plan.shadowSpaceBytes, 32, "every call reserves Windows home space");
+        Assert.True(plan.resultPhysical == Register::RAX, "integer results use RAX");
+        Assert.Equal(plan.result.width, 4, "integer result width is preserved");
+        int stack = if (count > 4) count - 4 else 0;
+        Assert.Equal(plan.stackArgumentCount, stack, "arguments after position three use stack slots");
+        for (i in 0 .. count) {
+            Assert.Equal(plan.arguments[i].source.value, i, "argument identity is retained");
+            if (i < 4) {
+                Assert.True(plan.arguments[i].physical == Win64Registers().integerArguments[i], "register position is retained");
+            } else {
+                Assert.True(plan.arguments[i].onStack, "later positions are on the stack");
+                Assert.Equal(plan.arguments[i].stackSlot, i - 4, "stack slot follows source position");
+            }
+        }
+    }
+}
+
+[[fact]] void VoidBooleanAndAddressCarriers() {
+    CallRequest request = Request(1, false);
+    CallPlan plan = EmptyCallPlan();
+    Assert.LGTM(PlanWin64Call(ref const request, ref plan), "void call is admitted");
+    Assert.False(plan.hasResult, "void call does not create a result");
+    Assert.Equal(plan.result.value, - 1, "void result retains its sentinel");
+    request.arguments[0] = ABIValue{0, CallValueType::Bool, ABIClass::Bool, 1};
+    Assert.LGTM(PlanWin64Call(ref const request, ref plan), "boolean call is admitted");
+    Assert.Equal(plan.arguments[0].source.width, 1, "boolean width is preserved");
+    request.arguments[0] = ABIValue{0, CallValueType::U64, ABIClass::Address, 8};
+    Assert.LGTM(PlanWin64Call(ref const request, ref plan), "address carrier is admitted");
+    Assert.True(plan.arguments[0].source.category == ABIClass::Address, "address is not reclassified as an integer");
+}
+
+[[fact]] void UnsupportedFormsAndCapacity() {
+    CallRequest request = Request(0, false);
+    CallPlan plan = EmptyCallPlan();
+    request.argumentCount = 9;
+    Assert.FailsWith(PlanWin64Call(ref const request, ref plan), ABIError::CapacityExceeded, "physical argument capacity is explicit");
+    request.argumentCount = 0;
+    request.form = ABIForm::Indirect;
+    Assert.FailsWith(PlanWin64Call(ref const request, ref plan), ABIError::UnsupportedForm, "indirect calls retain their boundary");
+    request.form = ABIForm::VarArgs;
+    Assert.FailsWith(PlanWin64Call(ref const request, ref plan), ABIError::UnsupportedForm, "varargs retain their boundary");
+    request.form = ABIForm::Tail;
+    Assert.FailsWith(PlanWin64Call(ref const request, ref plan), ABIError::UnsupportedForm, "tail calls retain their boundary");
+}
