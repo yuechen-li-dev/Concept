@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -120,6 +121,20 @@ func registerSemanticGobTypes() {
 		}
 		for _, value := range values {
 			gob.Register(value)
+		}
+		// Gob assigns process-global wire type IDs on first encoding, not on
+		// Register. This compiler is the sole owner of Gob in Stage-0. Reserve
+		// the closed semantic type graph in declaration order before any AST
+		// can choose that order. The discarded stream is never an artifact;
+		// readers still consume ordinary self-describing v2 Gob payloads.
+		seed := gob.NewEncoder(io.Discard)
+		if err := seed.Encode(Module{}); err != nil {
+			panic(fmt.Sprintf("MODULE_ARTIFACT_TYPE_REGISTRATION: %v", err))
+		}
+		for _, value := range values {
+			if err := seed.Encode(value); err != nil {
+				panic(fmt.Sprintf("MODULE_ARTIFACT_TYPE_REGISTRATION %T: %v", value, err))
+			}
 		}
 	})
 }

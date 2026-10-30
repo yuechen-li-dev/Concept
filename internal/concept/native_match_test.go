@@ -30,7 +30,7 @@ func TestEVT2h3Transport(t *testing.T) {
 	start := time.Now()
 	for _, ordinary := range []bool{true, false} {
 		_, _, lir, m, data := patternFixture(t, ordinary)
-		want := map[bool]string{true: "b3f04bb7352fec2209349bb26c55cd837158e50e32c2c656651d8bb41248c0ed", false: "451bb0a2ea632a6d8012d56b045892103e0b219eded5921cec559d79abb33098"}[ordinary]
+		want := map[bool]string{true: "b3f04bb7352fec2209349bb26c55cd837158e50e32c2c656651d8bb41248c0ed", false: "e68f23900d6a28cc14c81209b97bc561ddfef0b0c2dd53dd150ca0fcb6d4e560"}[ordinary]
 		if got := fmt.Sprintf("%x", sha256.Sum256(data)); got != want {
 			t.Fatalf("frozen v9 artifact changed: %s", got)
 		}
