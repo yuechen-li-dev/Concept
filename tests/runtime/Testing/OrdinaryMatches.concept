@@ -1,0 +1,58 @@
+module Testing.OrdinaryMatches;
+profile Core;
+
+enum State {
+    Idle, Running, Completed
+}
+enum Color {
+    Red, Green, Blue
+}
+State StateAt(int value) {
+    if (value == 0) { return State::Idle; }
+    if (value == 1) { return State::Running; }
+    return State::Completed;
+}
+int StateCode(State value) {
+    return match (value) {
+        State::Idle => 11, State::Running => 22, State::Completed => 33
+    };
+}
+int ColorCode(Color value) {
+    return match (value) {
+        Color::Blue => 3, Color::Red => 1, Color::Green => 2
+    };
+}
+Color ColorAt(int value) {
+    if (value == 0) { return Color::Red; }
+    if (value == 1) { return Color::Green; }
+    return Color::Blue;
+}
+int StateLoop(int count) {
+    int total = 0;
+    for (i in 0 .. count) {
+        match (StateAt(i)) {
+            State::Idle => {
+                total = total + 1;
+            }
+            State::Running => {
+                total = total + 2;
+            }
+            State::Completed => {
+                total = total + 3;
+            }
+        }
+    }
+    return total;
+}
+int Wildcard(int value) {
+    return match (value) {
+        - 1 => 7, 0 => 9, _ => 13
+    };
+}
+int AllReturn(State value) {
+    match (value) {
+        State::Completed => { return 30; }
+        State::Idle => { return 10; }
+        State::Running => { return 20; }
+    }
+}

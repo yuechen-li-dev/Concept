@@ -1,0 +1,124 @@
+module Testing.TaggedMatches;
+profile Core;
+import Testing.TaggedValues;
+
+int Inspect(Token token) {
+    return match (token) {
+        Token::End => 0,
+        Token::Integer(value) => value,
+        Token::Decimal(value) => if (value == 3.5) 35 else - 2,
+        Token::Real(value) => if (value == 1.25) 125 else - 3,
+        Token::Flag(value) => if (value) 1 else - 1,
+        Token::Many(count, ready, item, numbers) => if (ready) count + item.count + numbers[2] else - 4,
+        Token::Stamped(stamp) => stamp.value
+    };
+}
+double DoubleResult(Token token) {
+    return match (token) {
+        Token::End => 0.0, Token::Integer(value) => 1.0, Token::Decimal(value) => value,
+        Token::Real(value) => 3.0, Token::Flag(value) => 4.0,
+        Token::Many(count, ready, item, numbers) => item.amount, Token::Stamped(stamp) => 6.0
+    };
+}
+float FloatResult(Token token) {
+    return match (token) {
+        Token::End => 0.0, Token::Integer(value) => 1.0, Token::Decimal(value) => 2.0,
+        Token::Real(value) => value, Token::Flag(value) => 4.0,
+        Token::Many(count, ready, item, numbers) => 5.0, Token::Stamped(stamp) => 6.0
+    };
+}
+Token Replace(Token token) {
+    return match (token) {
+        Token::End => MakeInteger(11), Token::Integer(value) => MakeInteger(value + 1),
+        Token::Decimal(value) => MakeDecimal(value), Token::Real(value) => MakeReal(value),
+        Token::Flag(value) => MakeFlag(value), Token::Many(count, ready, item, numbers) => MakeMany(count + 1),
+        Token::Stamped(stamp) => MakeStamped(stamp.value + 1)
+    };
+}
+Item RecordResult(Token token) {
+    return match (token) {
+        Token::End => Item{0, 0.0}, Token::Integer(value) => Item{value, 1.0},
+        Token::Decimal(value) => Item{2, value}, Token::Real(value) => Item{3, 3.0},
+        Token::Flag(value) => Item{4, 4.0}, Token::Many(count, ready, item, numbers) => item,
+        Token::Stamped(stamp) => Item{stamp.value, 6.0}
+    };
+}
+bool Mark(ref int log, int digit, bool answer) {
+    log = log * 10 + digit;
+    return answer;
+}
+int Finish(ref int log, int digit, int answer) {
+    log = log * 10 + digit;
+    return answer;
+}
+Token Subject(ref int calls, int value) {
+    calls++;
+    return MakeInteger(value);
+}
+int Guards(Token token, ref int log) {
+    return match (token) {
+        Token::End => Finish(ref log, 9, 0),
+        Token::Integer(value) => match {
+            when Mark(ref log, 1, value < 0) => value,
+            when Mark(ref log, 2, value == 0) => 20,
+            otherwise => Finish(ref log, 3, value)
+        },
+        Token::Decimal(value) => 2, Token::Real(value) => 3, Token::Flag(value) => 4,
+        Token::Many(count, ready, item, numbers) => count, Token::Stamped(stamp) => stamp.value
+    };
+}
+int Once(ref int calls, int value) {
+    return Inspect(Replace(Subject(ref calls, value)));
+}
+int Nested(Token token, int value) {
+    return match (token) {
+        Token::End => match (MakeInteger(value)) {
+            Token::End => 0, Token::Integer(number) => number,
+            Token::Decimal(number) => 2, Token::Real(number) => 3, Token::Flag(flag) => 4,
+            Token::Many(count, ready, item, numbers) => count, Token::Stamped(stamp) => stamp.value
+        },
+        Token::Integer(number) => Inspect(MakeInteger(number + value)),
+        Token::Decimal(number) => 2, Token::Real(number) => 3, Token::Flag(flag) => 4,
+        Token::Many(count, ready, item, numbers) => count, Token::Stamped(stamp) => stamp.value
+    };
+}
+int Statements(Token token, int iterations) {
+    int total = 0;
+    for (i in 0 .. iterations) {
+        match (token) {
+            Token::End => {
+                total = total + 1;
+            }
+            Token::Integer(value) => {
+                if (value < 0) { return value; }
+                value++;
+                total = total + value;
+            }
+            Token::Decimal(value) => {
+                total = total + 2;
+            }
+            Token::Real(value) => {
+                total = total + 3;
+            }
+            Token::Flag(value) => {
+                match {
+                    when value => {
+                        total = total + 4;
+                    }
+                }
+            }
+            Token::Many(count, ready, item, numbers) => {
+                for (j in 0 .. 2) {
+                    total = total + numbers[j];
+                }
+            }
+            Token::Stamped(stamp) => {
+                total = total + stamp.value;
+            }
+        }
+    }
+    return total;
+}
+double SpillMatch(double a, double b, double c, double d, double e, double f, double g) {
+    return DoubleResult(FloatingPressure(a, b, c, d, e, f, g));
+}

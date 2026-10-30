@@ -294,6 +294,8 @@ func (b *lirBuilder) block(block Block) error {
 }
 func (b *lirBuilder) statement(stmt Statement) error {
 	switch s := stmt.(type) {
+	case *MatchStmt:
+		return b.matchStatement(s)
 	case *ExprStmt:
 		if _, _, err := b.expr(s.Value); err != nil {
 			return err
@@ -590,6 +592,10 @@ func (b *lirBuilder) foreach(s *ForeachStmt) error {
 
 func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	switch e := expr.(type) {
+	case *MatchExpr:
+		return b.matchExpression(e)
+	case *IfExpr:
+		return b.ifExpression(e)
 	case *ConstructExpr:
 		decl, ok := b.env.enums[e.EnumName]
 		if !ok {
@@ -802,6 +808,9 @@ func (b *lirBuilder) indexAddress(e *IndexExpr) (int, LIRType, error) {
 		return b.objectIndexAddress(e)
 	}
 	binding, ok := b.names[base.Name]
+	if ok && binding.local && binding.typ.Kind == TypeArray {
+		return b.objectIndexAddress(e)
+	}
 	if !ok || !binding.array {
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_INDEX_BASE %s", base.Name)
 	}

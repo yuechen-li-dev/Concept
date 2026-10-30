@@ -422,7 +422,7 @@ func (b *lirBuilder) objectAddress(expr Expr) (int, Type, error) {
 			return 0, Type{}, fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_LOCATION %s", e.Name)
 		}
 		lt, err := b.lowerType(binding.typ)
-		if err != nil || (!lirAggregateType(lt) && !lirCallScalar(lt)) {
+		if err != nil || (!lirAggregateType(lt) && !lirCallScalar(lt) && !(len(b.fn.Patterns) > 0 && binding.typ.Kind == TypeArray)) {
 			return 0, Type{}, fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_LOCATION %s", e.Name)
 		}
 		id := b.emit(LIRInstruction{Op: "slot_address", Result: 0, Type: lirPointer(lt), Slot: binding.slot, Source: e.Span})

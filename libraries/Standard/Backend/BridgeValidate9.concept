@@ -1,0 +1,560 @@
+module Standard.Backend.BridgeValidate9;
+profile Core;
+import Standard.Backend.BridgeCodec9;
+import Standard.Backend.BridgeValidate8;
+import Standard.Backend.BridgeValidate7;
+enum PatternError {
+    Malformed, Version, SchemaMismatch, Capacity, Domain, Operation, Flow, Binding, Scope, Join, ObjectContract
+}
+string DescribePatternError(PatternError error) {
+    return match (error) {
+        PatternError::Malformed => "CMIRAMD9_MALFORMED",
+        PatternError::Version => "CMIRAMD9_VERSION_MISMATCH",
+        PatternError::SchemaMismatch => "CMIRAMD9_SCHEMA_HASH_MISMATCH",
+        PatternError::Capacity => "CMIRAMD9_CAPACITY_EXCEEDED",
+        PatternError::Domain => "CMIRAMD9_PATTERN_DOMAIN",
+        PatternError::Operation => "CMIRAMD9_VARIANT_OPERATION",
+        PatternError::Flow => "CMIRAMD9_PATTERN_CFG",
+        PatternError::Binding => "CMIRAMD9_PAYLOAD_BINDING",
+        PatternError::Scope => "CMIRAMD9_BINDING_SCOPE",
+        PatternError::Join => "CMIRAMD9_RESULT_JOIN",
+        PatternError::ObjectContract => "CMIRAMD9_OBJECT_CONTRACT"
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, PatternError> PatternAt(ref const BridgeReader reader, BridgeSequence<T> sequence, int index) {
+    return match (ObjectAt<T>(ref const reader, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(PatternError::Malformed)
+    };
+}
+Result<WirePatternModule, BackendError> ReadPatternDocument(ref const BridgeReader source) {
+    BridgeReader reader = BridgeReader{source.data, 0};
+    ReadPatternBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WirePatternModule>{0});
+}
+Result<int, PatternError> PatternVariantCount(ref const BridgeReader reader, WirePatternModule document,
+int type) {
+    for (i in 0 .. document.Enums.count) {
+        WireEnumDomain domain = PatternAt<WireEnumDomain>(ref const reader, document.Enums, i) ?;
+        if (domain.Type == type) { return Result::Ok(domain.Variants.count); }
+    }
+    for (i in 0 .. document.Base.Domains.count) {
+        WireTaggedDomain domain = PatternAt<WireTaggedDomain>(ref const reader, document.Base.Domains,
+        i) ?;
+        if (domain.Type == type) { return Result::Ok(domain.Variants.count); }
+    }
+    return Result::Ok(0);
+}
+Result<WireObjectInstruction, PatternError> PatternInstruction(ref const BridgeReader reader,
+WireObjectFunction owner, int block, int index) {
+    WireObjectBlock b = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, block) ?;
+    return PatternAt<WireObjectInstruction>(ref const reader, b.Instructions, index);
+}
+Result<int, PatternError> PatternSiteIndex(ref const BridgeReader reader, WireObjectFunction owner, int block,
+int index) {
+    int cursor = index;
+    if (block < 0 or block >= owner.Blocks.count) {
+        return Result::Error(PatternError::Flow);
+    }
+    for (i in 0 .. block) {
+        WireObjectBlock b = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, i) ?;
+        cursor += b.Instructions.count;
+    }
+    if (cursor < 0 or cursor >= 1024) { return Result::Error(PatternError::Capacity); }
+    return Result::Ok(cursor);
+}
+Result<int, PatternError> PatternScopeAt(ref const BridgeReader reader, WireObjectFunction owner,
+WireBorrowFunction meta, int block, int index) {
+    int site = PatternSiteIndex(ref const reader, owner, block, index) ?;
+    WireBorrowSite s = PatternAt<WireBorrowSite>(ref const reader, meta.Sites, site) ?;
+    if (s.Block != block or s.Instruction != index) {
+        return Result::Error(PatternError::Scope);
+    }
+    return Result::Ok(s.Scope);
+}
+bool PatternEdge(WireObjectBlock block, int target) {
+    return(block.Term.Op != ObjectTerminator::Return and block.Term.True == target) or
+    (block.Term.Op == ObjectTerminator::Branch and block.Term.False == target);
+}
+struct PatternFunctionContext {
+    ObjectAuthorityContext authority;
+    bool[512] allowedTests;
+    bool[512] allowedProjects;
+    ObjectInstructionMask allowedRequirements;
+    bool[64] slots;
+}
+PatternFunctionContext EmptyPatternFunctionContext() {
+    return PatternFunctionContext {
+        EmptyObjectAuthority(),[false ...],[false ...], ObjectInstructionMask {
+            [false ...],[false ...]
+        },[false ...]
+    };
+}
+Result<void, PatternError> ValidatePatternOperations(ref const BridgeReader reader, WirePatternModule document,
+int ordinal, ref PatternFunctionContext context) {
+    WireObjectFunction owner = PatternAt<WireObjectFunction>(ref const reader, document.Base.Base.Objects.Functions,
+    ordinal) ?;
+    for (i in 0 .. document.Operations.count) {
+        WirePatternOperation op = PatternAt<WirePatternOperation>(ref const reader, document.Operations,
+        i) ?;
+        if (op.Function < 0 or op.Function >= document.Base.Base.Objects.Functions.count) {
+            return Result::Error(PatternError::Operation);
+        }
+        if (i > 0) {
+            WirePatternOperation previous = PatternAt<WirePatternOperation>(ref const reader, document.Operations,
+            i - 1) ?;
+            if (op.Function < previous.Function or(op.Function == previous.Function and(op.Block < previous.Block or(op.Block == previous.Block and op.Instruction <= previous.Instruction)))) {
+                return Result::Error(PatternError::Operation);
+            }
+        }
+        if (op.Function == ordinal) {
+            WireObjectInstruction in = PatternInstruction(ref const reader, owner, op.Block, op.Instruction) ?;
+            int count = PatternVariantCount(ref const reader, document, in.ParentType) ?;
+            if (count == 0 or in.Member < 0 or in.Member >= count or in.Slot != - 1 or in.Offset != 0 or in.Extent != 0 or in.Stride != 0 or in.Literal.length != 0 or in.Args.count != 1 or in.Calls.count != 0 or in.Copy != ObjectCopyKind::None) {
+                return Result::Error(PatternError::Operation);
+            }
+            WireObjectValueUse use = PatternAt<WireObjectValueUse>(ref const reader, in.Args, 0) ?;
+            WireObjectValue subject = PatternAt<WireObjectValue>(ref const reader, owner.Values, use.Value) ?;
+            WireObjectType result = PatternAt<WireObjectType>(ref const reader, document.Base.Base.Objects.Types,
+            in.Type) ?;
+            if (subject.Type != in.ParentType or subject.Class == ObjectValueClass::Location) {
+                return Result::Error(PatternError::Operation);
+            }
+            if (op.Kind == PatternOperationKind::TestVariant) {
+                if (in.Op != ObjectOpcode::Equal or in.Result < 0 or in.Result >= owner.Values.count or in.Result >= 512 or result.Kind != ObjectKind::Bool or context.authority.patternTests[in.Result]) {
+                    return Result::Error(PatternError::Operation);
+                }
+                context.authority.patternTests[in.Result] = true;
+            } else {
+                if (in.Op != ObjectOpcode::CheckIndex or in.Result != - 1 or result.Kind != ObjectKind::Void) {
+                    return Result::Error(PatternError::Operation);
+                }
+                int site = PatternSiteIndex(ref const reader, owner, op.Block, op.Instruction) ?;
+                if (site < 512) {
+                    context.authority.patternRequirements.first[site] = true;
+                }
+                else {
+                    context.authority.patternRequirements.second[site - 512] = true;
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, PatternError> ValidatePatternRegion(ref const BridgeReader reader, WireObjectFunction owner,
+WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm) {
+    bool[128] region =[false ...];
+    region[arm.Body] = true;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (bi in 0 .. owner.Blocks.count) {
+            if (region[bi]) {
+                for (ai in 0 .. flow.Arms.count) {
+                    WirePatternArm other = PatternAt<WirePatternArm>(ref const reader, flow.Arms, ai) ?;
+                    if (bi == other.Dispatch or(bi == other.Body and bi != arm.Body)) {
+                        return Result::Error(PatternError::Flow);
+                    }
+                }
+                WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+                for (target in 0 .. owner.Blocks.count) {
+                    if (target != flow.Join and PatternEdge(block, target) and not region[target]) {
+                        region[target] = true;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction in = PatternAt<WireObjectInstruction>(ref const reader, block.Instructions,
+            ii) ?;
+            int scope = PatternScopeAt(ref const reader, owner, meta, bi, ii) ?;
+            bool inside = BorrowScopeContains(ref const reader, meta, arm.Scope, scope);
+            bool binding = false;
+            for (j in 0 .. arm.Bindings.count) {
+                WirePatternBinding bound = PatternAt<WirePatternBinding>(ref const reader, arm.Bindings,
+                j) ?;
+                binding = binding or in.Slot == bound.Slot;
+            }
+            if ((inside or binding) and(not inside or not region[bi])) {
+                return Result::Error(PatternError::Scope);
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<PatternOperationKind, PatternError> PatternOperationAt(ref const BridgeReader reader,
+WirePatternModule document, int function, int block, int instruction) {
+    for (i in 0 .. document.Operations.count) {
+        WirePatternOperation op = PatternAt<WirePatternOperation>(ref const reader, document.Operations,
+        i) ?;
+        if (op.Function == function and op.Block == block and op.Instruction == instruction) {
+            return Result::Ok(op.Kind);
+        }
+    }
+    return Result::Error(PatternError::Operation);
+}
+Result<void, PatternError> ValidatePatternBindings(ref const BridgeReader reader, WirePatternModule document,
+WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm,
+int type, int variant, ref PatternFunctionContext context) {
+    BridgeSequence<WireObjectField> fields = BridgeSequence<WireObjectField>{0, 0};
+    for (di in 0 .. document.Base.Domains.count) {
+        WireTaggedDomain domain = PatternAt<WireTaggedDomain>(ref const reader, document.Base.Domains,
+        di) ?;
+        if (domain.Type == type) {
+            WireTaggedVariant selected = PatternAt<WireTaggedVariant>(ref const reader, domain.Variants,
+            variant) ?;
+            fields = selected.Fields;
+        }
+    }
+    if (arm.Bindings.count != fields.count or fields.count > 64) {
+        return Result::Error(PatternError::Binding);
+    }
+    WireObjectBlock body = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, arm.Body) ?;
+    if (fields.count > 0) {
+        if (body.Instructions.count < 1 + 2 * fields.count) {
+            return Result::Error(PatternError::Binding);
+        }
+        WireObjectInstruction load = PatternAt<WireObjectInstruction>(ref const reader, body.Instructions,
+        0) ?;
+        if (load.Op != ObjectOpcode::LoadSlot or load.Slot != flow.SubjectSlot or load.Type != type or PatternScopeAt(ref const reader,
+        owner, meta, arm.Body, 0) ? != arm.Scope) {
+            return Result::Error(PatternError::Binding);
+        }
+        for (fi in 0 .. fields.count) {
+            WireObjectField field = PatternAt<WireObjectField>(ref const reader, fields, fi) ?;
+            WirePatternBinding bound = PatternAt<WirePatternBinding>(ref const reader, arm.Bindings,
+            fi) ?;
+            WireObjectSlot slot = PatternAt<WireObjectSlot>(ref const reader, owner.Slots, bound.Slot) ?;
+            if (bound.Slot < 0 or bound.Slot >= 64 or context.slots[bound.Slot] or slot.Type != field.Type or PatternAt<int>(ref const reader,
+            meta.SlotScopes, bound.Slot) ? != arm.Scope) {
+                return Result::Error(PatternError::Binding);
+            }
+            context.slots[bound.Slot] = true;
+            WireObjectInstruction read = PatternAt<WireObjectInstruction>(ref const reader, body.Instructions,
+            1 + fi * 2) ?;
+            WireObjectInstruction init = PatternAt<WireObjectInstruction>(ref const reader, body.Instructions,
+            2 + fi * 2) ?;
+            if (read.Op != ObjectOpcode::Load or read.ParentType != type or read.Member != variant or read.Extent != fi or read.Type != field.Type or read.Args.count != 1 or PatternAt<WireObjectValueUse>(ref const reader,
+            read.Args, 0) ?.Value != load.Result or read.Result < 0 or read.Result >= 512 or not context.authority.taggedProjects[read.Result] or init.Op != ObjectOpcode::InitializeSlot or init.Slot != bound.Slot or init.Args.count != 1 or PatternAt<WireObjectValueUse>(ref const reader,
+            init.Args, 0) ?.Value != read.Result) {
+                return Result::Error(PatternError::Binding);
+            }
+            if (PatternScopeAt(ref const reader, owner, meta, arm.Body, 1 + fi * 2) ? != arm.Scope or PatternScopeAt(ref const reader,
+            owner, meta, arm.Body, 2 + fi * 2) ? != arm.Scope) {
+                return Result::Error(PatternError::Scope);
+            }
+            context.allowedProjects[read.Result] = true;
+        }
+    }
+    return Result::Ok();
+}
+Result<void, PatternError> ValidatePatternFlow(ref const BridgeReader reader, WirePatternModule document,
+WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref PatternFunctionContext context) {
+    WireObjectSlot subject = PatternAt<WireObjectSlot>(ref const reader, owner.Slots, flow.SubjectSlot) ?;
+    if (flow.SubjectSlot < 0 or flow.SubjectSlot >= 64 or context.slots[flow.SubjectSlot] or not subject.Readonly or flow.Scope < 0 or flow.Scope >= meta.Scopes.count or PatternAt<int>(ref const reader,
+    meta.SlotScopes, flow.SubjectSlot) ? != flow.Scope or flow.Arms.count < 1 or flow.Arms.count > 256) {
+        return Result::Error(PatternError::Flow);
+    }
+    context.slots[flow.SubjectSlot] = true;
+    WireObjectType type = PatternAt<WireObjectType>(ref const reader, document.Base.Base.Objects.Types,
+    subject.Type) ?;
+    int count = PatternVariantCount(ref const reader, document, subject.Type) ?;
+    if (count == 0 and not ScalarInteger(ObjectScalar(type.Kind))) {
+        return Result::Error(PatternError::Domain);
+    }
+    if (count > 0 and flow.Arms.count != count) { return Result::Error(PatternError::Flow); }
+    if (flow.Join < - 1 or flow.Join >= owner.Blocks.count or flow.ResultSlot < - 1) {
+        return Result::Error(PatternError::Join);
+    }
+    if (flow.ResultSlot >= 0) {
+        WireObjectSlot result = PatternAt<WireObjectSlot>(ref const reader, owner.Slots, flow.ResultSlot) ?;
+        if (flow.ResultSlot >= 64 or context.slots[flow.ResultSlot] or flow.Join < 0 or PatternAt<int>(ref const reader,
+        meta.SlotScopes, flow.ResultSlot) ? != flow.Scope) {
+            return Result::Error(PatternError::Join);
+        }
+        context.slots[flow.ResultSlot] = true;
+        WireObjectInstruction load = PatternInstruction(ref const reader, owner, flow.Join, 0) ?;
+        if (load.Op != ObjectOpcode::LoadSlot or load.Slot != flow.ResultSlot) {
+            return Result::Error(PatternError::Join);
+        }
+        for (bi in 0 .. owner.Blocks.count) {
+            WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+            for (ii in 0 .. block.Instructions.count) {
+                WireObjectInstruction in = PatternAt<WireObjectInstruction>(ref const reader, block.Instructions,
+                ii) ?;
+                if (in.Slot == flow.ResultSlot and(in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::StoreSlot)) {
+                    int scope = PatternScopeAt(ref const reader, owner, meta, bi, ii) ?;
+                    bool inside = false;
+                    for (ai in 0 .. flow.Arms.count) {
+                        WirePatternArm arm = PatternAt<WirePatternArm>(ref const reader, flow.Arms, ai) ?;
+                        inside = inside or BorrowScopeContains(ref const reader, meta, arm.Scope, scope);
+                    }
+                    if (not inside) { return Result::Error(PatternError::Join); }
+                }
+            }
+        }
+    }
+    int initialized = 0;
+    int initBlock = - 1;
+    for (bi in 0 .. owner.Blocks.count) {
+        WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+        for (ii in 0 .. block.Instructions.count) {
+            WireObjectInstruction in = PatternAt<WireObjectInstruction>(ref const reader, block.Instructions,
+            ii) ?;
+            if (in.Slot == flow.SubjectSlot and(in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::StoreSlot)) {
+                initialized += 1;
+                initBlock = bi;
+                if (in.Op != ObjectOpcode::InitializeSlot or PatternScopeAt(ref const reader, owner,
+                meta, bi, ii) ? != flow.Scope) { return Result::Error(PatternError::Flow); }
+            }
+        }
+    }
+    WirePatternArm first = PatternAt<WirePatternArm>(ref const reader, flow.Arms, 0) ?;
+    if (initialized != 1 or first.Dispatch < 0 or first.Dispatch >= owner.Blocks.count or not context.authority.dominators[first.Dispatch].items[initBlock]) {
+        return Result::Error(PatternError::Flow);
+    }
+    bool[256] seen =[false ...];
+    bool[128] blocks =[false ...];
+    bool[128] scopes =[false ...];
+    for (ai in 0 .. flow.Arms.count) {
+        WirePatternArm arm = PatternAt<WirePatternArm>(ref const reader, flow.Arms, ai) ?;
+        if (arm.Dispatch < 0 or arm.Dispatch >= owner.Blocks.count or arm.Body < 0 or arm.Body >= owner.Blocks.count or blocks[arm.Dispatch] or blocks[arm.Body] or arm.Scope <= 0 or arm.Scope >= meta.Scopes.count or scopes[arm.Scope]) {
+            return Result::Error(PatternError::Flow);
+        }
+        WireBorrowScope scope = PatternAt<WireBorrowScope>(ref const reader, meta.Scopes, arm.Scope) ?;
+        if (scope.Parent != flow.Scope) { return Result::Error(PatternError::Scope); }
+        blocks[arm.Dispatch] = true;
+        blocks[arm.Body] = true;
+        scopes[arm.Scope] = true;
+        WireObjectBlock dispatch = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, arm.Dispatch) ?;
+        int predecessor = initBlock;
+        if (ai > 0) {
+            predecessor = PatternAt<WirePatternArm>(ref const reader, flow.Arms, ai - 1) ?.Dispatch;
+        }
+        for (bi in 0 .. owner.Blocks.count) {
+            WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+            if ((PatternEdge(block, arm.Body) and bi != arm.Dispatch) or(PatternEdge(block, arm.Dispatch) and bi != predecessor)) {
+                return Result::Error(PatternError::Flow);
+            }
+        }
+        bool last = ai == flow.Arms.count - 1;
+        if (dispatch.Term.True != arm.Body or(last and dispatch.Term.Op != ObjectTerminator::Jump)) {
+            return Result::Error(PatternError::Flow);
+        }
+        if (not last) {
+            WirePatternArm next = PatternAt<WirePatternArm>(ref const reader, flow.Arms, ai + 1) ?;
+            if (dispatch.Term.Op != ObjectTerminator::Branch or dispatch.Term.False != next.Dispatch) {
+                return Result::Error(PatternError::Flow);
+            }
+        }
+        int variant = - 1;
+        if (count > 0) {
+            if (dispatch.Instructions.count != 2) {
+                return Result::Error(PatternError::Flow);
+            }
+            WireObjectInstruction load = PatternAt<WireObjectInstruction>(ref const reader, dispatch.Instructions,
+            0) ?;
+            WireObjectInstruction test = PatternAt<WireObjectInstruction>(ref const reader, dispatch.Instructions,
+            1) ?;
+            PatternOperationKind kind = PatternOperationAt(ref const reader, document, flow.Function,
+            arm.Dispatch, 1) ?;
+            PatternOperationKind expected = if (last) PatternOperationKind::RequireVariant else PatternOperationKind::TestVariant;
+            if (kind != expected or load.Op != ObjectOpcode::LoadSlot or load.Slot != flow.SubjectSlot or load.Type != subject.Type or test.Args.count != 1 or PatternAt<WireObjectValueUse>(ref const reader,
+            test.Args, 0) ?.Value != load.Result or test.ParentType != subject.Type or test.Member < 0 or test.Member >= count or seen[test.Member] or load.Source.Line != test.Source.Line or load.Source.Column != test.Source.Column or PatternScopeAt(ref const reader,
+            owner, meta, arm.Dispatch, 0) ? != flow.Scope or PatternScopeAt(ref const reader, owner,
+            meta, arm.Dispatch, 1) ? != flow.Scope) {
+                return Result::Error(PatternError::Flow);
+            }
+            if (not last and dispatch.Term.Value != test.Result) {
+                return Result::Error(PatternError::Flow);
+            }
+            variant = test.Member;
+            seen[variant] = true;
+            if (last) {
+                int site = PatternSiteIndex(ref const reader, owner, arm.Dispatch, 1) ?;
+                if (site < 512) {
+                    context.allowedRequirements.first[site] = true;
+                }
+                else {
+                    context.allowedRequirements.second[site - 512] = true;
+                }
+            } else {
+                context.allowedTests[test.Result] = true;
+            }
+        } else if (last) {
+            if (dispatch.Instructions.count != 0) {
+                return Result::Error(PatternError::Flow);
+            }
+        } else {
+            if (dispatch.Instructions.count != 3) {
+                return Result::Error(PatternError::Flow);
+            }
+            WireObjectInstruction load = PatternAt<WireObjectInstruction>(ref const reader, dispatch.Instructions,
+            0) ?;
+            WireObjectInstruction literal = PatternAt<WireObjectInstruction>(ref const reader, dispatch.Instructions,
+            1) ?;
+            WireObjectInstruction test = PatternAt<WireObjectInstruction>(ref const reader, dispatch.Instructions,
+            2) ?;
+            if (load.Op != ObjectOpcode::LoadSlot or load.Slot != flow.SubjectSlot or literal.Op != ObjectOpcode::Const or literal.Type != subject.Type or test.Op != ObjectOpcode::Equal or test.Args.count != 2 or PatternAt<WireObjectValueUse>(ref const reader,
+            test.Args, 0) ?.Value != load.Result or PatternAt<WireObjectValueUse>(ref const reader, test.Args,
+            1) ?.Value != literal.Result or dispatch.Term.Value != test.Result) {
+                return Result::Error(PatternError::Flow);
+            }
+            for (prior in 0 .. ai) {
+                WirePatternArm p = PatternAt<WirePatternArm>(ref const reader, flow.Arms, prior) ?;
+                WireObjectInstruction old = PatternInstruction(ref const reader, owner, p.Dispatch, 1) ?;
+                if (ObjectSame(ref const reader, old.Literal, literal.Literal)) {
+                    return Result::Error(PatternError::Flow);
+                }
+            }
+        }
+        ValidatePatternBindings(ref const reader, document, owner, meta, flow, arm, subject.Type, variant,
+        ref context) ?;
+        ValidatePatternRegion(ref const reader, owner, meta, flow, arm) ?;
+    }
+    return Result::Ok();
+}
+Result<void, PatternError> ValidatePatternFunction(ref const BridgeReader reader, WirePatternModule document,
+int ordinal, bool[256] sums) {
+    WireObjectFunction owner = PatternAt<WireObjectFunction>(ref const reader, document.Base.Base.Objects.Functions,
+    ordinal) ?;
+    WireBorrowFunction meta = PatternAt<WireBorrowFunction>(ref const reader, document.Base.Base.Authority,
+    ordinal) ?;
+    PatternFunctionContext context = EmptyPatternFunctionContext();
+    context.authority.taggedTypes = sums;
+    bool[512] constructors =[false ...];
+    bool[512] projects =[false ...];
+    match (ValidateTaggedOperations(ref const reader, document.Base, ordinal, ref constructors, ref projects)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(PatternError::Operation); }
+    }
+    context.authority.taggedConstructors = constructors;
+    context.authority.taggedProjects = projects;
+    ValidatePatternOperations(ref const reader, document, ordinal, ref context) ?;
+    // Existing typed CFG, source-reference, all-slot must-initialization and
+    // canonical value checks run before any pattern-region indexing.
+    match (ValidateBorrowFunctionAuthority(ref const reader, document.Base.Base, ordinal, ref context.authority)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(PatternError::ObjectContract); }
+    }
+    int flowCount = 0;
+    int previousFunction = - 1;
+    for (i in 0 .. document.Flows.count) {
+        WirePatternFlow flow = PatternAt<WirePatternFlow>(ref const reader, document.Flows, i) ?;
+        if (flow.Function < previousFunction or flow.Function < 0 or flow.Function >= document.Base.Base.Objects.Functions.count) {
+            return Result::Error(PatternError::Flow);
+        }
+        previousFunction = flow.Function;
+        if (flow.Function == ordinal) {
+            flowCount += 1;
+            if (flowCount > 64) { return Result::Error(PatternError::Capacity); }
+            ValidatePatternFlow(ref const reader, document, owner, meta, flow, ref context) ?;
+        }
+    }
+    for (i in 0 .. 512) {
+        if (context.authority.patternTests[i] != context.allowedTests[i] or context.authority.taggedProjects[i] != context.allowedProjects[i] or context.authority.patternRequirements.first[i] != context.allowedRequirements.first[i] or context.authority.patternRequirements.second[i] != context.allowedRequirements.second[i]) {
+            return Result::Error(PatternError::Operation);
+        }
+    }
+    if (flowCount > 0) {
+        for (bi in 0 .. owner.Blocks.count) {
+            WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+            for (ii in 0 .. block.Instructions.count) {
+                WireObjectInstruction in = PatternAt<WireObjectInstruction>(ref const reader, block.Instructions,
+                ii) ?;
+                if (in.Op == ObjectOpcode::SlotAddress or in.Op == ObjectOpcode::LoadSlot or in.Op == ObjectOpcode::StoreSlot or in.Op == ObjectOpcode::InitializeSlot) {
+                    int declared = PatternAt<int>(ref const reader, meta.SlotScopes, in.Slot) ?;
+                    int actual = PatternScopeAt(ref const reader, owner, meta, bi, ii) ?;
+                    if (not BorrowScopeContains(ref const reader, meta, declared, actual)) {
+                        return Result::Error(PatternError::Scope);
+                    }
+                }
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, PatternError> ValidatePatternMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadPatternBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => {
+            if (error == BackendError::BridgeVersion) {
+                return Result::Error(PatternError::Version);
+            }
+            if (error == BackendError::BridgeSchemaMismatch) {
+                return Result::Error(PatternError::SchemaMismatch);
+            }
+            return Result::Error(PatternError::Malformed);
+        }
+    }
+    WirePatternModule document = ReadPattern<WirePatternModule>(ref reader) ?;
+    WireObjectModule objects = document.Base.Base.Objects;
+    if (reader.offset != Len(artifact) or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or document.Base.Base.Authority.count != objects.Functions.count or document.Base.Domains.count > 128 or document.Enums.count > 128 or document.Flows.count < 1 or document.Flows.count > 8192 or document.Operations.count > 131072 or document.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
+        return Result::Error(PatternError::Capacity);
+    }
+    EnumDomainContext aliases = EmptyEnumDomainContext();
+    match (ValidateEnumDomainRecords(ref const reader, objects, document.Enums, ref aliases)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(PatternError::Domain); }
+    }
+    ObjectAuthorityContext types = EmptyObjectAuthority();
+    match (ValidateTaggedDomainsWithAliases(ref const reader, document.Base, ref types, aliases.aliases)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(PatternError::Domain); }
+    }
+    for (i in 0 .. objects.Dependencies.count) {
+        WireObjectDependency d = PatternAt<WireObjectDependency>(ref const reader, objects.Dependencies,
+        i) ?;
+        if (d.Identity.length == 0 or not ObjectDigest(ref const reader, d.Digest)) {
+            return Result::Error(PatternError::Domain);
+        }
+        for (j in 0 .. i) {
+            WireObjectDependency p = PatternAt<WireObjectDependency>(ref const reader, objects.Dependencies,
+            j) ?;
+            if (ObjectSame(ref const reader, d.Identity, p.Identity)) {
+                return Result::Error(PatternError::Domain);
+            }
+        }
+    }
+    for (i in 0 .. objects.Functions.count) {
+        WireObjectFunction f = PatternAt<WireObjectFunction>(ref const reader, objects.Functions, i) ?;
+        for (j in 0 .. i) {
+            WireObjectFunction p = PatternAt<WireObjectFunction>(ref const reader, objects.Functions,
+            j) ?;
+            if (ObjectSame(ref const reader, f.Identity, p.Identity)) {
+                return Result::Error(PatternError::ObjectContract);
+            }
+        }
+        ValidatePatternFunction(ref const reader, document, i, types.taggedTypes) ?;
+    }
+    return Result::Ok();
+}
+Result<int, PatternError> ValidatedPatternBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidatePatternMachineBridge(artifact) ?;
+    if (Len(output) < Len(artifact)) { return Result::Error(PatternError::Capacity); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    reader.offset = 44;
+    WirePatternModule document = ReadPattern<WirePatternModule>(ref reader) ?;
+    for (i in 0 .. 44) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, 44};
+    match (WriteWire(ref const document, ref const reader, ref writer)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(PatternError::Malformed); }
+    }
+    return Result::Ok(writer.offset);
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, PatternError> ReadPattern(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<T>{0})) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(PatternError::Malformed)
+    };
+}

@@ -11,6 +11,11 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	for _, f := range lir.Functions {
+		if len(f.Patterns) > 0 {
+			return projectPatternMachine(lir)
+		}
+	}
 	if len(lir.TaggedEnums) != 0 {
 		return projectTaggedMachine(lir)
 	}

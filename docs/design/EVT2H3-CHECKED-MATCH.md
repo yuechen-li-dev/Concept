@@ -47,7 +47,7 @@ physical MATCH instruction or changing old terminator enums. Native lowering
 uses deterministic compares, branches and the existing object/ABI/frame stack.
 CMIRAMD3–8 schemas/codecs and prior admission entrypoints remain frozen.
 
-Planned admission checks connect each typed test to its subject snapshot,
+Admission checks connect each typed test to its subject snapshot,
 selected arm and ordered bindings; validate exhaustive mappings and result
 joins; enforce binding regions and lexical scope; and reject uninitialized
 slot reads through CFG must analysis. Checked payload reads retain their v8
@@ -56,3 +56,11 @@ syntax, payload layout, allocator, copier or optimizer is introduced.
 
 This inventory is a design/implementation record, not native qualification.
 The conformance/convergence records must separately record executed evidence.
+
+Contract checkpoint: CMIRAMD9 schema SHA256
+`77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c`.
+Generated Go/Concept codecs reuse canonical v8/v7 records. Independent
+artifact-only Concept validation/roundtrip passed 100 runs per specimen in
+Normal and Verify (132.110 s package). Fresh source/LIR/CFG/MachineIR/debug and
+codec generation passed 100 runs (5.532 s); this is consistency/determinism
+evidence, distinct from later machine-code execution.

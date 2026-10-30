@@ -9,6 +9,7 @@ import (
 // MachineIR is AMD64-specific, but retains virtual registers and abstract frames.
 // No opcode below is an encoded instruction or an allocated register assignment.
 type MachineModule struct {
+	Pattern   *PatternModule       // CMIRAMD9 checked pattern CFG and lexical/result associations.
 	Tagged    *TaggedModule        // CMIRAMD8 checked nominal sums and atomic payload access.
 	Enum      *EnumModule          // CMIRAMD7 ordinary nominal discriminants.
 	Borrow    *BorrowModule        // CMIRAMD6 checked reference authority.
@@ -300,6 +301,9 @@ type MachineFunction struct {
 }
 
 func (m MachineModule) String() string {
+	if m.Pattern != nil {
+		return fmt.Sprintf("CMIRAMD9 enums=%v flows=%v operations=%v\n%s", m.Pattern.Enums, m.Pattern.Flows, m.Pattern.Operations, MachineModule{Tagged: &m.Pattern.Base}.String())
+	}
 	if m.Tagged != nil {
 		return fmt.Sprintf("CMIRAMD8 domains=%v operations=%v\n%s", m.Tagged.Domains, m.Tagged.Operations, m.Tagged.Base.Objects.String())
 	}

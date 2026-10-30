@@ -165,6 +165,12 @@ func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 				if in.Op == "checked_payload" {
 					si.Op = "load"
 				}
+				if in.Op == "test_variant" {
+					si.Op = "eq"
+				}
+				if in.Op == "require_variant" {
+					si.Op = "check_index"
+				}
 				if in.Aggregate != "" {
 					si.ParentType, e = valueType(in.Aggregate)
 					if e != nil {

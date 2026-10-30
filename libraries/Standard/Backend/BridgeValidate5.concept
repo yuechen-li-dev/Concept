@@ -209,7 +209,18 @@ bool requireAggregate, bool[256] aliases, bool[256] sums) {
 struct ObjectBlockMask {
     bool[128] items;
 }
+struct ObjectInstructionMask {
+    bool[512] first;
+    bool[512] second;
+}
+bool ObjectInstructionMarked(ObjectInstructionMask mask, int index) {
+    if (index < 0 or index >= 1024) { return false; }
+    if (index < 512) { return mask.first[index]; }
+    return mask.second[index - 512];
+}
 struct ObjectAuthorityContext {
+    bool[512] patternTests;
+    ObjectInstructionMask patternRequirements;
     bool[256] taggedTypes;
     bool[512] taggedConstructors;
     bool[512] taggedProjects;
@@ -222,9 +233,8 @@ struct ObjectAuthorityContext {
 }
 ObjectAuthorityContext EmptyObjectAuthority() {
     return ObjectAuthorityContext {
-        [false ...],[false ...],[false ...], false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask {
-            [false ...]
-        }
+        [false ...], ObjectInstructionMask{[false ...],[false ...]},[false ...],[false ...],[false ...],
+        false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask{[false ...]}
         ...]
     };
 }
@@ -512,15 +522,17 @@ WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
                     }
                 }
                 ObjectOpcode::CheckIndex => {
-                    if (in.Args.count != 1 or not operandsAreValues or in.Extent <= 0 or in.Extent > 256 or type.Kind != ObjectKind::Void) {
-                        return Result::Error(ObjectError::ArrayGeometry);
+                    if (not ObjectInstructionMarked(authority.patternRequirements, instructionCount - 1)) {
+                        if (in.Args.count != 1 or not operandsAreValues or in.Extent <= 0 or in.Extent > 256 or type.Kind != ObjectKind::Void) {
+                            return Result::Error(ObjectError::ArrayGeometry);
+                        }
+                        WireObjectType index = ObjectAt<WireObjectType>(ref const source, document.Types,
+                        valueTypes[args[0]]) ?;
+                        if (not ScalarInteger(ObjectScalar(index.Kind))) {
+                            return Result::Error(ObjectError::ValueType);
+                        }
+                        guards[args[0]] = in.Extent;
                     }
-                    WireObjectType index = ObjectAt<WireObjectType>(ref const source, document.Types,
-                    valueTypes[args[0]]) ?;
-                    if (not ScalarInteger(ObjectScalar(index.Kind))) {
-                        return Result::Error(ObjectError::ValueType);
-                    }
-                    guards[args[0]] = in.Extent;
                 }
                 ObjectOpcode::IndexAddress => {
                     if (in.Args.count != 2 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or classes[args[1]] == ObjectValueClass::Location) {
@@ -573,7 +585,9 @@ WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
                     ValidateObjectBinary(ref const source, document, owner, in, false, false) ?;
                 }
                 ObjectOpcode::Equal => {
-                    ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                    if (not authority.patternTests[in.Result]) {
+                        ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;
+                    }
                 }
                 ObjectOpcode::NotEqual => {
                     ValidateObjectBinary(ref const source, document, owner, in, false, true) ?;

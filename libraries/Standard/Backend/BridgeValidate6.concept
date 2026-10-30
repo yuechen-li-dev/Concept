@@ -188,6 +188,14 @@ int ordinal) {
 }
 Result<void, BorrowError> ValidateBorrowFunctionExtensions(ref const BridgeReader source, WireBorrowModule document,
 int ordinal, bool[256] sums, bool[512] constructors, bool[512] projects) {
+    ObjectAuthorityContext authority = EmptyObjectAuthority();
+    authority.taggedTypes = sums;
+    authority.taggedConstructors = constructors;
+    authority.taggedProjects = projects;
+    return ValidateBorrowFunctionAuthority(ref const source, document, ordinal, ref authority);
+}
+Result<void, BorrowError> ValidateBorrowFunctionAuthority(ref const BridgeReader source, WireBorrowModule document,
+int ordinal, ref ObjectAuthorityContext authority) {
     WireObjectFunction owner = BorrowAt<WireObjectFunction>(ref const source, document.Objects.Functions,
     ordinal) ?;
     WireBorrowFunction meta = BorrowAt<WireBorrowFunction>(ref const source, document.Authority, ordinal) ?;
@@ -209,10 +217,6 @@ int ordinal, bool[256] sums, bool[512] constructors, bool[512] projects) {
             return Result::Error(BorrowError::Lifetime);
         }
     }
-    ObjectAuthorityContext authority = EmptyObjectAuthority();
-    authority.taggedTypes = sums;
-    authority.taggedConstructors = constructors;
-    authority.taggedProjects = projects;
     authority.enabled = true;
     int previous = - 1;
     for (i in 0 .. meta.References.count) {

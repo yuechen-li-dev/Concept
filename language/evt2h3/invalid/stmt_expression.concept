@@ -1,0 +1,2 @@
+profile Core; enum E { End, Item(int value) } enum F { End, Item(int value) }
+int Bad(E x){match(x){E::End=>0,E::Item(v)=>v}return 0;}

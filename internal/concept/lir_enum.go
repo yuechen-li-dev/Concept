@@ -46,6 +46,10 @@ func (a *lirAggregateTypes) lowerEnum(t Type, decl EnumDecl) (LIRType, error) {
 	return e.Type, nil
 }
 func verifyLIREnums(m LIRModule) error {
+	patterns := false
+	for _, f := range m.Functions {
+		patterns = patterns || len(f.Patterns) > 0
+	}
 	domains := map[LIRType]LIREnum{}
 	identities := map[string]bool{}
 	for _, e := range m.Enums {
@@ -101,7 +105,7 @@ func verifyLIREnums(m LIRModule) error {
 			}
 		}
 	}
-	if len(m.Enums) > 0 && len(m.TaggedEnums) == 0 {
+	if len(m.Enums) > 0 && len(m.TaggedEnums) == 0 && !patterns {
 		if len(m.Aggregates) > 0 {
 			return fmt.Errorf("LIR_UNSUPPORTED_ENUM_AGGREGATE")
 		}

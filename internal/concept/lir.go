@@ -71,6 +71,7 @@ type LIRBlock struct {
 	Term         LIRTerminator
 }
 type LIRFunction struct {
+	Patterns   []LIRPatternFlow   `json:",omitempty"`
 	Borrow     *LIRBorrowContract `json:",omitempty"`
 	Identity   string
 	Name       string
@@ -171,6 +172,9 @@ func (m LIRModule) String() string {
 			fmt.Fprintf(&out, "v%d: %s", p.ID, p.Type)
 		}
 		fmt.Fprintf(&out, ") -> %s\n", f.Result)
+		for _, p := range f.Patterns {
+			fmt.Fprintf(&out, "  pattern subject=s%d result=s%d join=b%d scope=%d arms=%v\n", p.SubjectSlot, p.ResultSlot, p.Join, p.Scope, p.Arms)
+		}
 		if f.Machine != nil {
 			fmt.Fprintf(&out, "  machine %s %s frame size=%d align=%d\n", f.Machine.Role, f.Machine.Identity, f.Machine.Size, f.Machine.Alignment)
 			for _, field := range f.Machine.Fields {
@@ -326,6 +330,9 @@ func VerifyLIR(m LIRModule) error {
 		functions[f.Identity] = f
 	}
 	for _, f := range m.Functions {
+		if err := verifyLIRPatternFlow(f, m); err != nil {
+			return err
+		}
 		if err := verifyLIRMachineFunction(f); err != nil {
 			return err
 		}
@@ -415,6 +422,10 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "test_variant", "require_variant":
+					if err := verifyLIRVariantOperation(in, argType(0), tagged, m.Enums); err != nil {
+						return err
+					}
 				case "checked_payload":
 					domain, ok := tagged[in.Aggregate]
 					if !ok || in.Result < 0 || in.Slot != -1 || len(in.Args) != 1 || argType(0) != domain.Type || in.Member < 0 || in.Member >= len(domain.Variants) || in.Extent < 0 || in.Extent >= len(domain.Variants[in.Member].Fields) || in.FrameOffset != 0 || in.Stride != 0 || in.Literal != "" {
@@ -481,7 +492,7 @@ func VerifyLIR(m LIRModule) error {
 						}
 					}
 				case "slot_address":
-					if !hasSlot || s.Extent != 0 || (!lirAggregateType(s.Type) && !lirCallScalar(s.Type)) || in.Result < 0 || len(in.Args) != 0 || in.Type != lirPointer(s.Type) {
+					if !hasSlot || s.Extent != 0 && len(f.Patterns) == 0 || (!lirAggregateType(s.Type) && !lirCallScalar(s.Type) && !(len(f.Patterns) > 0 && s.Extent > 0)) || in.Result < 0 || len(in.Args) != 0 || in.Type != lirPointer(s.Type) {
 						return fmt.Errorf("LIR_BAD_OBJECT_ADDRESS b%d", b.ID)
 					}
 				case "field_address":
@@ -545,17 +556,17 @@ func VerifyLIR(m LIRModule) error {
 						return fmt.Errorf("LIR_BAD_ACTIVATION_OFFSET b%d", b.ID)
 					}
 				case "load_slot":
-					if !hasSlot || s.Extent > 0 || in.Type != s.Type || len(in.Args) != 0 || in.Result < 0 {
+					if !hasSlot || s.Extent > 0 && len(f.Patterns) == 0 || in.Type != s.Type || len(in.Args) != 0 || in.Result < 0 {
 						return fmt.Errorf("LIR_BAD_SLOT_LOAD b%d", b.ID)
 					}
 				case "initialize_slot", "store_slot":
-					if !hasSlot || s.Extent > 0 || in.Result >= 0 || len(in.Args) != 1 || argType(0) != s.Type {
+					if !hasSlot || s.Extent > 0 && len(f.Patterns) == 0 || in.Result >= 0 || len(in.Args) != 1 || argType(0) != s.Type {
 						return fmt.Errorf("LIR_BAD_SLOT_STORE b%d", b.ID)
 					}
 					if (lirTaggedType(s.Type) || lirTaggedType(in.Type)) && in.Type != s.Type {
 						return fmt.Errorf("LIR_TAGGED_SLOT_TYPE")
 					}
-					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) && (len(layouts) == 0 || !lirCallScalar(s.Type)) {
+					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) && (len(layouts) == 0 || !lirCallScalar(s.Type)) && !(len(f.Patterns) > 0 && (lirEnumType(s.Type) || lirCallScalar(s.Type) || s.Extent > 0)) {
 						return fmt.Errorf("LIR_BAD_OBJECT_INIT b%d", b.ID)
 					}
 				case "checked_add", "checked_sub", "checked_mul", "add", "sub", "mul":

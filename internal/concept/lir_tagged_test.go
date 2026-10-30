@@ -246,7 +246,7 @@ func TestEVT2h2SourceBoundaries(t *testing.T) {
 			}
 		})
 	}
-	for name, code := range map[string]string{"nested": "EVT2H2_NESTED_TAGGED_ENUM", "match": "EVT2_UNSUPPORTED_EXPR"} {
+	for name, code := range map[string]string{"nested": "EVT2H2_NESTED_TAGGED_ENUM"} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join("../../language/evt2h2/unsupported", name+".concept")
 			source, err := os.ReadFile(path)

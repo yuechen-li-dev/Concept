@@ -16,7 +16,7 @@ func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums
 
 type taggedSite struct{ function, block, instruction int }
 
-func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enums []LIREnum, tagged []LIRTaggedEnum, operations map[taggedSite]string) error {
+func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enums []LIREnum, tagged []LIRTaggedEnum, operations map[taggedSite]string, patterns ...map[int][]LIRPatternFlow) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD5_%s", s) }
 	if len(m.Types) == 0 || len(m.Types) > 256 || len(m.Functions) == 0 || len(m.Functions) > 128 || len(m.Dependencies) > 128 {
 		return bad("CAPACITY")
@@ -138,6 +138,9 @@ func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enum
 			return e
 		}
 		lf := LIRFunction{Identity: f.Identity, Name: f.Name, Result: result, Source: Span{Line: f.Source.Line, Column: f.Source.Column}, Facts: f.Facts, Decisions: f.Decisions}
+		if len(patterns) > 0 {
+			lf.Patterns = patterns[0][fi]
+		}
 		if authority != nil {
 			var err error
 			lf.Borrow, err = borrowLIRContract(authority[fi], f, types)
@@ -204,7 +207,14 @@ func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enum
 			if s.LayoutIdentity != m.Types[s.Type].LayoutIdentity {
 				return bad("STORAGE_LAYOUT_IDENTITY")
 			}
-			lf.Slots = append(lf.Slots, LIRSlot{ID: s.ID, Name: s.Name, Type: t, Readonly: s.Readonly, ParamValue: -1})
+			ls := LIRSlot{ID: s.ID, Name: s.Name, Type: t, Readonly: s.Readonly, ParamValue: -1}
+			if len(lf.Patterns) > 0 {
+				if element, extent, array := lirArrayValue(t); array {
+					ls.Element = element
+					ls.Extent = extent
+				}
+			}
+			lf.Slots = append(lf.Slots, ls)
 		}
 		count := 0
 		for bi, b := range f.Blocks {
@@ -244,7 +254,7 @@ func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enum
 				}
 				li := LIRInstruction{Op: in.Op, Result: in.Result, Type: t, Slot: in.Slot, Member: in.Member, FrameOffset: in.Offset, Extent: in.Extent, Stride: in.Stride, Literal: in.Literal, Source: Span{Line: in.Source.Line, Column: in.Source.Column}, Decision: in.Decision, Facts: in.Facts}
 				if op, ok := operations[taggedSite{fi, bi, ii}]; ok {
-					if (op == "make_tagged" && in.Op != "make_aggregate") || (op == "checked_payload" && in.Op != "load") {
+					if (op == "make_tagged" && in.Op != "make_aggregate") || (op == "checked_payload" && in.Op != "load") || (op == "test_variant" && in.Op != "eq") || (op == "require_variant" && in.Op != "check_index") {
 						return bad("TAGGED_OPERATION")
 					}
 					li.Op = op

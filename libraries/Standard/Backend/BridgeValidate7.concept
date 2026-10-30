@@ -2,7 +2,6 @@ module Standard.Backend.BridgeValidate7;
 profile Core;
 import Standard.Backend.BridgeCodec7;
 import Standard.Backend.BridgeValidate5;
-
 enum EnumError {
     Malformed, Version, SchemaMismatch, Capacity, Domain, Representation, Variant, Discriminant, Operation,
     ObjectContract
@@ -75,42 +74,10 @@ Result<void, EnumError> ValidateEnumMachineBridge(ReadOnlySpan<byte> artifact) {
     if (document.Domains.count < 1 or document.Domains.count > 128 or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or objects.Dependencies.count > 128) {
         return Result::Error(EnumError::Capacity);
     }
-    bool[256] aliases =[false ...];
-    int[256] counts =[0 ...];
-    for (i in 0 .. document.Domains.count) {
-        WireEnumDomain domain = EnumAt<WireEnumDomain>(ref const reader, document.Domains, i) ?;
-        if (domain.Type < 0 or domain.Type >= objects.Types.count) {
-            return Result::Error(EnumError::Domain);
-        }
-        if (aliases[domain.Type] or not EnumLayoutIdentity(ref const reader, domain.LayoutIdentity)) {
-            return Result::Error(EnumError::Domain);
-        }
-        WireObjectType type = EnumAt<WireObjectType>(ref const reader, objects.Types, domain.Type) ?;
-        if (not ObjectSame(ref const reader, type.Identity, domain.Identity) or not ObjectSame(ref const reader,
-        type.LayoutIdentity, domain.LayoutIdentity)) {
-            return Result::Error(EnumError::Domain);
-        }
-        if (domain.Size != 4 or domain.Align != 4 or type.Size != domain.Size or type.Align != domain.Align or type.Kind != ObjectKind::U32) {
-            return Result::Error(EnumError::Representation);
-        }
-        if (domain.Variants.count < 1 or domain.Variants.count > 256) {
-            return Result::Error(EnumError::Capacity);
-        }
-        for (j in 0 .. domain.Variants.count) {
-            WireEnumVariant variant = EnumAt<WireEnumVariant>(ref const reader, domain.Variants, j) ?;
-            if (variant.Tag != j or variant.Name.length == 0) {
-                return Result::Error(EnumError::Variant);
-            }
-            for (k in 0 .. j) {
-                WireEnumVariant prior = EnumAt<WireEnumVariant>(ref const reader, domain.Variants, k) ?;
-                if (ObjectSame(ref const reader, variant.Name, prior.Name)) {
-                    return Result::Error(EnumError::Variant);
-                }
-            }
-        }
-        aliases[domain.Type] = true;
-        counts[domain.Type] = domain.Variants.count;
-    }
+    EnumDomainContext context = EmptyEnumDomainContext();
+    ValidateEnumDomainRecords(ref const reader, objects, document.Domains, ref context) ?;
+    bool[256] aliases = context.aliases;
+    int[256] counts = context.counts;
     for (i in 0 .. objects.Types.count) {
         WireObjectType type = EnumAt<WireObjectType>(ref const reader, objects.Types, i) ?;
         if (ObjectAggregate(type.Kind)) { return Result::Error(EnumError::Operation); }
@@ -202,4 +169,49 @@ Result<int, EnumError> ValidatedEnumBridgeRoundTrip(ReadOnlySpan<byte> artifact,
 void EnumContractFacts() {
     Assert.Concept<NoAllocation>(ValidateEnumMachineBridge, "bounded nominal domains and caller-owned artifact views");
     Assert.Concept<NoAllocation>(ValidatedEnumBridgeRoundTrip, "caller-owned output; admission before mutation");
+}
+struct EnumDomainContext {
+    bool[256] aliases;
+    int[256] counts;
+}
+EnumDomainContext EmptyEnumDomainContext() {
+    return EnumDomainContext{[false ...],[0 ...]};
+}
+Result<void, EnumError> ValidateEnumDomainRecords(ref const BridgeReader reader, WireObjectModule objects,
+BridgeSequence<WireEnumDomain> domains, ref EnumDomainContext context) {
+    for (i in 0 .. domains.count) {
+        WireEnumDomain domain = EnumAt<WireEnumDomain>(ref const reader, domains, i) ?;
+        if (domain.Type < 0 or domain.Type >= objects.Types.count) {
+            return Result::Error(EnumError::Domain);
+        }
+        if (context.aliases[domain.Type] or not EnumLayoutIdentity(ref const reader, domain.LayoutIdentity)) {
+            return Result::Error(EnumError::Domain);
+        }
+        WireObjectType type = EnumAt<WireObjectType>(ref const reader, objects.Types, domain.Type) ?;
+        if (not ObjectSame(ref const reader, type.Identity, domain.Identity) or not ObjectSame(ref const reader,
+        type.LayoutIdentity, domain.LayoutIdentity)) {
+            return Result::Error(EnumError::Domain);
+        }
+        if (domain.Size != 4 or domain.Align != 4 or type.Size != domain.Size or type.Align != domain.Align or type.Kind != ObjectKind::U32) {
+            return Result::Error(EnumError::Representation);
+        }
+        if (domain.Variants.count < 1 or domain.Variants.count > 256) {
+            return Result::Error(EnumError::Capacity);
+        }
+        for (j in 0 .. domain.Variants.count) {
+            WireEnumVariant variant = EnumAt<WireEnumVariant>(ref const reader, domain.Variants, j) ?;
+            if (variant.Tag != j or variant.Name.length == 0) {
+                return Result::Error(EnumError::Variant);
+            }
+            for (k in 0 .. j) {
+                WireEnumVariant prior = EnumAt<WireEnumVariant>(ref const reader, domain.Variants, k) ?;
+                if (ObjectSame(ref const reader, variant.Name, prior.Name)) {
+                    return Result::Error(EnumError::Variant);
+                }
+            }
+        }
+        context.aliases[domain.Type] = true;
+        context.counts[domain.Type] = domain.Variants.count;
+    }
+    return Result::Ok();
 }

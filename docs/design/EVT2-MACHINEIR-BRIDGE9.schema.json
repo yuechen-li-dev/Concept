@@ -1,0 +1,224 @@
+{
+  "module": "Standard.Backend.BridgeSchema9",
+  "magic": "CMIRAMD9",
+  "version": 9,
+  "max_items": 1048576,
+  "representation": "little-endian;CMIRAMD8=8dc34f916ab8293e838db026d720825f10d2a7c12006c19924a0fffea94c0711;CMIRAMD7=74992e3d74be0581484be7f3c6341b7e75654d59b76255f075771367858d33c2;checked-pattern-CFG;immutable-subject-slot;ordered-exhaustive-arms;lexical-binding-regions;initialized-result-join;typed-test-and-require-variant;no-physical-match",
+  "records": [
+    {
+      "name": "PatternOperationKind",
+      "cases": [
+        {
+          "name": "TestVariant",
+          "tag": 0,
+          "go_value": "test_variant"
+        },
+        {
+          "name": "RequireVariant",
+          "tag": 1,
+          "go_value": "require_variant"
+        }
+      ]
+    },
+    {
+      "name": "WirePatternHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "WirePatternOperation",
+      "fields": [
+        {
+          "name": "Function",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Block",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Instruction",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Kind",
+          "type": {
+            "name": "PatternOperationKind"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WirePatternBinding",
+      "fields": [
+        {
+          "name": "Slot",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WirePatternArm",
+      "fields": [
+        {
+          "name": "Dispatch",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Body",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scope",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Bindings",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WirePatternBinding"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WirePatternFlow",
+      "fields": [
+        {
+          "name": "Function",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "SubjectSlot",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "ResultSlot",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Join",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scope",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Arms",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WirePatternArm"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WirePatternModule",
+      "fields": [
+        {
+          "name": "Base",
+          "type": {
+            "name": "WireTaggedModule"
+          }
+        },
+        {
+          "name": "Enums",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireEnumDomain"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Operations",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WirePatternOperation"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Flows",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WirePatternFlow"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

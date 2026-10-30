@@ -61,6 +61,11 @@ BridgeSequence<WireTaggedDomain> domains, int type) {
 // ordered fields and consistency; this does not choose native packing/frames.
 Result<void, TaggedError> ValidateTaggedDomains(ref const BridgeReader reader, WireTaggedModule document,
 ref ObjectAuthorityContext context) {
+    bool[256] aliases =[false ...];
+    return ValidateTaggedDomainsWithAliases(ref const reader, document, ref context, aliases);
+}
+Result<void, TaggedError> ValidateTaggedDomainsWithAliases(ref const BridgeReader reader, WireTaggedModule document,
+ref ObjectAuthorityContext context, bool[256] aliases) {
     WireObjectModule objects = document.Base.Objects;
     for (i in 0 .. document.Domains.count) {
         WireTaggedDomain d = TaggedAt<WireTaggedDomain>(ref const reader, document.Domains, i) ?;
@@ -69,15 +74,15 @@ ref ObjectAuthorityContext context) {
         }
         context.taggedTypes[d.Type] = true;
     }
-    bool[256] aliases =[false ...];
-    match (ValidateObjectTypeExtensions(ref const reader, objects, true, aliases, context.taggedTypes)) {
+    match (ValidateObjectTypeExtensions(ref const reader, objects, document.Domains.count > 0, aliases,
+    context.taggedTypes)) {
         Result::Ok => { }
         Result::Error(error) => { return Result::Error(TaggedError::ObjectContract); }
     }
     bool[256] payload =[false ...];
     for (i in 0 .. objects.Types.count) {
         WireObjectType t = TaggedAt<WireObjectType>(ref const reader, objects.Types, i) ?;
-        bool allowed = not context.taggedTypes[i] and t.Kind != ObjectKind::Void and t.Copy == ObjectCopyKind::CheckedValue;
+        bool allowed = not context.taggedTypes[i] and not aliases[i] and t.Kind != ObjectKind::Void and t.Copy == ObjectCopyKind::CheckedValue;
         if (t.Kind == ObjectKind::Array) {
             allowed = allowed and payload[t.Element];
         }
@@ -88,7 +93,7 @@ ref ObjectAuthorityContext context) {
             }
         }
         payload[i] = allowed;
-        if (not context.taggedTypes[i] and t.Kind != ObjectKind::Void and not allowed) {
+        if (not context.taggedTypes[i] and not aliases[i] and t.Kind != ObjectKind::Void and not allowed) {
             return Result::Error(TaggedError::Copy);
         }
     }

@@ -1,0 +1,58 @@
+module Standard.Backend.BridgeSchema9;
+profile Core;
+import Standard.Backend.BridgeSchema8;
+import Standard.Backend.BridgeSchema7;
+
+comptime string PatternBridgeMagic = "CMIRAMD9";
+comptime uint PatternBridgeVersion = 9u;
+comptime uint PatternBridgeMaxItems = 1048576u;
+comptime string PatternBridgeRepresentation = "little-endian;CMIRAMD8=8dc34f916ab8293e838db026d720825f10d2a7c12006c19924a0fffea94c0711;CMIRAMD7=74992e3d74be0581484be7f3c6341b7e75654d59b76255f075771367858d33c2;checked-pattern-CFG;immutable-subject-slot;ordered-exhaustive-arms;lexical-binding-regions;initialized-result-join;typed-test-and-require-variant;no-physical-match";
+
+[[reflect]] enum PatternOperationKind {
+    [[bridge_value("test_variant")]] TestVariant,
+    [[bridge_value("require_variant")]] RequireVariant
+}
+[[reflect]] record struct WirePatternHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WirePatternOperation {
+    int Function;
+    int Block;
+    int Instruction;
+    PatternOperationKind Kind;
+    // Base Equal/CheckIndex supplies canonical operands, ParentType and Member.
+    // This role is unavailable to all older contracts.
+}
+[[reflect]] record struct WirePatternBinding {
+    // Field identity/type/order comes from the admitted variant and projection.
+    int Slot;
+}
+[[reflect]] record struct WirePatternArm {
+    int Dispatch;
+    int Body;
+    int Scope;
+    BridgeSequence<WirePatternBinding> Bindings;
+}
+[[reflect]] record struct WirePatternFlow {
+    int Function;
+    int SubjectSlot;
+    int ResultSlot;
+    int Join;
+    int Scope;
+    BridgeSequence<WirePatternArm> Arms;
+}
+[[reflect]] record struct WirePatternModule {
+    WireTaggedModule Base;
+    BridgeSequence<WireEnumDomain> Enums;
+    BridgeSequence<WirePatternOperation> Operations;
+    BridgeSequence<WirePatternFlow> Flows;
+}
+reflect<PatternOperationKind>;
+reflect<WirePatternHeader>;
+reflect<WirePatternOperation>;
+reflect<WirePatternBinding>;
+reflect<WirePatternArm>;
+reflect<WirePatternFlow>;
+reflect<WirePatternModule>;

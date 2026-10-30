@@ -1,0 +1,12 @@
+profile Core;
+enum E {
+    End, Item(int value)
+}
+enum F {
+    End, Item(int value)
+}
+int Bad(E x) {
+    return match (x) {
+        E::End => 0, E::Missing(v) => v
+    };
+}

@@ -1,0 +1,39 @@
+module Testing.NativeMatchFacts;
+profile Core;
+import Testing.TaggedMatches;
+import Testing.OrdinaryMatches;
+import Testing.TaggedValues;
+
+[[fact]] void EnumMatchSelection() {
+    Assert.Equal(StateCode(StateAt(0)), 11, "first ordinary variant");
+    Assert.Equal(StateCode(StateAt(1)), 22, "second ordinary variant");
+    Assert.Equal(StateCode(StateAt(2)), 33, "last ordinary variant");
+    Assert.Equal(ColorCode(ColorAt(1)), 2, "distinct nominal enum");
+    Assert.Equal(StateLoop(5), 12, "statement match in loop");
+    Assert.Equal(AllReturn(StateAt(1)), 20, "all statement arms return");
+    Assert.Equal(Wildcard(17), 13, "integer wildcard");
+    Assert.Equal(Inspect(MakeEnd()), 0, "empty tagged case");
+    Assert.Equal(Inspect(MakeMany(10)), 27, "ordered scalar, record and array bindings");
+    Assert.Equal(Inspect(MakeStamped(29)), 29, "record binding");
+    Assert.Equal(Inspect(Replace(MakeInteger(40))), 41, "tagged match result and calls");
+    Assert.Equal(RecordResult(MakeMany(10)).count, 11, "aggregate expression result");
+}
+[[fact]] void MatchOrderAndControlFlow() {
+    int log = 0;
+    Assert.Equal(Guards(MakeInteger(7), ref log), 7, "guarded match uses payload binding");
+    Assert.Equal(log, 123, "false guards continue once in source order");
+    log = 0;
+    Assert.Equal(Guards(MakeInteger(- 7), ref log), - 7, "first true guard wins");
+    Assert.Equal(log, 1, "later guards do not execute");
+    log = 0;
+    Assert.Equal(Guards(MakeEnd(), ref log), 0, "irrelevant variant guards do not execute");
+    Assert.Equal(log, 9, "only selected arm executes");
+    int calls = 0;
+    Assert.Equal(Once(ref calls, 5), 6, "match result feeds native calls");
+    Assert.Equal(calls, 1, "scrutinee evaluated once");
+    Assert.Equal(Nested(MakeEnd(), 19), 19, "nested enum match");
+    Assert.Equal(Statements(MakeInteger(4), 3), 15, "binding copies initialized each loop iteration");
+    Assert.Equal(Statements(MakeInteger(- 4), 3), - 4, "early arm return");
+    Assert.Equal(Statements(MakeMany(3), 2), 18, "loop inside match arm");
+    Assert.Equal(SpillMatch(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0), 52.5, "spilled floating operands feed match return");
+}

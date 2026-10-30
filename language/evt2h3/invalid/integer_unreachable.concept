@@ -1,0 +1,12 @@
+profile Core;
+enum E {
+    End, Item(int value)
+}
+enum F {
+    End, Item(int value)
+}
+int Bad(int x) {
+    return match (x) {
+        _ => 1, 0 => 2
+    };
+}
