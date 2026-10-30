@@ -1,0 +1,56 @@
+module Standard.Backend.BridgeSchema8;
+profile Core;
+import Standard.Backend.BridgeSchema6;
+
+comptime string TaggedBridgeMagic = "CMIRAMD8";
+comptime uint TaggedBridgeVersion = 8u;
+comptime uint TaggedBridgeMaxItems = 1048576u;
+// The embedded contracts are reused verbatim. Sum types are opaque aggregate
+// types whose alternatives are described here, not simultaneously live fields.
+comptime string TaggedBridgeRepresentation = "little-endian;CMIRAMD6=67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d;nominal-tagged-values;ordinal-u32-tag;checked-variant-fields;complete-construction;checked-value-copy;atomic-checked-project;no-payload-references-or-nested-sums";
+
+[[reflect]] enum TaggedOperationKind {
+    [[bridge_value("make_tagged")]] Construct,
+    [[bridge_value("checked_payload")]] CheckedProject
+}
+[[reflect]] record struct WireTaggedHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireTaggedVariant {
+    BridgeText Identity;
+    BridgeText Name;
+    int Tag;
+    int Size;
+    int Align;
+    BridgeSequence<WireObjectField> Fields;
+}
+[[reflect]] record struct WireTaggedDomain {
+    // Identity, layout, size, alignment and copy eligibility are canonical in
+    // Base.Objects.Types[Type]. Fields there are empty: no record projection.
+    int Type;
+    int PayloadOffset;
+    BridgeSequence<WireTaggedVariant> Variants;
+}
+[[reflect]] record struct WireTaggedOperation {
+    int Function;
+    int Block;
+    int Instruction;
+    TaggedOperationKind Kind;
+    // The base instruction holds the canonical operands, result, types and
+    // provenance. Member is the variant; Extent is the projection field ID.
+    // Construct uses MakeAggregate, CheckedProject uses Load. Neither gains
+    // sum meaning outside this v8 operation table and independently admitted domain.
+}
+[[reflect]] record struct WireTaggedModule {
+    WireBorrowModule Base;
+    BridgeSequence<WireTaggedDomain> Domains;
+    BridgeSequence<WireTaggedOperation> Operations;
+}
+reflect<TaggedOperationKind>;
+reflect<WireTaggedHeader>;
+reflect<WireTaggedVariant>;
+reflect<WireTaggedDomain>;
+reflect<WireTaggedOperation>;
+reflect<WireTaggedModule>;

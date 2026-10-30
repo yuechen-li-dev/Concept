@@ -412,6 +412,14 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "checked_payload":
+					domain, ok := tagged[in.Aggregate]
+					if !ok || in.Result < 0 || in.Slot != -1 || len(in.Args) != 1 || argType(0) != domain.Type || in.Member < 0 || in.Member >= len(domain.Variants) || in.Extent < 0 || in.Extent >= len(domain.Variants[in.Member].Fields) || in.FrameOffset != 0 || in.Stride != 0 || in.Literal != "" {
+						return fmt.Errorf("LIR_TAGGED_ACCESS_AUTHORITY")
+					}
+					if in.Type != domain.Variants[in.Member].Fields[in.Extent].Type {
+						return fmt.Errorf("LIR_TAGGED_ACCESS_TYPE")
+					}
 				case "make_tagged":
 					domain, ok := tagged[in.Type]
 					if !ok || in.Result < 0 || in.Slot != -1 || in.Member < 0 || in.Member >= len(domain.Variants) || len(in.Args) != len(domain.Variants[in.Member].Fields) {

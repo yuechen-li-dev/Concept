@@ -180,6 +180,14 @@ WireObjectInstruction in, WireBorrowFunction meta) {
 }
 Result<void, BorrowError> ValidateBorrowFunction(ref const BridgeReader source, WireBorrowModule document,
 int ordinal) {
+    bool[256] sums =[false ...];
+    bool[512] constructors =[false ...];
+    bool[512] projects =[false ...];
+    return ValidateBorrowFunctionExtensions(ref const source, document, ordinal, sums, constructors,
+    projects);
+}
+Result<void, BorrowError> ValidateBorrowFunctionExtensions(ref const BridgeReader source, WireBorrowModule document,
+int ordinal, bool[256] sums, bool[512] constructors, bool[512] projects) {
     WireObjectFunction owner = BorrowAt<WireObjectFunction>(ref const source, document.Objects.Functions,
     ordinal) ?;
     WireBorrowFunction meta = BorrowAt<WireBorrowFunction>(ref const source, document.Authority, ordinal) ?;
@@ -202,6 +210,9 @@ int ordinal) {
         }
     }
     ObjectAuthorityContext authority = EmptyObjectAuthority();
+    authority.taggedTypes = sums;
+    authority.taggedConstructors = constructors;
+    authority.taggedProjects = projects;
     authority.enabled = true;
     int previous = - 1;
     for (i in 0 .. meta.References.count) {

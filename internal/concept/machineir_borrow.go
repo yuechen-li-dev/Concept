@@ -10,6 +10,9 @@ import (
 // Checked semantic projection and transport only. Physical references, their
 // allocation and Win64 placement remain Cathedral decisions.
 func projectBorrowMachine(lir LIRModule) (MachineModule, error) {
+	return projectBorrowContract(lir, false)
+}
+func projectBorrowContract(lir LIRModule, extension bool) (MachineModule, error) {
 	base, err := projectObjectContract(lir, true)
 	if err != nil {
 		return MachineModule{}, err
@@ -76,6 +79,9 @@ func projectBorrowMachine(lir LIRModule) (MachineModule, error) {
 		out.Authority = append(out.Authority, meta)
 	}
 	m := MachineModule{Borrow: &out}
+	if extension {
+		return m, nil
+	}
 	return m, VerifyMachineIR(m)
 }
 func encodeBorrowMachineBridge(m BorrowModule) ([]byte, error) {

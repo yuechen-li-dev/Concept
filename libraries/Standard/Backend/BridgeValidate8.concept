@@ -1,0 +1,300 @@
+module Standard.Backend.BridgeValidate8;
+profile Core;
+import Standard.Backend.BridgeCodec8;
+import Standard.Backend.BridgeValidate6;
+
+enum TaggedError {
+    Malformed, Version, SchemaMismatch, Capacity, Domain, Variant, Geometry, Initialization, Access,
+    Copy, ObjectContract
+}
+string DescribeTaggedError(TaggedError error) {
+    return match (error) {
+        TaggedError::Malformed => "CMIRAMD8_MALFORMED",
+        TaggedError::Version => "CMIRAMD8_VERSION_MISMATCH",
+        TaggedError::SchemaMismatch => "CMIRAMD8_SCHEMA_HASH_MISMATCH",
+        TaggedError::Capacity => "CMIRAMD8_CAPACITY_EXCEEDED",
+        TaggedError::Domain => "CMIRAMD8_TAGGED_DOMAIN",
+        TaggedError::Variant => "CMIRAMD8_TAGGED_VARIANT",
+        TaggedError::Geometry => "CMIRAMD8_PAYLOAD_GEOMETRY",
+        TaggedError::Initialization => "CMIRAMD8_PAYLOAD_INITIALIZATION",
+        TaggedError::Access => "CMIRAMD8_ACTIVE_VARIANT_AUTHORITY",
+        TaggedError::Copy => "CMIRAMD8_COPY_ELIGIBILITY",
+        TaggedError::ObjectContract => "CMIRAMD8_OBJECT_CONTRACT"
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, TaggedError> ReadTagged(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<T>{0})) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(TaggedError::Malformed)
+    };
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, TaggedError> TaggedAt(ref const BridgeReader reader, BridgeSequence<T> sequence, int index) {
+    return match (ObjectAt<T>(ref const reader, sequence, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(TaggedError::Malformed)
+    };
+}
+Result<WireTaggedModule, BackendError> ReadTaggedDocument(ref const BridgeReader source) {
+    BridgeReader reader = BridgeReader{source.data, 0};
+    ReadTaggedBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WireTaggedModule>{0});
+}
+bool TaggedLayoutIdentity(ref const BridgeReader reader, BridgeText text) {
+    if (text.length != 71) { return false; }
+    string prefix = "tagged:";
+    for (i in 0 .. 7) {
+        if (reader.data[text.offset + i] != prefix[i]) { return false; }
+    }
+    return ObjectDigest(ref const reader, BridgeText{text.offset + 7, 64});
+}
+Result<WireTaggedDomain, TaggedError> TaggedDomainAt(ref const BridgeReader reader,
+BridgeSequence<WireTaggedDomain> domains, int type) {
+    for (i in 0 .. domains.count) {
+        WireTaggedDomain domain = TaggedAt<WireTaggedDomain>(ref const reader, domains, i) ?;
+        if (domain.Type == type) { return Result::Ok(domain); }
+    }
+    return Result::Error(TaggedError::Domain);
+}
+// Source checking supplies layout. Admission validates bounds, identities,
+// ordered fields and consistency; this does not choose native packing/frames.
+Result<void, TaggedError> ValidateTaggedDomains(ref const BridgeReader reader, WireTaggedModule document,
+ref ObjectAuthorityContext context) {
+    WireObjectModule objects = document.Base.Objects;
+    for (i in 0 .. document.Domains.count) {
+        WireTaggedDomain d = TaggedAt<WireTaggedDomain>(ref const reader, document.Domains, i) ?;
+        if (d.Type < 0 or d.Type >= objects.Types.count or context.taggedTypes[d.Type]) {
+            return Result::Error(TaggedError::Domain);
+        }
+        context.taggedTypes[d.Type] = true;
+    }
+    bool[256] aliases =[false ...];
+    match (ValidateObjectTypeExtensions(ref const reader, objects, true, aliases, context.taggedTypes)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(TaggedError::ObjectContract); }
+    }
+    bool[256] payload =[false ...];
+    for (i in 0 .. objects.Types.count) {
+        WireObjectType t = TaggedAt<WireObjectType>(ref const reader, objects.Types, i) ?;
+        bool allowed = not context.taggedTypes[i] and t.Kind != ObjectKind::Void and t.Copy == ObjectCopyKind::CheckedValue;
+        if (t.Kind == ObjectKind::Array) {
+            allowed = allowed and payload[t.Element];
+        }
+        if (t.Kind == ObjectKind::Aggregate) {
+            for (j in 0 .. t.Fields.count) {
+                WireObjectField f = TaggedAt<WireObjectField>(ref const reader, t.Fields, j) ?;
+                allowed = allowed and payload[f.Type];
+            }
+        }
+        payload[i] = allowed;
+        if (not context.taggedTypes[i] and t.Kind != ObjectKind::Void and not allowed) {
+            return Result::Error(TaggedError::Copy);
+        }
+    }
+    for (i in 0 .. document.Domains.count) {
+        WireTaggedDomain d = TaggedAt<WireTaggedDomain>(ref const reader, document.Domains, i) ?;
+        WireObjectType t = TaggedAt<WireObjectType>(ref const reader, objects.Types, d.Type) ?;
+        if (not TaggedLayoutIdentity(ref const reader, t.LayoutIdentity) or t.Kind != ObjectKind::Aggregate or t.Fields.count != 0 or t.Immutable or t.Representation != ObjectRepresentation::Native) {
+            return Result::Error(TaggedError::Domain);
+        }
+        if (d.Variants.count < 1 or d.Variants.count > 256) {
+            return Result::Error(TaggedError::Capacity);
+        }
+        int payloadSize = 1;
+        int payloadAlign = 1;
+        bool nonempty = false;
+        for (v in 0 .. d.Variants.count) {
+            WireTaggedVariant variant = TaggedAt<WireTaggedVariant>(ref const reader, d.Variants, v) ?;
+            if (variant.Tag != v or variant.Name.length == 0 or not ObjectFieldOwner(ref const reader,
+            t.Identity, variant.Name, variant.Identity)) {
+                return Result::Error(TaggedError::Variant);
+            }
+            for (j in 0 .. v) {
+                WireTaggedVariant prior = TaggedAt<WireTaggedVariant>(ref const reader, d.Variants, j) ?;
+                if (ObjectSame(ref const reader, variant.Name, prior.Name)) {
+                    return Result::Error(TaggedError::Variant);
+                }
+            }
+            if (variant.Fields.count > 64) { return Result::Error(TaggedError::Capacity); }
+            int end = 0;
+            int alignment = 1;
+            for (j in 0 .. variant.Fields.count) {
+                WireObjectField f = TaggedAt<WireObjectField>(ref const reader, variant.Fields, j) ?;
+                if (f.ID != j or f.Name.length == 0 or not ObjectFieldOwner(ref const reader, variant.Identity,
+                f.Name, f.Identity) or not ObjectDigest(ref const reader, f.SemanticType)) {
+                    return Result::Error(TaggedError::Variant);
+                }
+                if (f.Type < 0 or f.Type >= d.Type or not payload[f.Type]) {
+                    return Result::Error(TaggedError::Copy);
+                }
+                WireObjectType child = TaggedAt<WireObjectType>(ref const reader, objects.Types, f.Type) ?;
+                if (f.Size != child.Size or f.Align != child.Align or not ObjectSame(ref const reader,
+                f.LayoutIdentity, child.LayoutIdentity) or f.Align <= 0 or f.Offset < end or f.Offset % f.Align != 0 or f.Size > 1048576 or f.Offset > 1048576 - f.Size) {
+                    return Result::Error(TaggedError::Geometry);
+                }
+                for (k in 0 .. j) {
+                    WireObjectField prior = TaggedAt<WireObjectField>(ref const reader, variant.Fields,
+                    k) ?;
+                    if (ObjectSame(ref const reader, f.Name, prior.Name)) {
+                        return Result::Error(TaggedError::Variant);
+                    }
+                }
+                if (f.Offset !=((end + f.Align - 1) / f.Align) * f.Align) {
+                    return Result::Error(TaggedError::Geometry);
+                }
+                end = f.Offset + f.Size;
+                if (f.Align > alignment) {
+                    alignment = f.Align;
+                }
+            }
+            if (variant.Align != alignment or variant.Size !=((end + alignment - 1) / alignment) * alignment) {
+                return Result::Error(TaggedError::Geometry);
+            }
+            if (variant.Size > payloadSize) {
+                payloadSize = variant.Size;
+            }
+            if (variant.Align > payloadAlign) {
+                payloadAlign = variant.Align;
+            }
+            nonempty = nonempty or variant.Fields.count > 0;
+        }
+        int alignment = if (payloadAlign > 4) payloadAlign else 4;
+        if (not nonempty or t.Align != alignment or d.PayloadOffset !=((4 + payloadAlign - 1) / payloadAlign) * payloadAlign or payloadSize > 1048576 - d.PayloadOffset or t.Size !=((d.PayloadOffset + payloadSize + alignment - 1) / alignment) * alignment) {
+            return Result::Error(TaggedError::Geometry);
+        }
+    }
+    return Result::Ok();
+}
+Result<void, TaggedError> ValidateTaggedOperations(ref const BridgeReader reader, WireTaggedModule document,
+int ordinal, ref bool[512] constructors, ref bool[512] projects) {
+    WireObjectFunction f = TaggedAt<WireObjectFunction>(ref const reader, document.Base.Objects.Functions,
+    ordinal) ?;
+    for (i in 0 .. document.Operations.count) {
+        WireTaggedOperation op = TaggedAt<WireTaggedOperation>(ref const reader, document.Operations,
+        i) ?;
+        if (op.Function < 0 or op.Function >= document.Base.Objects.Functions.count) {
+            return Result::Error(TaggedError::Access);
+        }
+        if (i > 0) {
+            WireTaggedOperation p = TaggedAt<WireTaggedOperation>(ref const reader, document.Operations,
+            i - 1) ?;
+            if (op.Function < p.Function or(op.Function == p.Function and(op.Block < p.Block or(op.Block == p.Block and op.Instruction <= p.Instruction)))) {
+                return Result::Error(TaggedError::Access);
+            }
+        }
+        if (op.Function == ordinal) {
+            WireObjectBlock b = TaggedAt<WireObjectBlock>(ref const reader, f.Blocks, op.Block) ?;
+            WireObjectInstruction in = TaggedAt<WireObjectInstruction>(ref const reader, b.Instructions,
+            op.Instruction) ?;
+            if (in.Result < 0 or in.Result >= f.Values.count or in.Result >= 512 or constructors[in.Result] or projects[in.Result]) {
+                return Result::Error(TaggedError::Access);
+            }
+            int parent = if (op.Kind == TaggedOperationKind::Construct) in.Type else in.ParentType;
+            WireTaggedDomain domain = TaggedDomainAt(ref const reader, document.Domains, parent) ?;
+            WireTaggedVariant variant = TaggedAt<WireTaggedVariant>(ref const reader, domain.Variants,
+            in.Member) ?;
+            if (in.Slot != - 1 or in.Offset != 0 or in.Stride != 0 or in.Literal.length != 0) {
+                return Result::Error(TaggedError::Access);
+            }
+            WireObjectValue result = TaggedAt<WireObjectValue>(ref const reader, f.Values, in.Result) ?;
+            if (result.Type != in.Type) { return Result::Error(TaggedError::Access); }
+            if (op.Kind == TaggedOperationKind::Construct) {
+                if (in.Op != ObjectOpcode::MakeAggregate or in.ParentType != - 1 or in.Extent != 0 or in.Args.count != variant.Fields.count or result.Class != ObjectValueClass::Aggregate or in.Copy != ObjectCopyKind::None) {
+                    return Result::Error(TaggedError::Initialization);
+                }
+                for (a in 0 .. in.Args.count) {
+                    WireObjectValueUse use = TaggedAt<WireObjectValueUse>(ref const reader, in.Args,
+                    a) ?;
+                    WireObjectValue value = TaggedAt<WireObjectValue>(ref const reader, f.Values, use.Value) ?;
+                    WireObjectField field = TaggedAt<WireObjectField>(ref const reader, variant.Fields,
+                    a) ?;
+                    if (value.Type != field.Type or value.Class == ObjectValueClass::Location) {
+                        return Result::Error(TaggedError::Initialization);
+                    }
+                }
+                constructors[in.Result] = true;
+            } else {
+                if (in.Op != ObjectOpcode::Load or in.Args.count != 1 or result.Class == ObjectValueClass::Location) {
+                    return Result::Error(TaggedError::Access);
+                }
+                WireObjectValueUse use = TaggedAt<WireObjectValueUse>(ref const reader, in.Args, 0) ?;
+                WireObjectValue value = TaggedAt<WireObjectValue>(ref const reader, f.Values, use.Value) ?;
+                WireObjectField field = TaggedAt<WireObjectField>(ref const reader, variant.Fields, in.Extent) ?;
+                if (value.Type != parent or value.Class != ObjectValueClass::Aggregate or in.Type != field.Type) {
+                    return Result::Error(TaggedError::Access);
+                }
+                projects[in.Result] = true;
+            }
+        }
+    }
+    return Result::Ok();
+}
+Result<void, TaggedError> ValidateTaggedMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadTaggedBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => {
+            if (error == BackendError::BridgeVersion) {
+                return Result::Error(TaggedError::Version);
+            }
+            if (error == BackendError::BridgeSchemaMismatch) {
+                return Result::Error(TaggedError::SchemaMismatch);
+            }
+            return Result::Error(TaggedError::Malformed);
+        }
+    }
+    WireTaggedModule document = ReadTagged<WireTaggedModule>(ref reader) ?;
+    if (reader.offset != Len(artifact)) { return Result::Error(TaggedError::Malformed); }
+    WireObjectModule objects = document.Base.Objects;
+    if (document.Domains.count < 1 or document.Domains.count > 128 or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or objects.Dependencies.count > 128 or document.Base.Authority.count != objects.Functions.count or document.Operations.count > 131072) {
+        return Result::Error(TaggedError::Capacity);
+    }
+    ObjectAuthorityContext context = EmptyObjectAuthority();
+    ValidateTaggedDomains(ref const reader, document, ref context) ?;
+    for (i in 0 .. objects.Dependencies.count) {
+        WireObjectDependency d = TaggedAt<WireObjectDependency>(ref const reader, objects.Dependencies,
+        i) ?;
+        if (d.Identity.length <= 0 or not ObjectDigest(ref const reader, d.Digest)) {
+            return Result::Error(TaggedError::Domain);
+        }
+        for (j in 0 .. i) {
+            WireObjectDependency p = TaggedAt<WireObjectDependency>(ref const reader, objects.Dependencies,
+            j) ?;
+            if (ObjectSame(ref const reader, d.Identity, p.Identity)) {
+                return Result::Error(TaggedError::Domain);
+            }
+        }
+    }
+    for (i in 0 .. objects.Functions.count) {
+        bool[512] constructors =[false ...];
+        bool[512] projects =[false ...];
+        ValidateTaggedOperations(ref const reader, document, i, ref constructors, ref projects) ?;
+        match (ValidateBorrowFunctionExtensions(ref const reader, document.Base, i, context.taggedTypes,
+        constructors, projects)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(TaggedError::ObjectContract); }
+        }
+    }
+    return Result::Ok();
+}
+Result<int, TaggedError> ValidatedTaggedBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidateTaggedMachineBridge(artifact) ?;
+    if (Len(output) < Len(artifact)) { return Result::Error(TaggedError::Capacity); }
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadTaggedBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(TaggedError::Malformed); }
+    }
+    int header = reader.offset;
+    WireTaggedModule document = ReadTagged<WireTaggedModule>(ref reader) ?;
+    for (i in 0 .. header) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, header};
+    match (WriteWire(ref const document, ref const reader, ref writer)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(TaggedError::Malformed); }
+    }
+    return Result::Ok(writer.offset);
+}

@@ -72,8 +72,8 @@ func TestEVT2h2CheckedTaggedLIR(t *testing.T) {
 			}
 		}
 	}
-	if _, err := LowerLirToAmd64Machine(lir); err == nil || !strings.Contains(err.Error(), "EVT2H2_TAGGED_TRANSPORT_REQUIRED") {
-		t.Fatalf("unsafe frozen transport fallback: %v", err)
+	if m, err := LowerLirToAmd64Machine(lir); err != nil || m.Tagged == nil {
+		t.Fatalf("missing tagged contract: %v", err)
 	}
 }
 

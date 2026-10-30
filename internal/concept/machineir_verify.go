@@ -51,6 +51,12 @@ func machineConditionValid(c string) bool {
 }
 func machineWidthValid(w int) bool { return w == 1 || w == 2 || w == 4 || w == 8 }
 func VerifyMachineIR(m MachineModule) error {
+	if m.Tagged != nil {
+		if m.Enum != nil || m.Borrow != nil || m.Object != nil || m.Scalar != nil || len(m.Functions) != 0 {
+			return fmt.Errorf("MIR_MIXED_CONTRACT_PAYLOAD")
+		}
+		return verifyTaggedMachine(*m.Tagged)
+	}
 	if m.Enum != nil {
 		if m.Borrow != nil || m.Object != nil || m.Scalar != nil || len(m.Functions) != 0 {
 			return fmt.Errorf("MIR_MIXED_CONTRACT_PAYLOAD")

@@ -11,6 +11,12 @@ func verifyObjectContract(m ObjectModule, authority []BorrowFunction) error {
 	return verifyObjectContractEnums(m, authority, nil)
 }
 func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums []LIREnum) error {
+	return verifyObjectContractTagged(m, authority, enums, nil, nil)
+}
+
+type taggedSite struct{ function, block, instruction int }
+
+func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enums []LIREnum, tagged []LIRTaggedEnum, operations map[taggedSite]string) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD5_%s", s) }
 	if len(m.Types) == 0 || len(m.Types) > 256 || len(m.Functions) == 0 || len(m.Functions) > 128 || len(m.Dependencies) > 128 {
 		return bad("CAPACITY")
@@ -31,7 +37,19 @@ func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums
 		if _, e := machineBridgeTag(objectBridgeTagsObjectKind, t.Kind); e != nil {
 			return bad("TYPE_KIND")
 		}
-		if t.Kind == "aggregate" {
+		var sum *LIRTaggedEnum
+		for j := range tagged {
+			if string(tagged[j].Type) == t.LayoutIdentity {
+				sum = &tagged[j]
+				break
+			}
+		}
+		if sum != nil {
+			if t.Kind != "aggregate" || t.Representation != "native" || len(t.Fields) != 0 || t.Element != -1 || t.Extent != 0 || t.Stride != 0 || t.Immutable || t.Copy != "checked_value" {
+				return bad("TAGGED_REPRESENTATION")
+			}
+			types[i] = sum.Type
+		} else if t.Kind == "aggregate" {
 			if t.Copy != "checked_value" || t.Element != -1 || t.Extent != 0 || t.Stride != 0 {
 				return bad("COPY_ELIGIBILITY")
 			}
@@ -103,7 +121,7 @@ func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums
 	if len(layouts) == 0 && authority == nil && len(enums) == 0 {
 		return bad("MISSING_AGGREGATE_LAYOUT")
 	}
-	lir := LIRModule{Aggregates: layouts, Enums: enums}
+	lir := LIRModule{Aggregates: layouts, Enums: enums, TaggedEnums: tagged}
 	facts := map[string]bool{}
 	typeAt := func(id int) (LIRType, error) {
 		if id < 0 || id >= len(types) {
@@ -225,6 +243,12 @@ func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums
 					}
 				}
 				li := LIRInstruction{Op: in.Op, Result: in.Result, Type: t, Slot: in.Slot, Member: in.Member, FrameOffset: in.Offset, Extent: in.Extent, Stride: in.Stride, Literal: in.Literal, Source: Span{Line: in.Source.Line, Column: in.Source.Column}, Decision: in.Decision, Facts: in.Facts}
+				if op, ok := operations[taggedSite{fi, bi, ii}]; ok {
+					if (op == "make_tagged" && in.Op != "make_aggregate") || (op == "checked_payload" && in.Op != "load") {
+						return bad("TAGGED_OPERATION")
+					}
+					li.Op = op
+				}
 				if authority != nil {
 					li.Scope = borrowSiteScope(authority[fi], bi, ii)
 					if in.Op == "copy_value" && in.Result >= 0 && f.Values[in.Result].Class == "location" {

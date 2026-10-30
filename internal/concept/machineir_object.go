@@ -43,6 +43,27 @@ func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 				return add(t, ObjectType{Identity: e.Identity, LayoutIdentity: string(e.Type), Name: e.Name, Kind: "u32", Representation: "scalar", Size: e.Size, Align: e.Alignment, Element: -1, Copy: "checked_value", Evidence: "checked_layout"}), nil
 			}
 		}
+		if element, extent, array := lirArrayValue(t); array {
+			eid, err := valueType(element)
+			if err != nil {
+				return -1, err
+			}
+			child := out.Types[eid]
+			return add(t, ObjectType{Identity: string(t), LayoutIdentity: string(t), Name: string(t), Kind: "array", Representation: "fixed_array", Size: child.Size * extent, Align: child.Align, Element: eid, Extent: extent, Stride: child.Size, Copy: "checked_value", Evidence: "checked_layout"}), nil
+		}
+		for _, e := range lir.TaggedEnums {
+			if e.Type != t {
+				continue
+			}
+			for _, v := range e.Variants {
+				for _, f := range v.Fields {
+					if _, err := valueType(f.Type); err != nil {
+						return -1, err
+					}
+				}
+			}
+			return add(t, ObjectType{Identity: e.Identity, LayoutIdentity: string(e.Type), Name: e.Name, Kind: "aggregate", Representation: "native", Size: e.Size, Align: e.Alignment, Element: -1, Copy: e.CopyEligibility, Evidence: "checked_layout"}), nil
+		}
 		if t == "void" || lirCallScalar(t) {
 			width := scalarWidth(string(t))
 			copy := "checked_value"
@@ -138,6 +159,12 @@ func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 				if in.Op == "borrow" {
 					si.Op = "copy_value"
 				}
+				if in.Op == "make_tagged" {
+					si.Op = "make_aggregate"
+				}
+				if in.Op == "checked_payload" {
+					si.Op = "load"
+				}
 				if in.Aggregate != "" {
 					si.ParentType, e = valueType(in.Aggregate)
 					if e != nil {
@@ -186,7 +213,7 @@ func projectObjectContract(lir LIRModule, borrow bool) (MachineModule, error) {
 				if in.Op == "store_slot" && in.Slot >= 0 && f.Slots[slotOrdinal(f.Slots, in.Slot)].Readonly && lirCallScalar(in.Type) {
 					si.Op = "initialize_slot"
 				}
-				if k := out.Types[tid].Kind; (k == "aggregate" || k == "array") && (in.Op == "initialize_slot" || in.Op == "load_slot" || in.Op == "store_slot" || in.Op == "load" || in.Op == "store") {
+				if k := out.Types[tid].Kind; (k == "aggregate" || k == "array") && (si.Op == "initialize_slot" || si.Op == "load_slot" || si.Op == "store_slot" || si.Op == "load" || si.Op == "store") {
 					si.Copy = "checked_value"
 				}
 				if in.Op == "call" {

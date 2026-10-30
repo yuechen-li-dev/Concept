@@ -300,7 +300,7 @@ func TestEVT2h1SourceBoundaries(t *testing.T) {
 		}
 		t.Logf("%s: %v", filepath.Base(path), err)
 	}
-	for name, want := range map[string]string{"payload": "EVT2H2_TAGGED_TRANSPORT_REQUIRED", "aggregate": "LIR_UNSUPPORTED_ENUM_CONTAINER", "reference": "LIR_UNSUPPORTED_ENUM_CONTAINER"} {
+	for name, want := range map[string]string{"aggregate": "LIR_UNSUPPORTED_ENUM_CONTAINER", "reference": "LIR_UNSUPPORTED_ENUM_CONTAINER"} {
 		path := "../../language/evt2h1/unsupported/" + name + ".concept"
 		source, err := os.ReadFile(path)
 		if err != nil {

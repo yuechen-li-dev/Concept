@@ -1,0 +1,195 @@
+{
+  "module": "Standard.Backend.BridgeSchema8",
+  "magic": "CMIRAMD8",
+  "version": 8,
+  "max_items": 1048576,
+  "representation": "little-endian;CMIRAMD6=67d71de72ece8b4b6ce438840543e6220fd3ddcc035e2142147c679b4c77e73d;nominal-tagged-values;ordinal-u32-tag;checked-variant-fields;complete-construction;checked-value-copy;atomic-checked-project;no-payload-references-or-nested-sums",
+  "records": [
+    {
+      "name": "TaggedOperationKind",
+      "cases": [
+        {
+          "name": "Construct",
+          "tag": 0,
+          "go_value": "make_tagged"
+        },
+        {
+          "name": "CheckedProject",
+          "tag": 1,
+          "go_value": "checked_payload"
+        }
+      ]
+    },
+    {
+      "name": "WireTaggedHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireTaggedVariant",
+      "fields": [
+        {
+          "name": "Identity",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Name",
+          "type": {
+            "name": "BridgeText"
+          }
+        },
+        {
+          "name": "Tag",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Size",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Align",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Fields",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireObjectField"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireTaggedDomain",
+      "fields": [
+        {
+          "name": "Type",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "PayloadOffset",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Variants",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireTaggedVariant"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireTaggedOperation",
+      "fields": [
+        {
+          "name": "Function",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Block",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Instruction",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Kind",
+          "type": {
+            "name": "TaggedOperationKind"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireTaggedModule",
+      "fields": [
+        {
+          "name": "Base",
+          "type": {
+            "name": "WireBorrowModule"
+          }
+        },
+        {
+          "name": "Domains",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireTaggedDomain"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Operations",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireTaggedOperation"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

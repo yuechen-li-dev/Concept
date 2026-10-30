@@ -99,6 +99,13 @@ bool requireAggregate) {
 // The frozen v5/v6 entrypoints always pass an empty set.
 Result<void, ObjectError> ValidateObjectTypeAliases(ref const BridgeReader source, WireObjectModule document,
 bool requireAggregate, bool[256] aliases) {
+    bool[256] sums =[false ...];
+    return ValidateObjectTypeExtensions(ref const source, document, requireAggregate, aliases, sums);
+}
+// Extensions are admitted by a versioned outer validator. Legacy v5/v6/v7
+// callers provide no sum types and retain their existing contract.
+Result<void, ObjectError> ValidateObjectTypeExtensions(ref const BridgeReader source, WireObjectModule document,
+bool requireAggregate, bool[256] aliases, bool[256] sums) {
     int[256] depths =[0 ...];
     int aggregateCount = 0;
     for (i in 0 .. document.Types.count) {
@@ -117,7 +124,7 @@ bool requireAggregate, bool[256] aliases) {
         }
         if (type.Kind == ObjectKind::Aggregate) {
             aggregateCount += 1;
-            if (aggregateCount > 128 or type.Fields.count < 1 or type.Fields.count > 64) {
+            if (aggregateCount > 128 or(not sums[i] and type.Fields.count < 1) or type.Fields.count > 64) {
                 return Result::Error(ObjectError::Capacity);
             }
             if ((type.Representation != ObjectRepresentation::Native and type.Representation != ObjectRepresentation::C) or type.Size <= 0 or type.Size > 1048576 or not ObjectAlignment(type.Align) or type.Size % type.Align != 0 or type.Element != - 1 or type.Extent != 0 or type.Stride != 0) {
@@ -125,6 +132,12 @@ bool requireAggregate, bool[256] aliases) {
             }
             int end = 0;
             int depth = 1;
+            if (sums[i]) {
+                if (type.Fields.count != 0 or type.Immutable or type.Representation != ObjectRepresentation::Native) {
+                    return Result::Error(ObjectError::Geometry);
+                }
+                depths[i] = 1;
+            }
             for (j in 0 .. type.Fields.count) {
                 WireObjectField field = ObjectAt<WireObjectField>(ref const source, type.Fields, j) ?;
                 if (field.ID != j or field.Name.length == 0 or not ObjectFieldOwner(ref const source,
@@ -197,6 +210,9 @@ struct ObjectBlockMask {
     bool[128] items;
 }
 struct ObjectAuthorityContext {
+    bool[256] taggedTypes;
+    bool[512] taggedConstructors;
+    bool[512] taggedProjects;
     bool enabled;
     bool[512] valid;
     int[512] roots;
@@ -206,7 +222,9 @@ struct ObjectAuthorityContext {
 }
 ObjectAuthorityContext EmptyObjectAuthority() {
     return ObjectAuthorityContext {
-        false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask{[false ...]}
+        [false ...],[false ...],[false ...], false,[false ...],[- 1 ...],[false ...],[- 1 ...],[ObjectBlockMask {
+            [false ...]
+        }
         ...]
     };
 }
@@ -389,10 +407,11 @@ WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
                     }
                 }
                 ObjectOpcode::MakeAggregate => {
-                    if (type.Kind != ObjectKind::Aggregate or in.Args.count != type.Fields.count or not operandsAreValues) {
+                    bool tagged = authority.taggedConstructors[in.Result];
+                    if (authority.taggedTypes[in.Type] != tagged or type.Kind != ObjectKind::Aggregate or(not tagged and in.Args.count != type.Fields.count) or not operandsAreValues) {
                         return Result::Error(ObjectError::Operation);
                     }
-                    for (ai in 0 .. in.Args.count) {
+                    for (ai in 0 ..(if (tagged) 0 else in.Args.count)) {
                         WireObjectField field = ObjectAt<WireObjectField>(ref const source, type.Fields,
                         ai) ?;
                         if (valueTypes[args[ai]] != field.Type) {
@@ -480,7 +499,7 @@ WireObjectFunction owner, ref const ObjectAuthorityContext authority) {
                     writable[in.Result] = writable[args[0]] and not parent.Immutable and not field.Readonly;
                 }
                 ObjectOpcode::Load => {
-                    if (in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type) {
+                    if (not authority.taggedProjects[in.Result] and(in.Args.count != 1 or classes[args[0]] != ObjectValueClass::Location or roots[args[0]] < 0 or valueTypes[args[0]] != in.Type)) {
                         return Result::Error(ObjectError::Provenance);
                     }
                 }

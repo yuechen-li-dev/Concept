@@ -95,7 +95,8 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	object := module.Name == "Standard.Backend.BridgeSchema5"
 	borrow := module.Name == "Standard.Backend.BridgeSchema6"
 	ordinary := module.Name == "Standard.Backend.BridgeSchema7"
-	modern := scalar || object || borrow || ordinary
+	tagged := module.Name == "Standard.Backend.BridgeSchema8"
+	modern := scalar || object || borrow || ordinary || tagged
 	prefix := "Scalar"
 	if object {
 		prefix = "Object"
@@ -105,6 +106,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	}
 	if ordinary {
 		prefix = "Enum"
+	}
+	if tagged {
+		prefix = "Tagged"
 	}
 	if module.Name != "Standard.Backend.BridgeSchema" && !modern {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
@@ -215,6 +219,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	if ordinary {
 		rootName, headerName = "WireEnumModule", "WireEnumHeader"
 	}
+	if tagged {
+		rootName, headerName = "WireTaggedModule", "WireTaggedHeader"
+	}
 	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
 	}
@@ -229,9 +236,14 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		emitter.records[r.Name] = r
 	}
 	// Explicit reuse of frozen v5 codecs, never a duplicated field definition.
-	if borrow || ordinary {
+	if borrow || ordinary || tagged {
 		emitter.sharedObject = true
 		for _, name := range []string{"WireObjectModule", "WireObjectSpan"} {
+			emitter.records[name] = bridgeSchemaRecord{Name: name}
+		}
+	}
+	if tagged {
+		for _, name := range []string{"WireBorrowModule", "WireObjectField"} {
 			emitter.records[name] = bridgeSchemaRecord{Name: name}
 		}
 	}
@@ -332,6 +344,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	// names. Stage-0 permits one template per callable name, so the counted-view
 	// template has its own name and these ordinary wrappers expose its witnesses.
 	seenSequences := map[string]bool{}
+	if tagged {
+		seenSequences["WireObjectField"] = true
+	}
 	for _, r := range def.Records {
 		for _, f := range r.Fields {
 			if f.Type.Name == "array" && f.Type.Element != nil && f.Type.Element.Name == "uint8" {
@@ -393,6 +408,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		if ordinary {
 			suffix, lower = "7", "enum"
 		}
+		if tagged {
+			suffix, lower = "8", "tagged"
+		}
 		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", prefix+"MachineBridge")
 		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema"+suffix+";")
 		goText = strings.ReplaceAll(goText, "bridgeTags", lower+"BridgeTags")
@@ -413,6 +431,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		).Replace(conceptSource.String())
 		if borrow || ordinary {
 			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec5;")
+		}
+		if tagged {
+			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec6;")
 		}
 		conceptSource.Reset()
 		conceptSource.WriteString(conceptText)

@@ -27,10 +27,6 @@ func TestAMD64BatchRejectsSourcesBeforeBootstrap(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Unknown") || strings.Contains(err.Error(), "BACKEND") {
 		t.Fatalf("expected source diagnostic before any bootstrap: %v", err)
 	}
-	err = printConceptAMD64Batch([]string{valid, "../../tests/runtime/Testing/TaggedValues.concept"})
-	if err == nil || !strings.Contains(err.Error(), "EVT2H2_TAGGED_TRANSPORT_REQUIRED") {
-		t.Fatalf("expected tagged transport stop before any bootstrap: %v", err)
-	}
 }
 
 // A new native CLI scenario goes in the existing batch, not in another cold

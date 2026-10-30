@@ -1,0 +1,70 @@
+// Code generated from checked BridgeSchema metadata; DO NOT EDIT.
+module Standard.Backend.BridgeCodec8;
+profile Core;
+import Standard.Backend.BridgeCodec6;
+import Standard.Backend.BridgeSchema8;
+string TaggedMachineBridgeSchemaHash() {
+    return "8dc34f916ab8293e838db026d720825f10d2a7c12006c19924a0fffea94c0711";
+}
+uint8[32] TaggedMachineBridgeSchemaHashBytes() {
+    uint8[32] value =[141u, 195u, 79u, 145u, 106u, 184u, 41u, 62u, 131u, 141u, 176u, 38u, 215u, 32u,
+    130u, 95u, 16u, 210u, 167u, 193u, 32u, 6u, 193u, 153u, 36u, 160u, 255u, 254u, 169u, 76u, 7u, 17u];
+    return value;
+}
+derive DeriveBridgeEnumRead reflect<TaggedOperationKind>;
+derive DeriveBridgeEnumWrite reflect<TaggedOperationKind>;
+derive DeriveBridgeRead reflect<WireTaggedVariant>;
+derive DeriveBridgeWrite reflect<WireTaggedVariant>;
+derive DeriveBridgeRead reflect<WireTaggedDomain>;
+derive DeriveBridgeWrite reflect<WireTaggedDomain>;
+derive DeriveBridgeRead reflect<WireTaggedOperation>;
+derive DeriveBridgeWrite reflect<WireTaggedOperation>;
+derive DeriveBridgeRead reflect<WireTaggedModule>;
+derive DeriveBridgeWrite reflect<WireTaggedModule>;
+Result<BridgeSequence<WireTaggedVariant>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireTaggedVariant>> type) {
+    return ReadBridgeSequence<WireTaggedVariant>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireTaggedVariant> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireTaggedVariant>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireTaggedDomain>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireTaggedDomain>> type) {
+    return ReadBridgeSequence<WireTaggedDomain>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireTaggedDomain> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireTaggedDomain>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireTaggedOperation>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireTaggedOperation>> type) {
+    return ReadBridgeSequence<WireTaggedOperation>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireTaggedOperation> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireTaggedOperation>(ref const value, ref const source, ref writer);
+}
+Result<int, BackendError> TaggedBridgeRoundTrip(ReadOnlySpan<byte> payload, Span<byte> output) {
+    BridgeReader reader = BridgeReader{payload, 0};
+    WireTaggedModule value = ReadWire(ref reader, BridgeType<WireTaggedModule>{0}) ?;
+    if (reader.offset != Len(payload)) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeWriter writer = BridgeWriter{output, 0};
+    WriteWire(ref const value, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> ReadTaggedBridgeIdentity(ref BridgeReader reader) {
+    WireHeader header = ReadWire(ref reader, BridgeType<WireHeader>{0}) ?;
+    for (i in 0 .. Len(header.magic)) {
+        if (header.magic[i] !=(TaggedBridgeMagic[i] as uint8)) {
+            return Result::Error(BackendError::BridgeVersion);
+        }
+    }
+    if (header.version != TaggedBridgeVersion) {
+        return Result::Error(BackendError::BridgeVersion);
+    }
+    uint8[32] expected = TaggedMachineBridgeSchemaHashBytes();
+    for (i in 0 .. Len(header.schemaHash)) {
+        if (header.schemaHash[i] != expected[i]) {
+            return Result::Error(BackendError::BridgeSchemaMismatch);
+        }
+    }
+    return Result::Ok();
+}
