@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -474,15 +475,18 @@ int main(void) {
 			t.Fatalf("%s runtime: %v\n%s", compiler, err, output)
 		}
 		for i, expression := range []string{"concept_conversions__casts_narrow_int(256)", "concept_conversions__casts_signed_unsigned(-1)", "concept_conversions__casts_unsigned_signed(UINT32_C(2147483648))", "concept_conversions__casts_narrow_unsigned(UINT64_C(256))"} {
+			// A crashed process can leave its image mapped briefly on Windows.
+			// Distinct specimens must not overwrite the previous trap's executable.
+			trapExe := filepath.Join(dir, "trap-"+strconv.Itoa(i)+".exe")
 			trap := "#include \"casts.generated.h\"\nint main(void) { return " + expression + "; }\n"
 			if err := os.WriteFile(filepath.Join(dir, "trap.c"), []byte(trap), 0600); err != nil {
 				t.Fatal(err)
 			}
-			cmd = nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "trap.c"), "-o", filepath.Join(dir, "trap.exe"))
+			cmd = nativeCommand(t, compiler, "-std=c11", "-pedantic-errors", filepath.Join(dir, "casts.generated.c"), filepath.Join(dir, "trap.c"), "-o", trapExe)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("%s trap %d link: %v\n%s", compiler, i, err, output)
 			}
-			cmd = nativeCommand(t, filepath.Join(dir, "trap.exe"))
+			cmd = nativeCommand(t, trapExe)
 			if output, err := cmd.CombinedOutput(); err == nil || !bytes.Contains(output, []byte("integer cast out of range")) {
 				t.Fatalf("%s trap %d did not reject: %v\n%s", compiler, i, err, output)
 			}
