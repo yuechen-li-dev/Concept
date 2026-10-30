@@ -122,3 +122,26 @@ func TestEVT2h3JoinDefiniteInitialization(t *testing.T) {
 	}
 	t.Fatal("no expression result")
 }
+
+func TestEVT2h3RejectCrossArmEntry(t *testing.T) {
+	path := "../../language/evt2h3/valid/arm_regions.concept"
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Parse(path, string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lir, err := GenerateLIR(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &lir.Functions[0]
+	p := f.Patterns[0]
+	// Bypass the other arm's discriminant and enter its inner if block.
+	f.Blocks[p.Arms[1].Body].Term.True = f.Blocks[p.Arms[0].Body].Term.True
+	if err := VerifyLIR(lir); err == nil {
+		t.Fatal("accepted cross-arm entry into nested control flow")
+	}
+}

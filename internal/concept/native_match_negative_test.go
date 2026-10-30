@@ -158,6 +158,27 @@ func patternBadArtifacts(t *testing.T) []patternBadArtifact {
 	addBytes("truncated header", valid[:20])
 	addBytes("truncated payload", valid[:len(valid)-1])
 	addBytes("trailing data", append(bytes.Clone(valid), 0))
+	path := "../../language/evt2h3/valid/arm_regions.concept"
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(path, string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	native, err := GenerateMachineIR(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := native.Pattern.Flows[0]
+	f := &native.Pattern.Base.Base.Objects.Functions[p.Function]
+	f.Blocks[p.Arms[1].Body].Term.True = f.Blocks[p.Arms[0].Body].Term.True
+	raw, err := encodePatternMachineBridge(*native.Pattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addBytes("cross-arm nested entry", raw)
 	return cases
 }
 func TestEVT2h3MalformedContracts(t *testing.T) {

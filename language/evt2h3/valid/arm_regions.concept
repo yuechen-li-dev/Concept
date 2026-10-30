@@ -1,0 +1,20 @@
+profile Core;
+enum Choice {
+    First, Second
+}
+int Regions(Choice choice, bool condition) {
+    int result = 0;
+    match (choice) {
+        Choice::First => {
+            if (condition) {
+                result = 1;
+            } else {
+                result = 2;
+            }
+        }
+        Choice::Second => {
+            result = 3;
+        }
+    }
+    return result;
+}

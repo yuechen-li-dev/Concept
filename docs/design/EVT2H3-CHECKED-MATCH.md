@@ -54,6 +54,11 @@ slot reads through CFG must analysis. Checked payload reads retain their v8
 runtime check as well. No guard is speculated or reordered, and no source
 syntax, payload layout, allocator, copier or optimizer is introduced.
 
+Arm-local instructions must also be dominated by the selected arm body.
+Region reachability alone is insufficient: a forged edge from another arm
+could enter a nested block. The retained cross-arm-entry specimen demonstrates
+that failure before the dominance correction, independently of payload guards.
+
 This inventory is a design/implementation record, not native qualification.
 The conformance/convergence records must separately record executed evidence.
 

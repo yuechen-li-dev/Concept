@@ -233,7 +233,7 @@ func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 					for _, id := range arm.Bindings {
 						bindingUse = bindingUse || (in.Slot == id)
 					}
-					if (inArm || bindingUse) && (!region[bi] || !inArm) {
+					if (inArm || bindingUse) && (!region[bi] || !inArm || !dom[bi][arm.Body]) {
 						return bad("BINDING_SCOPE")
 					}
 				}

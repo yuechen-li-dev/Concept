@@ -143,7 +143,7 @@ int ordinal, ref PatternFunctionContext context) {
     return Result::Ok();
 }
 Result<void, PatternError> ValidatePatternRegion(ref const BridgeReader reader, WireObjectFunction owner,
-WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm) {
+WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm, ref const ObjectAuthorityContext authority) {
     bool[128] region =[false ...];
     region[arm.Body] = true;
     bool changed = true;
@@ -180,7 +180,7 @@ WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm) {
                 j) ?;
                 binding = binding or in.Slot == bound.Slot;
             }
-            if ((inside or binding) and(not inside or not region[bi])) {
+            if ((inside or binding) and(not inside or not region[bi] or not authority.dominators[bi].items[arm.Body])) {
                 return Result::Error(PatternError::Scope);
             }
         }
@@ -415,7 +415,7 @@ WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref Pat
         }
         ValidatePatternBindings(ref const reader, document, owner, meta, flow, arm, subject.Type, variant,
         ref context) ?;
-        ValidatePatternRegion(ref const reader, owner, meta, flow, arm) ?;
+        ValidatePatternRegion(ref const reader, owner, meta, flow, arm, ref const context.authority) ?;
     }
     return Result::Ok();
 }
