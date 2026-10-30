@@ -4,7 +4,39 @@ Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission
 Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
 Payload enum status is [EVT2h2 native tagged execution](#evt2h2-tagged-value-authority),
 with final full qualification passed at `59788a4`.
+Native match authority is described in the [EVT2h3 conformance record](../conformance/EVT2H-CONFORMANCE.md#evt2h3--native-checked-match).
+Its native/C11 Normal/Verify, 100-run and full regression qualification passes
+at `1058c86`; source-bootstrap facts are separately identified in the evidence.
 Earlier milestone tables below retain their historical qualification boundaries.
+
+## EVT2h3 checked match authority
+
+Baseline main `745b1ec`; inventory `ee80418`; checked contract `6aa55c2`;
+native realization `9f50f82`; arm dominance `2b93c3c`.
+Bootstrap semantic input determinism is corrected in `1058c86`: reserve the
+compiler-owned closed Gob type graph before AST encoding. Stage-0 retains
+that private artifact responsibility; no native decision moves to Go.
+Stage-0 remains authoritative for existing match legality, exhaustiveness,
+binding/copy semantics, guard typing/order and expression types. Its LIR
+producer emits ordinary CFG and checked pattern associations, without physical
+locations, ABI choices, frames or encoding.
+
+Concept `BridgeSchema9` owns CMIRAMD9 and generates Go/Concept transport.
+Concept `BridgeValidate9` independently admits source-free artifacts, linking
+nominal test/require operations to immutable subjects, exhaustive ordered edges,
+arm regions, canonical bindings, scopes and initialized result joins. Existing
+object/borrow admission supplies typed SSA/CFG/lifetime checks. V8 atomic
+tag-checked reads remain an execution-time guard on the same snapshot.
+
+Concept AMD64 owns compare/SETZ/branches/UD2 and reuses object copying,
+allocation, Win64 ABI, the unified frame planner and encoder. Go retains
+semantic production, generated bootstrap transport, consistency verification
+and external C11/native orchestration. No second matching language, layout,
+copy engine, allocator or native Go backend is added. CMIRAMD3–8 are frozen;
+old admission entrypoints initialize extension flags to false. New operation
+privileges require independent v9 operation and flow admission.
+
+## Authority inventory
 
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
 migration matrix records the fuller subsystem inventory and prerequisites.

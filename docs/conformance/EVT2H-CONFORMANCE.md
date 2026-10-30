@@ -1,8 +1,130 @@
 # EVT2h — enum conformance
 
-Current EVT2h2 status: **SUCCESS — native tagged execution and full qualification**.
-See [native closeout](#evt2h2--native-tagged-values). The ordinary-enum and
+Current EVT2h3 status: **SUCCESS — native checked match and full qualification**.
+See [native match](#evt2h3--native-checked-match). The ordinary-enum and
 initial checked-LIR entries below retain their historical evidence and limits.
+
+## EVT2h3 — native checked match
+
+Actual baseline: clean main and freshly fetched origin/main at
+`745b1ec35679743bed555a89e19611c6dea4712a`. Compiler
+`concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64. Inventory `ee80418`;
+checked CFG/contract/admission `6aa55c2`. Historical detached worktrees are
+preserved. The [inventory](../design/EVT2H3-CHECKED-MATCH.md) records actual
+source semantics before implementation.
+
+Native implementation `9f50f82`, arm-dominance correction `2b93c3c` and
+conditional nesting qualification `1737006` complete the scoped changes.
+
+Bootstrap determinism follow-up `1058c86` reserves the compiler's closed Gob
+semantic type graph before encoding any AST. Previously an identical typed
+dependency acquired different private wire type IDs after earlier AST forms
+were encoded, changing its content digest. V9 correctly preserves that digest;
+the correction stabilizes its input rather than dropping provenance. The v2
+self-describing payload remains readable; no native algorithm or CMIRAMD
+schema/codec changes. Cold/warm 100-subprocess checks retain this regression.
+
+Final full qualification at `1058c86` passes: compiler/native 2,264.969 s,
+CLI 154.470 s, GPU-free Vulkan 0.780 s; complete lane 2,267.62 s including
+`go vet ./...`. Focused race, strict C11/native Normal/Verify, 100-run gates,
+Standard/DragonGod, package, generation, format/lint and diff checks pass.
+Final closeout changes these records and the h3 LF fixture rule only. Frozen
+Zig suites are skipped because their compiler/build/test paths are unchanged.
+
+### Existing semantics and native subset
+
+Enum matches list every variant exactly once. Payload patterns bind every
+field, in declaration order, as mutable arm-local copied values. There is no
+reference-pattern syntax. Enum wildcards reject CV4109; integer matches
+require a final wildcard. Guards use the existing subjectless
+`match { when condition => ...; otherwise => ... }`, parsed into ordered
+if chains. Guards attached to variants are not existing syntax. Native
+fixtures nest guards inside selected enum arms, preventing irrelevant guards
+from executing. Expression arms require one expression; statement arms require
+braced blocks and permit early returns.
+
+Qualified payload fields retain EVT2h2 integer/bool, binary32/binary64,
+copyable nested record/struct, fixed-array and mixed empty/payload forms.
+Results include integer/floating values, Item records and Token values through
+existing aggregate ABI rules. Authoritative modules:
+`Testing.OrdinaryMatches` (seven functions) and `Testing.TaggedMatches`
+(35 functions, including imported h2 helpers). Two facts in
+`tests/runtime/native_match.concept_test` exercise behavior through Concept's
+C bootstrap; separate native hosts execute the same checked source modules.
+The language facts alone are not native evidence.
+
+### Checked control flow and transport
+
+LIR snapshots the scrutinee once in a readonly typed slot. Ordered dispatch
+blocks test that snapshot through nominal `test_variant` operations. The last
+enum arm uses `require_variant`, trapping an invalid tag. Integer matches use
+existing literal equality/branches. Selected bodies project checked fields into
+ordered binding slots. Expression results join through typed slots initialized
+on every reachable normal completion path; all-return statements need no join.
+Nested matches and guarded if expressions use ordinary blocks/branches/slots.
+
+CMIRAMD9 schema SHA256:
+`77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c`.
+The authoritative Concept schema generates both codecs and metadata. V9 reuses
+v8 tagged domains/operations and v7 ordinary domains, adding typed test/require
+sites and subject/result/join/arm/binding associations with canonical object
+CFG, operands and lexical scopes. Geometry, field types, offsets and source
+sites remain in their existing records. CMIRAMD3–8 schemas/hashes/codecs remain
+byte-for-byte frozen.
+
+Independent `BridgeValidate9` checks nominal domains/operations, exact
+exhaustive mappings, unique dispatch/body predecessors, ordered false edges,
+immutable single initialization of subjects, binding projection prefixes,
+arm-local regions and body dominance, lexical scopes and result-join correspondence. Existing
+object/borrow admission supplies SSA/dominance, lifetime and all-slot CFG
+must-initialization. Go independently reconstructs checked LIR for consistency;
+it does not select or encode native code. Every payload projection retains
+the v8 runtime tag check against the same private snapshot. An offset or
+forged numeric tag cannot authorize arbitrary memory access.
+
+### Cathedral and Win64
+
+Concept AMD64 selects compare/SETZ/branch and compare/UD2 using existing scalar
+allocation and scratch preservation. Tagged storage, active-field recursive
+logical copying, argument transfers, unified frames, aggregate ABI and encoder
+reuse EVT2g/h2. There is no physical MATCH instruction, alternate layout/copy
+engine, allocator, frame planner, heap allocation or Go native match algorithm.
+V9 emission uses existing count-only preflight before publishing code/image.
+The CLI admits v9 and displays existing plans; its bounded output buffer is
+262,144 bytes for the larger 122,509-byte specimen.
+
+Win64 coverage includes scalar enum carriers, indirect Token parameters,
+hidden Token/Item results, mixed reference/integer/floating calls, nested
+calls, seven floating arguments/stack positions, eleven spills and live
+values across calls/branches. This is not general foreign enum or C++ variant
+interoperability. EVT2h2 independent MSVC/clang-cl probes remain regressions.
+
+### Limits and diagnostics
+
+V9 admission caps: 128 functions, 256 types, 128 ordinary and 128 tagged domains,
+128 blocks/scopes per function, 512 values, 64 slots and 64 match flows per
+function (8,192 module flows). Object admission permits 1,024 instruction
+sites; native planning retains its tighter qualified capacities. Existing
+frame/image bounds apply. Capacity failures reject before output mutation.
+
+Eighteen source negatives preserve CV4020/CV4024, CV4109–CV4118, CV4186 and
+guarded-match parser diagnostics. Native authority errors include
+`EVT2H3_UNSUPPORTED_MATCH_AUTHORITY`, `EVT2H3_UNSUPPORTED_MACHINE_MATCH`,
+`EVT2H3_UNSUPPORTED_RESULT` and existing native-subset errors. V9 diagnostics
+use prefix `CMIRAMD9_` with MALFORMED, VERSION_MISMATCH,
+SCHEMA_HASH_MISMATCH, CAPACITY_EXCEEDED, PATTERN_DOMAIN, VARIANT_OPERATION,
+PATTERN_CFG, PAYLOAD_BINDING, BINDING_SCOPE, RESULT_JOIN and OBJECT_CONTRACT.
+
+Reference/move-only/Drop-bearing subjects, escaping references, nested tagged
+payload fields, fallible built-ins and automaton matching remain outside the
+subset. Standalone fixed-array ABI results remain unsupported; array bindings
+use qualified indexing and record results. Only existing bounded range loops
+and qualified native statements are claimed. No new patterns, layout, generic
+wrappers, ownership/Drop, object files, jump tables or optimizations are added.
+
+Exact execution, hashes, timings and gates are recorded in
+[convergence evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h3-native-match-qualification).
+
 
 ## EVT2h0 / EVT2h1 — ordinary native enums
 

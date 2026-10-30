@@ -1,8 +1,155 @@
 # EVT2h convergence
 
-Current EVT2h2 status: **SUCCESS — native execution and final qualification passed**.
-See [native gap closure](#evt2h2-native-gap-closure). Earlier closeouts below
+Current EVT2h3 status: **SUCCESS — native checked match and full qualification**.
+See [native match qualification](#evt2h3-native-match-qualification). Earlier closeouts below
 retain their historical outcomes and qualification boundaries.
+
+## EVT2h3 native match qualification
+
+Actual baseline: clean synchronized main
+`745b1ec35679743bed555a89e19611c6dea4712a`, compiler
+`concept-evt1-stage0-go`, Windows AMD64 / Microsoft x64.
+Inventory `ee80418`; checked CFG/CMIRAMD9 admission `6aa55c2`;
+native realization/fixtures `9f50f82`; arm-dominance correction `2b93c3c`.
+The additional `1737006` conditional nesting probe adds tests/fixtures only.
+The final full lane runs at `1058c86`, including deterministic initialization
+of the existing private bootstrap semantic wire types and all probes.
+Closeout changes these records and pins h3 specimen line endings only.
+No unrelated edits or historical worktree files were reset.
+
+[Conformance](../../conformance/EVT2H-CONFORMANCE.md#evt2h3--native-checked-match)
+defines semantics, authority and bounds. Existing enum matches are exhaustive,
+without enum wildcards. Integer matches have a final wildcard. Existing
+subjectless guards become ordered if chains; variant-attached guards are not
+source syntax. Payload binding copies the full checked field list into
+arm-local values. No new source pattern language is introduced.
+
+CMIRAMD9 schema:
+`77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c`.
+Added typed test/require sites and flow associations reuse canonical v8/v7
+domains, object CFG, operands, borrow scopes and checked payload operations.
+No duplicate layout facts or physical MATCH instruction. Concept independently
+validates selection, field bindings, initialized joins and arm-body dominance;
+atomic v8 runtime guards remain on the same private snapshot. Cathedral reuses
+its recursive logical copier, object storage, allocator, unified frame planner,
+Win64 aggregate machinery and encoder. Go retains semantic production,
+generated transport, consistency verification and external oracles.
+
+| Specimen | Canonical artifact bytes / SHA256 | Native bytes / SHA256 |
+| --- | --- | --- |
+| OrdinaryMatches: 7 functions, 5 matches, 8 typed tests | 21,265 / `b3f04bb7352fec2209349bb26c55cd837158e50e32c2c656651d8bb41248c0ed` | 3,772 / `48dee1c8a55f462854fe930e64fb34d3eefac77d0c18a2d6c6cdfdc4ca40e83b` |
+| TaggedMatches: 35 functions, 9 matches, 54 typed tests, 81 field reads | 163,395 / `e68f23900d6a28cc14c81209b97bc561ddfef0b0c2dd53dd150ca0fcb6d4e560` | 122,509 / `398445c4b5e1bf1ff09c190f897843fb58985fe96625295e71f8ba6f2628484f` |
+
+The two-function conditional/region specimen additionally emits 1,000 bytes,
+SHA256 `1f709df6fccb5d081aeccb59a48072d6902a5a788fb1c10d6022076132415ecf`
+in both modes. It tests match inside if and if inside match arms, comparing
+typed C constructors with native enum carriers without assuming general C
+enum interoperability. Its 100 fresh source/artifact generations and 100
+emissions per mode passed in 77.651 s package.
+
+Both native images are identical in Normal and Verify, with one / 38 call
+fixups. Ordinary frames: 40..88 bytes. Tagged frames: 40..1,928 bytes, eleven
+spills across the module. Artifact-only native execution precedes linking the
+domain C oracle. The oracle host then independently compiles strict C11
+(`-std=c11 -Wall -Wextra -pedantic-errors -O2`) and executes the same
+observables against emitted AMD64.
+
+Native positive coverage includes all ordinary and mixed empty/payload
+variants, int/bool/float/double/multiple fields, records and fixed arrays,
+scalar/aggregate results, reassignment/copy isolation, nested matches and calls,
+range loops, if statements, early return, integer wildcard, single scrutinee
+evaluation, guard/call/mutable-log order, irrelevant-variant guard suppression,
+result joins and pressure/spills. Exact binary32/64 checks cover signed zero,
+adjacent precision, quiet NaN payload and subnormal. Existing h2/g5 independent
+external ABI probes remain required regression evidence, rather than a new
+general foreign enum ABI claim.
+
+| Gate | Measured outcome |
+| --- | --- |
+| Default Quick at completed native checkpoint | PASS; 18.95 s |
+| Quick after dominance correction | PASS; 24.95 s while full qualification runs; 24 runtime + 4 backend facts per mode |
+| Checked source/LIR/CFG/MachineIR/debug + generated codecs, 100 fresh runs | PASS; 5.444 s, pinned artifact hashes above |
+| Independent artifact-only Concept roundtrip | PASS; 100 per specimen per mode; initial package 132.110 s |
+| Native-only then strict C11/native execution, Normal/Verify | PASS; initial focused package 401.215 s, Normal 198.04 / Verify 203.04 s; repeated successfully in final lane after dominance and bootstrap corrections |
+| 100 complete native physical plans per function | PASS; ordinary 0.150 s, tagged 6.476 s Normal / 6.710 s Verify; exact existing ABI/frame/transfer debug equality |
+| 100 fresh complete admissions/emissions per native-only host/mode | PASS; exact full code, NativeImage, symbols and fixups; C-oracle host independently repeats one complete plan/emission |
+| Individual emission sample | Ordinary 12 ms; tagged 1,213 ms Normal / 1,328 ms Verify, including admission/preflight |
+| Native invalid-tag execution | PASS; ordinary/payload child processes require UD2 within generated image |
+| Source diagnostics | PASS; 18 invalid source specimens and retained h2 source-only match promoted to verified native input |
+| Missing predecessor result | PASS; dedicated LIR must-initialization mutation |
+| Malformed artifact admission and output atomicity | PASS after dominance correction; 38 independent Go/Concept cases in both modes, 92.758 s package; roundtrip/code/NativeImage sentinels preserved |
+| Focused race after bootstrap correction | PASS; source, CFG/dominance, 38 malformed contracts, 100 fresh subprocesses and source/transport/codecs; 212.768 s package (process gate 151.61 s, codec/source gate 57.315 s) |
+| Native CLI batch | PASS; 12 scenarios / 81.007 s package; both h3 sources share the existing single backend batch |
+| Standard Normal/Verify after bootstrap correction | PASS; 44 tests and three informational benchmarks each; CLI 53.158 / 51.965 s |
+| DragonGod Normal/Verify after bootstrap correction | PASS; 23 tests and one informational benchmark each; CLI 6.559 / 6.616 s |
+| Actual package build after bootstrap correction | PASS; DragonGod with Standard dependencies, 17.305 s |
+| Generated inspection / fixture format and lint | PASS; BridgeCodec9 declarations, schema/validator/native owners, positive fixtures and facts |
+| Frozen schemas/codecs | PASS; direct baseline diff for CMIRAMD3–8 empty; regenerated outputs unchanged |
+| 100 fresh compiler subprocesses, alternating cold/prior AST encoding | PASS; 10.18 s before full rerun; exact artifact and dependency identity |
+| Semantic artifact / focused enum checks after bootstrap correction | PASS; 21.208 s short package; native probes deliberately skipped here and retained in full lane |
+| Quick after bootstrap correction | PASS; 23.74 s |
+| Complete Compiler lane after bootstrap correction | PASS; `go test -short ./... -count=1 -parallel=4 -timeout=10m`, compiler package 554.080 s, CLI 3.802 s, GPU-free Vulkan 0.863 s |
+| Full qualification at `1058c86` | PASS; compiler/native package 2,264.969 s, CLI 154.470 s, GPU-free Vulkan 0.780 s; lane 2,267.62 s including `go vet ./...` |
+| Final codec regeneration and generated inspection | PASS after full lane; no generated Go/Concept codec or schema metadata diff |
+| Frozen root / legacy Zig | SKIPPED; legacy compiler/build/test infrastructure unchanged |
+
+Five intentionally parser-invalid fixtures cannot pass `concept format`:
+expression block, missing guard default, guard ordering, statement-expression
+arm and variant-attached guard. Their unchanged syntax errors are tested;
+all syntactically valid negative fixtures are formatted. There is no lint
+waiver for valid source. Quick facts run through C bootstrap; only the native
+hosts establish AMD64 execution.
+
+One full-lane attempt was stopped during audit when a forged edge entered
+another arm's inner if block. Region reachability alone accepted it, even
+though checked payload operations retained runtime guards. The
+`arm_regions.concept` mutation reproduces that pre-fix failure. Both Go and
+Concept now require arm-local instructions to be dominated by the selected
+body; independent artifact admission rejects it as CMIRAMD9_BINDING_SCOPE,
+preserving all sentinels. The full lane was restarted after `2b93c3c`.
+No failing gate was waived. An earlier native-host run also exceeded the
+ordinary two-minute child deadline during 100 full large-module emissions.
+The h3 host now has a bounded eight-minute deadline; the full package deadline
+is 45 minutes. All 100-run gates remain enabled; Quick's scope is unchanged.
+
+Final required command: `./test.ps1 -Lane Qualification` runs
+`go test ./... -count=1 -parallel=4 -timeout=45m` and `go vet ./...`.
+This includes earlier EVT2h/g native tests, strict C11 and external ABI probes,
+corpus, Golden, GPU-free Vulkan, package determinism and authority/workflow
+policies. Focused race and actual Standard/DragonGod CLI tests run separately.
+Detailed local logs are under ignored `artifacts/evt2h3/`.
+
+The completed full run at `2b93c3c` found exactly one failing gate:
+TestEVT2h3Transport, with compiler package 2,088.960 s, CLI 134.581 s and
+GPU-free Vulkan 0.667 s. The payload artifact hash changed only in that process;
+focused reexecution passed its former pin. A subprocess regression reproduced
+identical typed AST JSON with different semantic envelopes after encoding a
+different AST first. Gob reserves global wire IDs lazily. Stage-0 is the sole
+Gob owner in this compiler; `1058c86` deterministically reserves its closed
+semantic type graph before any AST encode/decode. This retains ordinary v2 Gob
+reading and full dependency digests, without a parallel codec or native Go
+algorithm. The prior focused payload artifact was
+`451bb0a2ea632a6d8012d56b045892103e0b219eded5921cec559d79abb33098`;
+the corrected canonical artifact is pinned above. Native hashes and frozen
+CMIRAMD3–8 contracts are unchanged. The full lane is repeated for this fix;
+the failing run is retained, and vet was not claimed from that failed lane.
+
+No Option/Result/Verdict, ownership/Drop, move/reference patterns, nested tagged
+payloads, foreign representation expansion, object output or optimizer work is
+qualified here. Source/C support for those forms remains distinct. EVT2h4
+requires separate review.
+
+**SUCCESS — EVT2h3 native checked match is qualified at `1058c86`.** Final
+documentation closeout records the exact evidence above and pins h3 specimen LF
+endings; no algorithm changes follow qualification. Earlier failed/interrupted
+runs remain recorded. No gate is waived. Planning/emission samples are local
+focused-run measurements, not portable performance thresholds. Native code
+hashes, scopes/joins, 38 malformed artifacts, 18 source diagnostics, 100 fresh
+process/source/artifact/native gates and frozen earlier contracts pass. Root
+and legacy Zig alone are skipped because the frozen Zig paths are unchanged;
+the subprocess-only worker is intentionally skipped as a standalone test and
+is executed by its 100-run owning test. Stop here; EVT2h4 is not started.
+
 
 ## EVT2h0–h1 historical closeout
 

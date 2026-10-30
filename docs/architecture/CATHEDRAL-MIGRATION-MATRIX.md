@@ -3,7 +3,33 @@
 Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
 Current payload enum stage: [EVT2h2 native tagged values](#evt2h2-native-tagged-values),
 with full qualification passed at `59788a4`.
+Current matching stage: [EVT2h3 native checked match](#evt2h3-native-checked-match).
+Full qualification passes at `1058c86`, including native/C11 and 100-run gates.
 Earlier stage tables retain their historical qualification boundaries.
+
+## EVT2h3 native checked match
+
+Baseline `745b1ec`; contract/admission `6aa55c2`; native realization `9f50f82`;
+arm dominance `2b93c3c`. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h3--native-checked-match)
+and [executed qualification](../history/milestones/EVT2H-CONVERGENCE.md#evt2h3-native-match-qualification).
+
+`1058c86` stabilizes initialization of the existing Go-owned private semantic
+artifact wire types, removing AST-encoding-order drift in dependency digests.
+CMIRAMD9 retains those digests; this is bootstrap input production, not a new
+codec, layout rule or native algorithm.
+
+| Decision | Current authority | Retained Stage-0 role | Mechanism reused / next boundary |
+| --- | --- | --- | --- |
+| Match legality, exhaustive patterns, binding types/scopes, guards, results | Go checker | Semantic production remains authoritative | Existing parser/checker semantics; no new patterns |
+| Checked match CFG and result joins | Go LIR producer/consistency verifier | Emit canonical typed CFG and flow associations | Ordinary blocks, branches, slots and borrow scopes |
+| CMIRAMD9 representation | Concept BridgeSchema9 | Generated codec/checked projection | Frozen v8/v7 records; freeze CMIRAMD3–8 |
+| Pattern/active-payload artifact admission | Concept BridgeValidate9 | Independent producer consistency checks | Shared object/borrow SSA, initialization and lifetime validation |
+| Native comparisons, checked payload binding and CFG encoding | Concept AMD64 | Bootstrap compilation/executable host | Existing selector, allocator, object copier, unified frame and Win64 ABI |
+| Independent execution evidence | External C11/native probes | Orchestration/oracles | Native-only artifact host precedes source differential; no interpreter-only claim |
+| Fallible built-ins, owning/reference patterns and nested sums | Not qualified | Existing source/C support remains distinct | Separate review; do not expand EVT2h3 |
+
+## Subsystem inventory
 
 This inventory is a decision map, not a schedule to delete Stage-0. `Current`
 classifies implementation as Go, Concept, or Shared. `Desired` means Stage-0
