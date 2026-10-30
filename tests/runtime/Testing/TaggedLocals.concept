@@ -1,0 +1,13 @@
+module Testing.TaggedLocals;
+profile Core;
+
+enum LocalValue {
+    Empty, Integer(int value)
+}
+int RunTaggedLocals(int input) {
+    LocalValue value = LocalValue::Integer(input);
+    LocalValue saved = value;
+    value = LocalValue::Empty;
+    value = saved;
+    return input;
+}

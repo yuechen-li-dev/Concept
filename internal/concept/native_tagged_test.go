@@ -433,6 +433,57 @@ func rawTagged(t *testing.T, m TaggedModule) []byte {
 	}
 	return data
 }
+
+func TestEVT2h2LocalModulePreflight(t *testing.T) {
+	requireNativeQualification(t)
+	path := "../../tests/runtime/Testing/TaggedLocals.concept"
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	module, err := Parse(path, string(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := GenerateMachineIR(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeMachineBridge(data); err != nil {
+		t.Fatal(err)
+	}
+	var defs strings.Builder
+	defs.WriteString("static const unsigned char artifact[]={")
+	for _, b := range data {
+		fmt.Fprintf(&defs, "%d,", b)
+	}
+	defs.WriteString("};\n")
+	host := `#include "amd64.generated.h"
+#include <windows.h>
+#include <string.h>
+#define F(n) concept_standard__backend__amd64_##n
+/* ARTIFACT */
+static unsigned char code[65536];static concept_native_image image,before;
+int main(void){concept_readonly_span_byte src={artifact,sizeof artifact};if(F(validate_tagged_machine_bridge)(src).tag)return 1;
+concept_result_wire_object_module_backend_error decoded=F(native_object_document)(src);if(decoded.tag)return 8;concept_bridge_reader reader={src,0};if(F(object_module_has_aggregate_abi)(&reader,decoded.payload.ok.value))return 9;
+memset(code,0xa5,sizeof code);memset(&image,0x5a,sizeof image);before=image;
+concept_result_int_native_error tiny=F(emit_module)(src,(concept_span_byte){code,1},&image);if(!tiny.tag||memcmp(&image,&before,sizeof image))return 2;
+for(size_t i=0;i<sizeof code;i++)if(code[i]!=0xa5)return 3;
+concept_result_int_native_error r=F(emit_module)(src,(concept_span_byte){code,sizeof code},&image);if(r.tag||!image.finalized||image.symbolCount!=1)return 4;
+unsigned char*memory=VirtualAlloc(NULL,image.byteCount,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);if(!memory)return 5;memcpy(memory,code,image.byteCount);DWORD old;if(!VirtualProtect(memory,image.byteCount,PAGE_EXECUTE_READ,&old))return 6;FlushInstructionCache(GetCurrentProcess(),memory,image.byteCount);
+typedef int(*Entry)(int);Entry entry;void*p=memory+image.symbols.data[0].offset;memcpy(&entry,&p,sizeof entry);for(int i=-50;i<50;i++)if(entry(i)!=i)return 7;VirtualFree(memory,0,MEM_RELEASE);return 0;}`
+	host = strings.Replace(host, "/* ARTIFACT */", defs.String(), 1)
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("native execution requires Windows AMD64")
+	}
+	for _, verify := range []bool{false, true} {
+		runFoundationNativeHarnessOutput(t, backendTestOutputs(t, verify), "tagged_local_preflight.c", host, "-pedantic-errors", "-O2")
+	}
+}
 func TestEVT2h2TaggedArtifactAdmission(t *testing.T) {
 	requireNativeQualification(t)
 	_, _, _, machine, valid := nativeTaggedFixture(t)

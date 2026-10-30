@@ -1,6 +1,7 @@
 module Testing.TaggedValueFacts;
 profile Core;
 import Testing.TaggedValues;
+import Testing.TaggedLocals;
 
 int Observe(Token value) {
     return match (value) {
@@ -31,6 +32,7 @@ int Observe(Token value) {
     }, 29, "equal layouts preserve distinct nominal identities");
 }
 [[fact]] void PayloadCopiesAndControlFlow() {
+    Assert.Equal(RunTaggedLocals(41), 41, "local-only tagged modules retain scalar signatures");
     Token original = MakeDecimal(3.5);
     Assert.Equal(Observe(CopyAndReplace(original, 0)), 35, "copied original survives variant replacement");
     Assert.Equal(Observe(original), 35, "assignment isolates values");

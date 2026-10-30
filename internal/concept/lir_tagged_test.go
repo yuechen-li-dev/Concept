@@ -320,6 +320,23 @@ func TestEVT2h2ImportedTaggedIdentity(t *testing.T) {
 	if len(lir.Dependencies) != 1 || lir.Dependencies[0].ModuleIdentity != "Testing.TaggedValues" || !objectDigest(lir.Dependencies[0].ContentSHA256) {
 		t.Fatalf("lost defining artifact: %+v", lir.Dependencies)
 	}
+	machine, err := LowerLirToAmd64Machine(lir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := EncodeMachineBridge(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeMachineBridge(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Tagged == nil || len(decoded.Tagged.Base.Objects.Dependencies) != 1 ||
+		decoded.Tagged.Base.Objects.Dependencies[0].Identity != lir.Dependencies[0].ModuleIdentity ||
+		decoded.Tagged.Base.Objects.Dependencies[0].Digest != lir.Dependencies[0].ContentSHA256 {
+		t.Fatal("CMIRAMD8 lost the defining semantic artifact")
+	}
 	for _, e := range lir.TaggedEnums {
 		if e.Name == "Token" && e.Identity == "Testing.TaggedValues|Token" {
 			return

@@ -488,7 +488,9 @@ Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> outp
         }
         BridgeReader source = BridgeReader{artifact, 0};
         WireObjectModule document = AdmittedObjectDocument(artifact) ?;
-        return EmitObjectNativeDocument(ref const source, document, output, ref image, true);
+        // V8 promises preflight even when sums occur only in local values and
+        // no function signature needs an aggregate carrier.
+        return EmitAggregateNativeDocument(ref const source, document, output, ref image);
     }
     if (Len(artifact) >= 8 and artifact[7] == 55) {
         match (ValidateEnumMachineBridge(artifact)) {
