@@ -241,8 +241,11 @@ func (m LIRModule) String() string {
 				if in.Op == "call" {
 					fmt.Fprintf(&out, " args=%v", in.ArgTypes)
 				}
-				if in.Op == "make_tagged" {
+				if in.Op == "make_tagged" || in.Op == "checked_payload" {
 					fmt.Fprintf(&out, " variant=%d", in.Member)
+				}
+				if in.Op == "checked_payload" {
+					fmt.Fprintf(&out, " field=%d", in.Extent)
 				}
 				if in.Literal != "" {
 					fmt.Fprintf(&out, " %s", in.Literal)

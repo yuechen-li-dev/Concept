@@ -7,6 +7,8 @@ isolation are retained. No native match or fallible-type milestone is started.
 
 ## 1. CMIRAMD8 contract and admission
 
+Committed as `8698781`.
+
 Concept `BridgeSchema8` owns the v8 header, nominal sum domains, ordered variants
 and operation identities. The envelope reuses frozen `WireBorrowModule` and
 `WireObjectField` records; canonical identities, geometry, copy permission,
@@ -46,13 +48,46 @@ passed in 1.194 s; independent artifact admission passed in 14.04 s.
 
 ## 2. Native tagged operations
 
-Pending: extend the existing object storage/copy/selector owner with active-tag
-dispatch and atomic checked payload reads, using the shared allocator and frame
-planner. This section must record actual native execution before qualification.
+Implemented in the existing `AMD64.Objects.CopyObjectFields` recursion and
+`AMD64.EncodeObjectMemoryInstruction`. Construction writes active fields then
+the tag. Copy dispatches on the admitted tag and visits only active meaningful
+fields through the same record/array/scalar copier. Invalid tags trap. Atomic
+projection checks the same private snapshot before loading the selected field.
+There is no second copy engine, union layout producer, allocator or frame plan.
+
+The expanded 20-function source includes forward calls, recursion, nested calls,
+mixed arguments, evaluation order, variant replacement and distinct nominal
+types with identical geometry. Seven internal LIR projection wrappers add no
+source syntax. Fixed-array projection returns an existing checked ArrayBox
+record, preserving the standalone-array ABI rejection.
+
+Normal/Verify artifact-only execution and independent strict C11 parity passed.
+The image contains 27 functions / 29,745 bytes, SHA256
+`188ac9b4bdeeaa2c2f0dcfa4e5496660f4dab4f7746ba593862895b3042b40c7`.
+Frames measured 40..1096 bytes. 100 complete physical plans per function,
+including canonical debug descriptions, and 100 emissions are identical.
+Measured emission 72..75 ms; 100 whole-module physical plans 1.491..1.564 s.
+The current 36,605-byte CMIRAMD8 artifact has SHA256
+`1a7372b2cb15862274d6595c4028e559b39ccd77060d471c0bbd281fb45c8c06`;
+100 fresh generations/codecs passed in 620.643 ms.
 
 ## 3. Native ABI and closeout
 
-Pending: existing Win64 aggregate machinery, independent C11 differential and
-ABI probes, malformed native-output sentinels, 100 fresh emissions, exact bytes,
-Normal/Verify parity and full regression. The trap-path regression remains part
-of qualification. Earlier source-bootstrap evidence is not native h2 evidence.
+The existing Win64 aggregate classifier/transfers realize 8-byte sum carriers
+directly, 12/48-byte values indirectly, and hidden results with argument shifts.
+Ordinary native records retain their established conservative hidden-result
+rule. Separately compiled MSVC and clang-cl C DLLs pass both calling directions
+for tagged values, mixed positional arguments and fifth/later stack arguments.
+These probes grant no source foreign enum representation or external linker.
+
+22 malformed artifacts reject in Go and Concept, with native output and image
+sentinels retained. Three child-process trap probes reject inactive and forged
+tags, including payload storage behind a protected page. This detects accidental
+inactive-field reads as access violations instead of the required UD2 trap.
+Existing cast-trap executables remain separate per case; three fresh focused
+runs pass in 9.245 s. Focused new semantic/transport race passes in 11.485 s.
+EVT2h1 native/transport frozen hashes remain exact.
+
+Full qualification is pending. The final conformance/convergence entries must
+record its actual outcome before EVT2h2 success. Earlier source-bootstrap
+evidence remains distinct from the native evidence above.

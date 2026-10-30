@@ -33,7 +33,7 @@ func taggedFixture(t *testing.T) (Module, []byte, LIRModule) {
 
 func TestEVT2h2CheckedTaggedLIR(t *testing.T) {
 	_, _, lir := taggedFixture(t)
-	if len(lir.TaggedEnums) != 4 || len(lir.Aggregates) != 2 {
+	if len(lir.TaggedEnums) != 4 || len(lir.Aggregates) != 3 {
 		t.Fatalf("missing checked types: %+v", lir.TaggedEnums)
 	}
 	byName := map[string]LIRTaggedEnum{}

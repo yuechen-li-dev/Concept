@@ -481,6 +481,15 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8 and artifact[7] == 56) {
+        match (ValidateTaggedMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        BridgeReader source = BridgeReader{artifact, 0};
+        WireObjectModule document = AdmittedObjectDocument(artifact) ?;
+        return EmitObjectNativeDocument(ref const source, document, output, ref image, true);
+    }
     if (Len(artifact) >= 8 and artifact[7] == 55) {
         match (ValidateEnumMachineBridge(artifact)) {
             Result::Ok => { }
@@ -1330,7 +1339,7 @@ ref const FinalizedFrame frame, ref EncodingWorkspace workspace) {
     return Result::Ok();
 }
 Result<void, BackendError> EncodeObjectMemoryInstruction(ref ByteWriter writer, ref const BridgeReader reader,
-WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input,
+WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input, int taggedKind,
 ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
 ref const FinalizedFrame frame) {
     WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
@@ -1353,7 +1362,69 @@ ref const FinalizedFrame frame) {
     ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
     bool scalarResult = false;
     bool floatingResult = false;
-    if (input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) {
+    if (taggedKind >= 0) {
+        WireTaggedModule tagged = ReadTaggedDocument(ref const reader) ?;
+        int domainType = input.Type;
+        if (taggedKind == 1) {
+            domainType = input.ParentType;
+        }
+        WireTaggedDomain domain = NativeObjectAt<WireTaggedDomain>(ref const reader, tagged.Domains,
+        0) ?;
+        match (TaggedDomainAt(ref const reader, tagged.Domains, domainType)) {
+            Result::Ok(value) => {
+                domain = value;
+            }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+        WireTaggedVariant variant = NativeObjectAt<WireTaggedVariant>(ref const reader, domain.Variants,
+        input.Member) ?;
+        if (taggedKind == 0) {
+            int destination = frame.slotOffsets[placement.values[input.Result]];
+            for (i in 0 .. variant.Fields.count) {
+                WireObjectField field = NativeObjectAt<WireObjectField>(ref const reader, variant.Fields,
+                i) ?;
+                ObjectStackAddress(ref writer, Register::RDX, destination + domain.PayloadOffset + field.Offset) ?;
+                int value = NativeObjectAt<WireObjectValueUse>(ref const reader, input.Args, i) ?.Value;
+                WriteObjectValue(ref writer, ref const reader, document, owner, value, ref const placement,
+                ref const function, ref const allocation, ref const frame) ?;
+            }
+            WriteMovImmediate(ref writer, Register::R10, variant.Tag, 4) ?;
+            WriteRSPReg(ref writer, false, Register::R10, destination, 4) ?;
+        } else {
+            int source = frame.slotOffsets[placement.values[left]];
+            WriteRSPReg(ref writer, true, Register::R10, source, 4) ?;
+            WriteCompareImmediate(ref writer, Register::R10, variant.Tag, 4) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 132) ?;
+            WriteI32LE(ref writer, 2) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 11) ?;
+            // The checked tag and read refer to this same private snapshot.
+            WireObjectField field = NativeObjectAt<WireObjectField>(ref const reader, variant.Fields,
+            input.Extent) ?;
+            ObjectStackAddress(ref writer, Register::RDX, source + domain.PayloadOffset + field.Offset) ?;
+            if (ObjectAggregate(type.Kind)) {
+                WriteRegReg(ref writer, 137, Register::RAX, Register::RDX, 8) ?;
+                ObjectStackAddress(ref writer, Register::RDX, frame.slotOffsets[placement.values[input.Result]]) ?;
+                CopyObjectFields(ref writer, ref const reader, document, input.Type, 0, 0) ?;
+            } else {
+                ScalarRepresentation scalar = ObjectScalar(type.Kind);
+                if (ScalarFloating(scalar)) {
+                    WriteScalarAddressSSE(ref writer, false, scalar, XMMRegister::XMM5, Register::RDX) ?;
+                    floatingResult = true;
+                } else {
+                    int opcode = 139;
+                    if (type.Size == 1) {
+                        opcode = 138;
+                    }
+                    WriteAddressReg(ref writer, opcode, Register::RAX, RegisterEncoding(Register::RDX),
+                    - 1, 0, 0, type.Size) ?;
+                    ExtendObjectInteger(ref writer, Register::RAX, scalar) ?;
+                    scalarResult = true;
+                }
+            }
+        }
+    } else if (input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) {
         LoadObjectGPR(ref writer, Register::RAX, placement.registers[left], 8, ref const allocation,
         ref const frame) ?;
         scalarResult = true;
@@ -1510,13 +1581,14 @@ ref const FinalizedFrame frame) {
     return Result::Ok();
 }
 Result<void, BackendError> EncodeObjectInstruction(ref ByteWriter writer, ref const BridgeReader reader,
-WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input,
+WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input, int taggedKind,
 ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
 ref const FinalizedFrame frame) {
     WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
     if ((input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) or ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
     input.Op == ObjectOpcode::IndexAddress or input.Op == ObjectOpcode::CheckIndex or input.Op == ObjectOpcode::Load or input.Op == ObjectOpcode::Store) {
-        return EncodeObjectMemoryInstruction(ref writer, ref const reader, document, owner, input, ref const placement,
+        return EncodeObjectMemoryInstruction(ref writer, ref const reader, document, owner, input, taggedKind,
+        ref const placement,
         ref const function, ref const allocation, ref const frame);
     }
     int left = - 1;
@@ -1617,7 +1689,12 @@ Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction fu
 // Inspection uses the same production projection, allocator and finalizer.
 Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
 ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
-    if (Len(artifact) >= 8 and artifact[7] == 55) {
+    if (Len(artifact) >= 8 and artifact[7] == 56) {
+        match (ValidateTaggedMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    } else if (Len(artifact) >= 8 and artifact[7] == 55) {
         match (ValidateEnumMachineBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
@@ -1672,6 +1749,12 @@ ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionP
     Liveness live = EmptyLiveness();
     ComputeLiveness(ref const function, ref live) ?;
     EncodingPlan branches = EmptyEncodingPlan();
+    BridgeSequence<WireTaggedOperation> taggedOperations = BridgeSequence<WireTaggedOperation>{
+        0, 0
+    };
+    if (Len(reader.data) >= 8 and reader.data[7] == 56) {
+        taggedOperations = ReadTaggedDocument(ref const reader) ?.Operations;
+    }
     int cursor = 0;
     for (bi in 0 .. owner.Blocks.count) {
         WireObjectBlock block = NativeObjectAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
@@ -1707,7 +1790,19 @@ ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionP
                     position, ref const frame, ref workspace) ?;
                 }
             } else {
-                EncodeObjectInstruction(ref writer, ref const reader, document, owner, instruction, ref const placement,
+                int taggedKind = - 1;
+                for (ti in 0 .. taggedOperations.count) {
+                    WireTaggedOperation operation = NativeObjectAt<WireTaggedOperation>(ref const reader,
+                    taggedOperations, ti) ?;
+                    if (operation.Function == workspace.functionOrdinal and operation.Block == bi and operation.Instruction == ii) {
+                        taggedKind = 0;
+                        if (operation.Kind == TaggedOperationKind::CheckedProject) {
+                            taggedKind = 1;
+                        }
+                    }
+                }
+                EncodeObjectInstruction(ref writer, ref const reader, document, owner, instruction, taggedKind,
+                ref const placement,
                 ref const function, ref const allocation, ref const frame) ?;
             }
             cursor += 1;

@@ -38,6 +38,11 @@ int Observe(Token value) {
     Assert.Equal(Observe(Select(true)), 35, "conditional return preserves active payload");
     Assert.Equal(Observe(Select(false)), 0, "conditional return preserves empty variant");
     Assert.Equal(Observe(Nested(10)), 27, "nested calls preserve aggregate payloads");
+    Assert.Equal(Observe(Recur(MakeInteger(31), 4)), 31, "recursive calls preserve the selected payload");
+    Other small = SmallCall(37);
+    Assert.Equal(match (small) {
+        Other::End => 0, Other::Integer(value) => value
+    }, 37, "small tagged calls retain payloads");
     Assert.Equal(Observe(Pressure(original, 2, 4.0, MakeEnd(), 1.0, true, MakeInteger(8))), 35, "mixed arguments preserve a value live across calls");
 }
 [[fact]] void PayloadEvaluationOrder() {

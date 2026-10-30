@@ -1,8 +1,7 @@
 module Standard.Backend.Win64AggregateABI;
 profile Core;
 import Standard.Backend.Win64ABI;
-import Standard.Backend.BridgeValidate6;
-
+import Standard.Backend.BridgeValidate8;
 // Derived Win64 default ABI state. No physical placement enters MachineIR.
 enum AggregateABIClass {
     Void, Scalar, Reference, DirectArgument, IndirectArgument, DirectReturn, HiddenReturn
@@ -78,6 +77,25 @@ WireObjectModule document, int typeID, int depth) {
         return Result::Error(AggregateABIError::Capacity);
     }
     bool[256] eligible =[false ...];
+    bool[256] sums =[false ...];
+    if (Len(reader.data) >= 8 and reader.data[7] == 56) {
+        match (ReadTaggedDocument(ref const reader)) {
+            Result::Ok(tagged) => {
+                if (tagged.Domains.count > 128) {
+                    return Result::Error(AggregateABIError::Capacity);
+                }
+                for (i in 0 .. tagged.Domains.count) {
+                    WireTaggedDomain domain = AggregateABIAt<WireTaggedDomain>(ref const reader, tagged.Domains,
+                    i) ?;
+                    if (domain.Type < 0 or domain.Type >= document.Types.count or domain.Type >= 256) {
+                        return Result::Error(AggregateABIError::StaleLayout);
+                    }
+                    sums[domain.Type] = true;
+                }
+            }
+            Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }
+        }
+    }
     // Semantic types are already checked in dependency order. A bounded pass
     // also makes the allocation-free summary closed across module imports.
     for (id in 0 .. typeID + 1) {
@@ -86,7 +104,7 @@ WireObjectModule document, int typeID, int depth) {
             return Result::Error(AggregateABIError::CopyEligibility);
         }
         if (type.Kind == ObjectKind::Aggregate) {
-            eligible[id] = type.Representation == ObjectRepresentation::C;
+            eligible[id] = type.Representation == ObjectRepresentation::C or sums[id];
             for (i in 0 .. type.Fields.count) {
                 WireObjectField field = AggregateABIAt<WireObjectField>(ref const reader, type.Fields,
                 i) ?;

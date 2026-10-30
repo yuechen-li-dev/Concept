@@ -8,6 +8,12 @@ struct Item {
 record struct Stamp {
     int value;
 }
+struct ArrayBox {
+    int[3] values;
+}
+ArrayBox MakeBox() {
+    return ArrayBox{[1, 2, 3]};
+}
 enum Token {
     End,
     Integer(int value),
@@ -88,4 +94,14 @@ Token Pressure(Token a, int b, double c, Token d, float e, bool f, Token g) {
     if (f) { return Forward(saved); }
     if (b > 0) { return Forward(changed); }
     return Forward(g);
+}
+Other SmallCall(int value) {
+    return SmallForward(MakeOther(value));
+}
+Other SmallForward(Other value) {
+    return value;
+}
+Token Recur(Token value, int depth) {
+    if (depth == 0) { return value; }
+    return Recur(Forward(value), depth - 1);
 }
