@@ -1,3 +1,4 @@
+module Testing.MatchRegions;
 profile Core;
 enum Choice {
     First, Second
@@ -17,4 +18,12 @@ int Regions(Choice choice, bool condition) {
         }
     }
     return result;
+}
+int Conditional(Choice choice, bool condition) {
+    if (condition) {
+        return match (choice) {
+            Choice::First => 7, Choice::Second => 9
+        };
+    }
+    return - 1;
 }
