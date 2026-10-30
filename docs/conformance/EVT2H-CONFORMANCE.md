@@ -1,9 +1,8 @@
 # EVT2h — enum conformance
 
-Current EVT2h2 status: **PARTIAL — checked payload LIR, native transport still
-unsupported**. No native tagged-value execution is qualified. See the
-[EVT2h2 section](#evt2h2--checked-payload-lir-partial) below. EVT2h1 remains
-qualified; its historical evidence follows.
+Current EVT2h2 status: **SUCCESS — native tagged execution and full qualification**.
+See [native closeout](#evt2h2--native-tagged-values). The ordinary-enum and
+initial checked-LIR entries below retain their historical evidence and limits.
 
 ## EVT2h0 / EVT2h1 — ordinary native enums
 
@@ -195,6 +194,8 @@ for the corrected LF-only failure and complete command/outcome record.
 
 ## EVT2h2 — checked payload LIR (PARTIAL)
 
+Historical entry at `09b3d50`, superseded by the native closeout below.
+
 Real baseline: `4e96e5cda4f932231129c057de1c00edbb81e7f8`, fetched `origin/main`,
 including the merged EVT2h1 and test-workflow checkpoints. The original clean
 local checkout was `8b129ad` on `main`. Work uses
@@ -295,3 +296,143 @@ failure and its correction are retained in the convergence ledger. Native
 `match`, fallible types,
 ownership/Drop, object output and optimizations remain deferred. The next work
 is completion of EVT2h2, not EVT2h3.
+
+## EVT2h2 — native tagged values
+
+Actual baseline: clean `main` at `934e5b4859b201354331b1eca0b2fbe286af47fd`,
+equal to fetched origin/main. Historical checkpoints were preserved; no task
+branch was revived or reset. Compiler `concept-evt1-stage0-go`, Windows AMD64 /
+Microsoft x64. Contract/admission commit: `8698781`. Native realization:
+`0da865b`. Completed spill/negative qualification specimen: `4a175e6`.
+Local-only module preflight correction and imported-transport follow-up: `59788a4`.
+The three [internal checkpoints](../history/milestones/EVT2H2-CHECKPOINTS.md)
+record the implementation progression and completed qualification.
+
+The existing source contract remains authoritative: declaration-order tags,
+nominal identity, constructor arity/type/order, checked copy eligibility and
+pattern-only payload inspection. The source program has 22 functions, four sum
+domains and three ordinary record/struct layouts. Token's seven variants cover
+empty, integer, double, float, bool, mixed fields, a nested Item, fixed int[3]
+and Stamp record. Other/Twin have identical 8/4 geometry and distinct identities;
+Ordered has 12/4 geometry and two evaluated integer fields. Token remains 48/8.
+The private semantic layout is still the explicit 4/4 tag plus aligned union of
+checked variant records. Public payload SizeOf/AlignOf and extern enum ABI still
+reject. No native layout is inferred from integer width or variant spelling.
+
+CMIRAMD8 is owned by `Standard.Backend.BridgeSchema8`; its generated Go and
+Concept codecs and JSON schema have SHA256
+`8dc34f916ab8293e838db026d720825f10d2a7c12006c19924a0fffea94c0711`.
+It embeds frozen v6 object/reference records and adds nominal sum domains with
+ordered variants/field geometry plus sparse canonical operation sites. Existing
+type/value/operand/provenance/copy metadata is reused. Sum roots are opaque in
+the ordinary field table, so record projections cannot expose inactive bytes.
+The defining semantic dependency identity/digest survives imported transport.
+CMIRAMD3–7 schemas, generated codecs and byte contracts are unchanged.
+
+`BridgeValidate8` independently validates artifact-only geometry, nominal and
+variant identities, initialization, field order/type/layout, copy eligibility,
+operation authority and existing object/reference/CFG rules. This is consistency
+validation, not producer authentication. Construct operations bind every active
+payload operand; the constructor establishes the tag after writing fields.
+Internal `checked_payload` binds a logical snapshot, variant and field. Its
+native selector compares that snapshot's tag and traps before a mismatched
+read. There is no separate Boolean authority that an artifact can forge, no
+untyped address as projection subject, and no payload address result. Seven
+verified internal observer wrappers exercise scalar, record and array reads
+without introducing source projection syntax or native match.
+
+Cathedral extends the existing `AMD64.Objects.CopyObjectFields` recursion with
+admitted tag dispatch. It reads/writes the tag and copies only active meaningful
+fields through the same scalar/record/array copier. Inactive storage and padding
+are not semantic data. Locals, snapshots, source/call temporaries and hidden
+results use the existing frame planner and object placement. Allocation, scalar
+encoding, transfers, calls and fixups remain Concept-authored. Go produces
+checked semantics and generated transport, orchestrates tests and supplies the
+independent C oracle; there is no production Go tagged native algorithm.
+
+The existing Win64 aggregate machinery passes/returns the 8-byte sums directly,
+uses indirect arguments for larger sums, and hidden results for 12/48-byte
+returns. Hidden pointers shift positional GPR/XMM/stack arguments. Outgoing
+indirect temporaries retain the existing 16-byte alignment and value isolation.
+Ordinary native records retain their conservative hidden-result rule: the
+4-byte Stamp observer uses an explicit result pointer in its independent C
+probe. Standalone array returns remain unsupported; the array observer returns
+an ordinary ArrayBox record. Neither probe grants C enum, C++ variant or general
+foreign-source interoperability.
+
+Native execution covers construction, local/call copies, same/different variant
+replacement, original-value isolation, conditional returns, loops, forward and
+backward calls, recursion, reference-observable evaluation order, mixed arguments
+and fifth/later stack positions. FloatingPressure demonstrably spills nine
+floating values using the existing allocator/frame path. Signed zero, adjacent
+precision, NaN payloads and subnormals retain exact binary32/binary64 bits through
+native constructors, copies and guarded reads. Normal/Verify execute the bytes
+in a source-free host before separately linking the strict C11 source oracle.
+Separate MSVC and clang-cl DLLs test C-to-native and native-to-C tagged calls.
+Earlier EVT2g5 assembly ABI boundary probes remain frozen regression evidence.
+
+Three child-process guard tests require an illegal-instruction trap for inactive
+or forged tags. Two put all payload storage behind a protected page: an inactive
+payload read would instead cause an access violation and fail the test. The
+existing cast-trap harness retains a distinct executable path per case. Tagged
+trap children execute a finished binary without relinking an open executable.
+
+28 malformed artifacts reject in both independent admissions and before native
+output/NativeImage mutation. Cases cover unknown/duplicate domains and variants,
+nominal calls/returns, layout/alignment/overlap/size, copy permission, complete
+initialization, missing/duplicate/invalid operation authority, bad projection
+variant/field, capacity, header/hash/version, unknown operation and truncation/
+trailing bytes. Tiny valid-output capacity and malformed derived argument,
+return and overlapping frame plans also reject. Diagnostics include
+`CMIRAMD8_{MALFORMED,VERSION_MISMATCH,SCHEMA_HASH_MISMATCH,CAPACITY_EXCEEDED,
+TAGGED_DOMAIN,TAGGED_VARIANT,PAYLOAD_GEOMETRY,PAYLOAD_INITIALIZATION,
+ACTIVE_VARIANT_AUTHORITY,COPY_ELIGIBILITY,OBJECT_CONTRACT}` and existing
+`AMD64_AGGREGATE_ABI_*` errors. Existing eight source diagnostics and 22 malformed
+LIR cases remain; neither numeric casts nor payload equality become legal.
+
+`Testing/TaggedLocals.concept` separately exercises construction, copying and
+replacement in a module with scalar-only function signatures. CMIRAMD8 always
+uses the existing aggregate count-only preflight, including this case; it
+cannot select the older object emission path merely because no signature needs
+an aggregate carrier. The regression verifies this classification, executes
+the module in both modes, and requires a one-byte output failure to preserve
+every output byte and the previous NativeImage. CMIRAMD3–7 routing is unchanged.
+
+| Measured artifact / gate | Result |
+| --- | --- |
+| Canonical CMIRAMD8 | 42,064 bytes; SHA256 `1215b1c779093e9fc149929d8ca4ad0b6f81a1a6aa0d77c56341d5e3372125e5` |
+| Native image | 29 functions, 18 resolved calls, 31,871 bytes |
+| Pinned native SHA256, both modes | `524c364540dbb5efc8b1634f5d7087f8933fd4225d92afaa73dc39bccd7becc3` |
+| Native frame range | 40..1096 bytes |
+| 100 fresh domain/LIR/MachineIR/debug generations and schema/codecs | PASS; 668.665 ms |
+| 100 complete physical plans per function | PASS; canonical debug descriptions compared; 1.699 s in the recorded Normal run |
+| 100 fresh native emissions per host | PASS; exact code, symbols and fixups; Normal/Verify identical |
+| Emission | 84 ms in the recorded Normal run, including admission and count-only preflight |
+| MSVC / clang-cl ABI and strict C11 differential | PASS in Normal/Verify |
+| Full Go/vet at `4a175e6` | PASS; compiler/native 1569.289 s, CLI 74.861 s, GPU-free Vulkan 0.506 s, lane 1572 s |
+| Final full Go/vet including local-only preflight at `59788a4` | PASS; compiler/native 1557.665 s, CLI 81.251 s, GPU-free Vulkan 0.480 s; lane 1564.97 s including vet |
+
+Admission retains 256 object types, 128 functions/blocks, 512 values, 64 source
+slots and 1024 instructions per function; sum domains are bounded to 128,
+variants to 256, fields to 64, arrays to 256 elements, storage to 1 MiB and
+operation sites to 131072. Native placement retains 128 scalar virtuals, 512
+flattened object instructions, 64 total object slots, 32 calls / 256 aggregate
+transfers per function, 128 symbols / 512 call fixups, eight physical arguments
+including hidden results, recursive copy depth 16 and frames below 4096 bytes.
+Exhausted GPR allocation rejects; existing floating spills are qualified. These
+are bounded capacities, not claims that every combination at every maximum fits.
+
+Nested payload sums, sums inside ordinary objects, coexisting ordinary enum
+domains (`EVT2H2_UNSUPPORTED_ORDINARY_ENUM_CONTEXT`), reference-bearing/owning/
+move-only/Drop payloads, raw reinterpretation, unknown layout and foreign enum
+representations remain unsupported. Native match, Option/Result/Verdict,
+ownership/Drop, new object output and optimization are deferred. Source C
+bootstrap support for these richer forms does not establish native execution.
+The next milestone is EVT2h3 only after separate review.
+
+**SUCCESS — EVT2h2 native tagged values qualified.** The full final Go run
+includes frozen native regressions, corpus, Golden, package and Vulkan gates.
+Focused race, independent strict C11/MSVC/clang-cl, Standard/DragonGod in both
+modes, generated inspection, format/lint and diff checks pass. Frozen Zig is
+skipped because its compiler/build/test infrastructure is unchanged. Work stops
+after EVT2h2; source-only match support is not native match qualification.

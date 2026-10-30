@@ -1,9 +1,8 @@
 # EVT2h convergence
 
-Current EVT2h2 status: **PARTIAL**, checked frontend progression only; native
-tagged values remain blocked at the versioned MachineIR boundary. See
-[the current entry](#evt2h2-checked-frontend-progression). The EVT2h0–h1 closeout
-below is historical and remains qualified.
+Current EVT2h2 status: **SUCCESS — native execution and final qualification passed**.
+See [native gap closure](#evt2h2-native-gap-closure). Earlier closeouts below
+retain their historical outcomes and qualification boundaries.
 
 ## EVT2h0–h1 historical closeout
 
@@ -91,6 +90,8 @@ The work stops here. EVT2h2 has not begun.
 
 ## EVT2h2 checked frontend progression
 
+Historical progression at `09b3d50`; the native gap is addressed below.
+
 Actual initial local checkout: clean `main` at `8b129ad`. Fetch exposed newer
 `origin/main` at `4e96e5cda4f932231129c057de1c00edbb81e7f8`, merging the
 workflow through `bc84b51`, with merge commits `ff5e398`, `d554b27` and `4e96e5c`
@@ -164,3 +165,91 @@ outputs, Golden, package and Vulkan checks. These qualify regression preservatio
 they are not h2 native execution evidence. `go vet ./...` passed as the final
 workflow stage. No failing test was waived. The native h2 acceptance criteria
 remain unmet, and the final milestone status is **PARTIAL**.
+
+## EVT2h2 native gap closure
+
+Baseline `934e5b4859b201354331b1eca0b2fbe286af47fd`, clean `main`, equal to
+fetched origin/main. Historical EVT2g5/h1/workflow commits were not replayed.
+Work stays on main, with no new task branch or historical worktree mutation.
+Compiler `concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64.
+
+| Checkpoint | Commit / result |
+| --- | --- |
+| Concept-owned CMIRAMD8 and independent admission | `8698781`; generated schema/codecs; no CMIRAMD3–7 changes |
+| Native tagged operations and existing aggregate ABI integration | `0da865b`; native construction, active-field copy, guarded projection, calls and returns |
+| Completed spill/negative/byte fixture | `4a175e6`; nine floating spills, 29 functions / 18 calls, exact native bytes pinned |
+| Local-only preflight correction | `59788a4`; all v8 modules use existing count-only preflight; imported transport follow-up included |
+| Source-free imported transport follow-up | Focused race passes; defining semantic identity/digest survives CMIRAMD8 encode/decode |
+
+The [checkpoint record](EVT2H2-CHECKPOINTS.md) retains the initial 23-function
+contract specimen and interim 27-function native evidence. The final source has
+22 functions plus seven internal guarded observers. Current artifact: 42,064
+bytes, SHA256 `1215b1c779093e9fc149929d8ca4ad0b6f81a1a6aa0d77c56341d5e3372125e5`.
+Current native image: 31,871 bytes, SHA256
+`524c364540dbb5efc8b1634f5d7087f8933fd4225d92afaa73dc39bccd7becc3`,
+identical in Normal and Verify; frames 40..1096 bytes. Fresh generation/codec100
+took 668.665 ms; one recorded emission 84 ms; 100 complete physical plans per
+function 1.699 s. These are local measurements, not performance thresholds.
+
+| Gate | Current outcome |
+| --- | --- |
+| Default `./test.ps1` after completed fixture | PASS; 24.16 s; 26 Concept facts per mode plus workflow/CLI frontend policies |
+| Default quick including local-only source regression | PASS; 24.14 s |
+| Source/LIR/transport/debug and generated codecs, 100 fresh runs | PASS; final artifact/hash above |
+| 100 complete Concept physical plans per function | PASS; reused existing canonical ABI/frame/move/transfer debug descriptions |
+| 100 fresh native emissions per host | PASS; exact code, symbols and fixups; Normal/Verify identical |
+| Artifact-only native execution before source oracle | PASS in both modes |
+| Strict C11 source/native differential | PASS; scalar/mixed/record/array payloads, local isolation, variant replacement, calls, loops, recursion, evaluation order and floating spill return |
+| Independent Microsoft x64 ABI probes | PASS; separate MSVC and clang-cl C DLLs, both calling directions, direct/indirect values and hidden/stack argument shifts |
+| Binary32/binary64 exact bits | PASS; signed zero, adjacent precision, NaN payload and subnormal through native construction/copy/guarded read |
+| Malformed artifact and native sentinels | PASS; 28 cases, independent Go/Concept rejection; output and NativeImage unchanged |
+| Checked active-variant execution guards | PASS; three child processes, including two protected-payload-page probes; require UD2 rather than access violation |
+| Derived tagged ABI/frame corruption and tiny output | PASS; argument identity, return class, overlap and preflight capacity reject |
+| Module with tagged locals and no aggregate ABI signatures | PASS; checked source, Normal/Verify execution and tiny-output/image atomicity; 70.666 s focused package |
+| Existing source / malformed LIR boundaries | PASS; eight invalid source cases, 22 LIR mutations; nested sum and native match remain unsupported |
+| Focused final semantic/transport race | PASS; 15.247 s; 100-run semantic/transport/codec checks retained |
+| Imported artifact transport follow-up race | PASS; 2.053 s |
+| Windows cast-trap executable isolation | PASS; three fresh `TestExplicitCastCore` runs, 9.245 s; unique executable per case retained |
+| Frozen EVT2h1 | PASS focused; original 46,377-byte artifact and 8,440-byte native hashes unchanged |
+| Native CLI | PASS focused before spill fixture; ten scenarios share one cold backend, plus existing single-input smoke; final expanded fixture covered by full run |
+| Standard Normal / Verify | PASS; 44 tests each, three informational benchmarks |
+| DragonGod Normal / Verify | PASS; 23 tests each, one informational benchmark |
+| Package graph | PASS; actual `concept package build DragonGod`, including Standard |
+| Changed source/specimen format / lint | PASS; schema, codec, validator, native owners and Concept facts |
+| Generated inspection | PASS for derived `BridgeCodec8` declarations using built semantic artifacts; schema itself has no generated declarations to inspect |
+| Full `./test.ps1 -Lane Qualification` at `4a175e6` | PASS; compiler/native 1569.289 s, CLI 74.861 s, GPU-free Vulkan profile 0.506 s; lane 1572 s including vet |
+| Final full lane at `59788a4` | PASS; compiler/native 1557.665 s, CLI 81.251 s, GPU-free Vulkan profile 0.480 s; lane 1564.97 s including vet |
+| Frozen root / legacy Zig | SKIPPED; legacy compiler/build/test infrastructure unchanged |
+
+One qualification attempt was deliberately interrupted after coverage review
+found that the mixed-call fixture did not force floating spills. No failing
+test was waived. Adding Seven/FloatingPressure proves nine spills through the
+existing allocator, then the complete lane was restarted on `4a175e6`.
+Earlier iteration failures narrowed the standalone-array return boundary; the
+array observer now returns a checked ArrayBox record, retaining the existing
+ABI restriction. No union-specific layout/copy engine, frame planner or Go
+native algorithm was introduced. Local detailed logs are under ignored
+`artifacts/evt2h2-close/`.
+
+The final audit also found that a v8 module containing only local sums could
+select the older object emitter without count-only emission preflight. That
+legacy path advertises scratch output until success, which is insufficient for
+v8 atomic capacity failures. `59788a4` routes all v8 modules through the existing
+aggregate preflight and adds an authoritative local-only Concept specimen. The
+regression requires a scalar-only signature classification and checks native
+execution plus unchanged tiny-output/image sentinels in both modes. Older
+versions retain their routes. The full lane was repeated for this correction;
+the earlier passing run is retained rather than claimed as final-code evidence.
+
+The [conformance record](../../conformance/EVT2H-CONFORMANCE.md#evt2h2--native-tagged-values)
+defines source/transport/native authority, caps, unsupported forms and exact
+diagnostics. Source `.concept_test` matching still runs through C bootstrap;
+the separately emitted native image establishes h2 execution. Native match,
+fallible wrappers, ownership/Drop, object output and optimization remain outside
+this closeout. EVT2h3 requires separate review.
+
+**SUCCESS — native EVT2h2 qualified at `59788a4`.** The final full lane includes
+all frozen native, corpus, Golden, Vulkan and package regressions. The subsequent
+closeout commit changes these records only. Native bytes remain pinned above;
+no failing gate is waived, no later milestone is started, and all implementation,
+specimens and evidence are committed on main. The worktree is clean at closeout.

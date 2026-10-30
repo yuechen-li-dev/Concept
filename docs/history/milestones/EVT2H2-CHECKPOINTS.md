@@ -48,6 +48,9 @@ passed in 1.194 s; independent artifact admission passed in 14.04 s.
 
 ## 2. Native tagged operations
 
+Committed as `0da865b`; the measurements in this section describe that interim
+27-function specimen. The completed qualification fixture follows in checkpoint 3.
+
 Implemented in the existing `AMD64.Objects.CopyObjectFields` recursion and
 `AMD64.EncodeObjectMemoryInstruction`. Construction writes active fields then
 the tag. Copy dispatches on the admitted tag and visits only active meaningful
@@ -80,14 +83,43 @@ rule. Separately compiled MSVC and clang-cl C DLLs pass both calling directions
 for tagged values, mixed positional arguments and fifth/later stack arguments.
 These probes grant no source foreign enum representation or external linker.
 
-22 malformed artifacts reject in Go and Concept, with native output and image
+28 malformed artifacts reject in Go and Concept, with native output and image
 sentinels retained. Three child-process trap probes reject inactive and forged
 tags, including payload storage behind a protected page. This detects accidental
 inactive-field reads as access violations instead of the required UD2 trap.
 Existing cast-trap executables remain separate per case; three fresh focused
-runs pass in 9.245 s. Focused new semantic/transport race passes in 11.485 s.
+runs pass in 9.245 s. Final semantic/transport race passes in 15.247 s, with
+source-free imported transport covered by a further 2.053 s race run.
 EVT2h1 native/transport frozen hashes remain exact.
 
-Full qualification is pending. The final conformance/convergence entries must
-record its actual outcome before EVT2h2 success. Earlier source-bootstrap
-evidence remains distinct from the native evidence above.
+`4a175e6` completes the 22-function source fixture (29 native functions with
+internal observers). FloatingPressure uses seven positional double arguments,
+including stack positions shifted by a hidden result, and demonstrably spills
+nine floating values through the existing allocator. Separate MSVC/clang-cl
+callers exercise that path too. A qualification attempt was interrupted to add
+this missing coverage, then restarted; no failure was waived.
+
+Final CMIRAMD8: 42,064 bytes, SHA256
+`1215b1c779093e9fc149929d8ca4ad0b6f81a1a6aa0d77c56341d5e3372125e5`.
+100 fresh generations/codecs: 668.665 ms. Final native image: 29 functions,
+18 calls, 31,871 bytes, SHA256
+`524c364540dbb5efc8b1634f5d7087f8933fd4225d92afaa73dc39bccd7becc3`.
+Normal/Verify exact parity remains; frames 40..1096 bytes. Emission measured
+82..84 ms, and 100 complete physical plans per function 1.699..1.719 s.
+Independent native/C11 execution, ABI probes, checked trap guards, tiny-output
+sentinels and corrupt derived argument/result/frame plans pass. The final quick
+lane passes in 24.16 s. Standard/DragonGod pass in both modes (44/23 tests), as
+do package build, format/lint and derived-code inspection.
+
+Full qualification at `4a175e6` passed in 1572 s including vet (compiler/native
+1569.289 s, CLI 74.861 s, GPU-free Vulkan 0.506 s). A final audit found a local-only
+module route without count-only preflight. `59788a4` sends all v8 modules through
+the existing aggregate preflight and adds `Testing.TaggedLocals` as an actual
+checked source regression. Normal/Verify execution and unchanged tiny-output /
+image sentinels pass, focused package 70.666 s; quick passes in 24.14 s.
+The repeated final lane at `59788a4` passes: compiler/native 1557.665 s, CLI
+81.251 s, GPU-free Vulkan 0.480 s; total 1564.97 s including vet. Frozen native,
+corpus, Golden and package gates are included. Format/lint and derived inspection
+remain clean. Frozen Zig is skipped because unchanged. **EVT2h2 SUCCESS**; work
+stops here, with EVT2h3 requiring separate review. Earlier source-bootstrap
+evidence remains distinct from native execution.

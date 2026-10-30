@@ -2,8 +2,8 @@
 
 Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
 Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
-Payload enum status is [EVT2h2 checked frontend progression](#evt2h2-checked-payload-authority-partial),
-with native tagged-value execution still unqualified.
+Payload enum status is [EVT2h2 native tagged execution](#evt2h2-tagged-value-authority),
+with final full qualification passed at `59788a4`.
 Earlier milestone tables below retain their historical qualification boundaries.
 
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
@@ -312,18 +312,24 @@ See [EVT2g5 execution and ABI evidence](../conformance/EVT2G-CONFORMANCE.md#evt2
 
 See [the enum contract and executed evidence](../conformance/EVT2H-CONFORMANCE.md).
 
-## EVT2h2 checked payload authority (PARTIAL)
+## EVT2h2 tagged-value authority
 
 | Decision / surface | Owner and classification | Qualification / boundary |
 | --- | --- | --- |
 | Payload source construction, nominal identity, copyability and pattern authority | Existing Stage-0 checker, GO_AUTHORITATIVE | Existing language rules retained; no direct field syntax or public payload SizeOf introduced |
 | Checked sum layout and complete constructor LIR | Stage-0 semantic producer/verifier, GO_AUTHORITATIVE | Reuses checked record/array geometry; nominal sum domains stay separate from records and scalar enums; independently checked against C layout |
-| Language behavior assertions | Concept-authored `.concept_test`, C bootstrap | Three facts in Normal/Verify; source-only evidence, not Cathedral execution |
-| Payload MachineIR / independent artifact admission | NOT_YET_QUALIFIED | `EVT2H2_TAGGED_TRANSPORT_REQUIRED`; next version must be Concept-schema-owned CMIRAMD8; v3–7 untouched |
-| Tag-controlled active-field copy, native construction and payload reads | NOT_YET_QUALIFIED; future Cathedral object owner | No Go native sum algorithm, blob copy, record-field bypass or alternate copy engine |
-| Native sum storage, carriers, argument/result plans and encoding | NOT_YET_QUALIFIED; existing Cathedral frame/aggregate ABI owners remain authoritative | No h2 native plan/image or ABI interoperability claim |
+| Language behavior assertions | Concept-authored `.concept_test`, C bootstrap | Three facts in Normal/Verify; source matching remains source-only |
+| CMIRAMD8 | CONCEPT_AUTHORITATIVE `BridgeSchema8`; schema-generated codecs | Embeds frozen v6 records; nominal sum domains, variants/geometry and exact operation sites; v3–7 unchanged |
+| Independent artifact admission | CONCEPT_AUTHORITATIVE `BridgeValidate8` and existing object/borrow validators | Complete initialization, active access, copy and nominal/layout consistency; malformed artifacts fail before mutation |
+| Tag-controlled active-field copy | CONCEPT_AUTHORITATIVE existing `AMD64.Objects.CopyObjectFields` recursion | Only live fields; shared record/array/scalar copier; no padding/inactive bytes or parallel union-copy engine |
+| Native construction and atomic guarded payload access | CONCEPT_AUTHORITATIVE `AMD64.EncodeObjectMemoryInstruction` | Writes fields then tag; read checks the same private snapshot's variant and traps before mismatch; no new source syntax |
+| Storage, allocation, frames, calls and encoding | CONCEPT_AUTHORITATIVE existing object/scalar/Win64 machinery | Direct 8-byte sum carriers, indirect larger values/hidden results; ordinary record ABI restrictions retained; nine floating spills tested |
+| Native output atomicity | CONCEPT_AUTHORITATIVE existing aggregate count-only preflight for all v8 modules | Local-only sums cannot bypass preflight through scalar-only signatures; old v3–7 routes unchanged |
+| Bootstrap and oracles | Generated Go transport / orchestration and independent strict C11/MSVC/clang-cl probes | No production Go native enum algorithm; artifact-only execution precedes source oracle |
 | Native match, fallible wrappers, ownership/Drop, object output | Deferred | No subsequent milestone begun |
 
-The implementation removes the checked-LIR blocker only. No responsibility for
-native representation validation, allocation, physical realization or encoding
-has moved into Go. See the [EVT2h2 conformance entry](../conformance/EVT2H-CONFORMANCE.md#evt2h2--checked-payload-lir-partial).
+The 29-function, 31,871-byte image executes in Normal and Verify with exact
+byte parity, independent C11 behavior and separate Microsoft ABI probes.
+Full regression and vet pass at `59788a4`. Checked source layout remains distinct from native
+physical placement; identity consistency is not producer authentication.
+See [EVT2h2 conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h2--native-tagged-values).

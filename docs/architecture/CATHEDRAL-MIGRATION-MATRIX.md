@@ -1,6 +1,8 @@
 # Cathedral migration matrix (R9c)
 
 Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
+Current payload enum stage: [EVT2h2 native tagged values](#evt2h2-native-tagged-values),
+with full qualification passed at `59788a4`.
 Earlier stage tables retain their historical qualification boundaries.
 
 This inventory is a decision map, not a schedule to delete Stage-0. `Current`
@@ -241,18 +243,23 @@ See [EVT2h conformance](../conformance/EVT2H-CONFORMANCE.md) and the
 [convergence record](../history/milestones/EVT2H-CONVERGENCE.md) for exact bytes,
 gate outcomes and measured limits.
 
-## EVT2h2 checked payload frontend (PARTIAL)
+## EVT2h2 native tagged values
 
-| Capability | Current owner/state | Required native transition |
+| Capability | Current owner/state | Remaining boundary |
 | --- | --- | --- |
 | Payload constructors, copy eligibility and pattern semantics | Existing Stage-0 checker | Preserve semantics; no source match or projection bypass |
-| Nominal sum values, variant layouts, complete initialization and typed local/call operations in LIR | Stage-0 checked semantic production, implemented and verifier-tested | Preserve these facts through a new Concept-owned contract |
-| Payload storage geometry | Checked private sum layout; strict C11 field/size probes | Cathedral must independently admit the supplied layout and realize storage; public payload geometry still rejects |
-| Versioned sum transport | NOT_YET_QUALIFIED; explicit `EVT2H2_TAGGED_TRANSPORT_REQUIRED` | Concept-authored CMIRAMD8 schema, generated codecs, artifact-only admission and malformed-input sentinels |
-| Conditional active-field semantic copy and guarded payload reads | NOT_YET_QUALIFIED | Extend the existing Concept object-copy owner; retain active-variant authority |
-| Tagged Win64 arguments/results, frames and emission | NOT_YET_QUALIFIED | Extend existing aggregate ABI/classifier/transfer/frame machinery with admitted sum facts |
-| Source behavior qualification | Three Concept facts, Normal/Verify C bootstrap; 100 fresh LIR generations | Independent native/C11 parity and 100 fresh native emissions still required |
+| Nominal sum values, variant layouts, complete initialization and typed local/call operations in LIR | Stage-0 checked semantic production, verifier-tested | No native match or direct source payload projection |
+| Payload storage geometry | Checked private sum layout plus independent Concept admission; strict C11 field/size probes | Public payload geometry still rejects; no second union-layout producer |
+| Versioned sum transport | Concept-owned CMIRAMD8, generated codecs, source-free admission | Opaque sums reuse canonical object/reference records; frozen v3–7 unchanged |
+| Conditional active-field semantic copy | Existing Concept object-copy recursion extended by admitted tag dispatch | Checked copyable fields only; no inactive bytes/padding, owning/move-only or nested sums |
+| Guarded payload reads | Atomic checked LIR/transport operation, Concept admission and selector | Variant check and read use the same private logical snapshot; no unchecked location, runtime type registry or new source syntax |
+| Tagged Win64 arguments/results, frames and emission | Existing Concept aggregate ABI, scalar allocator, frame and encoder; native executed | Direct 8-byte carriers / indirect larger values / hidden returns; eight physical arguments; ordinary record/array ABI restrictions retained |
+| Local-only tagged modules / output preflight | Same existing Concept aggregate count-only preflight, all v8 modules | Scalar-only signatures do not bypass atomic capacity failure; frozen routes unchanged |
+| Language behavior | Three Concept facts, Normal/Verify C bootstrap | Source matching remains C-only |
+| Native qualification | Independent C11/MSVC/clang-cl execution; 100 fresh plans/emissions and exact bytes; full Go/vet passed at `59788a4` | 29 functions, 31,871 bytes, frames 40..1096; documented bounded forms only |
 | Frozen bridge and native regressions | CMIRAMD3–7 retained | No old envelope is reinterpreted as tagged storage |
 
-EVT2h2 native execution is not complete. The next work is its transport and
-Cathedral realization; EVT2h3 match and richer sum types remain deferred.
+No production Go tagged allocation/layout/copy/ABI/encoding algorithm was added.
+Standalone ordinary enum coexistence, nested/reference-bearing/owning payloads,
+native match and richer sum types remain deferred. See
+[the conformance boundary](../conformance/EVT2H-CONFORMANCE.md#evt2h2--native-tagged-values).
