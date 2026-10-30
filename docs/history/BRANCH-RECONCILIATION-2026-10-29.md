@@ -43,8 +43,9 @@ All branch tips below are verified reachable from main before cleanup. Their
 commits remain in main's history and can be restored with
 `git branch <name> <tip>`. The cleanup removes 30 local task refs and 17 remaining
 remote task refs, after publishing integrated main. Nine already-deleted remote
-refs were pruned during fetch. No force push, forced branch deletion or worktree
-folder deletion is used.
+refs were pruned during fetch. No history rewrite, forced local branch deletion
+or worktree folder deletion is used. Remote deletions use exact-tip leases and
+an atomic update, rejecting concurrent branch changes rather than deleting them.
 
 ## Reconciled branch inventory
 
