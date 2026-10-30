@@ -9,7 +9,8 @@ import (
 // LIR is target independent. Computations define one value; mutable source
 // variables use explicit slots until a later promotion pass exists.
 type LIRModule struct {
-	Enums         []LIREnum `json:",omitempty"`
+	TaggedEnums   []LIRTaggedEnum `json:",omitempty"`
+	Enums         []LIREnum       `json:",omitempty"`
 	PlanID        string
 	SemanticFacts []MIRSemanticFact
 	Aggregates    []LIRAggregateLayout       // Checked source layout snapshots; never native storage plans.
@@ -134,6 +135,12 @@ type LIRMachineState struct {
 
 func (m LIRModule) String() string {
 	var out strings.Builder
+	for _, e := range m.TaggedEnums {
+		fmt.Fprintf(&out, "tagged %s identity=%q size=%d align=%d payload-offset=%d copy=%s\n", e.Type, e.Identity, e.Size, e.Alignment, e.PayloadOffset, e.CopyEligibility)
+		for _, v := range e.Variants {
+			fmt.Fprintf(&out, "  variant %d %s identity=%q size=%d align=%d fields=%v\n", v.Tag, v.Name, v.Identity, v.Size, v.Alignment, v.Fields)
+		}
+	}
 	for _, e := range m.Enums {
 		fmt.Fprintf(&out, "enum %s identity=%q size=%d align=%d variants=%v\n", e.Type, e.Identity, e.Size, e.Alignment, e.Variants)
 	}
@@ -234,6 +241,9 @@ func (m LIRModule) String() string {
 				if in.Op == "call" {
 					fmt.Fprintf(&out, " args=%v", in.ArgTypes)
 				}
+				if in.Op == "make_tagged" {
+					fmt.Fprintf(&out, " variant=%d", in.Member)
+				}
 				if in.Literal != "" {
 					fmt.Fprintf(&out, " %s", in.Literal)
 				}
@@ -288,6 +298,10 @@ func VerifyLIR(m LIRModule) error {
 		return err
 	}
 	layouts, err := verifyLIRAggregateLayouts(m.Aggregates)
+	if err != nil {
+		return err
+	}
+	tagged, err := verifyLIRTaggedEnums(m, layouts)
 	if err != nil {
 		return err
 	}
@@ -398,6 +412,16 @@ func VerifyLIR(m LIRModule) error {
 				}
 				s, hasSlot := slots[in.Slot]
 				switch in.Op {
+				case "make_tagged":
+					domain, ok := tagged[in.Type]
+					if !ok || in.Result < 0 || in.Slot != -1 || in.Member < 0 || in.Member >= len(domain.Variants) || len(in.Args) != len(domain.Variants[in.Member].Fields) {
+						return fmt.Errorf("LIR_TAGGED_CONSTRUCTOR")
+					}
+					for i, field := range domain.Variants[in.Member].Fields {
+						if argType(i) != field.Type {
+							return fmt.Errorf("LIR_TAGGED_CONSTRUCTOR_TYPE")
+						}
+					}
 				case "borrow":
 					if !lirReferenceType(in.Type) || in.Result < 0 || len(in.Args) != 1 || lirAddressTarget(argType(0)) != lirAddressTarget(in.Type) || in.Slot != -1 {
 						return fmt.Errorf("LIR_REFERENCE_TARGET")
@@ -427,7 +451,7 @@ func VerifyLIR(m LIRModule) error {
 					}
 				case "make_aggregate":
 					layout, ok := layouts[in.Type]
-					if !ok || in.Result < 0 || in.Slot != -1 || len(in.Args) != len(layout.Fields) {
+					if !ok || lirTaggedType(in.Type) || in.Result < 0 || in.Slot != -1 || len(in.Args) != len(layout.Fields) {
 						return fmt.Errorf("LIR_BAD_RECORD_INIT b%d", b.ID)
 					}
 					for i, field := range layout.Fields {
@@ -516,6 +540,9 @@ func VerifyLIR(m LIRModule) error {
 				case "initialize_slot", "store_slot":
 					if !hasSlot || s.Extent > 0 || in.Result >= 0 || len(in.Args) != 1 || argType(0) != s.Type {
 						return fmt.Errorf("LIR_BAD_SLOT_STORE b%d", b.ID)
+					}
+					if (lirTaggedType(s.Type) || lirTaggedType(in.Type)) && in.Type != s.Type {
+						return fmt.Errorf("LIR_TAGGED_SLOT_TYPE")
 					}
 					if in.Op == "initialize_slot" && !lirAggregateType(s.Type) && (len(layouts) == 0 || !lirCallScalar(s.Type)) {
 						return fmt.Errorf("LIR_BAD_OBJECT_INIT b%d", b.ID)

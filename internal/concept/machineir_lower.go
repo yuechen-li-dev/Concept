@@ -11,6 +11,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 	if err := VerifyLIR(lir); err != nil {
 		return MachineModule{}, err
 	}
+	if len(lir.TaggedEnums) != 0 {
+		return MachineModule{}, fmt.Errorf("EVT2H2_TAGGED_TRANSPORT_REQUIRED: frozen CMIRAMD3-7 cannot preserve active payloads")
+	}
 	if len(lir.Enums) != 0 {
 		return projectEnumMachine(lir)
 	}

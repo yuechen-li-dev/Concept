@@ -1,0 +1,7 @@
+profile Core;
+enum Token {
+    End, Integer(int value)
+}
+Token Main() {
+    return Token::Missing(1);
+}

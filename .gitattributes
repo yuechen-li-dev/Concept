@@ -27,3 +27,5 @@ docs/design/EVT2-MACHINEIR-BRIDGE7.schema.json text eol=lf
 tests/runtime/*.concept_test text eol=lf
 tests/backend/*.concept_test text eol=lf
 test.ps1 text eol=lf
+tests/runtime/Testing/*.concept text eol=lf
+language/evt2h2/**/*.concept text eol=lf

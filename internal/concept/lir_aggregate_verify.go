@@ -24,7 +24,7 @@ func verifyLIRAggregateFunction(f LIRFunction, layouts map[LIRType]LIRAggregateL
 				return fmt.Errorf("LIR_UNKNOWN_OBJECT_TYPE %s", t)
 			}
 		}
-		if strings.HasPrefix(string(t), "ptr<") && strings.Contains(string(t), "aggregate:") && f.Borrow == nil {
+		if strings.HasPrefix(string(t), "ptr<") && (strings.Contains(string(t), "aggregate:") || lirTaggedType(lirAddressTarget(t))) && f.Borrow == nil {
 			return fmt.Errorf("LIR_OBJECT_REFERENCE_NOT_QUALIFIED %s", t)
 		}
 		return nil

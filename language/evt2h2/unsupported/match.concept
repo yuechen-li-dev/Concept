@@ -1,0 +1,9 @@
+profile Core;
+enum Token {
+    End, Integer(int value)
+}
+int Main(Token token) {
+    return match (token) {
+        Token::End => 0, Token::Integer(value) => value
+    };
+}

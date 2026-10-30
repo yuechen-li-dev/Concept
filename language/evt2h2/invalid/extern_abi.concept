@@ -1,0 +1,5 @@
+profile Core;
+enum Token {
+    End, Integer(int value)
+}
+extern "C" Token Foreign(Token value);

@@ -1,0 +1,51 @@
+module Testing.TaggedValueFacts;
+profile Core;
+import Testing.TaggedValues;
+
+int Observe(Token value) {
+    return match (value) {
+        Token::End => 0,
+        Token::Integer(number) => number,
+        Token::Decimal(number) => if (number == 3.5) 35 else - 1,
+        Token::Real(number) => if (number == 1.25) 125 else - 1,
+        Token::Flag(flag) => if (flag) 1 else - 1,
+        Token::Many(count, ready, item, numbers) => count + item.count + numbers[2],
+        Token::Stamped(stamp) => stamp.value
+    };
+}
+[[fact]] void PayloadConstructors() {
+    Assert.Equal(Observe(MakeEnd()), 0, "payload-free case retains the sum type");
+    Assert.Equal(Observe(MakeInteger(42)), 42, "integer payload is preserved");
+    Assert.Equal(Observe(MakeDecimal(3.5)), 35, "binary64 payload is preserved");
+    Assert.Equal(Observe(MakeReal(1.25)), 125, "binary32 payload is preserved");
+    Assert.Equal(Observe(MakeFlag(true)), 1, "boolean payload is preserved");
+    Assert.Equal(Observe(MakeMany(10)), 27, "ordered fields include a nested struct and fixed array");
+    Assert.Equal(Observe(MakeStamped(19)), 19, "copyable record payload is preserved");
+    Other other = MakeOther(23);
+    Assert.Equal(match (other) {
+        Other::End => 0, Other::Integer(value) => value
+    }, 23, "distinct nominal enum retains its own domain");
+    Twin twin = MakeTwin(29);
+    Assert.Equal(match (twin) {
+        Twin::End => 0, Twin::Integer(value) => value
+    }, 29, "equal layouts preserve distinct nominal identities");
+}
+[[fact]] void PayloadCopiesAndControlFlow() {
+    Token original = MakeDecimal(3.5);
+    Assert.Equal(Observe(CopyAndReplace(original, 0)), 35, "copied original survives variant replacement");
+    Assert.Equal(Observe(original), 35, "assignment isolates values");
+    Assert.Equal(Observe(CopyAndReplace(original, 5)), 4, "same-variant reassignment works across loops");
+    Assert.Equal(Observe(Select(true)), 35, "conditional return preserves active payload");
+    Assert.Equal(Observe(Select(false)), 0, "conditional return preserves empty variant");
+    Assert.Equal(Observe(Nested(10)), 27, "nested calls preserve aggregate payloads");
+    Assert.Equal(Observe(Pressure(original, 2, 4.0, MakeEnd(), 1.0, true, MakeInteger(8))), 35, "mixed arguments preserve a value live across calls");
+}
+[[fact]] void PayloadEvaluationOrder() {
+    int counter = 0;
+    Ordered value = MakeOrdered(ref counter);
+    int observed = match (value) {
+        Ordered::Pair(first, second) => first * 10 + second
+    };
+    Assert.Equal(observed, 12, "payload constructor arguments evaluate once left to right");
+    Assert.Equal(counter, 2, "both constructor arguments are evaluated exactly once");
+}

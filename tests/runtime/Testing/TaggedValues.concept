@@ -1,0 +1,91 @@
+module Testing.TaggedValues;
+profile Core;
+
+struct Item {
+    int count;
+    double amount;
+}
+record struct Stamp {
+    int value;
+}
+enum Token {
+    End,
+    Integer(int value),
+    Decimal(double value),
+    Real(float value),
+    Flag(bool value),
+    Many(int count, bool ready, Item item, int[3] numbers),
+    Stamped(Stamp value)
+}
+enum Other {
+    End, Integer(int value)
+}
+enum Twin {
+    End, Integer(int value)
+}
+enum Ordered {
+    Pair(int first, int second)
+}
+int Next(ref int counter) {
+    counter++;
+    return counter;
+}
+Ordered MakeOrdered(ref int counter) {
+    return Ordered::Pair(Next(ref counter), Next(ref counter));
+}
+
+Token MakeEnd() {
+    return Token::End;
+}
+Token MakeInteger(int value) {
+    return Token::Integer(value);
+}
+Token MakeDecimal(double value) {
+    return Token::Decimal(value);
+}
+Token MakeReal(float value) {
+    return Token::Real(value);
+}
+Token MakeFlag(bool value) {
+    return Token::Flag(value);
+}
+Token MakeMany(int value) {
+    return Token::Many(value, true, Item{value + 1, 3.5},[4, 5, 6]);
+}
+Token MakeStamped(int value) {
+    return Token::Stamped(Stamp{value});
+}
+Other MakeOther(int value) {
+    return Other::Integer(value);
+}
+Twin MakeTwin(int value) {
+    return Twin::Integer(value);
+}
+Token Forward(Token value) {
+    return value;
+}
+Token CopyAndReplace(Token input, int count) {
+    Token value = input;
+    Token saved = value;
+    value = Token::Integer(7);
+    value = Token::Integer(9);
+    for (i in 0 .. count) {
+        value = Token::Integer(i);
+    }
+    if (count == 0) { return Forward(saved); }
+    return Forward(value);
+}
+Token Nested(int value) {
+    return Forward(Forward(MakeMany(value)));
+}
+Token Select(bool flag) {
+    if (flag) { return MakeDecimal(3.5); }
+    return MakeEnd();
+}
+Token Pressure(Token a, int b, double c, Token d, float e, bool f, Token g) {
+    Token saved = a;
+    Token changed = CopyAndReplace(d, b);
+    if (f) { return Forward(saved); }
+    if (b > 0) { return Forward(changed); }
+    return Forward(g);
+}

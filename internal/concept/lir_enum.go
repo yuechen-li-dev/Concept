@@ -25,7 +25,7 @@ func lirEnumIdentity(e LIREnum) LIRType {
 func (a *lirAggregateTypes) lowerEnum(t Type, decl EnumDecl) (LIRType, error) {
 	for _, v := range decl.Variants {
 		if len(v.Payload) != 0 {
-			return "", fmt.Errorf("EVT2_UNSUPPORTED_PAYLOAD_ENUM %s", t.String())
+			return a.lowerTaggedEnum(t, decl)
 		}
 	}
 	key := decl.Module + "|" + decl.Name
@@ -101,7 +101,7 @@ func verifyLIREnums(m LIRModule) error {
 			}
 		}
 	}
-	if len(m.Enums) > 0 {
+	if len(m.Enums) > 0 && len(m.TaggedEnums) == 0 {
 		if len(m.Aggregates) > 0 {
 			return fmt.Errorf("LIR_UNSUPPORTED_ENUM_AGGREGATE")
 		}

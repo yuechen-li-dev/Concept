@@ -48,8 +48,10 @@ type LIRAggregateField struct {
 	ElementAlignment    int
 }
 
-func lirAggregateType(t LIRType) bool { return strings.HasPrefix(string(t), "aggregate:") }
-func lirPointer(t LIRType) LIRType    { return LIRType("ptr<" + string(t) + ">") }
+func lirAggregateType(t LIRType) bool {
+	return strings.HasPrefix(string(t), "aggregate:") || lirTaggedType(t)
+}
+func lirPointer(t LIRType) LIRType { return LIRType("ptr<" + string(t) + ">") }
 func lirArrayValue(t LIRType) (LIRType, int, bool) {
 	s := string(t)
 	end := strings.IndexByte(s, ']')
@@ -74,6 +76,7 @@ func lirAggregateIdentity(layout LIRAggregateLayout) LIRType {
 }
 
 type lirAggregateTypes struct {
+	tagged   []LIRTaggedEnum
 	enums    []LIREnum
 	env      *semanticEnv
 	layouts  []LIRAggregateLayout

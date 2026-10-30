@@ -1,0 +1,10 @@
+profile Core;
+enum Inner {
+    End, Integer(int value)
+}
+enum Outer {
+    End, Nested(Inner value)
+}
+Outer Main(Inner value) {
+    return Outer::Nested(value);
+}

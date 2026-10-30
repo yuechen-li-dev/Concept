@@ -1,0 +1,7 @@
+profile Core;
+enum Token {
+    End, Pair(int first, int second)
+}
+Token Main() {
+    return Token::Pair(1);
+}

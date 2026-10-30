@@ -1,0 +1,7 @@
+profile Core;
+enum Token {
+    End, Integer(int value)
+}
+bool Main(Token first, Token second) {
+    return first == second;
+}

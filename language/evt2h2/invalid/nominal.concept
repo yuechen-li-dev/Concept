@@ -1,0 +1,10 @@
+profile Core;
+enum Left {
+    End, Integer(int value)
+}
+enum Right {
+    End, Integer(int value)
+}
+Right Main() {
+    return Left::Integer(1);
+}
