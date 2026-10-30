@@ -105,3 +105,9 @@ Token Recur(Token value, int depth) {
     if (depth == 0) { return value; }
     return Recur(Forward(value), depth - 1);
 }
+Token Seven(double a, double b, double c, double d, double e, double f, double g) {
+    return Token::Decimal(a + b + c + d + e + f + g);
+}
+Token FloatingPressure(double a, double b, double c, double d, double e, double f, double g) {
+    return Seven(a + 0.5, b + 1.5, c + 2.5, d + 3.5, e + 4.5, f + 5.5, g + 6.5);
+}

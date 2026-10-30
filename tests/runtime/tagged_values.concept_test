@@ -38,6 +38,7 @@ int Observe(Token value) {
     Assert.Equal(Observe(Select(true)), 35, "conditional return preserves active payload");
     Assert.Equal(Observe(Select(false)), 0, "conditional return preserves empty variant");
     Assert.Equal(Observe(Nested(10)), 27, "nested calls preserve aggregate payloads");
+    Assert.Equal(Observe(FloatingPressure(- 1.0, - 2.0, - 3.0, - 4.0, - 5.0, - 6.0, 0.0)), 35, "tagged returns preserve spilled floating operands");
     Assert.Equal(Observe(Recur(MakeInteger(31), 4)), 31, "recursive calls preserve the selected payload");
     Other small = SmallCall(37);
     Assert.Equal(match (small) {

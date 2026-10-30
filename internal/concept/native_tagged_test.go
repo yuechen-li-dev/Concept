@@ -17,6 +17,7 @@ import (
 )
 
 func TestEVT2h2NativeExecution(t *testing.T) {
+	requireNativeQualification(t)
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")
 	}
@@ -82,7 +83,7 @@ func TestEVT2h2NativeExecution(t *testing.T) {
 			} else if !bytes.Equal(first, actual) {
 				t.Fatal("Normal/Verify native bytes differ")
 			}
-			if got := fmt.Sprintf("%x", sha256.Sum256(actual)); got != "188ac9b4bdeeaa2c2f0dcfa4e5496660f4dab4f7746ba593862895b3042b40c7" {
+			if got := fmt.Sprintf("%x", sha256.Sum256(actual)); got != "524c364540dbb5efc8b1634f5d7087f8933fd4225d92afaa73dc39bccd7becc3" {
 				t.Fatalf("exact native tagged bytes changed: %s", got)
 			}
 			t.Logf("native bytes=%d sha256=%x", len(actual), sha256.Sum256(actual))
@@ -157,6 +158,7 @@ typedef ProbeToken(*BoolFn)(_Bool);
 typedef ProbeToken(*ForwardFn)(ProbeToken);
 typedef ProbeToken(*ReplaceFn)(ProbeToken,int);
 typedef ProbeToken(*PressureFn)(ProbeToken,int,double,ProbeToken,float,_Bool,ProbeToken);
+typedef ProbeToken(*FloatingFn)(double,double,double,double,double,double,double);
 typedef ProbeSmall(*SmallFn)(int);
 typedef ProbeOrdered(*OrderedFn)(int*);
 typedef int(*GetIntFn)(ProbeToken);
@@ -176,7 +178,7 @@ static concept_finalized_frame frame;
 static concept_aggregate_function_plan plan;
 /* PLAN DEBUG */
 #define GETTER(t) static t Resolve##t(unsigned char *memory,int ordinal){t f=NULL;void*p=memory+image.symbols.data[ordinal].offset;memcpy(&f,&p,sizeof f);return f;}
-GETTER(EndFn) GETTER(IntFn) GETTER(DoubleFn) GETTER(FloatFn) GETTER(BoolFn) GETTER(ForwardFn) GETTER(ReplaceFn) GETTER(PressureFn) GETTER(SmallFn) GETTER(OrderedFn) GETTER(GetIntFn) GETTER(GetDoubleFn) GETTER(GetFloatFn) GETTER(GetBoolFn) GETTER(GetItemFn) GETTER(GetArrayFn) GETTER(GetStampFn)
+GETTER(EndFn) GETTER(IntFn) GETTER(DoubleFn) GETTER(FloatFn) GETTER(BoolFn) GETTER(ForwardFn) GETTER(ReplaceFn) GETTER(PressureFn) GETTER(FloatingFn) GETTER(SmallFn) GETTER(OrderedFn) GETTER(GetIntFn) GETTER(GetDoubleFn) GETTER(GetFloatFn) GETTER(GetBoolFn) GETTER(GetItemFn) GETTER(GetArrayFn) GETTER(GetStampFn)
 #define FN(n,t) Resolve##t(memory,ORD_##n)
 static uint64_t bits64(double v){uint64_t b;memcpy(&b,&v,8);return b;}
 static uint32_t bits32(float v){uint32_t b;memcpy(&b,&v,4);return b;}
@@ -211,6 +213,7 @@ int main(int argc,char**argv){
      REQUIRE(!owner.tag);function=F(empty_function)();placement=F(empty_object_placement)();allocation=F(empty_allocation)();frame=F(empty_finalized_frame)();plan=F(empty_aggregate_function_plan)();
      concept_result_void_aggregate_abierror prepared=F(prepare_aggregate_function)(&reader,document,owner.payload.ok.value,&function,&placement,&allocation,&frame,&plan);REQUIRE(!prepared.tag);
      unsigned long long hash=fingerprint();REQUIRE(!debugOverflow);
+     if(run==0&&fi==ORD_FloatingPressure){int spills=0;for(int id=0;id<function.virtualRegCount;id++)spills+=allocation.spilled.data[id];REQUIRE(spills>0);printf("tagged floating-pressure spills=%d\n",spills);}
      if(run==0){first[fi]=hash;memcpy(firstText[fi],debugText,debugLength+1);if(frame.byteCount<min_frame)min_frame=frame.byteCount;if(frame.byteCount>max_frame)max_frame=frame.byteCount;}
      else{REQUIRE(first[fi]==hash&&!strcmp(firstText[fi],debugText));}
      if(run==99&&fi==ORD_Pressure){
@@ -259,6 +262,7 @@ int main(int argc,char**argv){
    ProbeToken pressure=FN(Pressure,PressureFn)(e,3,2.5,a,1.25f,1,b);REQUIRE(pressure.tag==5&&pressure.payload.many.count==run);
    pressure=FN(Pressure,PressureFn)(e,3,2.5,a,1.25f,0,b);REQUIRE(pressure.tag==1&&pressure.payload.integer==2);
    pressure=FN(Pressure,PressureFn)(e,0,2.5,a,1.25f,0,b);REQUIRE(pressure.tag==2&&pressure.payload.decimal==b.payload.decimal);
+   ProbeToken floating=FN(FloatingPressure,FloatingFn)(1,2,3,4,5,6,7+run);REQUIRE(floating.tag==2&&floating.payload.decimal==52.5+run);
    REQUIRE(FN(Select,BoolFn)(1).tag==2&&FN(Select,BoolFn)(0).tag==0);
    ProbeSmall s=FN(MakeOther,SmallFn)(run),t=FN(MakeTwin,SmallFn)(-run);REQUIRE(s.tag==1&&s.value==run&&t.tag==1&&t.value==-run);
    s=FN(SmallCall,SmallFn)(run);REQUIRE(s.tag==1&&s.value==run);
@@ -268,6 +272,7 @@ int main(int argc,char**argv){
    REQUIRE(oracle.tag==changed.tag&&oracle.payload.integer.value==changed.payload.integer);
    oracle=concept_testing__tagged_values_make_decimal(b.payload.decimal);REQUIRE(oracle.tag==b.tag&&bits64(oracle.payload.decimal.value)==bits64(b.payload.decimal));
    oracle=concept_testing__tagged_values_nested(run);REQUIRE(oracle.tag==e.tag&&oracle.payload.many.count==e.payload.many.count&&oracle.payload.many.item.count==e.payload.many.item.count&&oracle.payload.many.numbers.data[2]==e.payload.many.numbers[2]);
+   oracle=concept_testing__tagged_values_floating_pressure(1,2,3,4,5,6,7+run);REQUIRE(oracle.tag==floating.tag&&bits64(oracle.payload.decimal.value)==bits64(floating.payload.decimal));
 #endif
  }
  const uint64_t doubles[]={UINT64_C(0x8000000000000000),UINT64_C(0x3ff0000000000001),UINT64_C(0x7ff8000000001234),UINT64_C(1)};
@@ -283,7 +288,7 @@ int main(int argc,char**argv){
  for(int di=0;probe_dlls[di];di++){
    HMODULE dll=LoadLibraryA(probe_dlls[di]);REQUIRE(dll);typedef int(*Observe)(const void*const*);typedef int(*Count)(void);Observe observe;Count count;
    FARPROC address=GetProcAddress(dll,"CallTagged");REQUIRE(address);memcpy(&observe,&address,sizeof observe);address=GetProcAddress(dll,"TaggedCalls");REQUIRE(address);memcpy(&count,&address,sizeof count);
-   const void*table[]={memory+image.symbols.data[ORD_MakeInteger].offset,memory+image.symbols.data[ORD_MakeOther].offset,memory+image.symbols.data[ORD_MakeTwin].offset,memory+image.symbols.data[ORD_MakeOrdered].offset,memory+image.symbols.data[ORD_Pressure].offset,memory+image.symbols.data[ORD_Nested].offset};
+   const void*table[]={memory+image.symbols.data[ORD_MakeInteger].offset,memory+image.symbols.data[ORD_MakeOther].offset,memory+image.symbols.data[ORD_MakeTwin].offset,memory+image.symbols.data[ORD_MakeOrdered].offset,memory+image.symbols.data[ORD_Pressure].offset,memory+image.symbols.data[ORD_Nested].offset,memory+image.symbols.data[ORD_FloatingPressure].offset};
    REQUIRE(observe(table)==0);
    REQUIRE(VirtualProtect(memory,image.byteCount,PAGE_READWRITE,&old));
    stub=memory+image.symbols.data[ORD_Forward].offset;address=GetProcAddress(dll,"TaggedRelay");REQUIRE(address);memcpy(stub+2,&address,8);
@@ -429,6 +434,7 @@ func rawTagged(t *testing.T, m TaggedModule) []byte {
 	return data
 }
 func TestEVT2h2TaggedArtifactAdmission(t *testing.T) {
+	requireNativeQualification(t)
 	_, _, _, machine, valid := nativeTaggedFixture(t)
 	blob, err := json.Marshal(machine.Tagged)
 	if err != nil {
@@ -497,7 +503,39 @@ func TestEVT2h2TaggedArtifactAdmission(t *testing.T) {
 			}
 		}
 	})
+	add("nominal return", func(m *TaggedModule) {
+		for i := range m.Base.Objects.Functions {
+			if m.Base.Objects.Functions[i].Name == "MakeOther" {
+				m.Base.Objects.Functions[i].ResultType = m.Domains[3].Type
+				return
+			}
+		}
+	})
+	add("nominal call", func(m *TaggedModule) {
+		for fi := range m.Base.Objects.Functions {
+			for bi := range m.Base.Objects.Functions[fi].Blocks {
+				for ii := range m.Base.Objects.Functions[fi].Blocks[bi].Instructions {
+					in := &m.Base.Objects.Functions[fi].Blocks[bi].Instructions[ii]
+					if len(in.Calls) > 0 && strings.Contains(in.Calls[0].Target, "SmallForward|") {
+						in.Calls[0].Arguments[0].Type = m.Domains[3].Type
+						return
+					}
+				}
+			}
+		}
+		t.Fatal("missing nominal call specimen")
+	})
+	for _, offset := range []int{0, 8, 12, len(valid) - 1} {
+		raw := bytes.Clone(valid)
+		raw[offset] ^= 255
+		cases = append(cases, specimen{fmt.Sprintf("corrupt header or operation %d", offset), raw})
+	}
 	cases = append(cases, specimen{"truncated", valid[:len(valid)-1]}, specimen{"trailing", append(append([]byte(nil), valid...), 0)})
+	for _, c := range cases {
+		if _, err := DecodeMachineBridge(c.data); err == nil {
+			t.Fatalf("Go accepted %s", c.name)
+		}
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "valid.cmir8")
 	if err := os.WriteFile(path, valid, 0600); err != nil {

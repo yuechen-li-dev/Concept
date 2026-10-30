@@ -103,7 +103,7 @@ func TestAMD64CLIBatch(t *testing.T) {
 		wants              []string
 	}{
 		{"enum", "../../language/evt2h1/valid/enums.concept", "", []string{"functions=17", "frame size="}},
-		{"tagged", "../../tests/runtime/Testing/TaggedValues.concept", "", []string{"functions=20", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
+		{"tagged", "../../tests/runtime/Testing/TaggedValues.concept", "", []string{"functions=22", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
 		{"calls", "../../internal/concept/testdata/evt2e_calls.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"floats", "../../language/evt2f/valid/scalars.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"zero", "", "int Target(){return 7;} int Caller(){return Target();}", []string{"call @Target|Target()", "shadow=32 stack-bytes=0", "return RAX ->"}},

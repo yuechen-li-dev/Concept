@@ -15,6 +15,7 @@ typedef Token (*Make)(int);
 typedef Small (*MakeSmall)(int);
 typedef Ordered (*MakeOrdered)(int *);
 typedef Token (*Mixed)(Token, int, double, Token, float, _Bool, Token);
+typedef Token (*Floating)(double, double, double, double, double, double, double);
 static int calls;
 EXPORT Token TaggedRelay(Token value) { calls++; return value; }
 EXPORT Small SmallRelay(Small value) { calls++; return value; }
@@ -24,12 +25,14 @@ EXPORT int CallTagged(const void *const *table) {
     MakeSmall other, twin;
     MakeOrdered ordered;
     Mixed mixed;
+    Floating floating;
     memcpy(&make, table + 0, sizeof make);
     memcpy(&other, table + 1, sizeof other);
     memcpy(&twin, table + 2, sizeof twin);
     memcpy(&ordered, table + 3, sizeof ordered);
     memcpy(&mixed, table + 4, sizeof mixed);
     memcpy(&nested, table + 5, sizeof nested);
+    memcpy(&floating, table + 6, sizeof floating);
     for (int i = 0; i < 100; i++) {
         Token a = make(i), b = make(-i), c = nested(i);
         Small x = other(i), y = twin(-i);
@@ -45,6 +48,8 @@ EXPORT int CallTagged(const void *const *table) {
             return 2;
         v = mixed(c, 3, 2.5, b, 1.25f, 0, a);
         if (v.tag != 1 || v.payload.integer != 2) return 3;
+        v = floating(1, 2, 3, 4, 5, 6, 7 + i);
+        if (v.tag != 2 || v.payload.decimal != 52.5 + i) return 4;
     }
     calls = 0;
     return 0;
