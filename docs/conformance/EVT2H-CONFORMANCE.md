@@ -1,4 +1,11 @@
-# EVT2h0 / EVT2h1 — ordinary native enums
+# EVT2h — enum conformance
+
+Current EVT2h2 status: **PARTIAL — checked payload LIR, native transport still
+unsupported**. No native tagged-value execution is qualified. See the
+[EVT2h2 section](#evt2h2--checked-payload-lir-partial) below. EVT2h1 remains
+qualified; its historical evidence follows.
+
+## EVT2h0 / EVT2h1 — ordinary native enums
 
 Baseline: `535910e486b0f20f6ec1c6e6e7bee931d359b61a` (EVT2g5),
 `concept-evt1-stage0-go`, Windows AMD64 / Microsoft x64. Work starts on
@@ -185,3 +192,106 @@ DragonGod Normal/Verify, package, generated inspection, formatting/lint and diff
 checks pass. Frozen Zig tests are skipped because their compiler/build/test
 infrastructure is unchanged. See the [convergence ledger](../history/milestones/EVT2H-CONVERGENCE.md)
 for the corrected LF-only failure and complete command/outcome record.
+
+## EVT2h2 — checked payload LIR (PARTIAL)
+
+Real baseline: `4e96e5cda4f932231129c057de1c00edbb81e7f8`, fetched `origin/main`,
+including the merged EVT2h1 and test-workflow checkpoints. The original clean
+local checkout was `8b129ad` on `main`. Work uses
+`codex/evt2h2-native-payload-enums`; inventory commit `7e3db57`, checked-LIR and
+specimen commit `784b34c`. Qualification-harness correction: `09b3d50` isolates
+Windows cast-trap executable paths. Compiler and Windows AMD64 / Microsoft x64 target are
+unchanged. See the [starting inventory](../design/EVT2H2-CHECKED-TAGGED-VALUES.md).
+
+This removes the first blocker: `GenerateLIR` now preserves payload enums as
+nominal `tagged:<digest>` logical values. `LIRTaggedEnum` records checked storage
+geometry, per-variant identities/ordinals, ordered field identities and types,
+record/array geometry, readonly fields and checked copy eligibility.
+`make_tagged` selects a declaration-order variant and requires every active
+field exactly once, in checked field order. Its operands are evaluated left to
+right. This complete-value operation is its initialization evidence; there is
+no partial payload initialization operation. Debug output includes the variant.
+
+Logical tagged values reuse existing typed local/slot/call checking and the
+aggregate definite-initialization analysis. The verifier treats their record
+field surface as opaque: generic record construction, field projection and
+member replacement cannot authorize a payload read. Unknown domains, malformed
+constructors, nominal result mismatches and use of uninitialized slots reject.
+Imported defining-module identity/digest survives source-free semantic-artifact
+loading. This is frontend consistency verification, not independent Cathedral
+artifact admission.
+
+The checked sum layout uses an explicit 4/4 ordinal-tag contract followed by an
+aligned union of checked variant records, with a minimum one-byte union storage
+member matching the existing C bootstrap. It reuses existing checked record
+offsets, scalar geometry and fixed-array geometry. Public payload SizeOf/AlignOf
+still rejects with `CV4573`; this private checked layout does not add source
+syntax, layout casts, foreign representation permission or a physical frame
+plan. Both GCC and Clang independently check the fixture's C sizes, alignments,
+union offsets, variant sizes and field offsets under strict C11.
+
+| Checked domain | Size / alignment / payload offset | Fields exercised |
+| --- | --- | --- |
+| Token | 48 / 8 / 8 | empty, int, double, float, bool, mixed fields, nested Item, int[3], record Stamp |
+| Other | 8 / 4 / 4 | empty and int |
+| Twin | 8 / 4 / 4 | distinct nominal identity with Other's representation |
+| Ordered | 12 / 4 / 4 | two int fields; reference-call evaluation order |
+
+The authoritative program is `tests/runtime/Testing/TaggedValues.concept`:
+16 functions, four sum domains, two aggregate layouts. Three facts in
+`tests/runtime/tagged_values.concept_test` execute existing checked source
+matching, construction, copying, variant replacement, branches, loops, nested
+calls, mixed arguments and evaluation order through the C bootstrap in Normal
+and Verify. They are part of the quick lane. A separate strict-C11 C probe checks
+eight exact floating bit patterns, including signed zero, adjacent precision,
+NaN payloads and subnormals, through C-bootstrap constructors in Normal mode.
+Those probes do not establish native payload ABI or native semantic parity.
+
+Twenty-two malformed LIR mutations reject, covering domains, variants/tags,
+layout/copy permission, field and array metadata, constructor arity/types,
+nominal results, unguarded record projection and initialization state. Eight
+invalid source specimens pin existing diagnostics; two source/C-valid specimens
+pin nested-tagged-LIR and native-match stops. Nested tagged payloads, enum fields
+inside ordinary aggregates, reference-bearing payloads, owning/Drop forms, raw
+storage and unknown geometry are outside the checked subset. Existing source
+copy and authority checks remain in force.
+Checked-LIR guards bound sum domains to 128, variants to 256 per domain,
+payload fields to 64 per variant and total sum storage to 1 MiB. Existing
+record-graph and fixed-array bounds also apply. These are frontend guards,
+not measured native capacities; no tagged frame or ABI capacity is qualified.
+
+One hundred fresh parse/check/LIR/debug generations agree: canonical LIR JSON
+55,712 bytes, SHA256
+`4e345711e1b1d0f75ad810b8d1fe7673fb7f775e61625b370b0204a4ca90ef06`.
+Measured generation time was 606.767 ms. This is an LIR snapshot hash, not a
+MachineIR artifact or native-byte hash. Focused checks passed in 1.831 s;
+focused race passed in 5.727 s; quick passed in 20.48 s.
+The post-qualification quick run at `09b3d50` passed in 19.53 s.
+
+### Exact remaining native boundary
+
+`LowerLirToAmd64Machine` stops with `EVT2H2_TAGGED_TRANSPORT_REQUIRED` before
+projection. A CLI batch test removes the C toolchain from PATH and confirms the
+same diagnostic before Cathedral bootstrap. No tagged MachineIR is published.
+CMIRAMD3–7 schemas, generated codecs and byte contracts are unchanged.
+
+CMIRAMD8 remains necessary and **has not been introduced**. The frozen v7 domain
+only describes ordinary U32 aliases; v5/v6 record copying assumes all fields are
+simultaneously live. A correct next implementation must carry active-variant
+semantics into Concept-owned artifact admission, extend the existing recursive
+copy owner with validated tag dispatch, and integrate those sum facts with the
+existing aggregate ABI planner/emitter. No integer/blob erasure, record-field
+escape, parallel copy engine, native allocator or production Go native algorithm
+was added to route around that missing contract.
+
+Native constructors, active-payload access, tagged copies/assignment, payload
+argument/return ABI, artifact-only native execution, malformed tagged-artifact
+sentinels and 100 native emissions are **not implemented or qualified**. Native
+image size, frame range and planning/emission timings are N/A. Full regression
+at `09b3d50` passed (1417.092 s compiler/native, 69.240 s CLI, 0.528 s GPU-free
+Vulkan profile), followed by vet. This preserves the old native qualification;
+it does not qualify new h2 execution. The earlier Windows trap-executable reuse
+failure and its correction are retained in the convergence ledger. Native
+`match`, fallible types,
+ownership/Drop, object output and optimizations remain deferred. The next work
+is completion of EVT2h2, not EVT2h3.

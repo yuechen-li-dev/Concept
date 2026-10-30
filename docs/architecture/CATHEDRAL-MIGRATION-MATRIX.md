@@ -240,3 +240,19 @@ bounded planner/emitter composition. See [the execution contract](../conformance
 See [EVT2h conformance](../conformance/EVT2H-CONFORMANCE.md) and the
 [convergence record](../history/milestones/EVT2H-CONVERGENCE.md) for exact bytes,
 gate outcomes and measured limits.
+
+## EVT2h2 checked payload frontend (PARTIAL)
+
+| Capability | Current owner/state | Required native transition |
+| --- | --- | --- |
+| Payload constructors, copy eligibility and pattern semantics | Existing Stage-0 checker | Preserve semantics; no source match or projection bypass |
+| Nominal sum values, variant layouts, complete initialization and typed local/call operations in LIR | Stage-0 checked semantic production, implemented and verifier-tested | Preserve these facts through a new Concept-owned contract |
+| Payload storage geometry | Checked private sum layout; strict C11 field/size probes | Cathedral must independently admit the supplied layout and realize storage; public payload geometry still rejects |
+| Versioned sum transport | NOT_YET_QUALIFIED; explicit `EVT2H2_TAGGED_TRANSPORT_REQUIRED` | Concept-authored CMIRAMD8 schema, generated codecs, artifact-only admission and malformed-input sentinels |
+| Conditional active-field semantic copy and guarded payload reads | NOT_YET_QUALIFIED | Extend the existing Concept object-copy owner; retain active-variant authority |
+| Tagged Win64 arguments/results, frames and emission | NOT_YET_QUALIFIED | Extend existing aggregate ABI/classifier/transfer/frame machinery with admitted sum facts |
+| Source behavior qualification | Three Concept facts, Normal/Verify C bootstrap; 100 fresh LIR generations | Independent native/C11 parity and 100 fresh native emissions still required |
+| Frozen bridge and native regressions | CMIRAMD3–7 retained | No old envelope is reinterpreted as tagged storage |
+
+EVT2h2 native execution is not complete. The next work is its transport and
+Cathedral realization; EVT2h3 match and richer sum types remain deferred.

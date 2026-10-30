@@ -1,4 +1,11 @@
-# EVT2h0–h1 convergence
+# EVT2h convergence
+
+Current EVT2h2 status: **PARTIAL**, checked frontend progression only; native
+tagged values remain blocked at the versioned MachineIR boundary. See
+[the current entry](#evt2h2-checked-frontend-progression). The EVT2h0–h1 closeout
+below is historical and remains qualified.
+
+## EVT2h0–h1 historical closeout
 
 Baseline: `535910e486b0f20f6ec1c6e6e7bee931d359b61a`, qualified EVT2g5.
 Branch: `codex/evt2h1-native-enums`. Compiler: `concept-evt1-stage0-go`.
@@ -81,3 +88,79 @@ forms is explicitly separate from native execution. EVT2h2 remains deferred.
 
 **SUCCESS — EVT2h0 semantic inventory and EVT2h1 native ordinary enum execution qualified.**
 The work stops here. EVT2h2 has not begun.
+
+## EVT2h2 checked frontend progression
+
+Actual initial local checkout: clean `main` at `8b129ad`. Fetch exposed newer
+`origin/main` at `4e96e5cda4f932231129c057de1c00edbb81e7f8`, merging the
+workflow through `bc84b51`, with merge commits `ff5e398`, `d554b27` and `4e96e5c`
+after the recorded workflow lineage. Created `codex/evt2h2-native-payload-enums`
+from that fetched merge, preserving the local main branch. No reset, unrelated
+worktree edit or other-repository change was performed.
+
+Inventory commit `7e3db57` records the existing syntax/checker, C union semantics,
+left-to-right constructor evaluation, public geometry rejection and native
+transport/copy boundary. Implementation/specimens: `784b34c`.
+
+The first blocker is removed: checked source now generates and verifies nominal
+payload LIR, including variant field layouts, complete initialization, local
+value copies/replacement, typed calls/returns, branches/loops and defining
+artifact identity. Four domains include two distinct 8/4 sum types with identical
+physical geometry. Constructor order is checked against retained call result
+operands. Three Concept-authored behavior facts execute in both C-bootstrap
+modes, including checked matches used only by the oracle.
+
+The next blocker is concrete: MachineIR rejects the saved positive source with
+`EVT2H2_TAGGED_TRANSPORT_REQUIRED`. CMIRAMD3–7 cannot encode a sum's active payload
+and checked conditional copy/access authority. No new bridge, Cathedral sum
+admission, tag-dispatched semantic copy, tagged ABI realization or native image
+exists yet. Treating the sum as an ordinary record would permit inactive-field
+reads; using its tag as the value would discard the payload. Neither fallback
+was introduced. This is meaningful frontend progression, **not EVT2h2 success**.
+
+| Gate | Outcome |
+| --- | --- |
+| Starting quick lane | PASS; 26.90 s |
+| Final implementation quick lane | PASS; 20.48 s, 26 facts per mode plus workflow/CLI checks |
+| Closeout quick lane at `09b3d50` | PASS; 19.53 s |
+| Focused `go test ./internal/concept -run '^TestEVT2h2' -count=1 -v -timeout=3m` | PASS; 1.831 s |
+| 100 fresh source/check/LIR/debug generations | PASS; 606.767 ms; 55,712-byte JSON SHA256 `4e345711e1b1d0f75ad810b8d1fe7673fb7f775e61625b370b0204a4ca90ef06` |
+| Malformed LIR | PASS; 22 mutations, including independently rehashed invalid descriptors |
+| Invalid source / retained unsupported forms | PASS; 8 source diagnostics and 2 source/C-valid native boundaries |
+| Strict C11 layout probes | PASS; GCC and Clang independently check all four sum layouts/fields |
+| Exact floating payload bits | PASS; 4 binary32 + 4 binary64 patterns through Normal C bootstrap, strict C11 |
+| Source-free semantic artifact | PASS; imported nominal identity and dependency digest retained in LIR |
+| Focused race `go test -race ./internal/concept -run '^TestEVT2h2' -count=1 -v -timeout=5m` | PASS; 5.727 s |
+| EVT2h1 transport/source boundary focus | PASS; original v7 schema and exact 46,377-byte artifact unchanged; payload boundary deliberately advances from unsupported LIR to unsupported MachineIR |
+| Workflow and architecture authority policy focus | PASS; `TestRuntimeWorkflowPolicy` and `TestR9cConditionAuthorityShadowAgreement`, 0.975 s |
+| Changed-source formatting / lint | PASS; all 12 new source/specimen files formatted; positive source and Concept facts lint clean |
+| Generated inspection | PASS; frozen BridgeCodec7 using built Standard semantic artifacts; the new source has no generated declarations |
+| Standard Normal / Verify | PASS; 44 tests each, 3 informational benchmarks |
+| DragonGod Normal / Verify | PASS; 23 tests each, 1 informational benchmark |
+| Package graph | PASS; `go run ./cmd/concept package build DragonGod`, including Standard |
+| Frozen bridge/schema/golden diff | Empty against actual baseline `4e96e5c`, including v7 |
+| Initial full workflow at `784b34c` | FAIL: `TestExplicitCastCore` reused `trap.exe` after abnormal termination; GCC linker reported Permission denied. Compiler sweep 1417.133 s; CLI 69.354 s; GPU-free Vulkan profile 0.553 s; no other failure reported |
+| Windows trap-probe isolation, `09b3d50` | Each negative specimen now has its own executable path; no sleeps, retries or skipped probes. Three focused runs passed in 8.296 s |
+| Repeated full qualification workflow at `09b3d50` | PASS; compiler/native package 1417.092 s, CLI 69.240 s, GPU-free Vulkan profile 0.528 s; total 1419.61 s including vet |
+| Native h2 execution, parity, artifact-only admission and 100 emissions | NOT RUN / NOT IMPLEMENTED |
+| Native h2 frames, images, plans, ABI and emission measurements | N/A |
+| Frozen root / legacy Zig | SKIPPED; legacy compiler/build/test infrastructure unchanged |
+
+Local logs are under ignored `artifacts/evt2h2-*`. The conformance record names
+the checked representation, exact limits and diagnostics. Remaining native work
+must continue EVT2h2; EVT2h3 match has not begun.
+
+The initial full sweep exposed a qualification-harness file reuse hazard, not
+an accepted failing compiler check. `explicit_conversion_test.go` linked all four
+aborting cast probes to the same `trap.exe`; Windows denied the third overwrite.
+The correction gives each executable a distinct case identity and retains every
+strict-C11 compilation, abnormal exit and diagnostic assertion. Full qualification
+passed on `09b3d50`; the failed log is preserved as
+`artifacts/evt2h2-qualification-initial-permission-failure.log`.
+
+The successful full run retains the established EVT2g5/EVT2h1 native execution,
+malformed artifact sentinels, 100-emission and exact-byte gates, corpus, checked
+outputs, Golden, package and Vulkan checks. These qualify regression preservation;
+they are not h2 native execution evidence. `go vet ./...` passed as the final
+workflow stage. No failing test was waived. The native h2 acceptance criteria
+remain unmet, and the final milestone status is **PARTIAL**.

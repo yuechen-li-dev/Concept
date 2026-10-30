@@ -2,6 +2,8 @@
 
 Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
 Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
+Payload enum status is [EVT2h2 checked frontend progression](#evt2h2-checked-payload-authority-partial),
+with native tagged-value execution still unqualified.
 Earlier milestone tables below retain their historical qualification boundaries.
 
 Update this ledger when an EVT2 or frontend change moves a **decision**. The
@@ -309,3 +311,19 @@ See [EVT2g5 execution and ABI evidence](../conformance/EVT2G-CONFORMANCE.md#evt2
 | Payloads, match, built-in fallible types, mixed object/reference enum modules | NOT_YET_QUALIFIED | Source C support does not imply native qualification; separate review after EVT2h1 |
 
 See [the enum contract and executed evidence](../conformance/EVT2H-CONFORMANCE.md).
+
+## EVT2h2 checked payload authority (PARTIAL)
+
+| Decision / surface | Owner and classification | Qualification / boundary |
+| --- | --- | --- |
+| Payload source construction, nominal identity, copyability and pattern authority | Existing Stage-0 checker, GO_AUTHORITATIVE | Existing language rules retained; no direct field syntax or public payload SizeOf introduced |
+| Checked sum layout and complete constructor LIR | Stage-0 semantic producer/verifier, GO_AUTHORITATIVE | Reuses checked record/array geometry; nominal sum domains stay separate from records and scalar enums; independently checked against C layout |
+| Language behavior assertions | Concept-authored `.concept_test`, C bootstrap | Three facts in Normal/Verify; source-only evidence, not Cathedral execution |
+| Payload MachineIR / independent artifact admission | NOT_YET_QUALIFIED | `EVT2H2_TAGGED_TRANSPORT_REQUIRED`; next version must be Concept-schema-owned CMIRAMD8; v3–7 untouched |
+| Tag-controlled active-field copy, native construction and payload reads | NOT_YET_QUALIFIED; future Cathedral object owner | No Go native sum algorithm, blob copy, record-field bypass or alternate copy engine |
+| Native sum storage, carriers, argument/result plans and encoding | NOT_YET_QUALIFIED; existing Cathedral frame/aggregate ABI owners remain authoritative | No h2 native plan/image or ABI interoperability claim |
+| Native match, fallible wrappers, ownership/Drop, object output | Deferred | No subsequent milestone begun |
+
+The implementation removes the checked-LIR blocker only. No responsibility for
+native representation validation, allocation, physical realization or encoding
+has moved into Go. See the [EVT2h2 conformance entry](../conformance/EVT2H-CONFORMANCE.md#evt2h2--checked-payload-lir-partial).
