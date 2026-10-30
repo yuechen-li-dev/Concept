@@ -35,7 +35,9 @@ try {
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
         'Qualification' {
-            & go test ./... -count=1 -parallel=4 -timeout=35m
+            # Includes the fresh CMIRAMD9 CFG/native 100-run gates. Keep the
+            # full lane bounded without truncating those qualification runs.
+            & go test ./... -count=1 -parallel=4 -timeout=45m
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             & go vet ./...
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

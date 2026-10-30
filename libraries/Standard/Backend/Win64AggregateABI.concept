@@ -1,7 +1,15 @@
 module Standard.Backend.Win64AggregateABI;
 profile Core;
 import Standard.Backend.Win64ABI;
-import Standard.Backend.BridgeValidate8;
+import Standard.Backend.BridgeValidate9;
+
+Result<WireTaggedModule, BackendError> NativeTaggedDocument(ref const BridgeReader reader) {
+    if (Len(reader.data) >= 8 and reader.data[7] == 57) {
+        WirePatternModule pattern = ReadPatternDocument(ref const reader) ?;
+        return Result::Ok(pattern.Base);
+    }
+    return ReadTaggedDocument(ref const reader);
+}
 // Derived Win64 default ABI state. No physical placement enters MachineIR.
 enum AggregateABIClass {
     Void, Scalar, Reference, DirectArgument, IndirectArgument, DirectReturn, HiddenReturn
@@ -78,8 +86,8 @@ WireObjectModule document, int typeID, int depth) {
     }
     bool[256] eligible =[false ...];
     bool[256] sums =[false ...];
-    if (Len(reader.data) >= 8 and reader.data[7] == 56) {
-        match (ReadTaggedDocument(ref const reader)) {
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+        match (NativeTaggedDocument(ref const reader)) {
             Result::Ok(tagged) => {
                 if (tagged.Domains.count > 128) {
                     return Result::Error(AggregateABIError::Capacity);

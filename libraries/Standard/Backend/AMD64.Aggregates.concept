@@ -187,7 +187,12 @@ WireObjectModule document, WireObjectFunction owner) {
 }
 Result<WireObjectModule, AggregateABIError> AdmittedAggregateDocument(ReadOnlySpan<byte> artifact) {
     if (Len(artifact) < 8) { return Result::Error(AggregateABIError::Malformed); }
-    if (artifact[7] == 56) {
+    if (artifact[7] == 57) {
+        match (ValidatePatternMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }
+        }
+    } else if (artifact[7] == 56) {
         match (ValidateTaggedMachineBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(AggregateABIError::Malformed); }

@@ -309,20 +309,21 @@ int main(int argc, char** argv) {
   if(fseek(file,0,SEEK_END))return 4;long size=ftell(file);
   if(size<=0||size>10000000||fseek(file,0,SEEK_SET))return 5;
   unsigned char *input=malloc((size_t)size);if(!input||fread(input,1,(size_t)size,file)!=(size_t)size)return 6;fclose(file);
-  unsigned char bytes[65536];concept_readonly_span_byte source={input,(size_t)size};concept_span_byte output={bytes,sizeof bytes};
+  unsigned char bytes[262144];concept_readonly_span_byte source={input,(size_t)size};concept_span_byte output={bytes,sizeof bytes};
   concept_native_image image=concept_standard__backend__amd64_empty_native_image();
   if(size>=8 && !memcmp(input,"CMIRAMD4",8)){for(int i=0;i<scalar_count;i++){if(print_scalar_plans(source,i)){free(input);return 8;}}}
   if(size>=8 && !memcmp(input,"CMIRAMD6",8)){concept_result_void_borrow_error admitted=concept_standard__backend__amd64_validate_borrow_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_borrow_error(admitted.payload.error.error));concept_result_wire_borrow_module_backend_error decoded=concept_standard__backend__amd64_native_borrow_document(source);if(!decoded.tag){concept_bridge_reader reader={source,0};for(int i=0;i<decoded.payload.ok.value.Objects.Functions.count;i++){concept_result_void_borrow_error checked=concept_standard__backend__amd64_validate_borrow_function(&reader,decoded.payload.ok.value,i);if(checked.tag)fprintf(stderr,"function %d: %s\n",i,concept_standard__backend__amd64_describe_borrow_error(checked.payload.error.error));}}free(input);return 7;}}
   if(size>=8 && !memcmp(input,"CMIRAMD7",8)){concept_result_void_enum_error admitted=concept_standard__backend__amd64_validate_enum_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_enum_error(admitted.payload.error.error));free(input);return 7;}}
   if(size>=8 && !memcmp(input,"CMIRAMD8",8)){concept_result_void_tagged_error admitted=concept_standard__backend__amd64_validate_tagged_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_tagged_error(admitted.payload.error.error));free(input);return 7;}}
-  if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8)||!memcmp(input,"CMIRAMD8",8))){if(print_aggregate_plans(source)){free(input);return 8;}}
+  if(size>=8 && !memcmp(input,"CMIRAMD9",8)){concept_result_void_pattern_error admitted=concept_standard__backend__amd64_validate_pattern_machine_bridge(source);if(admitted.tag){fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_pattern_error(admitted.payload.error.error));free(input);return 7;}}
+  if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8)||!memcmp(input,"CMIRAMD8",8)||!memcmp(input,"CMIRAMD9",8))){if(print_aggregate_plans(source)){free(input);return 8;}}
   concept_result_int_native_error result=concept_standard__backend__amd64_emit_module(source,output,&image);
   if(result.tag){fflush(stdout);fprintf(stderr,"%s\n",concept_standard__backend__amd64_describe_native_error(result.payload.error.error));free(input);return 7;}
   printf("native image bytes=%d functions=%d calls=%d finalized=%d\n",image.byteCount,image.symbolCount,image.fixupCount,image.finalized);
   for(int i=0;i<image.symbolCount;++i){concept_native_symbol symbol=image.symbols.data[i];
     printf("fn %.*s [%.*s] offset=%d size=%d\n",symbol.name.length,(const char*)input+symbol.name.offset,symbol.identity.length,(const char*)input+symbol.identity.offset,symbol.offset,symbol.size);
     printf("  %04x: ",symbol.offset);for(int b=0;b<symbol.size;++b)printf("%02x",bytes[symbol.offset+b]);printf("\n");
-    if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8)||!memcmp(input,"CMIRAMD7",8)||!memcmp(input,"CMIRAMD8",8))){if(print_object_plans(source,i)){free(input);return 8;}}
+    if(size>=8 && (!memcmp(input,"CMIRAMD5",8)||!memcmp(input,"CMIRAMD6",8)||!memcmp(input,"CMIRAMD7",8)||!memcmp(input,"CMIRAMD8",8)||!memcmp(input,"CMIRAMD9",8))){if(print_object_plans(source,i)){free(input);return 8;}}
     concept_backend_function function=concept_standard__backend__amd64_empty_function();
     if(!concept_standard__backend__amd64_decode_function(source,i,&function).tag){
       int calls=0;for(int p=0;p<function.instructionCount;++p)if(function.instructions.data[p].op.tag==16)calls++;

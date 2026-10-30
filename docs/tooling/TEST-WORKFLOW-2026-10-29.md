@@ -5,6 +5,12 @@ Concept test framework in Normal and Verify for runtime and leaf backend facts,
 then checks the CLI frontend and workflow policies. Full native qualification
 is explicit: `./test.ps1 -Lane Qualification`. See [TESTING.md](TESTING.md).
 
+EVT2h3 adds CMIRAMD9 artifact/CFG admission and 100 complete native match
+planning/emission gates. Qualification now permits 45 minutes per Go package;
+the larger native determinism host has its own eight-minute child deadline.
+Quick remains unchanged. This extends the execution budget, preserving every
+gate and repetition count; historical timings below describe their checkpoints.
+
 ## Scope and provenance
 
 The starting point was EVT2h1 closeout `c250308`, following native enum

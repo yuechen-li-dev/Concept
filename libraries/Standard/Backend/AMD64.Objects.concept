@@ -21,6 +21,10 @@ ObjectPlacement EmptyObjectPlacement() {
 }
 Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
+    if (Len(artifact) >= 8 and artifact[7] == 57) {
+        WirePatternModule document = ReadPatternDocument(ref const reader) ?;
+        return Result::Ok(document.Base.Base.Objects);
+    }
     if (Len(artifact) >= 8 and artifact[7] == 56) {
         WireTaggedModule document = ReadTaggedDocument(ref const reader) ?;
         return Result::Ok(document.Base.Objects);
@@ -397,8 +401,8 @@ Result<void, BackendError> ObjectStackAddress(ref ByteWriter writer, Register ta
 Result<void, BackendError> CopyObjectFields(ref ByteWriter writer, ref const BridgeReader reader,
 WireObjectModule document, int typeID, int offset, int depth) {
     BridgeSequence<WireTaggedDomain> domains = BridgeSequence<WireTaggedDomain>{0, 0};
-    if (Len(reader.data) >= 8 and reader.data[7] == 56) {
-        domains = ReadTaggedDocument(ref const reader) ?.Domains;
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+        domains = NativeTaggedDocument(ref const reader) ?.Domains;
     }
     return CopyObjectFieldsWithDomains(ref writer, ref const reader, document, domains, typeID, offset,
     depth);

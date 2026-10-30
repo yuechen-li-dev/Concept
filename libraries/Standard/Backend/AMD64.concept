@@ -481,6 +481,15 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
+    if (Len(artifact) >= 8 and artifact[7] == 57) {
+        match (ValidatePatternMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
+        }
+        BridgeReader source = BridgeReader{artifact, 0};
+        WireObjectModule document = AdmittedObjectDocument(artifact) ?;
+        return EmitAggregateNativeDocument(ref const source, document, output, ref image);
+    }
     if (Len(artifact) >= 8 and artifact[7] == 56) {
         match (ValidateTaggedMachineBridge(artifact)) {
             Result::Ok => { }
@@ -1364,8 +1373,30 @@ ref const FinalizedFrame frame) {
     ScalarRepresentation::Float64), ScalarRegisterOperand(XMMRegister::XMM5, ScalarRepresentation::Float64)) ?;
     bool scalarResult = false;
     bool floatingResult = false;
-    if (taggedKind >= 0) {
-        WireTaggedModule tagged = ReadTaggedDocument(ref const reader) ?;
+    if (taggedKind >= 2) {
+        WireObjectValue subject = NativeObjectAt<WireObjectValue>(ref const reader, owner.Values, left) ?;
+        if (subject.Class == ObjectValueClass::Aggregate) {
+            WriteRSPReg(ref writer, true, Register::R10, frame.slotOffsets[placement.values[left]], 4) ?;
+        } else {
+            LoadObjectGPR(ref writer, Register::R10, placement.registers[left], 4, ref const allocation,
+            ref const frame) ?;
+        }
+        WriteCompareImmediate(ref writer, Register::R10, input.Member, 4) ?;
+        if (taggedKind == 2) {
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 148) ?;
+            WriteByte(ref writer, 192) ?;
+            WriteBoolRegister(ref writer, Register::RAX, Register::RAX) ?;
+            scalarResult = true;
+        } else {
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 132) ?;
+            WriteI32LE(ref writer, 2) ?;
+            WriteByte(ref writer, 15) ?;
+            WriteByte(ref writer, 11) ?;
+        }
+    } else if (taggedKind >= 0) {
+        WireTaggedModule tagged = NativeTaggedDocument(ref const reader) ?;
         int domainType = input.Type;
         if (taggedKind == 1) {
             domainType = input.ParentType;
@@ -1587,7 +1618,7 @@ WireObjectModule document, WireObjectFunction owner, WireObjectInstruction input
 ref const ObjectPlacement placement, ref const BackendFunction function, ref const Allocation allocation,
 ref const FinalizedFrame frame) {
     WireObjectType type = NativeObjectAt<WireObjectType>(ref const reader, document.Types, input.Type) ?;
-    if ((input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) or ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
+    if (taggedKind >= 0 or(input.Op == ObjectOpcode::CopyValue and input.Result >= 0 and placement.registers[input.Result] >= 0) or ObjectAggregate(type.Kind) or input.Op == ObjectOpcode::SlotAddress or input.Op == ObjectOpcode::FieldAddress or
     input.Op == ObjectOpcode::IndexAddress or input.Op == ObjectOpcode::CheckIndex or input.Op == ObjectOpcode::Load or input.Op == ObjectOpcode::Store) {
         return EncodeObjectMemoryInstruction(ref writer, ref const reader, document, owner, input, taggedKind,
         ref const placement,
@@ -1691,7 +1722,12 @@ Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction fu
 // Inspection uses the same production projection, allocator and finalizer.
 Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
 ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
-    if (Len(artifact) >= 8 and artifact[7] == 56) {
+    if (Len(artifact) >= 8 and artifact[7] == 57) {
+        match (ValidatePatternMachineBridge(artifact)) {
+            Result::Ok => { }
+            Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
+        }
+    } else if (Len(artifact) >= 8 and artifact[7] == 56) {
         match (ValidateTaggedMachineBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
@@ -1754,8 +1790,14 @@ ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionP
     BridgeSequence<WireTaggedOperation> taggedOperations = BridgeSequence<WireTaggedOperation>{
         0, 0
     };
-    if (Len(reader.data) >= 8 and reader.data[7] == 56) {
-        taggedOperations = ReadTaggedDocument(ref const reader) ?.Operations;
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+        taggedOperations = NativeTaggedDocument(ref const reader) ?.Operations;
+    }
+    BridgeSequence<WirePatternOperation> patternOperations = BridgeSequence<WirePatternOperation>{
+        0, 0
+    };
+    if (Len(reader.data) >= 8 and reader.data[7] == 57) {
+        patternOperations = ReadPatternDocument(ref const reader) ?.Operations;
     }
     int cursor = 0;
     for (bi in 0 .. owner.Blocks.count) {
@@ -1793,6 +1835,16 @@ ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionP
                 }
             } else {
                 int taggedKind = - 1;
+                for (pi in 0 .. patternOperations.count) {
+                    WirePatternOperation operation = NativeObjectAt<WirePatternOperation>(ref const reader,
+                    patternOperations, pi) ?;
+                    if (operation.Function == workspace.functionOrdinal and operation.Block == bi and operation.Instruction == ii) {
+                        taggedKind = 2;
+                        if (operation.Kind == PatternOperationKind::RequireVariant) {
+                            taggedKind = 3;
+                        }
+                    }
+                }
                 for (ti in 0 .. taggedOperations.count) {
                     WireTaggedOperation operation = NativeObjectAt<WireTaggedOperation>(ref const reader,
                     taggedOperations, ti) ?;

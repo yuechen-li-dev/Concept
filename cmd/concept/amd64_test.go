@@ -98,12 +98,31 @@ func TestAMD64CLIBatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("native CLI qualification; run test.ps1 -Lane Qualification")
 	}
+	// Imported match specimens use the same public semantic-artifact path as
+	// the CLI; build the domain once before the shared Cathedral invocation.
+	modules, err := concept.BuildSemanticModuleArtifactsFromSources([]string{"../../tests/runtime"}, []string{"Testing.TaggedValues"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	for name, data := range modules {
+		path := filepath.Join(root, filepath.FromSlash(strings.ReplaceAll(name, ".", "/")+".concept-module.json"))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("CONCEPT_MODULE_ROOTS", root)
 	cases := []struct {
 		name, path, source string
 		wants              []string
 	}{
 		{"enum", "../../language/evt2h1/valid/enums.concept", "", []string{"functions=17", "frame size="}},
 		{"tagged", "../../tests/runtime/Testing/TaggedValues.concept", "", []string{"functions=22", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
+		{"ordinary-match", "../../tests/runtime/Testing/OrdinaryMatches.concept", "", []string{"functions=7", "frame size="}},
+		{"payload-match", "../../tests/runtime/Testing/TaggedMatches.concept", "", []string{"functions=35", "frame size=", "hidden-aggregate-return"}},
 		{"calls", "../../internal/concept/testdata/evt2e_calls.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"floats", "../../language/evt2f/valid/scalars.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"zero", "", "int Target(){return 7;} int Caller(){return Target();}", []string{"call @Target|Target()", "shadow=32 stack-bytes=0", "return RAX ->"}},
