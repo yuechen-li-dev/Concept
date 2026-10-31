@@ -1,7 +1,106 @@
 # EVT2h convergence
 
-Current EVT2h5 status: **MILESTONE VERIFIED — bounded native Result and `?`**.
+Current EVT2h6 status: **MILESTONE VERIFIED — comptime Verdict and native erasure**.
 Earlier sections retain historical outcomes and boundaries.
+
+## EVT2h6 Verdict architecture and native erasure
+
+Actual baseline: clean `cb4201a9e277be8b0db3d16c9343ec6dd0926bc1` on the existing
+`codex/implement-native-ordinary-enums` worktree. Fetched main `065317d` is an
+ancestor, not a replacement for h5. Compiler concept-evt1-stage0-go, Windows
+AMD64 / Microsoft x64. Baseline Quick passes in 23.96 s. Inventory `0028e4f`
+precedes implementation and records the actual Go/Concept owners and dependency
+graph. The research ledger lives under docs/conformance, not docs/design.
+Implementation, fixtures and external probes are `50d30c0`. The final
+documentation commit records the closeout; its SHA is reported separately to
+avoid a self-referential commit hash.
+
+Decision: preserve the existing comptime-only Verdict system; no runtime sum/ABI
+feature is needed. A useful real native prerequisite is identified and removed:
+the actual R9 typed-predicate specimen passes checking/C emission but native LIR
+stops at `EVT2_UNSUPPORTED_CALL Concept`. Five frontend lines now erase the checked
+zero-runtime-effect assertion after normal semantic validation. A ConceptGoal
+and checked intrinsic marker are both required. False/Unknown requirements still
+reject; an unrelated fabricated marker rejects rather than silently remove a call.
+
+No evaluator, lattice, projection, generic closure, fact registration or semantic
+artifact production/consumption authority moves. Concept still owns predicate
+and diagnostic bodies; Go executes them and owns the semantic mechanisms. The
+current compiler-private gob AST is a concrete migration prerequisite. A future
+versioned checked semantic-value/observation boundary must precede a Concept-owned
+consumer/evaluator. Native CMIRAMD3–9 cannot substitute for that semantic contract.
+
+### Focused evidence
+
+Detailed local logs are ignored under `artifacts/evt2h6/`; fixtures, tests and
+evidence records are committed. Exact commands:
+
+```powershell
+./test.ps1
+go test ./internal/concept -run '^TestEVT2h6' -count=1 -v -parallel=4 -timeout=8m
+go test ./internal/concept -run '^(TestR9b.*|TestComptime.*|TestInnate.*|TestAssertConcept.*|TestR9aDeclaredPredicate.*|TestR9aStructuredGenericArtifactIdentity|TestR9aOldOrInconsistentGenericArtifactsRejected|TestSemanticModuleGraphRejectsMissingCycleSchemaAndCorruption)$' -count=1 -v -parallel=4 -timeout=8m
+go test ./internal/concept ./cmd/concept -run '^(TestEVT2h6.*|TestAMD64CLIBatch|TestEVT2CoreLIRPlannerAndDeterminism)$' -count=1 -v -parallel=4 -timeout=10m
+go test ./cmd/concept -run '^TestAMD64CLIBatch$' -count=1 -v -timeout=8m
+go test -race ./internal/concept -run '^(TestEVT2h6(VerdictErasure|ArtifactVerdictsAreDescriptive|ForgedMarkerDoesNotEraseCall)|TestR9b2TypedProvenCannotAuthorizeFacts|TestR9b2ClosedTemplateBudget|TestR9b2OwnershipProtocolAgreement|TestR9b3UnknownRendererContract|TestRuntimeWorkflowPolicy)$' -count=1 -v -timeout=5m
+go vet ./internal/concept ./cmd/concept
+go build ./...
+```
+
+| Gate | Measured result |
+| --- | --- |
+| Quick | PASS, final 22.68 s; unchanged 32 facts per mode / 64 C-bootstrap executions |
+| R9b/R9b2/R9b3, comptime, innate, proof, generic identity and artifact negatives | PASS, 55 top-level families, package 35.299 s / wall 40.013 s, no skips; all selected historical 100-run gates retained |
+| Initial h6 native/C11 | PASS, package 83.118 s |
+| Final h6 plus core LIR in combined run | PASS, package 96.912 s, all four native cases and both modes; CLI result separated below |
+| Corrected full CLI batch | PASS, all 16 cases; package 176.563 s / wall 177.149 s |
+| Focused race | PASS, eight families; initial 2.160 s, repeated after final metadata/type/site forgery assertions in 2.067 s |
+| Vet / Go build | PASS |
+| Format/lint/diff | All three new Concept fixtures format-check/lint; changed Go gofmt and diff checks pass; artifact consumer uses an actual built semantic-artifact root |
+| Artifact-only public CLI | PASS: build-module protocol, then check consumer with CONCEPT_MODULE_ROOTS containing only its dependency artifact |
+
+The combined native/CLI invocation initially fails only two new CLI assertions:
+I incorrectly expected `frame size=` for frame-free leaves. Actual code is the
+same ten-byte constant return already verified independently by native/C11 and
+the assertion-free counterfactual. Corrected only the new expectations to pin
+bytes=10, functions=1, calls=0, finalized=1 and exact instruction bytes. Existing
+CLI cases/goldens are unchanged; the complete batch is rerun, not skipped.
+
+The main fixtures are existing R9 typed_predicate_protocol and typed_verdict_values.
+New fixtures add a distinct closed E/R application, a source-free importing
+consumer and an ordinary-call marker negative. No second embedded Concept program
+or comptime evaluator is introduced. Runtime behavior tested is residual return7;
+the typed proof remains compiler-time Go execution.
+
+Native single-function image SHA256 is
+`43a5857c93722cd54cfc1cdd4b33a39c67d0c81036396703dc76d97a83ead5d7` (10 bytes);
+consumer SHA256 is
+`4561bd362d67bd9cc489ab4a03c7ae7c30b0a6e1279e057a76fa7069da32cac6` (20 bytes,
+two ordinary functions). Both have zero fixups and no frame. Three semantic
+specimens each run ten fresh proof/artifact/LIR/MachineIR generations. Four
+native specimens each run ten fresh whole-image emissions per host/mode with
+Normal/Verify and strict C11 parity and exact counterfactual code agreement.
+The existing phase marker promotes h6 samples to 100; h6 phase qualification
+was not run. This is independently executed residual native code, not an
+independent native comptime evaluator or proof engine.
+
+Rehashed inspectable verdict metadata cannot alter outcome, predicate/type,
+selected payload, source site/provenance, diagnostic graph or trusted facts.
+Source-free consumers re-evaluate checked bodies. Unknown remains Unknown with
+no payload. Four corrupt/stale envelope categories reject. Full R9 selections
+also cover renderer failure/limits, unavailable bodies, resource/open/runtime
+types, recursive/fuel/depth/loop bounds, declared/innate/policy requirements,
+ownership shadow and actual extent/allocation/alias/lifetime forgery boundaries.
+
+No central proof authority or generic/comptime semantics changes, so no broad
+qualification escalation is justified. Physical ABI/allocation/frame/encoder
+and frozen transports remain untouched; existing CLI native regressions run in
+the batch. Full Go/corpus/Golden, all native ABI/race suites, Standard/DragonGod,
+GPU-free Vulkan and full phase gates remain deferred under the ordinary-milestone
+policy. Frozen Zig is skipped because its infrastructure is unchanged.
+
+Recommended next review: define the checked semantic value/observation and
+artifact-consumption boundary before committing to evaluator migration. The
+inventory stages that work without starting h7. Stop after EVT2h6.
 
 ## EVT2h5 native Result milestone
 

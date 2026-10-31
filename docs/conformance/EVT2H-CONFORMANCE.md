@@ -1,8 +1,89 @@
 # EVT2h — enum conformance
 
-Current EVT2h5 status: **MILESTONE VERIFIED — bounded native Result and `?`**.
+Current EVT2h6 status: **MILESTONE VERIFIED — comptime Verdict and native erasure**.
 Historical sections retain the evidence and boundaries at their respective
-checkpoints; h5 does not claim full project qualification.
+checkpoints. Ordinary milestone verification does not claim phase qualification.
+
+## EVT2h6 — typed Verdict authority and checked native erasure
+
+Baseline `cb4201a9e277be8b0db3d16c9343ec6dd0926bc1`, clean existing task branch;
+fetched origin/main `065317d` is an ancestor six commits behind. No historical
+checkpoint replaces newer work. Compiler `concept-evt1-stage0-go`, Windows AMD64.
+Preimplementation inventory `0028e4f` records every dependency, authority owner,
+input/transport requirement, execution mode, testing opportunity and migration
+difficulty in [EVT2H6-VERDICT-AUTHORITY](../design/EVT2H6-VERDICT-AUTHORITY.md).
+Implementation/fixtures/harnesses are `50d30c0`; final closeout changes evidence
+records only.
+
+**Verdict requires no runtime representation.** Proven(E), Disproven(R) and
+payload-free Unknown remain comptime-only and normalize through the one existing
+projector into the existing lattice. Both closed payload types must be supported;
+Unknown carries no fabricated negative payload. Runtime typed Verdict arguments,
+locals and returns remain invalid. No Win64 Verdict classification or new
+MachineIR sum representation is introduced.
+
+The existing R9 evaluator already implements the bounded intended protocol.
+The chosen boundary is architectural closeout (approach A), plus a concrete
+runtime-lowering correction: the accepted R9 typed-predicate flagship previously
+failed LIR with `Use: EVT2_UNSUPPORTED_CALL Concept at 31:5`. LIR now erases a
+checked `concept_assert` statement with an actual ConceptGoal, as C emission
+already does. Semantic analysis still runs first; Disproven/Unknown fail before
+LIR or native output. An unrelated forged marker cannot silently erase a call.
+No semantic fact, proof authority or trusted provenance is created by erasure.
+
+The three source specimens (existing typed_predicate_protocol and
+typed_verdict_values, plus a distinct OtherEvidence/OtherRefutation application)
+retain only ordinary `int Use() { return 7; }` in LIR. Closed generic Box<uint8>,
+typed payload enums, all three value cases and exhaustive comptime matches are
+checked before that boundary. A source-free semantic artifact consumer rechecks
+the transported predicate/helper bodies and emits Main plus imported Use. Native
+execution is **of these residual runtime functions**, not of Verdict evaluation.
+
+Native/C11 Normal/Verify pass for all four specimens, first without any domain C
+linked, then against strict C11 `-pedantic-errors -O2`. Removing only the checked
+assertion from the same AST produces identical machine code. Single-function
+images are ten bytes, zero fixups:
+`41ba070000004489d0c3`, SHA256
+`43a5857c93722cd54cfc1cdd4b33a39c67d0c81036396703dc76d97a83ead5d7`.
+The two-function artifact consumer is twenty bytes, zero fixups, SHA256
+`4561bd362d67bd9cc489ab4a03c7ae7c30b0a6e1279e057a76fa7069da32cac6`.
+These are frame-free scalar leaves; a frame report is not expected. Both modes
+and every fresh emission agree with the pinned bytes.
+
+Ten fresh generations per semantic specimen compare proof JSON, selected
+metadata, concept-module.v2 artifacts, LIR, MachineIR and roundtrip admission.
+Ten fresh complete native emissions per specimen/host/mode compare image/code,
+plus the assertion-free counterfactual. The phase marker retains 100 trials for
+these new gates. Historical selected R9 100-run loops remain unchanged.
+Runtime artifacts use frozen CMIRAMD3; CMIRAMD3–9 schemas/codecs/hashes/fixtures
+and semantic-module schema are unchanged.
+
+Rehashed descriptive artifact verdicts with forged outcome, predicate, closed
+type, site, message and six fact-authority claims cannot change consumer proof
+JSON, selected payload, provenance or diagnostics. Real source bodies still
+produce Proven(int), Disproven(string) and Unknown(float). Bad content hashes,
+stale innate/generic identities and wrong schemas reject. Existing R9 negatives
+cover invalid payloads/open or missing bodies, recursion/fuel/depth/loop bounds,
+renderers, improper runtime use, invalid requirements and user fact forgery.
+Descriptive metadata being ignored after a valid rehash is distinct from
+structurally corrupt input being rejected.
+
+Concept owns the authored predicate/refutation-rendering algorithms and Cathedral
+runtime admission/encoding. **Go still owns** Value execution, compiler.*
+observations, canonical generic closure, the bounded evaluator, single Verdict
+projector, proof graph, semantic gob artifact loader and trusted fact owners.
+Calling a Concept predicate through that Go evaluator is not evaluator migration.
+The innate fact-authority registry remains empty. No new trusted fact projector
+is qualified. Native bridges are not semantic AST/proof transports.
+
+The useful prerequisite removed is admission of already checked proof-bearing
+runtime bodies. Further self-hosting needs a canonical checked semantic
+value/type/declaration/AST and observation contract before a source-free Concept
+consumer/evaluator can replace a bounded owner. It does not need a runtime
+Verdict object. No second evaluator, proof graph, type registry or truth lattice
+is introduced. Full focused commands, timings, failed CLI test assumption and
+deferred gates are in [convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+Work stops after h6; no h7 or ownership/Drop work begins.
 
 ## EVT2h5 — closed native Result and propagation
 

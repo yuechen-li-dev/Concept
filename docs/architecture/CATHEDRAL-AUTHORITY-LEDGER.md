@@ -13,6 +13,39 @@ qualified through the existing tagged/pattern/aggregate mechanisms.
 Closed Result and `?` status is [EVT2h5 milestone verification](#evt2h5-closed-result-and-propagation-authority),
 with focused independent evidence rather than phase-level qualification.
 
+## EVT2h6 typed Verdict authority
+
+Baseline `cb4201a`; preimplementation inventory `0028e4f`; implementation `50d30c0`:
+[dependency/authority map](../design/EVT2H6-VERDICT-AUTHORITY.md).
+Verdict<E,R> remains comptime-only. Concept authors the predicate and refutation/
+Unknown-renderer bodies; Go still owns canonical closure, observation intrinsics,
+bounded execution, the sole lattice projector, proof graphs and semantic artifact
+loading. This milestone does not move those owners or claim a native evaluator.
+
+The useful native correction erases a checked Assert.Concept statement after
+normal semantic validation, matching C emission. Disproven/Unknown remain
+errors. A forged marker without a checked goal cannot silently remove an
+ordinary call. Cathedral then admits/emits only residual runtime instructions;
+no Verdict object, physical tag, payload layout, runtime registry or Win64
+Verdict ABI is introduced. Existing CMIRAMD3 is sufficient and all v3–9 frozen
+contracts remain unchanged.
+
+Go artifact-only consumers re-evaluate transported predicate/helper bodies.
+Rehashed descriptive verdict metadata cannot grant optimizer authority or change
+typed outcome, payload, sites/provenance or diagnostics. The innate fact registry
+remains empty; imported operation-summary authority and PredicateVerdict's
+FactAuthority are distinct seams. No positive trusted-fact projector is added.
+
+Normal/Verify execute the residual code through Concept Cathedral and compare
+with strict C11 and the same checked AST without assertions: ten-byte leaves,
+twenty-byte importing consumer, zero call fixups or frame. This is runtime erasure
+evidence, not native execution of comptime proofs. Native storage/allocation/
+frame/ABI/encoding remain the existing Concept owners. Later self-hosting needs
+a checked semantic-value/AST/observation contract before evaluator migration;
+the current Go-private gob artifact reader is a concrete dependency. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h6--typed-verdict-authority-and-checked-native-erasure)
+and [evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+
 ## EVT2h5 closed Result and propagation authority
 
 Baseline `065317d`; preimplementation semantic inventory `c78b310`; independent

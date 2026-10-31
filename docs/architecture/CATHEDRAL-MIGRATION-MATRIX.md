@@ -10,6 +10,26 @@ Closed Option stage: [EVT2h4 native execution](#evt2h4-closed-native-option),
 with full qualification and measured throughput improvement.
 Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-result-and-fallible-control-flow).
 
+## EVT2h6 comptime Verdict and native erasure
+
+Baseline `cb4201a`; inventory `0028e4f`; implementation `50d30c0`. Exact evidence/status are in
+[convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+
+| Subsystem | Actual owner after h6 | Qualified boundary / remaining dependency |
+| --- | --- | --- |
+| Typed E/R bodies, selected cases, optional renderers | Ordinary Concept source, executed by Go | Existing R9 typed/generic/record/enum/value semantics; no runtime Verdict |
+| Canonical generic closure, compiler.* observations, bounded execution | Go Stage-0, unchanged | Fuel4096/depth32/loops256; no second interpreter or budget reset |
+| Truth projection and proof graph | Existing single Go projector/lattice/graph, unchanged | Proven/Disproven/Unknown, selected payload, predicate/site/provenance preserved |
+| Semantic artifacts | Existing Go concept-module.v2 loader and checked private gob AST | Source-free semantic re-evaluation; descriptive metadata cannot hydrate facts; future Concept consumer needs a checked semantic contract |
+| Trusted facts | Existing qualified compiler owners; innate authority registry empty | User Proven or rehashed metadata grants no extent/allocation/alias/lifetime/relocation/address authority |
+| Runtime admission correction | Go checked frontend LIR erasure | Checked Assert.Concept has no runtime effect; false/Unknown reject, unrelated forged marker cannot erase a call |
+| Physical execution | Existing Concept Cathedral scalar admission/encoder | Frozen CMIRAMD3 residual code; native/C11 Normal/Verify, ten fresh samples; no Verdict ABI or storage |
+| Further self-hosting | Not implemented | Canonical semantic values/types/handles/AST and observation requests before evaluator/consumer migration; trusted fact migration separate |
+
+No runtime Verdict, new transport/evaluator/proof engine, ownership/Drop or h7
+implementation is added. Architectural closeout does not mean complete Concept
+ownership of compiler-time evaluation.
+
 ## EVT2h5 closed native Result and fallible control flow
 
 Baseline `065317d`, inventory `c78b310`, C bootstrap sequencing fix `8b064a6`.
