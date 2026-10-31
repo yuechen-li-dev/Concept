@@ -1,5 +1,12 @@
 # Concept-owned iteration workflow, 2026-10-29
 
+Scheduling update, effective 2026-10-31: follow the
+[revised EVT2 qualification policy](EVT2-QUALIFICATION-POLICY.md). Ordinary
+milestones use focused evidence; the full workflow is reserved for major
+checkpoints and warranted infrastructure-risk escalation. Next planned major
+checkpoint: EVT2h phase closeout, tentatively EVT2h9. Existing scripts, test
+logic, 100-run gates and the historical measurements below are unchanged.
+
 The default development command is `./test.ps1`. It executes the ordinary
 Concept test framework in Normal and Verify for runtime and leaf backend facts,
 then checks the CLI frontend and workflow policies. Full native qualification
