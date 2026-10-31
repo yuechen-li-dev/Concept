@@ -7,6 +7,17 @@ checkpoints and warranted infrastructure-risk escalation. Next planned major
 checkpoint: EVT2h phase closeout, tentatively EVT2h9. Existing scripts, test
 logic, 100-run gates and the historical measurements below are unchanged.
 
+EVT2h5 adds a ten-trial focused Result gate: fresh checked source/LIR/CFG,
+transport round trips, physical plans and native emissions. The Qualification
+lane sets `CONCEPT_EVT2H_PHASE_QUALIFICATION=1` for that invocation, promoting
+these new Result gates to 100 trials, and restores the previous environment
+value afterward. Existing historical 100-run gates are unchanged in every lane.
+Direct focused `go test -run '^TestEVT2h5' -count=1` uses ten trials; it does not
+claim phase qualification. Two Result facts bring Quick to 32 facts per mode
+(28 runtime and four backend), 64 executions, through C bootstrap. Native Result
+evidence remains in external artifact-only/C11/ABI harnesses, and its CLI case
+joins the shared multi-input batch.
+
 The default development command is `./test.ps1`. It executes the ordinary
 Concept test framework in Normal and Verify for runtime and leaf backend facts,
 then checks the CLI frontend and workflow policies. Full native qualification
