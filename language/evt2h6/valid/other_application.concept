@@ -1,0 +1,20 @@
+module Research.OtherVerdict;
+profile Core;
+
+record struct OtherEvidence {
+    uint8 value;
+}
+enum OtherRefutation {
+    Unsupported(typename subject)
+}
+
+comptime Verdict<OtherEvidence, OtherRefutation> OtherJudge(typename subject) {
+    return Verdict::Proven(OtherEvidence{9});
+}
+concept OtherSupported<T> {
+    requires OtherJudge(T);
+}
+int Use() {
+    Assert.Concept<OtherSupported>(int, "distinct closed semantic application");
+    return 7;
+}

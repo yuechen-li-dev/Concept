@@ -299,6 +299,11 @@ func (b *lirBuilder) statement(stmt Statement) error {
 	case *TryStmt:
 		return fmt.Errorf("EVT2H5_UNSUPPORTED_LOCAL_ERROR_HANDLING")
 	case *ExprStmt:
+		// Semantic analysis has already checked the proof and rejected Unknown
+		// or Disproven. Match C emission: this intrinsic has no runtime effect.
+		if call, ok := s.Value.(*CallExpr); ok && call.Intrinsic == "concept_assert" && call.ConceptGoal != "" {
+			return nil
+		}
 		if _, _, err := b.expr(s.Value); err != nil {
 			return err
 		}
