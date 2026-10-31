@@ -296,6 +296,8 @@ func (b *lirBuilder) statement(stmt Statement) error {
 	switch s := stmt.(type) {
 	case *MatchStmt:
 		return b.matchStatement(s)
+	case *TryStmt:
+		return fmt.Errorf("EVT2H5_UNSUPPORTED_LOCAL_ERROR_HANDLING")
 	case *ExprStmt:
 		if _, _, err := b.expr(s.Value); err != nil {
 			return err
@@ -597,8 +599,11 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	case *IfExpr:
 		return b.ifExpression(e)
 	case *ConstructExpr:
-		if e.EnumName == evt1OptionName {
-			if !evt1IsOptionType(e.ResolvedType) {
+		if e.EnumName == evt1OptionName || e.EnumName == evt1ResultName {
+			if !evt1IsFailureType(e.ResolvedType) {
+				if e.EnumName == evt1ResultName {
+					return 0, "", fmt.Errorf("EVT2H5_RESULT_REQUIRES_CLOSED_TYPE")
+				}
 				return 0, "", fmt.Errorf("EVT2H4_OPTION_REQUIRES_CLOSED_TYPE")
 			}
 			decl, _ := evt1FailureEnumDecl(e.ResolvedType)
@@ -686,6 +691,10 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		args := make([]int, 0, len(e.Args))
 		argTypes := make([]LIRType, 0, len(e.Args))
+		saved := make([]int, len(e.Args))
+		for i := range saved {
+			saved[i] = -1
+		}
 		for i, arg := range e.Args {
 			v, actual, err := b.expr(arg)
 			if err != nil {
@@ -697,6 +706,15 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			}
 			args = append(args, v)
 			argTypes = append(argTypes, expected)
+			if resultQuestions(e.Args[i+1:]) {
+				saved[i], err = b.saveBeforePropagation(v, actual, e.Span)
+				if err != nil {
+					return 0, "", err
+				}
+			}
+		}
+		for i := range args {
+			args[i] = b.loadAfterPropagation(args[i], saved[i], argTypes[i], e.Span)
 		}
 		if resultType != "void" && !lirCallScalar(resultType) && !lirAggregateType(resultType) {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %s", e.Callee, resultType)
@@ -754,10 +772,18 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		if err != nil {
 			return 0, "", err
 		}
+		saved := -1
+		if resultQuestion(e.Right) {
+			saved, err = b.saveBeforePropagation(left, lt, e.Span)
+			if err != nil {
+				return 0, "", err
+			}
+		}
 		right, rt, err := b.expr(e.Right)
 		if err != nil {
 			return 0, "", err
 		}
+		left = b.loadAfterPropagation(left, saved, lt, e.Span)
 		if lt != rt {
 			return 0, "", fmt.Errorf("EVT2_BINARY_TYPE_MISMATCH")
 		}
@@ -798,6 +824,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		v, typ := b.loadMachineField(id, e.Span)
 		return v, typ, nil
 	case *FailureExpr:
+		if evt1IsResultType(e.ResolvedType) {
+			return b.resultPropagation(e)
+		}
 		if evt1IsOptionType(e.ResolvedType) {
 			return 0, "", fmt.Errorf("EVT2H4_UNSUPPORTED_OPTION_OPERATOR %s", e.Op)
 		}

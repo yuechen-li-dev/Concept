@@ -102,7 +102,7 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 		return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_AUTHORITY %s", t.String())
 	}
 	t = t.valueType()
-	if evt1IsOptionType(t) {
+	if evt1IsFailureType(t) {
 		decl, _ := evt1FailureEnumDecl(t)
 		return a.lowerTaggedEnum(t, decl)
 	}
@@ -299,6 +299,11 @@ func (b *lirBuilder) recordConstruction(e *StructConstructExpr) (int, LIRType, e
 		return 0, "", fmt.Errorf("EVT2_INCOMPLETE_RECORD_INIT %s", t.String())
 	}
 	args := make([]int, len(decl.Fields))
+	saved := make([]int, len(args))
+	for i := range saved {
+		saved[i] = -1
+	}
+	types := make([]LIRType, len(args))
 	for i, arg := range e.Args {
 		member := i
 		if len(e.ArgNames) != 0 {
@@ -322,6 +327,16 @@ func (b *lirBuilder) recordConstruction(e *StructConstructExpr) (int, LIRType, e
 			return 0, "", fmt.Errorf("EVT2_RECORD_INIT_TYPE %s", decl.Fields[member].Name)
 		}
 		args[member] = value
+		types[member] = actual
+		if resultQuestions(e.Args[i+1:]) {
+			saved[member], err = b.saveBeforePropagation(value, actual, e.Span)
+			if err != nil {
+				return 0, "", err
+			}
+		}
+	}
+	for i := range args {
+		args[i] = b.loadAfterPropagation(args[i], saved[i], types[i], e.Span)
 	}
 	return b.emit(LIRInstruction{Op: "make_aggregate", Result: 0, Type: lt, Args: args, Slot: -1, Source: e.Span}), lt, nil
 }

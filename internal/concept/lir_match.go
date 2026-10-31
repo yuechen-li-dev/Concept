@@ -15,6 +15,7 @@ type LIRPatternArm struct {
 
 func (b *lirBuilder) checkedExpressionType(expr Expr) (Type, error) {
 	scope := newEVT1Scope(nil)
+	scope.returnType = b.mir.ReturnType
 	for name, binding := range b.names {
 		scope.declare(name, evt1ValueBinding{t: binding.typ, mutable: true, state: evt1StorageInitialized})
 	}
@@ -144,7 +145,7 @@ func (b *lirBuilder) lowerMatch(subject Expr, patterns []Pattern, resultSlot int
 		variant := VariantDecl{}
 		if lirEnumType(t) || lirTaggedType(t) {
 			decl := b.env.enums[st.Name]
-			if evt1IsOptionType(st) {
+			if evt1IsFailureType(st) {
 				decl, _ = evt1FailureEnumDecl(st)
 			}
 			variant, _ = evt1LookupVariant(decl, p.VariantName)

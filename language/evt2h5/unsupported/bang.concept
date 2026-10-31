@@ -1,0 +1,5 @@
+// expect: EVT2H5_UNSUPPORTED_RESULT_OPERATOR
+profile Core;
+int Need(Result<int, bool> value) {
+    return value!;
+}

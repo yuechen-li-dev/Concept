@@ -32,13 +32,14 @@ func lirTaggedIdentity(layout LIRTaggedEnum) LIRType {
 
 func (a *lirAggregateTypes) lowerTaggedEnum(t Type, decl EnumDecl) (LIRType, error) {
 	key := decl.Module + "|" + decl.Name
-	if evt1IsOptionType(t) {
+	if evt1IsFailureType(t) {
 		// Project the checked intrinsic application through the existing
-		// structured generic identity; never key closed options by bare Name.
-		key = evt1GenericApplicationKey(&GenericApplication{
-			Declaration: GenericDeclarationIdentity{Name: evt1OptionName},
-			Arguments:   []GenericArgument{{Kind: "type", Type: evt1GenericIdentityType(evt1CanonicalType(a.env, t.TypeArgs[0]))}},
-		})
+		// structured generic identity; never key closed sums by bare Name.
+		application := &GenericApplication{Declaration: GenericDeclarationIdentity{Name: t.Name}}
+		for _, arg := range t.TypeArgs {
+			application.Arguments = append(application.Arguments, GenericArgument{Kind: "type", Type: evt1GenericIdentityType(evt1CanonicalType(a.env, arg))})
+		}
+		key = evt1GenericApplicationKey(application)
 	}
 	for active := range a.visiting {
 		if strings.HasPrefix(active, "tagged:") {
@@ -72,7 +73,7 @@ func (a *lirAggregateTypes) lowerTaggedEnum(t Type, decl EnumDecl) (LIRType, err
 			if err != nil {
 				return "", fmt.Errorf("%s::%s.%s: %w", t.String(), variant.Name, field.Name, err)
 			}
-			if lirEnumType(ft) || lirTaggedType(ft) || lirReferenceType(ft) {
+			if lirEnumType(ft) && !evt1IsResultType(t) || lirTaggedType(ft) || lirReferenceType(ft) {
 				return "", fmt.Errorf("EVT2H2_UNSUPPORTED_PAYLOAD_TYPE %s", field.Type.String())
 			}
 			fieldTypes[i] = ft
@@ -153,7 +154,15 @@ func verifyLIRTaggedEnums(m LIRModule, layouts map[LIRType]LIRAggregateLayout) (
 			end, align := 0, 1
 			for _, field := range v.Fields {
 				size, alignment, err := lirAggregateGeometry(field.Type, layouts, 0)
-				if err != nil || lirEnumType(field.Type) || lirTaggedType(field.Type) || size <= 0 || size > lirAggregateMaxSize || alignment <= 0 || alignment > 16 {
+				if lirEnumType(field.Type) {
+					for _, alias := range m.Enums {
+						if alias.Type == field.Type {
+							size, alignment, err = alias.Size, alias.Alignment, nil
+							break
+						}
+					}
+				}
+				if err != nil || lirTaggedType(field.Type) || size <= 0 || size > lirAggregateMaxSize || alignment <= 0 || alignment > 16 {
 					return nil, fmt.Errorf("LIR_TAGGED_PAYLOAD_TYPE")
 				}
 				if field.Name == "" || fields[field.Name] || !objectDigest(field.TypeIdentity) || field.DeclarationIdentity != v.Identity+"|"+field.Name || field.Size != size || field.Alignment != alignment || field.Offset != evt1AlignUp(end, alignment) {

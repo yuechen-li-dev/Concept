@@ -495,7 +495,7 @@ Result<void, PatternError> ValidatePatternMachineBridge(ReadOnlySpan<byte> artif
     }
     WirePatternModule document = ReadPattern<WirePatternModule>(ref reader) ?;
     WireObjectModule objects = document.Base.Base.Objects;
-    if (reader.offset != Len(artifact) or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or document.Base.Base.Authority.count != objects.Functions.count or document.Base.Domains.count > 128 or document.Enums.count > 128 or document.Flows.count < 1 or document.Flows.count > 8192 or document.Operations.count > 131072 or document.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
+    if (reader.offset != Len(artifact) or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or document.Base.Base.Authority.count != objects.Functions.count or document.Base.Domains.count > 128 or document.Enums.count > 128 or(document.Flows.count == 0 and(document.Operations.count != 0 or document.Enums.count == 0 or document.Base.Domains.count == 0)) or document.Flows.count > 8192 or document.Operations.count > 131072 or document.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
         return Result::Error(PatternError::Capacity);
     }
     EnumDomainContext aliases = EmptyEnumDomainContext();

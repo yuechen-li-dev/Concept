@@ -1,0 +1,5 @@
+// expect: EVT2H2_UNSUPPORTED_PAYLOAD_TYPE
+profile Core;
+Result<ref int, bool> Empty() {
+    return Result::Error(true);
+}

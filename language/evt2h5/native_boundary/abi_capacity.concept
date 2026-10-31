@@ -1,0 +1,5 @@
+// expect: AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED
+profile Core;
+Result<double, bool> TooMany(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return Result::Ok(3.5);
+}

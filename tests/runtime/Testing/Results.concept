@@ -148,10 +148,10 @@ int ArrayValue(Result<int<array>[3], ParseError> value) {
     };
 }
 Result<int<array>[3], ParseError> ForwardArray(bool valid) {
-    return Result::Ok(MakeArray(valid)?);
+    return Result::Ok(MakeArray(valid) ?);
 }
 Result<Item, ParseError> ForwardItem(bool valid, int count) {
-    Item item = MakeItem(valid, count)?;
+    Item item = MakeItem(valid, count) ?;
     return Result::Ok(item);
 }
 int MutateArrayBinding(Result<int<array>[3], ParseError> value) {

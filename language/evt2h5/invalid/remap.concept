@@ -1,0 +1,6 @@
+// expect: CV4543
+profile Core;
+Result<int, int> Bad(Result<int, bool> value) {
+    int number = value ? else true;
+    return Result::Ok(number);
+}

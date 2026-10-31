@@ -48,7 +48,7 @@ func projectPatternMachine(lir LIRModule) (MachineModule, error) {
 func verifyPatternMachine(m PatternModule) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD9_%s", s) }
 	objects := m.Base.Base.Objects
-	if len(objects.Functions) == 0 || len(objects.Functions) > 128 || len(objects.Types) == 0 || len(objects.Types) > 256 || len(m.Enums) > 128 || len(m.Base.Domains) > 128 || len(m.Base.Base.Authority) != len(objects.Functions) || len(m.Flows) == 0 || len(m.Flows) > 8192 || len(m.Operations) > 131072 {
+	if len(objects.Functions) == 0 || len(objects.Functions) > 128 || len(objects.Types) == 0 || len(objects.Types) > 256 || len(m.Enums) > 128 || len(m.Base.Domains) > 128 || len(m.Base.Base.Authority) != len(objects.Functions) || len(m.Flows) == 0 && (len(m.Operations) != 0 || len(m.Enums) == 0 || len(m.Base.Domains) == 0) || len(m.Flows) > 8192 || len(m.Operations) > 131072 {
 		return bad("CAPACITY")
 	}
 	tagged, err := checkedTaggedDomains(objects, m.Base.Domains)

@@ -17,6 +17,9 @@ func LowerLirToAmd64Machine(lir LIRModule) (MachineModule, error) {
 		}
 	}
 	if len(lir.TaggedEnums) != 0 {
+		if len(lir.Enums) != 0 {
+			return projectPatternMachine(lir)
+		}
 		return projectTaggedMachine(lir)
 	}
 	if len(lir.Enums) != 0 {

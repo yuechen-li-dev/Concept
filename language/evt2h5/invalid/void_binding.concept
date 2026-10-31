@@ -1,0 +1,7 @@
+// expect: CV4112
+profile Core;
+int Bad(Result<void, bool> value) {
+    return match (value) {
+        Result::Ok(payload) => payload, Result::Error(error) => 0
+    };
+}
