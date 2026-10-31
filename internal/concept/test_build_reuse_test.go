@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 var nativeFixtureBuilds = struct {
@@ -58,6 +59,8 @@ func nativeFixtureObjects(t *testing.T, outputs Outputs, compiler string, flags 
 		}
 		key := fmt.Sprintf("%x", h.Sum(nil))
 		object := nativeFixtureBuilds.objects[key]
+		profileStart := time.Now()
+		profileCold := object == ""
 		if object == "" {
 			dir, err := os.MkdirTemp("", "concept-go-fixture-")
 			if err != nil {
@@ -76,6 +79,7 @@ func nativeFixtureObjects(t *testing.T, outputs Outputs, compiler string, flags 
 			nativeFixtureBuilds.objects[key] = object
 		}
 		objects = append(objects, object)
+		qualificationEvent(t, "native-object", profileStart, map[string]any{"cold": profileCold, "key": key, "source": source, "compiler": compiler, "flags": flags})
 	}
 	if len(objects) == 0 {
 		t.Fatal("generated C output missing")
@@ -97,7 +101,10 @@ func backendTestOutputs(t *testing.T, verify bool) Outputs {
 		index = 1
 	}
 	build := &backendFixtureBuilds[index]
+	profileStart := time.Now()
+	profileCold := false
 	build.Do(func() {
+		profileCold = true
 		path := "../../libraries/Standard/Backend/AMD64.concept"
 		source, err := os.ReadFile(path)
 		if err != nil {
@@ -115,6 +122,7 @@ func backendTestOutputs(t *testing.T, verify bool) Outputs {
 		}
 		build.outputs, build.err = GenerateForTargetWithPolicy(module, source, GenericC11Target(), policy)
 	})
+	qualificationEvent(t, "cathedral-generation", profileStart, map[string]any{"cold": profileCold, "verify": verify})
 	if build.err != nil {
 		t.Fatal(build.err)
 	}
