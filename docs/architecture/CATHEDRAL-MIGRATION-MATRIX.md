@@ -8,6 +8,31 @@ Full qualification passes at `1058c86`, including native/C11 and 100-run gates.
 Earlier stage tables retain their historical qualification boundaries.
 Closed Option stage: [EVT2h4 native execution](#evt2h4-closed-native-option),
 with full qualification and measured throughput improvement.
+Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-result-and-fallible-control-flow).
+
+## EVT2h5 closed native Result and fallible control flow
+
+Baseline `065317d`, inventory `c78b310`, C bootstrap sequencing fix `8b064a6`.
+Native implementation `f283a0b`; phase scheduling `2ccaf3a`; aggregate/exact-bit
+error propagation coverage `ac840ae`.
+Evidence and exact status are in
+[convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+Ordinary milestone scheduling applies; complete phase qualification is deferred.
+
+| Decision | Authority / reused mechanism | Tested boundary |
+| --- | --- | --- |
+| Result definition, closed T/E, constructors, must_use, exact E and explicit remap | Existing Stage-0 semantics/generic closure | Ok0/Error1; void Ok has no payload; no arbitrary error conversion |
+| `?` success continuation and Error return | Checked Go LIR projection through existing h3 exhaustive CFG, bindings and joins | Operand once; ordered binary/call/record operands; void, loops, conditional and recursive calls |
+| Canonical artifact contract | Existing Concept-owned CMIRAMD8/9 with generated codecs | Frozen v3–9 bytes/hashes/codecs unchanged; no successor |
+| Admission and payload proof | Existing Concept v9 pattern/tagged/object validators | Checked ordinary enum aliases; constructor-only alias domains; 27 malformed artifact cases and seven LIR cases |
+| Native storage, assignments, replacement and copy | Existing Concept active-field logical copier and slots | Fourteen applications; no inactive/padding semantic data or hidden allocation |
+| Native calls and returns | Existing Concept Win64 aggregate/frame/allocation/encoding | Direct 8-byte and indirect 12/16/24-byte Results, hidden return, stack positions, mixed references/floats, six spills |
+| Independent execution | External Go orchestration, strict C11, MSVC and clang-cl private-shape probes | Normal/Verify, artifact-only first, protected page/trap, ten fresh native trials and pinned bytes |
+| Source semantics regression | Two Concept facts plus existing external failure cleanup/panic/remap suites | C bootstrap sequencing repair; C Result compatibility fields retained |
+| Qualification scheduling | Existing Quick/focused/phase lanes | Ten new Result trials ordinarily, 100 in phase lane; old gates unchanged |
+
+Native panic `!`, local try/except, general ownership/Drop, reference-bearing
+payloads, nested sums, public foreign Result ABI, Verdict and EVT2h6 are not added.
 
 ## EVT2h4 closed native Option
 

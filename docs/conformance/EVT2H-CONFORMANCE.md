@@ -1,9 +1,158 @@
 # EVT2h — enum conformance
 
-Current EVT2h4 status: **SUCCESS — bounded native Option and throughput
-qualification**. Implementation `10be4cb`, specimen formatting/LF `a5588b9`;
-the final closeout changes evidence records only. Historical sections retain
-the evidence and boundaries at their respective checkpoints.
+Current EVT2h5 status: **MILESTONE VERIFIED — bounded native Result and `?`**.
+Historical sections retain the evidence and boundaries at their respective
+checkpoints; h5 does not claim full project qualification.
+
+## EVT2h5 — closed native Result and propagation
+
+Actual baseline: `065317d262c85ce159219561b0709526e7973c1f`, fetched integration
+main, fast-forwarded from clean `7daab14` before edits. Their trees agree.
+Compiler `concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64. Inventory
+`c78b310` records the inspected semantics before implementation; bootstrap
+sequencing correction `8b064a6` is independently reviewable. See the
+[checked inventory](../design/EVT2H5-CHECKED-RESULT.md) and
+[focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+Native semantic production, fixtures and external harnesses are `f283a0b`;
+phase-test scheduling is separately identifiable in `2ccaf3a`. Final closeout
+changes the evidence records only. Focused aggregate/exact-bit Error propagation
+coverage and its expanded fixture pins are `ac840ae`.
+
+### Existing source semantics and checked control flow
+
+Intrinsic Result has two ordered canonical type arguments. Ok(value: T) is tag
+0; Error(error: E) is tag 1. Result<void,E>::Ok has no field or argument.
+Constructors retain the contextually resolved closed type. The existing checker
+owns must_use/explicit discard, exact nominal error compatibility, exhaustiveness,
+copy eligibility, initialization and ownership restrictions. No new syntax,
+equality rule, inference system or implicit error conversion is introduced.
+
+Postfix `?` evaluates its operand once. Its checked LIR uses the existing
+immutable match snapshot, exhaustive Ok/Error CFG and arm-local bindings.
+Ok initializes the ordinary result slot and continues; Error constructs the
+containing function's checked Result::Error and terminates that path with a
+return. Void success needs no slot, fabricated value or payload read. The
+existing result-join/dominance and source-operation verifiers remain operative.
+Without `else`, E must match exactly, even if two enums have identical geometry.
+Existing `? else expression` evaluates a checked explicit error remap only on
+the Error path. Operand T and containing function T may differ.
+
+Already evaluated binary operands, ordinary call arguments and record constructor
+fields survive a later `?` through ordinary typed logical slots. Cathedral
+chooses their storage and lifetime. Parameters retain their existing global LIR
+identity. Computed references that would need a new cross-propagation lifetime
+contract reject explicitly. Native `!` panic and local try/except remain outside
+this milestone. Owned/Drop-bearing values reject rather than skip cleanup.
+
+The independent C11 run exposed a bootstrap ordering defect: a later `?` prelude
+could return before an earlier call argument or binary operand executed. C
+emission now materializes eligible earlier values before that prelude, preserving
+the existing source order; the operand is still evaluated once. Existing failure
+cleanup/panic/remap tests pass. The emitted C Result retains its legacy is_error
+and error compatibility fields used by Vulkan. It is deliberately not treated
+as the native physical shape.
+
+### Representation, transport and Cathedral ownership
+
+The producer reuses h4's structured GenericApplication identity with intrinsic
+declaration `(module="", name="Result")` and both ordered canonical arguments.
+Result<int,ParseError> and Result<int,OtherError> remain distinct types and call
+signatures. The same tagged layout, constructor, assignment, match, copy and
+return operations serve user enums, Option and Result.
+
+CMIRAMD8 suffices for scalar constructor-only Results. CMIRAMD9 carries matches,
+propagation and ordinary enum payload aliases. No new version, fields, schema,
+generated codec, hash or historical byte fixture is introduced. Frozen CMIRAMD3–9
+remain unchanged. Two bounded admission additions are needed: independently
+validated v9 ordinary enum aliases may be tagged fields, and a v9 constructor-only
+module with enum and tagged domains may have no pattern flows/operations. An
+artifact containing pattern operations still requires complete flow authority.
+V8 supplies no enum aliases and keeps its prior eligibility boundary.
+
+Cathedral's Concept validators independently check type/layout/variant identity,
+geometry, source correspondence, scopes, initialized joins and active payload
+authority. The existing logical copier dispatches on the active variant and
+recurses only through meaningful fields. Storage, direct/indirect arguments,
+hidden results, scalar encoding, allocator and unified frame planner are reused
+without policy changes. No production Go Result layout/copy/ABI/encoding engine
+or Result-specific physical implementation is added.
+
+| Executed closed applications | Size / alignment | Existing Win64 route |
+| --- | --- | --- |
+| Result<int,ParseError>, Result<int,OtherError>, Result<void,ParseError>, Result<bool,ParseError> | 8 / 4 | direct eight-byte aggregate |
+| Result<float,bool>, Result<bool,uint8> | 8 / 4 | direct eight-byte aggregate |
+| Result<Pair,uint16>, Pair = two-int copyable struct | 12 / 4 | indirect argument / hidden result |
+| Result<double,ParseError>, Result<int,double> | 16 / 8 | indirect argument / hidden result |
+| Result<int<array>[3],ParseError>, Result<int,int<array>[3]> | 16 / 4 | indirect argument / hidden result |
+| Result<Item,ParseError>, Result<int,Item>, Result<void,Item>; Item = { int; double; } record | 24 / 8 | indirect argument / hidden result |
+
+The ABI probes use explicitly agreed private shapes, not generated C Result
+structs. They establish the tested Win64 carrier paths; general foreign Result
+interoperability is not claimed. The existing eight physical argument positions
+include the hidden result pointer. Seven explicit mixed arguments exercise stack
+positions; eight explicit arguments plus a hidden result reject with
+`AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED` and intact code/image sentinels.
+
+### Focused execution and rejection evidence
+
+`tests/runtime/Testing/Results.concept` owns 61 functions and fourteen applications.
+Two `.concept_test` facts execute source semantics through C in Normal/Verify;
+they do not count as native proof. External hosts first execute the artifact
+without domain C linked, then compile the same source with strict C11
+`-pedantic-errors -O2` and compare values, effects and ordering.
+
+Native cases cover both variants, scalar/record/struct/array successes and errors,
+copies and isolated bindings, variant replacement, void propagation, explicit
+matches, loops, early-return ordering, conditional results, differing success
+types, explicit error remapping, recursion, mixed calls, stack arguments and six
+floating spills. Exact binary32/64 checks include negative zero, adjacent finite
+values, quiet NaN payloads and subnormals, including Error payloads rethrown by
+`?`. Record and fixed-array errors also propagate, including void success with
+a record error. MSVC and clang-cl DLLs call native
+constructors/propagation and mixed signatures, then relay direct and indirect
+values back to native consumers, twenty trials per shape per host.
+
+Protected-page probes put void Ok immediately before inaccessible Error storage;
+Ok executes without touching it. An invalid tag must raise the existing native
+UD2 inside the emitted image, rather than authorize a payload read. Trap children
+use their completed host executable and never overwrite a running Windows binary.
+Constructor-only v8/v9 artifacts also execute without domain source.
+
+Fourteen source-invalid specimens pin constructor/type/arity, nominal identity,
+must_use, void binding, exhaustiveness and propagation/remap diagnostics. Six
+source-valid native-unsupported specimens pin nested sums, ownership/Drop,
+references, `!`, try/except and computed-reference liveness. Seven malformed LIR
+mutations reject. Twenty-seven malformed artifacts reject independently in Go
+and Concept Normal/Verify, preserving round-trip, code and image sentinels.
+They cover identity/type swaps, invalid tags/arity, absent variant authority,
+incorrect early-return edges, uninitialized/nondominating bindings, fabricated
+void fields, scope/copy/geometry/CFG errors, capacity and corrupt wire records.
+Concept diagnostics include CMIRAMD9_PATTERN_DOMAIN, PAYLOAD_BINDING,
+VARIANT_OPERATION, OBJECT_CONTRACT, CAPACITY_EXCEEDED, VERSION_MISMATCH,
+SCHEMA_HASH_MISMATCH and MALFORMED under their existing CMIRAMD9 prefix.
+
+The pinned artifact is **261,777 bytes**, SHA256
+`df95976a73a53afc06d280ebc13b31d00aeb47086aa6dd9274947bb938fdad2d`.
+The identical Normal/Verify native image is **107,444 bytes**, 61 functions,
+39 call fixups, frames **40..488 bytes**, six spills; SHA256
+`34c260bb98b31437371fcc19df53a8f192dd9da870bcd795dc27521ddbe5c464`.
+Ten fresh source/LIR/CFG/transport/debug generations and ten complete native
+planning/emission samples per mode are the ordinary milestone gate. The phase
+Qualification lane promotes the new gate to 100; it was not run for h5. Earlier
+selected regression families keep their existing 100-run gates.
+
+### Remaining boundaries
+
+No Result-specific runtime exceptions, native `!`, local try/except, ownership,
+Drop, move-only or reference-bearing payloads, nested sums, fallible built-ins
+beyond Result/Option, public layout query, general foreign representation,
+new object output or optimization pass is introduced. Computed references across
+a later `?` reject explicitly. The qualified expression contexts are the tested
+ordinary calls, binary operands, record construction and existing match/if/loop
+paths; arbitrary record-with/index/short-circuit propagation is not claimed.
+Standalone fixed-array ABI limitations remain unchanged; arrays inside admitted
+Result payloads execute through the existing aggregate route. Verdict and EVT2h6
+remain unimplemented.
 
 ## EVT2h4 — closed native Option applications
 

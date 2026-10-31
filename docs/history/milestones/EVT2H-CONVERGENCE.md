@@ -1,7 +1,149 @@
 # EVT2h convergence
 
-Current EVT2h4 status: **SUCCESS — bounded native Option and full qualification**.
+Current EVT2h5 status: **MILESTONE VERIFIED — bounded native Result and `?`**.
 Earlier sections retain historical outcomes and boundaries.
+
+## EVT2h5 native Result milestone
+
+Started clean at policy `7daab14` on the existing task branch
+`codex/implement-native-ordinary-enums`. Fetched integration main and
+fast-forwarded to actual baseline
+`065317d262c85ce159219561b0709526e7973c1f`; the trees agree. No unrelated work,
+remote branch, older qualified implementation or frozen format was discarded.
+Compiler `concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64.
+Initial Quick passed (compiler 15.535 s, CLI 3.555 s; no whole-backend build).
+Inventory `c78b310` preceded implementation. C sequencing repair `8b064a6`
+is separate from native semantic production and milestone evidence.
+Implementation/fixtures/harnesses are `f283a0b`; phase scheduling is `2ccaf3a`.
+Additional aggregate/exact-bit error propagation coverage is `ac840ae`.
+The final closeout commit changes these evidence records only.
+
+The checker already specifies Ok tag0, Error tag1, must_use, contextual closed
+constructors, exact nominal E compatibility, explicit `? else` remap and empty
+void success. Native production now projects that existing Result view through
+the same tagged/pattern/generic machinery as Option. `?` lowers to an immutable
+checked two-arm match: Ok initializes its continuation value; Error constructs
+the containing Result and returns. Earlier evaluated values use normal logical
+slots across the split. No exception/ownership implementation is invented.
+
+The C differential oracle first exposed an ordering mismatch: on a failing second
+operand/argument, an earlier Mark call had not executed. Native produced log12,
+while C produced log2. The bootstrap fix sequences eligible values before a
+later propagation prelude. The expectation was not relaxed; the C facts and
+existing failure cleanup/panic/remap regressions then passed. Legacy C Result
+compatibility fields remain intact. Independent ABI probes use agreed private
+native shapes rather than assume equality with that C representation.
+
+Transport remains frozen CMIRAMD8/9, without schema/codec/hash/fixture edits.
+Scalar constructors use v8; enum payloads and checked flows use v9. The v9
+validators now admit independently checked ordinary-enum field aliases and a
+constructor-only document containing enum/tagged domains without pattern
+operations. Missing authority for actual pattern operations still rejects.
+This admission change triggers additional h2/h3/h4 transport, malformed and
+native regressions, including their unchanged embedded 100-run gates. There is
+no shared ABI policy, frame planner, allocator or encoder change requiring
+project-wide qualification. The revised ordinary milestone policy applies.
+
+The [conformance section](../../conformance/EVT2H-CONFORMANCE.md#evt2h5--closed-native-result-and-propagation)
+records fourteen closed applications, complete positive/negative boundaries and
+the source/native ABI distinction. The source-free host executes before domain
+C is linked. Normal/Verify, strict C11, MSVC/clang-cl call/relay probes, protected
+inactive Error storage and invalid-tag trap children pass in the initial focused
+h5 run (131.074 s). The expanded run adds adjacent regressions; the final
+fixture/harness follow-up independently reruns h5 and the CLI batch.
+
+Pinned final artifact: **261,777 bytes**,
+`df95976a73a53afc06d280ebc13b31d00aeb47086aa6dd9274947bb938fdad2d`.
+Native image: **107,444 bytes**, 61 functions, 39 call fixups, frames **40..488**,
+six XMM spills, identical Normal/Verify SHA256
+`34c260bb98b31437371fcc19df53a8f192dd9da870bcd795dc27521ddbe5c464`.
+The final h5 run measured ten fresh semantic/transport generations in 465.380 ms;
+full-module initial emission 2,405..2,632 ms and ten full-function planning rounds
+1,433 / 1,544 ms in Normal / Verify native hosts. These are local host-clock measurements,
+not portable performance limits or a new full-suite throughput comparison.
+
+Ten trials are justified for this additive semantic projection over qualified
+tagged storage/ABI, with unchanged wire/physical algorithms and independent
+negative/oracle evidence. Each trial freshly parses/checks/generates LIR/CFG,
+MachineIR, debug text and encoded/decoded artifacts. Each native mode independently
+replans all 61 functions and emits the whole image ten times, comparing plans,
+frames, allocation/debug, fixups, image metadata and code. The two domain-C hosts
+each independently emit again and run one planning/emission round. This is not
+cached-result or LIR-interpreter evidence. At the phase checkpoint,
+`test.ps1 -Lane Qualification` selects 100 for all new Result gates with
+`CONCEPT_EVT2H_PHASE_QUALIFICATION=1`; it restores the prior environment afterward.
+No old loop is reduced. The h5 100-run phase gate was not executed here.
+
+### Executed commands and outcomes
+
+Local detailed logs: ignored `artifacts/evt2h5/`. The fixture, harnesses, pins,
+negative specimens and this evidence are committed. All Go invocations below
+disable result caching with `-count=1`.
+
+```powershell
+./test.ps1
+go test ./internal/concept -run '^TestEVT2h5' -count=1 -v -parallel=4 -timeout=15m
+$focused = '^(TestEVT2h[245].*|TestEVT2h3(SourceDiagnostics|CheckedLIR|JoinDefiniteInitialization|RejectCrossArmEntry|Transport|ArtifactAdmission|NativeExecution|ConditionalNativeExecution|MalformedContracts|MalformedArtifactAdmission)|TestAMD64CLIBatch|TestFailure.*|TestR9a2BridgeGeneratedOutputs|TestR9a2BridgeFrozenPayloadParity)$'
+go test ./internal/concept ./cmd/concept -run $focused -count=1 -v -parallel=4 -timeout=25m
+go test ./internal/concept ./cmd/concept -run '^(TestEVT2h5.*|TestAMD64CLIBatch)$' -count=1 -v -parallel=4 -timeout=12m
+go test -race ./internal/concept -run '^(TestEVT2h5(CheckedResult|SourceBoundaries|LIRAdmission|MalformedContracts|Determinism|ConstructorContracts)|TestFailureConformance|TestRuntimeWorkflowPolicy)$' -count=1 -v -timeout=5m
+go vet ./internal/concept ./cmd/concept
+go build ./...
+```
+
+| Gate | Actual evidence |
+| --- | --- |
+| Quick | PASS, final 22.35 s; 32 facts/mode, 64 C-bootstrap executions; preceding quiet run 19.78 s also verifies phase-environment restoration |
+| Initial complete h5 focused run | PASS, 131.074 s; native/C11 Normal/Verify, both external ABI toolchains, ten fresh trials |
+| H5 + adjacent regression command above | PASS, 49 top-level families, no skips; wall 573.463 s, compiler 566.063 s, CLI 180.227 s; h3 native retains all 100 trials and takes 392.09 s |
+| Final 61-function h5 + CLI rerun after coverage extension | PASS, nine top-level families, no skips; wall 214.091 s, compiler 176.853 s, CLI 209.250 s; native/C11 both modes, both ABI compilers, ten fresh trials |
+| Focused race | PASS; initial package 8.772 s / wall 26.517 s, repeated with final fixture and pin in 7.515 s package |
+| Focused vet | PASS, wall 1.701 s |
+| Build all Go packages | PASS |
+| Changed Go and new Concept format, positive fixture/fact/standalone lint | PASS |
+| Generated inspection | Result fixture correctly reports no generated declarations; CLI codec inspection lacked imported semantic artifacts, so is not claimed; v8/v9 generated-byte checks run in selected transport tests |
+| Diff/frozen-contract check | PASS; no schema/codec/metadata/historical byte-file diff from baseline |
+
+Formatting uses `concept format <file> --check` for both validators, the fixture,
+fact file and all 23 h5 semantic specimens; `concept lint <file>` checks the
+fixture, fact file and two valid standalone cases. Changed Go files pass
+`gofmt -l`; PowerShell parsing and `git diff --check` pass. The actual Result
+`generated` inspection reports no generated public declarations. The attempted
+standalone codec CLI inspection reports MODULE_IMPORT_MISSING without its built
+import artifacts; this is recorded rather than presented as a passing gate.
+Selected v8/v9 transport tests independently regenerate and compare their actual
+Go/Concept codecs and schema metadata, including 100 generation repetitions.
+
+H5 negative coverage is fourteen source-invalid and six source-valid native
+unsupported cases, seven malformed LIR mutations, 27 malformed artifacts in Go
+and independent Concept Normal/Verify admission, plus the physical ABI-capacity
+sentinel rejection. Two source-free constructor-only artifacts (v8/v9) execute.
+Main native hosts exercise 40 inputs in each of two variants, six loop failure
+positions, exact floating bit vectors, and twenty external call/relay trials per
+shape/toolchain/host. Standalone and full-image preflight failures preserve code
+and image output before any executable mutation.
+
+The last coverage extension adds record-error and fixed-array-error propagation,
+exact floating Error bits across `?`, and Result<void,Item> propagation. It changes
+the new h5 fixture/pins from the earlier 57-function development image; historical
+h1–h4/schema byte expectations remain untouched. The new image hash is observed
+identically in both modes before pinning it. This fixture/harness-only follow-up
+reruns h5 and the real CLI batch; adjacent implementation regressions above need
+no second run because production code is unchanged. The round-trip host supplies
+262,144 output bytes; the final artifact uses 261,777. This is a harness span,
+not a new language or transport capacity claim.
+
+Full Go/corpus/Golden, full race/vet, all historical ABI probes, Standard/DragonGod,
+GPU-free Vulkan, full phase determinism and the complete qualification lane are
+deferred to EVT2h phase closeout under the revised policy. Selected earlier suites
+still execute all their own checks. Frozen Zig is skipped under unchanged legacy
+infrastructure policy. No deferred gate is recorded as passed.
+
+Native `!`, local try/except, owned/Drop-bearing or reference-bearing payloads,
+nested sums, general foreign Result interoperability, arbitrary untested
+expression contexts and standalone array ABI expansion remain unsupported or
+unqualified as detailed in conformance. Verdict and EVT2h6 are not implemented.
+Work stops after EVT2h5.
 
 ## EVT2h4 native Option qualification
 

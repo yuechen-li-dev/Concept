@@ -10,6 +10,43 @@ at `1058c86`; source-bootstrap facts are separately identified in the evidence.
 Earlier milestone tables below retain their historical qualification boundaries.
 Closed Option status is [EVT2h4 native execution](#evt2h4-closed-option-authority),
 qualified through the existing tagged/pattern/aggregate mechanisms.
+Closed Result and `?` status is [EVT2h5 milestone verification](#evt2h5-closed-result-and-propagation-authority),
+with focused independent evidence rather than phase-level qualification.
+
+## EVT2h5 closed Result and propagation authority
+
+Baseline `065317d`; preimplementation semantic inventory `c78b310`; independent
+bootstrap sequencing correction `8b064a6`; native implementation `f283a0b`;
+phase-test scheduling `2ccaf3a`; additional propagation coverage `ac840ae`. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h5--closed-native-result-and-propagation)
+and [focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+The existing checker owns Result<T,E>, Ok/Error, void success, must_use,
+copy/ownership rules, exact E compatibility and explicit `? else` remapping.
+Go projects checked closed generic identities and lowers `?` into the existing
+exhaustive match CFG, ordinary logical value slots and early return. It does not
+realize native Result storage or invent cleanup semantics.
+
+CMIRAMD8/9 schemas, generated codecs, hashes and historical byte fixtures remain
+unchanged. Concept admission extends existing v9 checked enum-alias eligibility
+for payload fields and admits constructor-only enum/tagged domains without
+fabricated pattern flows. Actual test/require/binding operations still need
+their complete checked scope, dominance, initialization and active-arm authority.
+Both Go and artifact-only Concept reject malformed propagation graphs. A raw
+discriminant never substitutes for active-variant proof.
+
+Cathedral's existing Concept tagged copier, object placement, allocation, frame,
+Win64 aggregate classifier and encoder own every physical decision. Ok and Error
+select only their meaningful fields; void Ok authorizes no payload access. There
+is no Result-specific copier, ABI planner, registry, union engine or production
+Go native algorithm. Independent strict C11 and MSVC/clang-cl probes distinguish
+the private native shape from the bootstrap's legacy Result compatibility ABI.
+The 61-function image is 107,444 bytes, frames 40..488 with six floating spills.
+The ordinary milestone uses ten fresh Result trials; existing selected 100-run
+regression gates remain intact and the phase lane retains 100 Result trials.
+This evidence does not claim project-wide phase qualification.
+
+Native `!`, local try/except, ownership/Drop cleanup, nested sums and unqualified
+reference-bearing alternatives remain deferred. Verdict is not implemented.
 
 ## EVT2h4 closed Option authority
 
