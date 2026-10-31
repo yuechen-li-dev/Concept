@@ -1,3 +1,7 @@
 // expect: CV4115
 profile Core;
-int Bad(Option<int> value) { return match (value) { Option::Some(number) => number }; }
+int Bad(Option<int> value) {
+    return match (value) {
+        Option::Some(number) => number
+    };
+}

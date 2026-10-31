@@ -1,3 +1,5 @@
 // expect: CV4103
 profile Core;
-Option<int> Bad() { return Option::Other; }
+Option<int> Bad() {
+    return Option::Other;
+}

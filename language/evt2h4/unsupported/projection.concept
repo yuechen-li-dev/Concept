@@ -1,3 +1,5 @@
 // expect: EVT2H4_UNSUPPORTED_OPTION_OPERATOR
 profile Core;
-int Forward(ref Option<int> value) { return OptionValue(ref value); }
+int Forward(ref Option<int> value) {
+    return OptionValue(ref value);
+}
