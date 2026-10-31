@@ -416,7 +416,7 @@ func TestEVT2g3bNativeReferences(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			outputs := backendTestOutputs(t, verify)
-			runFoundationNativeHarnessOutput(t, outputs, "references_artifact.c", harness, "-pedantic-errors", "-O2", "-DREFERENCE_NATIVE_ONLY=1")
+			runFoundationNativeHarnessOutput(t, outputs, "references_artifact.c", "#define REFERENCE_NATIVE_ONLY 1\n"+harness, "-pedantic-errors", "-O2")
 			actual, err := os.ReadFile(filepath.FromSlash(dump))
 			if err != nil {
 				t.Fatal(err)

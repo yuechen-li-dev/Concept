@@ -9,6 +9,7 @@ import (
 )
 
 func TestEVT2f4ScalarSSEPrimitives(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("actual Win64 XMM entrypoints require Windows AMD64")
 	}
@@ -122,6 +123,7 @@ int main(void){
 `
 
 func TestEVT2f4SourceNativeScalar(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("Win64 native execution")
 	}
