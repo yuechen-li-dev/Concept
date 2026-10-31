@@ -8,6 +8,43 @@ Native match authority is described in the [EVT2h3 conformance record](../confor
 Its native/C11 Normal/Verify, 100-run and full regression qualification passes
 at `1058c86`; source-bootstrap facts are separately identified in the evidence.
 Earlier milestone tables below retain their historical qualification boundaries.
+Closed Option status is [EVT2h4 native execution](#evt2h4-closed-option-authority),
+qualified through the existing tagged/pattern/aggregate mechanisms.
+
+## EVT2h4 closed Option authority
+
+Baseline `408db17`; semantic inventory `609494d`; implementation `10be4cb`.
+See [conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h4--closed-native-option-applications).
+The existing Stage-0 checker owns intrinsic Option meaning, contextual closed
+constructor types, generic argument canonicalization, copyability, matching,
+initialization and source propositions. Its checked producer now routes the
+intrinsic enum view through the existing sum-type LIR, using structured closed
+GenericApplication identity. This is semantic production, not native lowering.
+
+CMIRAMD8/9 remain frozen. The Concept-authored schemas/codecs already carry
+canonical type/variant/field geometry, complete construction, copy permission,
+source correspondence, CFG and active selection/binding authority. Cathedral
+independently admits source-free artifacts and reuses h2/h3 physical storage,
+tag dispatch, recursive active-field logical copy, guarded reads, aggregate
+Win64 calls, scalar allocation, unified frames and encoding. None never grants
+Some access. There is no Option-specific classifier, copier, layout engine or
+Go production native algorithm.
+
+Independent execution covers eight closed applications, direct/indirect and
+hidden returns, stack arguments, recursion, ordered matches, exact floating
+bits, spills, protected inactive storage, strict C11 and MSVC/clang-cl probes.
+Go retains external malformed/sentinel/byte/determinism/oracle orchestration.
+The two Concept facts exercise source-to-C semantics, separately from native
+evidence. Full Go/vet and focused race pass; native/C11 Normal/Verify and all
+fresh gates pass. See convergence for the executed commands and qualified
+eight-application subset. The full lane improves from measured 2,208.808 s
+to 1,319.57 s without changing compiler/native authority.
+
+Throughput changes are test-only. Run-local immutable C object reuse consumes
+exact compiler/target/flags/source/transitive include bytes; unknown include
+dependencies disable reuse. No checked result, plan, artifact or emission is
+cached. Independent native families use the existing bounded Go scheduler and
+isolated paths; no production compiler ownership changes.
 
 ## EVT2h3 checked match authority
 
