@@ -374,6 +374,7 @@ func TestEVT2g3bBridgeAdmission(t *testing.T) {
 }
 
 func TestEVT2g3bNativeReferences(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("actual Win64 execution requires Windows AMD64")
 	}

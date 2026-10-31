@@ -186,6 +186,7 @@ func TestEVT2h3MalformedContracts(t *testing.T) {
 	t.Logf("%d malformed contracts rejected by independent Go consistency checks", len(cases))
 }
 func TestEVT2h3MalformedArtifactAdmission(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	cases := patternBadArtifacts(t)
 	dir := t.TempDir()

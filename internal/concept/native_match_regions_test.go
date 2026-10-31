@@ -15,6 +15,7 @@ import (
 // is inside an if. Runtime assertions are independent C/native differential
 // probes over the same authoritative source used by the malformed CFG test.
 func TestEVT2h3ConditionalNativeExecution(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")

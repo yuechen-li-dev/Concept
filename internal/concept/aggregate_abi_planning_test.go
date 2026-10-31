@@ -38,6 +38,7 @@ func aggregateABIFixture(t *testing.T) (MachineModule, []byte) {
 }
 
 func TestEVT2g4ArtifactOnlyPlanning(t *testing.T) {
+	t.Parallel()
 	machine, data := aggregateABIFixture(t)
 	dir := t.TempDir()
 	artifact := filepath.Join(dir, "checked.cmir")

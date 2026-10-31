@@ -17,6 +17,7 @@ import (
 )
 
 func TestEVT2h2NativeExecution(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")
@@ -435,6 +436,7 @@ func rawTagged(t *testing.T, m TaggedModule) []byte {
 }
 
 func TestEVT2h2LocalModulePreflight(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	path := "../../tests/runtime/Testing/TaggedLocals.concept"
 	source, err := os.ReadFile(path)
@@ -485,6 +487,7 @@ typedef int(*Entry)(int);Entry entry;void*p=memory+image.symbols.data[0].offset;
 	}
 }
 func TestEVT2h2TaggedArtifactAdmission(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	_, _, _, machine, valid := nativeTaggedFixture(t)
 	blob, err := json.Marshal(machine.Tagged)

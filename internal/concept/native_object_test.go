@@ -12,6 +12,7 @@ import (
 )
 
 func TestEVT2g3NativeObjects(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("Win64 native execution requires Windows AMD64")
 	}
