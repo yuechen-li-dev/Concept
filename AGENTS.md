@@ -22,6 +22,19 @@ Any partial work must leave the codebase in a cleaner, more legible, and more di
 
 ## Test ownership and iteration
 
+- Follow [the EVT2 qualification policy](docs/tooling/EVT2-QUALIFICATION-POLICY.md),
+  effective 2026-10-31. Ordinary milestones require focused native/C11,
+  Normal/Verify, malformed-input and adjacent regression evidence, with a small,
+  justified fresh determinism sample. Full project qualification is not an
+  ordinary milestone prerequisite. The next planned major checkpoint is EVT2h
+  phase closeout, tentatively EVT2h9.
+- Expand testing immediately for changes to shared ABI, allocation, frame
+  planning, encoding, transport compatibility or other high-risk infrastructure;
+  do not wait for the planned checkpoint. Preserve existing cases, scripts,
+  independent oracles, golden expectations and full 100-run gates; change their
+  scheduling, not verification logic.
+- Report evidence status as IMPLEMENTED, MILESTONE VERIFIED or FULLY QUALIFIED
+  using that policy. Do not carry a baseline's full qualification onto new work.
 - Run `./test.ps1` for the default quick loop. It runs Concept runtime and leaf
   backend component facts in Normal and Verify, plus workflow/CLI frontend checks.
 - Runtime behavior assertions belong in `.concept_test` files under `tests/runtime`

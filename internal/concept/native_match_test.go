@@ -112,6 +112,7 @@ func patternAdmissionOutputs(t *testing.T, verify bool) Outputs {
 	return build.outputs
 }
 func TestEVT2h3ArtifactAdmission(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	dir := t.TempDir()
 	var cases strings.Builder

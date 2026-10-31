@@ -50,6 +50,7 @@ func nativeCommand(t testing.TB, name string, args ...string) *exec.Cmd {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.Cleanup(cancel)
 	cmd := exec.CommandContext(ctx, name, args...)
+	qualificationCommand(t, cmd)
 	cmd.Cancel = func() error {
 		if ctx.Err() == context.DeadlineExceeded {
 			t.Logf("NATIVE_TIMEOUT: killed after %s: %s %s", timeout, name, strings.Join(args, " "))

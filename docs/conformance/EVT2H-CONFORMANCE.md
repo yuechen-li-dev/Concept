@@ -1,8 +1,151 @@
 # EVT2h — enum conformance
 
-Current EVT2h3 status: **SUCCESS — native checked match and full qualification**.
-See [native match](#evt2h3--native-checked-match). The ordinary-enum and
-initial checked-LIR entries below retain their historical evidence and limits.
+Current EVT2h4 status: **SUCCESS — bounded native Option and throughput
+qualification**. Implementation `10be4cb`, specimen formatting/LF `a5588b9`;
+the final closeout changes evidence records only. Historical sections retain
+the evidence and boundaries at their respective checkpoints.
+
+## EVT2h4 — closed native Option applications
+
+Actual baseline: clean main and fetched origin/main
+`408db1720fdf72381069cbc8f5a5feaa6633816a`, with no intervening commits.
+Compiler `concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64.
+Inventory `609494d`; native checked production/fixtures `10be4cb`.
+Harness-only profiling/reuse changes are independently reviewable in
+`679bc86`, `3c5b6eb` and `5ba39d8`. No remote branches were changed.
+
+### Source and checked representation
+
+The [inventory](../design/EVT2H4-CHECKED-OPTION.md) records the existing intrinsic
+definition: `Option<T>`, Some(value: T) tag **0**, None tag **1**. Constructors
+require an expected closed type; Stage-0 preserves that complete type on the
+checked constructor. Exhaustive Some/None matching, arm-local mutable copied
+bindings, subjectless ordered guards, copyability, initialization and trusted
+semantic propositions retain their existing checker authority. Equality and
+public SizeOf/AlignOf are not added. Variant-attached guards and enum wildcards
+remain invalid source forms, as in h3.
+
+Closed applications use the existing structured GenericApplication identity:
+intrinsic declaration `(module="", name="Option")` and one ordered canonical
+type argument, including nested generic application identity where applicable.
+Display names and ordinary integer width are not identity. Same-sized
+Option<int>, Option<float>, Option<bool> and narrow integer applications remain
+distinct throughout layouts, constructors, projections and call signatures.
+
+Only semantic production changes in Go: lower the checked intrinsic enum view
+through the existing tagged layout/constructor/match paths. No production Go
+Option storage, copy, allocation, ABI, instruction selection or encoding engine
+is introduced. Cathedral's existing Concept implementation admits and realizes
+these values without an Option-specific physical path.
+
+### Frozen transport and native realization
+
+No successor schema is needed. Constructor-only applications use CMIRAMD8;
+applications with matches use CMIRAMD9. The full fixture's canonical artifact
+is **117,108 bytes**, SHA256
+`410976620e998aac75eb2e79e1cc0949c01cb05f595516bb3f4fc6b7c1794f88`.
+CMIRAMD3–9 schema, generated Go/Concept codecs, metadata and historical byte
+fixtures are unchanged. V9 schema SHA256 remains
+`77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c`.
+
+Canonical object type/domain/variant/field records retain nominal application,
+checked geometry, copy permission and initialization. Existing v9 test/require
+sites, immutable scrutinee slots, ordered CFG edges, binding scopes and result
+joins govern active access. Concept admission independently verifies these
+relationships from artifacts; no domain source or production runtime registry
+is needed. A forged numeric tag cannot establish payload access authority.
+
+Construction, variant replacement and copies reuse h2's tag dispatch and
+recursive fieldwise logical copier. Only live fields are semantic values;
+inactive bytes and padding are not copied as payload. Storage uses ordinary
+object slots and the unified frame planner, with no hidden allocation. The
+same scalar encoder/allocation path realizes the selected live fields.
+
+| Executed closed application | Size / alignment | Win64 carrier |
+| --- | --- | --- |
+| Option<int>, Option<float>, Option<bool>, Option<uint8>, Option<uint16> | 8 / 4 | direct eight-byte aggregate |
+| Option<double> | 16 / 8 | indirect argument / hidden result |
+| Option<Item>, Item = C-represented copyable record { int; double; } | 24 / 8 | indirect argument / hidden result |
+| Option<int<array>[3]> | 16 / 4 | indirect argument / hidden result |
+
+The checked private tagged storage policy is shared with h2; it does not grant
+source-level C enum or C++ variant interoperability. Independent C probes use
+explicitly agreed struct shapes. No niche or null-pointer packing is claimed.
+Eight physical arguments, including the hidden result pointer, remain the ABI
+limit. The source-valid eight-explicit-argument hidden-return specimen transports
+successfully but Cathedral preflight rejects it with
+`AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED`, preserving code/image sentinels.
+
+### Independent execution and negative evidence
+
+`tests/runtime/Testing/Options.concept` is the authoritative 34-function fixture.
+Two `.concept_test` facts exercise existing source semantics through C in both
+modes; they are not native evidence. External native hosts first execute the
+artifact without the domain C oracle linked, then independently compile and
+execute the same checked source with strict C11 (`-pedantic-errors -O2`).
+MSVC and clang-cl DLLs independently call native constructors and mixed calls,
+and relay direct/indirect values back to native consumers, 100 times per shape.
+
+Native coverage includes None/Some, all eight applications, eligible local
+copies and isolated array/record bindings, same/different variant replacement,
+branches, loops, early returns, recursion, nested matches, Option-valued result
+joins, single scrutinee evaluation, ordered side effects/guards, seven explicit
+mixed arguments plus hidden result, fifth/later stack positions and live XMM
+spills. Binary32/64 probes preserve negative zero, an adjacent finite value,
+quiet-NaN payload bits and the least subnormal. A None value at a protected
+page boundary proves that inactive payload storage is not read. A forged tag
+traps inside native code in a separate finished executable path.
+
+Six malformed checked LIR cases reject closed identity/layout, inactive access,
+wrong field type, missing pattern authority and copy permission. Nine invalid
+source specimens retain CV4106/CV4540/CV4028/CV4114/CV4573/CV4115/CV4116/CV4107/
+CV4103. Six source-valid native boundaries reject nested sums, owning payloads,
+reference payloads and `?`, `!`, OptionValue with precise existing h2 or explicit
+`EVT2H4_UNSUPPORTED_OPTION_OPERATOR` diagnostics.
+
+Twenty-nine malformed v9 artifacts independently reject in Go and Concept:
+closed-type/call/result mismatches, inactive None access, constructor arity/
+initialization, variants/tags/identities, geometry/types/copy representation,
+missing selection/correspondence/bindings, scope/CFG/result/provenance corruption,
+capacity, version/hash, truncation and trailing data. Normal and Verify retain
+round-trip, code and image sentinels on every rejection. Diagnostics include
+CMIRAMD9_PATTERN_DOMAIN, VARIANT_OPERATION, OBJECT_CONTRACT, PAYLOAD_BINDING, RESULT_JOIN,
+PATTERN_CFG, CAPACITY_EXCEEDED, VERSION_MISMATCH, SCHEMA_HASH_MISMATCH and MALFORMED.
+
+The native image is **45,901 bytes**, 34 symbols / 22 resolved calls, frames
+**40..408 bytes**, with **four floating spills**. Both modes pin SHA256
+`5d5b8746bd74e74b50d40f8cc7dbe5e680597c6c00ba732d33be33fa8bc90316`.
+Qualification performs 100 fresh source/LIR/CFG/MachineIR/debug generations,
+100 exact valid Concept round trips per mode, 100 complete physical plans per
+function and 100 full fresh emissions per mode, comparing code, symbols and
+fixups. Oracle executions are separate from those fresh native gates.
+
+In the final full run at `10be4cb`, native emission samples are 318 ms in each
+mode, including admission/preflight; 100 complete physical-plan sets are
+3.559 s Normal / 3.677 s Verify. Fresh source/CFG/artifact generation and codecs
+take 1.550 s for 100 runs. Native Option execution is 84.84 s for both modes;
+independent artifact/sentinel admission is 22.88 s. Canonical formatting/LF
+follow-up `a5588b9` changes only negative/ABI-boundary specimens and is rechecked
+with focused diagnostics and race admission. The authoritative executed positive
+source and all pinned artifact/native bytes remain unchanged.
+
+Full-run measurements and gate outcomes are recorded in the
+[convergence record](../history/milestones/EVT2H-CONVERGENCE.md#evt2h4-native-option-qualification)
+and [throughput evidence](../tooling/EVT2H4-QUALIFICATION-THROUGHPUT.md).
+Full uncached Go/native qualification and vet pass: 1,319.57 s, 935 passed
+families; compiler/native 1,310.377 s, CLI 143.971 s, GPU-free Vulkan 0.443 s.
+Focused race passes (481.521 s package / 494.193 s wall), including both native
+modes, malformed admission, include-closure invalidation, Concept facts and
+workflow policy. Standard/DragonGod pass Normal/Verify. Eight legacy C11 tests
+skipped for missing MSVC shell includes in the full lane are executed and pass
+in the developer environment. The remaining two ordinary-run skips are the
+unrelated opt-in collector burn-in and the subprocess-only worker parent role.
+Frozen Zig suites are skipped under the unchanged-infrastructure policy.
+Nested Option/sums, owning/move-only/Drop/reference-bearing payloads, raw storage,
+unknown layouts, general foreign ABI, native `?`, `!`, OptionValue and wider
+integer domains without specific Option execution evidence remain unqualified.
+Result/Verdict, ownership/Drop, object output and optimizations are deferred.
+Stop at EVT2h4; a subsequent mission requires separate review.
 
 ## EVT2h3 — native checked match
 

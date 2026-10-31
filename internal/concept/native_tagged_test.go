@@ -17,6 +17,7 @@ import (
 )
 
 func TestEVT2h2NativeExecution(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")
@@ -92,6 +93,10 @@ func TestEVT2h2NativeExecution(t *testing.T) {
 }
 
 func buildTaggedProbe(t *testing.T, compiler string) string {
+	return buildIndependentSumProbe(t, compiler, "../../language/evt2h2/probes/tagged.c")
+}
+
+func buildIndependentSumProbe(t *testing.T, compiler, source string) string {
 	t.Helper()
 	cl, err := exec.LookPath("cl")
 	if err != nil {
@@ -109,7 +114,7 @@ func buildTaggedProbe(t *testing.T, compiler string) string {
 	}
 	setup := filepath.Join(vc, "Auxiliary", "Build", "vcvars64.bat")
 	dir := t.TempDir()
-	body, err := os.ReadFile("../../language/evt2h2/probes/tagged.c")
+	body, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,6 +440,7 @@ func rawTagged(t *testing.T, m TaggedModule) []byte {
 }
 
 func TestEVT2h2LocalModulePreflight(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	path := "../../tests/runtime/Testing/TaggedLocals.concept"
 	source, err := os.ReadFile(path)
@@ -485,6 +491,7 @@ typedef int(*Entry)(int);Entry entry;void*p=memory+image.symbols.data[0].offset;
 	}
 }
 func TestEVT2h2TaggedArtifactAdmission(t *testing.T) {
+	t.Parallel()
 	requireNativeQualification(t)
 	_, _, _, machine, valid := nativeTaggedFixture(t)
 	blob, err := json.Marshal(machine.Tagged)

@@ -144,6 +144,9 @@ func (b *lirBuilder) lowerMatch(subject Expr, patterns []Pattern, resultSlot int
 		variant := VariantDecl{}
 		if lirEnumType(t) || lirTaggedType(t) {
 			decl := b.env.enums[st.Name]
+			if evt1IsOptionType(st) {
+				decl, _ = evt1FailureEnumDecl(st)
+			}
 			variant, _ = evt1LookupVariant(decl, p.VariantName)
 			snapshot := b.emit(LIRInstruction{Op: "load_slot", Result: 0, Type: t, Slot: subjectSlot, Source: span})
 			op, result, rt := "test_variant", 0, LIRType("bool")

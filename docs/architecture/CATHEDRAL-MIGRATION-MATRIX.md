@@ -6,6 +6,30 @@ with full qualification passed at `59788a4`.
 Current matching stage: [EVT2h3 native checked match](#evt2h3-native-checked-match).
 Full qualification passes at `1058c86`, including native/C11 and 100-run gates.
 Earlier stage tables retain their historical qualification boundaries.
+Closed Option stage: [EVT2h4 native execution](#evt2h4-closed-native-option),
+with full qualification and measured throughput improvement.
+
+## EVT2h4 closed native Option
+
+Baseline `408db17`, checked implementation `10be4cb`, formatting `a5588b9`.
+Native/C11 Normal/Verify, 100-run, full Go/vet and focused race pass. Final
+qualification is recorded in
+[convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h4-native-option-qualification).
+
+| Decision | Authority / reused mechanism | Tested boundary |
+| --- | --- | --- |
+| Intrinsic Option, Some/None, closed arguments, contextual constructors | Existing Stage-0 semantics and generic identity | No source syntax/equality/public geometry changes |
+| Checked nominal application and sum operations | Stage-0 LIR/MachineIR semantic production | Eight closed applications; matching uses existing CFG and scopes |
+| Versioned artifact contract | Existing Concept-owned CMIRAMD8/9 and generated codecs | Frozen CMIRAMD3–9 unchanged; no successor needed |
+| Source-free type/layout/initialization/copy/active-selection admission | Existing Concept tagged/pattern validators | 29 malformed Option artifacts; code/image/round-trip sentinels |
+| Storage, construction, replacement, copies and binding | Existing Concept h2/h3 slots, tag dispatch, active-field recursion and guarded reads | No inactive payload/padding semantics, nested/owning/reference-bearing payloads |
+| Win64 calls, results and physical realization | Existing Concept aggregate classifier/frame/allocator/encoder | Direct 8-byte values; indirect larger values, hidden returns, eight physical positions |
+| Language facts | Concept .concept_test via C bootstrap | Two new facts, distinct from native execution evidence |
+| Native independent qualification | Go external orchestration; strict C11/MSVC/clang-cl, protected page and native traps | 34 functions, 45,901 bytes, frames 40..408; 100 fresh generations/plans/emissions |
+| Qualification throughput | Go test-only immutable builds/isolated scheduling and optional PowerShell profiler | No result/plan/output cache, no fresh-gate or oracle reduction |
+
+Native Option operators `?`, `!`, OptionValue, nested sums/options, ownership/
+Drop, Result/Verdict and foreign representation contracts remain later work.
 
 ## EVT2h3 native checked match
 

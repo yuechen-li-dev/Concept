@@ -2,13 +2,20 @@
 
 ## Start here
 
+The [EVT2 qualification policy](EVT2-QUALIFICATION-POLICY.md), effective
+2026-10-31, schedules full project qualification at major checkpoints rather
+than every ordinary milestone. The next planned checkpoint is EVT2h phase
+closeout, tentatively EVT2h9. Expand testing immediately for changes to shared
+ABI, allocator, frame planner, encoder, transport compatibility or other
+high-risk infrastructure. Historical qualification results below remain intact.
+
 ```powershell
 ./test.ps1                                           # default quick loop
 ./test.ps1 -Lane Runtime -Filter Enum                 # one group of Concept facts
 ./test.ps1 -Lane Runtime -Path tests/backend -Filter Argument
 ./test.ps1 -Lane Runtime -Filter Enum -Verify
 ./test.ps1 -Lane Compiler                             # broad short Go conformance sweep
-./test.ps1 -Lane Qualification                        # complete Go/native gates and vet
+./test.ps1 -Lane Qualification                        # major checkpoint: full Go/native gates and vet
 ```
 
 The quick loop runs Concept runtime specifications and leaf backend component
@@ -18,6 +25,14 @@ compiler/corpus/determinism sweep and can take minutes; it is the Compiler lane,
 not the default edit loop. Qualification retains native execution, external ABI
 and independent C oracles, every full determinism repetition, corpus and Golden
 checks. Skipped native checks in the Compiler lane are reported explicitly.
+
+For ordinary milestone completion, run focused native execution, independent
+C11 differential checks, Normal/Verify parity, malformed-input cases and selected
+adjacent regressions. Use a small justified fresh determinism sample and record
+the exact commands, counts and outcomes. Existing 100-run tests and scripts
+remain unchanged for checkpoint qualification. `-short` can skip native tests;
+it is not a substitute for focused native execution. Report IMPLEMENTED,
+MILESTONE VERIFIED or FULLY QUALIFIED according to evidence at the tested revision.
 
 Use `.concept_test` for runtime expectations, including tests of Concept-authored
 compiler algorithms. Group related facts in a module: its C compilation is shared

@@ -1,8 +1,115 @@
 # EVT2h convergence
 
-Current EVT2h3 status: **SUCCESS — native checked match and full qualification**.
-See [native match qualification](#evt2h3-native-match-qualification). Earlier closeouts below
-retain their historical outcomes and qualification boundaries.
+Current EVT2h4 status: **SUCCESS — bounded native Option and full qualification**.
+Earlier sections retain historical outcomes and boundaries.
+
+## EVT2h4 native Option qualification
+
+Started from clean synchronized main
+`408db1720fdf72381069cbc8f5a5feaa6633816a`, not from an assumed historical branch.
+Inventory `609494d` follows inspection of source Option, generic identity,
+proof/failure facts, C lowering, h2/h3 LIR/transport/admission and native ABI.
+Compiler `concept-evt1-stage0-go`, Windows AMD64 / Microsoft x64.
+
+Implementation `10be4cb` adds only checked semantic production and fixtures.
+Existing intrinsic Some tag0 / None tag1 and contextual constructor resolution
+feed the same tagged and match paths. Structured closed GenericApplication
+identity replaces the ordinary enum declaration key for Option. CMIRAMD8/9
+already express every required fact; all frozen v3–9 contracts remain unchanged.
+Concept's existing admission, guarded reads, active-field copier, slots, scalar
+allocator, frame, ABI and encoder execute the applications. No new Option
+native algorithm, generic engine, bridge or layout/copy engine was needed.
+
+Focused native/C11 Normal/Verify and both independent MSVC/clang-cl caller/callee
+probes pass. The source-free native host runs before linking the domain oracle.
+The 34-function image is 45,901 bytes, 22 calls, frames 40..408, four XMM spills;
+SHA256 `5d5b8746bd74e74b50d40f8cc7dbe5e680597c6c00ba732d33be33fa8bc90316`.
+The canonical v9 artifact is 117,108 bytes, SHA256
+`410976620e998aac75eb2e79e1cc0949c01cb05f595516bb3f4fc6b7c1794f88`.
+All 100 fresh source/transport/plan/emission gates retain full counts. Six LIR,
+29 artifact, nine source-invalid and six native-unsupported cases reject. The
+eight-explicit-argument hidden-return boundary is independently rejected by
+Cathedral physical preflight with unchanged output/image sentinels.
+
+Iteration exposed two existing source/ABI limits without changing them: record
+fields are immutable (use an ordinary replacement value for copied bindings),
+and a hidden result consumes one of the existing eight physical argument slots.
+The positive mixed-call specimen uses seven explicit parameters; the rejected
+nine-position form remains a permanent negative probe. None-at-page-boundary
+and invalid-tag child probes retain unique executable paths on Windows.
+
+The mandatory throughput work is separately identifiable: observer `679bc86`,
+exact include-closure reuse / isolated test scheduling `3c5b6eb`, and profiled
+full workflow plus scalar scheduling `5ba39d8`. Baseline measurement at h3 is
+2,208.19 s uncached Go, with a separately measured 0.62 s vet stage. The
+[throughput record](../../tooling/EVT2H4-QUALIFICATION-THROUGHPUT.md) distinguishes
+observed wall time, process counts, immutable build reuse and actual fresh gates.
+No validation count or independent oracle is removed.
+
+Final implementation is `10be4cb`; canonical negative specimen formatting/LF
+follow-up is `a5588b9`. Formatting changes no executable positive source or
+pinned bytes and is rechecked by focused diagnostics and race admission. Final
+closeout changes evidence records only. Detailed local logs are under ignored
+`artifacts/evt2h4/`; the profiling command and summarizer are committed.
+
+| Executed gate | Outcome |
+| --- | --- |
+| Final default `./test.ps1` | PASS, 18.21 s; 30 facts per mode, no whole-Cathedral build |
+| Full `./test.ps1 -Lane Qualification -ProfileDirectory artifacts/evt2h4/after` | PASS, 1,319.57 s including vet/report; uncached Go 1,317.301 s |
+| Compiler/native / CLI / GPU-free Vulkan packages | PASS, 1,310.377 / 143.971 / 0.443 s |
+| Full top-level families | 935 passed / 10 prerequisite-or-role skips, zero failures |
+| Supplemental eight legacy strict C11 specimens in MSVC developer environment | PASS, 1.470 s package; clears eight full-lane environment skips |
+| Focused race: h4, cache invalidation/reuse, runtime/backend facts and workflow policy | PASS, 481.521 s package / 494.193 s wall; full native counts retained |
+| Standard CLI Normal / Verify | 44 passed plus three benchmarks each, 41.099 / 41.602 s |
+| DragonGod CLI Normal / Verify | 23 passed plus one benchmark each, 5.711 / 5.721 s |
+| Fresh h4 source/LIR/CFG/MachineIR/debug + codecs, 100 | PASS, 1.550 s in full run |
+| H4 source-free valid round trips / malformed artifacts | PASS, 100 per mode / 29 cases; all sentinels; 22.88 s family |
+| H4 native-only followed by strict C11/native oracle, both modes | PASS, 84.84 s family; exact bits, protected None, trap and both DLL toolchains |
+| H4 physical plans / emissions | PASS, 100 complete sets per mode; plans 3.559 / 3.677 s; emission samples 318 / 318 ms |
+| Frozen v3–9, h1–h3/g5, corpus, Golden, generated outputs, checked outputs, package, policy | PASS within the full lane; no frozen bridge file changes |
+| Windows trap executable regression | PASS, TestExplicitCastCore 2.46 s; distinct paths retained |
+| Go build, gofmt, new Concept fixture/specimen format, lint, generated inspection, diff | PASS; generated inspection correctly has no new public generated declarations |
+
+The two remaining ordinary-run skips are TestCollectorHundredRunDeterminism
+(unrelated R7fR opt-in burn-in) and TestEVT2h3ArtifactProcessWorker (subprocess-only
+worker; the existing driver separately exercises its 100-process gate). Root
+and legacy Zig suites are skipped because their infrastructure is unchanged.
+No required h4 test is skipped. TinyXML and adjacent Oct checks execute in main;
+they were absent from the isolated baseline checkout's prerequisites.
+
+Exact focused race command:
+
+```powershell
+go test -race ./internal/concept -run '^(TestEVT2h4.*|TestNativeFixtureHeaderClosure.*|TestRuntimeWorkflowPolicy|TestRuntimeConceptSpecifications|TestBackendConceptSpecifications)$' -count=1 -parallel=4 -timeout=15m -v
+```
+
+Library commands are `concept test libraries/Standard --module-root libraries
+--verbose` and the corresponding DragonGod command, each repeated with
+`--verify`. `go build ./...` and changed-Go `gofmt -l` pass. The new authoritative
+Option fixture and fact file pass CLI format/lint; all sixteen negative and
+native-boundary specimens pass canonical formatting and diagnostics recheck.
+
+Observed throughput improves **2,208.808 -> 1,319.57 s**, **1.674x / 40.26%**,
+with 13 more passed families and additional Option oracles. Shared semantic/C
+builds remain two; backend C object cold builds fall 43 -> 12, all observed
+reusable C objects 46 -> 17, and nativeCommand launches 1,976 -> 1,965. The named
+oracle/parity compilation subset grows 16 -> 18. All old 100-run gates remain;
+new h4 gates add fresh source, plans and emissions. Peak memory is unmeasured.
+The sub-20-minute stretch goal is missed; remaining h3 native and independent
+oracle/validator execution costs are measured, not declared inevitable.
+
+The baseline observer patch/logs are preserved before restoring its checkout
+clean. The app prevents archiving that attached checkout because it designates
+it as this task's primary checkout. Closeout mirrors qualified main there as a
+clean detached snapshot, avoiding a stale h3 starting point. No additional task
+branch or remote changes are created, and unrelated worktrees remain intact.
+
+**SUCCESS — EVT2h4 native Option and throughput qualification complete.**
+
+The [conformance record](../../conformance/EVT2H-CONFORMANCE.md#evt2h4--closed-native-option-applications)
+states the exact tested domain and unsupported boundaries. The two new Concept
+facts are C-bootstrap evidence; independent emitted code establishes native
+execution. No Result/Verdict/Drop/ownership/COFF or EVT2h5 work is begun.
 
 ## EVT2h3 native match qualification
 

@@ -102,6 +102,10 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 		return "", fmt.Errorf("EVT2_UNSUPPORTED_OBJECT_AUTHORITY %s", t.String())
 	}
 	t = t.valueType()
+	if evt1IsOptionType(t) {
+		decl, _ := evt1FailureEnumDecl(t)
+		return a.lowerTaggedEnum(t, decl)
+	}
 	if decl, ok := a.env.enums[t.Name]; ok {
 		return a.lowerEnum(t, decl)
 	}

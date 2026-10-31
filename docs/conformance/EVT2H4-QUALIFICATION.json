@@ -1,0 +1,159 @@
+{
+  "milestone": "EVT2h4",
+  "status": "SUCCESS",
+  "baseline": "408db1720fdf72381069cbc8f5a5feaa6633816a",
+  "implementation": "10be4cb1205f9988957dfb0852ea3531b4b345ca",
+  "specimen_format": "a5588b91b83e4b4c6d5f2fb1c99bb0e16426b23c",
+  "compiler": "concept-evt1-stage0-go",
+  "target": "Windows AMD64 / Microsoft x64",
+  "contracts": [
+    8,
+    9
+  ],
+  "frozen_contracts": "CMIRAMD3-9 unchanged",
+  "closed_applications": [
+    "Option<int>",
+    "Option<double>",
+    "Option<float>",
+    "Option<bool>",
+    "Option<uint8>",
+    "Option<uint16>",
+    "Option<Item>",
+    "Option<int<array>[3]>"
+  ],
+  "artifact": {
+    "bytes": 117108,
+    "sha256": "410976620e998aac75eb2e79e1cc0949c01cb05f595516bb3f4fc6b7c1794f88"
+  },
+  "native": {
+    "normal_verify_identical": true,
+    "plan100_ms": [
+      3559,
+      3677
+    ],
+    "abi_probes": [
+      "MSVC",
+      "clang-cl"
+    ],
+    "sha256": "5d5b8746bd74e74b50d40f8cc7dbe5e680597c6c00ba732d33be33fa8bc90316",
+    "functions": 34,
+    "floating_spills": 4,
+    "calls": 22,
+    "bytes": 45901,
+    "c11_parity": true,
+    "frames": [
+      40,
+      408
+    ],
+    "artifact_only": true,
+    "sample_emission_ms": [
+      318,
+      318
+    ]
+  },
+  "fresh_counts": {
+    "valid_concept_roundtrips_per_mode": 100,
+    "full_native_emissions_per_mode": 100,
+    "source_lir_cfg_machine_debug_generations": 100,
+    "physical_plans_per_function_per_mode": 100
+  },
+  "negative": {
+    "sentinels_preserved": true,
+    "malformed_lir": 6,
+    "source_invalid": 9,
+    "physical_abi_capacity": 1,
+    "source_valid_unsupported": 6,
+    "malformed_artifacts": 29
+  },
+  "qualification": {
+    "race_wall_seconds": 494.1925124,
+    "quick_seconds": 18.21,
+    "race_package_seconds": 481.521,
+    "go_exit": 0,
+    "gpu_free_vulkan_seconds": 0.443,
+    "root_legacy_zig": "Skipped unchanged frozen infrastructure",
+    "compiler_seconds": 1310.377,
+    "remaining_skips": [
+      "unrelated opt-in R7fR collector burn-in",
+      "subprocess-only worker parent role"
+    ],
+    "cli_seconds": 143.971,
+    "ordinary_skips": 10,
+    "legacy_sdk_skips_supplemented": 8,
+    "race_exit": 0,
+    "vet_exit": 0,
+    "passed_families": 935
+  },
+  "throughput": {
+    "shared_cathedral_generations": [
+      2,
+      2
+    ],
+    "wall_speedup": 1.6738847704934183,
+    "fact_executions_per_mode": [
+      28,
+      30
+    ],
+    "observed_native_commands": [
+      1976,
+      1965
+    ],
+    "wall_reduction_percent": 40.258731208527244,
+    "passed_families": [
+      922,
+      935
+    ],
+    "measurement_scope": "Before is sum of measured Go and separate vet stages; after includes profile reporting. Native command counts cover nativeCommand, not all descendants. Baseline overlaps development; after executes more prerequisite-dependent cases. Supplemental race/library gates are timed separately.",
+    "after_script_wall_seconds": 1319.57,
+    "cli_cold_builds": [
+      2,
+      2
+    ],
+    "cold_backend_c_objects": [
+      43,
+      12
+    ],
+    "named_oracle_parity_compile_subset": [
+      16,
+      18
+    ],
+    "observed_command_cpu_seconds": [
+      1097.34375,
+      1201.484375
+    ],
+    "peak_tree_memory": null,
+    "warm_c_objects": [
+      59,
+      97
+    ],
+    "baseline_go_seconds": 2208.1859796,
+    "baseline_stage_sum_seconds": 2208.8081266,
+    "baseline_separately_measured_vet_seconds": 0.622147,
+    "observed_gcc_commands": [
+      837,
+      816
+    ],
+    "cli_cases": [
+      12,
+      13
+    ],
+    "after_vet_seconds": 1.3997576,
+    "cold_all_reused_c_objects": [
+      46,
+      17
+    ],
+    "after_go_seconds": 1317.3006667,
+    "observed_clang_commands": [
+      135,
+      135
+    ]
+  },
+  "unsupported": [
+    "nested sums/Options",
+    "owning/move-only/Drop/reference-bearing payloads",
+    "native ? / ! / OptionValue",
+    "general foreign enum ABI",
+    "untested wider Option domains",
+    "Result / Verdict / ownership / COFF / new optimizations"
+  ]
+}

@@ -1,9 +1,49 @@
 # Concept-owned iteration workflow, 2026-10-29
 
+Scheduling update, effective 2026-10-31: follow the
+[revised EVT2 qualification policy](EVT2-QUALIFICATION-POLICY.md). Ordinary
+milestones use focused evidence; the full workflow is reserved for major
+checkpoints and warranted infrastructure-risk escalation. Next planned major
+checkpoint: EVT2h phase closeout, tentatively EVT2h9. Existing scripts, test
+logic, 100-run gates and the historical measurements below are unchanged.
+
 The default development command is `./test.ps1`. It executes the ordinary
 Concept test framework in Normal and Verify for runtime and leaf backend facts,
 then checks the CLI frontend and workflow policies. Full native qualification
 is explicit: `./test.ps1 -Lane Qualification`. See [TESTING.md](TESTING.md).
+
+EVT2h4 retains that default and adds an optional measured full lane:
+
+```powershell
+./test.ps1 -Lane Qualification -ProfileDirectory artifacts/qualification/current
+```
+
+It executes the same uncached full suite and vet, saves Go JSON family/package
+timings plus opt-in immutable-build/process observations, and generates
+`summary.json` using `tools/qualification/report.ps1`. It does not use Go test
+result caching or cache fresh semantic generation, artifacts, plans or code.
+The [EVT2h4 throughput record](EVT2H4-QUALIFICATION-THROUGHPUT.md) gives the
+measured before/after results, count scope, isolation and remaining bottlenecks.
+Use a distinct profile directory for each retained run.
+
+Within one qualification process, generated C objects now key the actual
+transitive literal include closure, compiler executable/target and exact flags.
+Changing a used header invalidates reuse; an unrelated oracle header does not
+force a rebuild of unchanged Cathedral. Unknown/macro includes or unsupported
+dependency configurations disable reuse conservatively. Harness-only native/
+oracle selection macros are defined in their host translation units, so they
+do not change Cathedral object build flags. No persistent build/result cache
+is introduced. Compatible native families use the existing `-parallel=4`
+scheduler with independent harnesses, artifacts, executables and outputs.
+Tests that mutate process environment remain serial. Windows trap executables
+retain separate finished paths; simultaneous tests cannot overwrite them.
+
+Two Option facts bring Quick to 30 facts per mode (26 runtime, four backend),
+60 executions. They reuse the authoritative 34-function Option specimen through
+C bootstrap. External native/oracle/ABI qualification remains in the full lane.
+At EVT2h4 closeout Quick passes in 18.21 s; measured full qualification improves
+from 2,208.808 s to 1,319.57 s (40.26%) with expanded coverage. Exact measurement
+scope and the missed sub-20-minute stretch goal are retained in the evidence.
 
 EVT2h3 adds CMIRAMD9 artifact/CFG admission and 100 complete native match
 planning/emission gates. Qualification now permits 45 minutes per Go package;

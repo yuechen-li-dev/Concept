@@ -597,6 +597,17 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	case *IfExpr:
 		return b.ifExpression(e)
 	case *ConstructExpr:
+		if e.EnumName == evt1OptionName {
+			if !evt1IsOptionType(e.ResolvedType) {
+				return 0, "", fmt.Errorf("EVT2H4_OPTION_REQUIRES_CLOSED_TYPE")
+			}
+			decl, _ := evt1FailureEnumDecl(e.ResolvedType)
+			typ, err := b.lowerType(e.ResolvedType)
+			if err != nil {
+				return 0, "", err
+			}
+			return b.taggedConstruction(e, decl, typ)
+		}
 		decl, ok := b.env.enums[e.EnumName]
 		if !ok {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_ENUM_CONSTRUCTOR %s", e.EnumName)
@@ -652,6 +663,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		return b.emit(LIRInstruction{Op: "fneg", Result: 0, Type: t, Args: []int{v}, Slot: -1, Source: e.Span}), t, nil
 	case *CallExpr:
+		if e.Intrinsic == "option_value" {
+			return 0, "", fmt.Errorf("EVT2H4_UNSUPPORTED_OPTION_OPERATOR OptionValue")
+		}
 		if e.Intrinsic != "" || e.Member || e.Receiver != nil || e.CallableInvoke || e.DynDispatch || e.resolvedSignature == "" {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL %s at %d:%d", e.Callee, e.Span.Line, e.Span.Column)
 		}
@@ -783,6 +797,11 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		v, typ := b.loadMachineField(id, e.Span)
 		return v, typ, nil
+	case *FailureExpr:
+		if evt1IsOptionType(e.ResolvedType) {
+			return 0, "", fmt.Errorf("EVT2H4_UNSUPPORTED_OPTION_OPERATOR %s", e.Op)
+		}
+		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	case *StructConstructExpr:
 		return b.recordConstruction(e)
 	case *WithExpr:

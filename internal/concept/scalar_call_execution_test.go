@@ -9,6 +9,7 @@ import (
 )
 
 func TestEVT2f5NativeMixedCalls(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("actual mixed Win64 entrypoints require Windows AMD64")
 	}

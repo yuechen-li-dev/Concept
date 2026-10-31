@@ -1,0 +1,211 @@
+module Testing.Options;
+profile Core;
+
+[[repr(C)]] record struct Item {
+    int count;
+    double amount;
+}
+Option<int> MakeInt(bool present, int value) {
+    if (present) { return Option::Some(value); }
+    return Option::None;
+}
+Option<double> MakeDouble(bool present, double value) {
+    return if (present) Option::Some(value) else Option::None;
+}
+Option<float> MakeFloat(bool present, float value) {
+    if (present) { return Option::Some(value); }
+    return Option::None;
+}
+Option<bool> MakeBool(bool present, bool value) {
+    if (present) { return Option::Some(value); }
+    return Option::None;
+}
+Option<uint8> MakeByte(bool present, uint8 value) {
+    if (present) { return Option::Some(value); }
+    return Option::None;
+}
+Option<uint16> MakeWord(bool present, uint16 value) {
+    if (present) { return Option::Some(value); }
+    return Option::None;
+}
+Option<Item> MakeItem(bool present, int count) {
+    if (present) {
+        return Option::Some(Item{count, 3.5});
+    }
+    return Option::None;
+}
+Option<int<array>[3]> MakeArray(bool present) {
+    if (present) { return Option::Some([3, 6, 9]); }
+    return Option::None;
+}
+int IntValue(Option<int> value) {
+    return match (value) {
+        Option::Some(number) => number, Option::None => - 1
+    };
+}
+double DoubleValue(Option<double> value) {
+    return match (value) {
+        Option::None => - 1.0, Option::Some(number) => number
+    };
+}
+float FloatValue(Option<float> value) {
+    return match (value) {
+        Option::Some(number) => number, Option::None => - 1.0
+    };
+}
+bool BoolValue(Option<bool> value) {
+    return match (value) {
+        Option::Some(answer) => answer, Option::None => false
+    };
+}
+uint8 ByteValue(Option<uint8> value) {
+    return match (value) {
+        Option::Some(number) => number, Option::None => 0
+    };
+}
+uint16 WordValue(Option<uint16> value) {
+    return match (value) {
+        Option::Some(number) => number, Option::None => 0
+    };
+}
+Item ItemValue(Option<Item> value) {
+    return match (value) {
+        Option::Some(item) => item, Option::None => Item{- 1, 0.0}
+    };
+}
+int ArrayValue(Option<int<array>[3]> value) {
+    return match (value) {
+        Option::Some(numbers) => numbers[0] + numbers[2], Option::None => - 1
+    };
+}
+Option<int> Replace(Option<int> value, int next) {
+    Option<int> copy = value;
+    value = Option::None;
+    copy = Option::Some(next);
+    value = copy;
+    return value;
+}
+int LocalCopies(int value) {
+    Option<int> first = Option::Some(value);
+    Option<int> second = first;
+    first = Option::None;
+    int total = IntValue(first) + IntValue(second);
+    first = Option::Some(value + 10);
+    second = first;
+    return total + IntValue(second);
+}
+Option<Item> RecordCopy(Option<Item> value) {
+    Option<Item> copy = value;
+    match (value) {
+        Option::Some(item) => {
+            item = Item{item.count + 1, item.amount};
+            value = Option::Some(item);
+        }
+        Option::None => {
+            value = Option::Some(Item{4, 1.0});
+        }
+    }
+    return copy;
+}
+int MutateArrayBinding(Option<int<array>[3]> value) {
+    int count = 0;
+    match (value) {
+        Option::Some(numbers) => {
+            numbers[0] = 99;
+            count = numbers[0];
+        }
+        Option::None => {
+            count = - 1;
+        }
+    }
+    return count + ArrayValue(value);
+}
+Option<int> AcrossBranches(Option<int> value, int count) {
+    for (i in 0 .. count) {
+        match (value) {
+            Option::Some(number) => {
+                if (number < 0) { return Option::None; }
+                value = Option::Some(number + 1);
+            }
+            Option::None => {
+                value = Option::Some(i);
+            }
+        }
+    }
+    return value;
+}
+Option<int> Recursive(Option<int> value, int count) {
+    if (count == 0) { return value; }
+    return Recursive(Replace(value, IntValue(value) + 1), count - 1);
+}
+bool Mark(ref int log, int digit, bool answer) {
+    log = log * 10 + digit;
+    return answer;
+}
+int Guarded(Option<int> value, ref int log) {
+    return match (value) {
+        Option::Some(number) => match {
+            when Mark(ref log, 1, number < 0) => - 1,
+            when Mark(ref log, 2, number == 0) => 0,
+            otherwise => number
+        },
+        Option::None => - 2
+    };
+}
+Option<int> Subject(ref int calls, int value) {
+    calls++;
+    return Option::Some(value);
+}
+int Once(ref int calls, int value) {
+    return match (Subject(ref calls, value)) {
+        Option::Some(number) => number, Option::None => - 1
+    };
+}
+Option<double> Mixed(Option<int> first, int bias, double amount, ref int calls,
+Option<double> fifth, float sixth, bool seventh) {
+    calls++;
+    int total = IntValue(first) + bias;
+    double source = DoubleValue(fifth);
+    if (seventh) {
+        if (total > 0) {
+            if (sixth == 1.25) { return Option::Some(source + amount); }
+        }
+    }
+    return Option::None;
+}
+double Seven(double a, double b, double c, double d, double e, double f, double g) {
+    return a + b + c + d + e + f + g;
+}
+Option<double> FloatingPressure(double a, double b, double c, double d, double e, double f, double g) {
+    double total = Seven(g, f, e, d, c, b, a);
+    double live = a + b + c + d + e + f + g;
+    return Option::Some(total + live);
+}
+double SpillMatch(double a, double b, double c, double d, double e, double f, double g) {
+    return DoubleValue(FloatingPressure(a, b, c, d, e, f, g));
+}
+double MixedCaller(int first, int last, ref int calls) {
+    Option<int> a = MakeInt(true, first);
+    Option<double> b = MakeDouble(true, 3.5);
+    return DoubleValue(Mixed(a, last, 2.0, ref calls, b, 1.25, true));
+}
+Option<int> MatchResult(Option<int> value) {
+    return match (value) {
+        Option::Some(number) => MakeInt(true, number + 1),
+        Option::None => MakeInt(false, 0)
+    };
+}
+int Nested(Option<int> value, bool choice) {
+    return match (value) {
+        Option::Some(number) => match (MakeBool(true, choice)) {
+            Option::Some(answer) => if (answer) number else 0,
+            Option::None => - 2
+        },
+        Option::None => - 1
+    };
+}
+Option<double> FloatCopy(Option<double> value) {
+    Option<double> copy = value;
+    value = Option::None;
+    return copy;
+}

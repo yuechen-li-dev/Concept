@@ -134,6 +134,7 @@ func TestEVT2h1ImportedIdentity(t *testing.T) {
 	}
 }
 func TestEVT2h1NativeExecution(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("requires Windows AMD64")
 	}
@@ -193,6 +194,7 @@ func TestEVT2h1NativeExecution(t *testing.T) {
 }
 
 func TestEVT2h1Admission(t *testing.T) {
+	t.Parallel()
 	_, _, machine, valid := enumFixture(t)
 	type specimen struct {
 		name string

@@ -1,0 +1,6 @@
+// expect: AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED
+profile Core;
+Option<double> TooMany(Option<int> first, int second, double third, ref int fourth,
+Option<double> fifth, float sixth, bool seventh, int eighth) {
+    return Option::Some(third);
+}

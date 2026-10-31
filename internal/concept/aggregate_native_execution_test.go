@@ -54,6 +54,7 @@ func buildAggregateProbe(t *testing.T, compiler string) string {
 }
 
 func TestEVT2g5ExternalABI(t *testing.T) {
+	t.Parallel()
 	_, _, machine, data := aggregateExecutionFixture(t)
 	var definitions strings.Builder
 	definitions.WriteString("static const unsigned char artifact[]={")
@@ -158,6 +159,7 @@ int main(void){concept_readonly_span_byte src={artifact,sizeof artifact};concept
 }
 
 func TestEVT2g5MalformedArtifacts(t *testing.T) {
+	t.Parallel()
 	_, _, machine, _ := aggregateExecutionFixture(t)
 	base, _ := json.Marshal(machine.Borrow)
 	ordinal := func(m *BorrowModule, name string) int {
@@ -261,6 +263,7 @@ VirtualFree(memory,0,MEM_RELEASE);FreeLibrary(dll);return 0;}
 `
 
 func TestEVT2g5NativeSmoke(t *testing.T) {
+	t.Parallel()
 	machine, data := aggregateABIFixture(t)
 	var c strings.Builder
 	c.WriteString("#include \"amd64.generated.h\"\n#include <windows.h>\n#include <stdio.h>\n#include <string.h>\n#define F(n) concept_standard__backend__amd64_##n\nstatic unsigned char artifact[]={")
@@ -319,7 +322,7 @@ VirtualFree(memory,0,MEM_RELEASE);return 0;}
 `)
 	for _, verify := range []bool{false, true} {
 		outputs := backendTestOutputs(t, verify)
-		runFoundationNativeHarnessOutput(t, outputs, "native_aggregate_smoke.c", c.String(), "-pedantic-errors", "-O2", "-DG4_NATIVE_ONLY=1")
+		runFoundationNativeHarnessOutput(t, outputs, "native_aggregate_smoke.c", "#define G4_NATIVE_ONLY 1\n"+c.String(), "-pedantic-errors", "-O2")
 		path := "../../language/evt2g4/valid/aggregate_abi.concept"
 		source, err := os.ReadFile(path)
 		if err != nil {
@@ -385,6 +388,7 @@ func TestEVT2g5FreshCheckedInput(t *testing.T) {
 }
 
 func TestEVT2g5NativeExecution(t *testing.T) {
+	t.Parallel()
 	m, source, machine, data := aggregateExecutionFixture(t)
 	dir := t.TempDir()
 	var definitions strings.Builder
@@ -408,7 +412,7 @@ func TestEVT2g5NativeExecution(t *testing.T) {
 		dump := filepath.Join(dir, mode+".bin")
 		host := strings.Replace(aggregateExecutionHost, "/* ARTIFACT */", definitions.String(), 1)
 		host = strings.Replace(host, "/* IMAGE_DUMP */", fmt.Sprintf("%q", filepath.ToSlash(dump)), 1)
-		runFoundationNativeHarnessOutput(t, outputs, "aggregate_artifact_only.c", host, "-pedantic-errors", "-O2", "-DG5_NATIVE_ONLY=1")
+		runFoundationNativeHarnessOutput(t, outputs, "aggregate_artifact_only.c", "#define G5_NATIVE_ONLY 1\n"+host, "-pedantic-errors", "-O2")
 		image, err := os.ReadFile(dump)
 		if err != nil {
 			t.Fatal(err)

@@ -2,14 +2,13 @@ package concept
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 var nativeFixtureBuilds = struct {
@@ -44,20 +43,13 @@ func nativeFixtureObjects(t *testing.T, outputs Outputs, compiler string, flags 
 		if !strings.HasSuffix(source, ".generated.c") {
 			continue
 		}
-		h := sha256.New()
-		fmt.Fprintf(h, "%q %q %q", compiler, flags, source)
-		for _, name := range names {
-			if strings.HasSuffix(name, ".c") && name != source {
-				continue
-			}
-			if name != source && !strings.HasSuffix(name, ".h") && !strings.HasSuffix(name, ".inc") {
-				continue
-			}
-			fmt.Fprintf(h, "%d:%s%d:", len(name), name, len(outputs[name]))
-			h.Write(outputs[name])
+		key, cacheable := nativeFixtureKey(outputs, source, compiler, flags)
+		object := ""
+		if cacheable {
+			object = nativeFixtureBuilds.objects[key]
 		}
-		key := fmt.Sprintf("%x", h.Sum(nil))
-		object := nativeFixtureBuilds.objects[key]
+		profileStart := time.Now()
+		profileCold := object == ""
 		if object == "" {
 			dir, err := os.MkdirTemp("", "concept-go-fixture-")
 			if err != nil {
@@ -73,9 +65,12 @@ func nativeFixtureObjects(t *testing.T, outputs Outputs, compiler string, flags 
 			if out, err := nativeCommand(t, compiler, args...).CombinedOutput(); err != nil {
 				t.Fatalf("native fixture compile failed: %v\n%s", err, out)
 			}
-			nativeFixtureBuilds.objects[key] = object
+			if cacheable {
+				nativeFixtureBuilds.objects[key] = object
+			}
 		}
 		objects = append(objects, object)
+		qualificationEvent(t, "native-object", profileStart, map[string]any{"cold": profileCold, "key": key, "source": source, "compiler": compiler, "flags": flags})
 	}
 	if len(objects) == 0 {
 		t.Fatal("generated C output missing")
@@ -97,7 +92,10 @@ func backendTestOutputs(t *testing.T, verify bool) Outputs {
 		index = 1
 	}
 	build := &backendFixtureBuilds[index]
+	profileStart := time.Now()
+	profileCold := false
 	build.Do(func() {
+		profileCold = true
 		path := "../../libraries/Standard/Backend/AMD64.concept"
 		source, err := os.ReadFile(path)
 		if err != nil {
@@ -115,6 +113,7 @@ func backendTestOutputs(t *testing.T, verify bool) Outputs {
 		}
 		build.outputs, build.err = GenerateForTargetWithPolicy(module, source, GenericC11Target(), policy)
 	})
+	qualificationEvent(t, "cathedral-generation", profileStart, map[string]any{"cold": profileCold, "verify": verify})
 	if build.err != nil {
 		t.Fatal(build.err)
 	}

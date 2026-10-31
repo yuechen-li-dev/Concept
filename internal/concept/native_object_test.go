@@ -12,6 +12,7 @@ import (
 )
 
 func TestEVT2g3NativeObjects(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		t.Skip("Win64 native execution requires Windows AMD64")
 	}
@@ -70,7 +71,7 @@ func TestEVT2g3NativeObjects(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			outputs := backendTestOutputs(t, verify)
-			runFoundationNativeHarnessOutput(t, outputs, "native_objects_artifact_only.c", harness, "-pedantic-errors", "-O2", "-DOBJECT_NATIVE_ONLY=1")
+			runFoundationNativeHarnessOutput(t, outputs, "native_objects_artifact_only.c", "#define OBJECT_NATIVE_ONLY 1\n"+harness, "-pedantic-errors", "-O2")
 			policy := ConservativeCompilationPolicy()
 			if verify {
 				policy = VerifyCompilationPolicy()

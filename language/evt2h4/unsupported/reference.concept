@@ -1,0 +1,5 @@
+// expect: EVT2H2_UNSUPPORTED_PAYLOAD_TYPE
+profile Core;
+Option<ref int> Empty() {
+    return Option::None;
+}
