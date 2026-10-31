@@ -1,0 +1,3 @@
+// expect: CV4028
+profile Core;
+bool Bad(Option<int> left, Option<int> right) { return left == right; }

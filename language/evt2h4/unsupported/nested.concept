@@ -1,0 +1,3 @@
+// expect: EVT2H2_NESTED_TAGGED_ENUM
+profile Core;
+Option<Option<int>> Identity(Option<Option<int>> value) { return value; }

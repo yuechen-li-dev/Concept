@@ -1,0 +1,5 @@
+// expect: EVT2H2_TAGGED_COPY_INELIGIBLE
+profile Core;
+struct Resource { int value; }
+void Drop(owned Resource resource);
+Option<owned Resource> Empty() { return Option::None; }

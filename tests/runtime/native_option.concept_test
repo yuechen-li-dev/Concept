@@ -1,0 +1,33 @@
+module Testing.NativeOptionFacts;
+profile Core;
+import Testing.Options;
+
+[[fact]] void ClosedOptionValues() {
+    Assert.Equal(IntValue(MakeInt(true, 42)), 42, "Some integer");
+    Assert.Equal(IntValue(MakeInt(false, 42)), - 1, "None does not read payload");
+    Assert.Equal(DoubleValue(MakeDouble(true, 3.5)), 3.5, "double application");
+    Assert.Equal(BoolValue(MakeBool(true, true)), true, "boolean application");
+    Assert.Equal(ArrayValue(MakeArray(true)), 12, "fixed-array binding");
+    Assert.Equal(MutateArrayBinding(MakeArray(true)), 111, "binding has isolated array value");
+    Assert.Equal(ItemValue(RecordCopy(MakeItem(true, 9))).count, 9, "record copy isolation");
+    Assert.Equal(LocalCopies(7), 23, "Some/None local replacement");
+    Assert.Equal(IntValue(AcrossBranches(MakeInt(false, 0), 3)), 2, "Option across loop branches");
+    Assert.Equal(IntValue(Recursive(MakeInt(true, 4), 3)), 7, "recursive Option return");
+    Assert.Equal(IntValue(MatchResult(MakeInt(true, 4))), 5, "Option match result");
+    Assert.Equal(Nested(MakeInt(true, 4), true), 4, "nested closed applications");
+}
+[[fact]] void OptionEvaluationAndCalls() {
+    int calls = 0;
+    Assert.Equal(Once(ref calls, 19), 19, "single scrutinee evaluation");
+    Assert.Equal(calls, 1, "scrutinee count");
+    int log = 0;
+    Assert.Equal(Guarded(MakeInt(true, 7), ref log), 7, "guard payload use");
+    Assert.Equal(log, 12, "ordered guards execute once");
+    log = 0;
+    Assert.Equal(Guarded(MakeInt(false, 0), ref log), - 2, "None arm");
+    Assert.Equal(log, 0, "irrelevant guards are skipped");
+    calls = 0;
+    Assert.Equal(MixedCaller(10, 20, ref calls), 5.5, "hidden return and stack arguments");
+    Assert.Equal(calls, 1, "native mixed call effect");
+    Assert.Equal(SpillMatch(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0), 56.0, "live floating spills feed Option match");
+}

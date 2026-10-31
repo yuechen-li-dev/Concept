@@ -1,0 +1,3 @@
+// expect: CV4107
+profile Core;
+Option<int> Bad() { return Option::Some(true); }

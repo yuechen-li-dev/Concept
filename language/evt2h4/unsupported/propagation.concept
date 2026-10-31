@@ -1,0 +1,3 @@
+// expect: EVT2H4_UNSUPPORTED_OPTION_OPERATOR
+profile Core;
+Option<int> Forward(Option<int> value) { int number = value?; return Option::Some(number); }

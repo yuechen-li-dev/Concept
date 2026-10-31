@@ -32,6 +32,14 @@ func lirTaggedIdentity(layout LIRTaggedEnum) LIRType {
 
 func (a *lirAggregateTypes) lowerTaggedEnum(t Type, decl EnumDecl) (LIRType, error) {
 	key := decl.Module + "|" + decl.Name
+	if evt1IsOptionType(t) {
+		// Project the checked intrinsic application through the existing
+		// structured generic identity; never key closed options by bare Name.
+		key = evt1GenericApplicationKey(&GenericApplication{
+			Declaration: GenericDeclarationIdentity{Name: evt1OptionName},
+			Arguments:   []GenericArgument{{Kind: "type", Type: evt1GenericIdentityType(evt1CanonicalType(a.env, t.TypeArgs[0]))}},
+		})
+	}
 	for active := range a.visiting {
 		if strings.HasPrefix(active, "tagged:") {
 			return "", fmt.Errorf("EVT2H2_NESTED_TAGGED_ENUM %s", t.String())

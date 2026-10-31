@@ -1,0 +1,3 @@
+// expect: CV4540
+profile Core;
+int Bad() { Option::Some(1); return 0; }

@@ -1,0 +1,3 @@
+// expect: CV4573
+profile Core;
+int Bad() { return SizeOf<Option<int>>(); }

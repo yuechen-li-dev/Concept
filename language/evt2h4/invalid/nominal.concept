@@ -1,0 +1,3 @@
+// expect: CV4116
+profile Core;
+Option<float> Bad(Option<int> value) { return value; }
