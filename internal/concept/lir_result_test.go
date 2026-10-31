@@ -67,7 +67,7 @@ func TestEVT2h5CheckedResult(t *testing.T) {
 func TestEVT2h5Determinism(t *testing.T) {
 	start := time.Now()
 	_, _, lir, machine, data := resultFixture(t)
-	if got := fmt.Sprintf("%x", sha256.Sum256(data)); got != "2281a385066d2e289da8f158b9e5bc2ea68432d59d5b1b337eecbf43b0096334" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(data)); got != "df95976a73a53afc06d280ebc13b31d00aeb47086aa6dd9274947bb938fdad2d" {
 		t.Fatalf("exact Result artifact changed: %s", got)
 	}
 	for trial := 0; trial < resultSamples(); trial++ {

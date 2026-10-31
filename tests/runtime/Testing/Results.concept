@@ -308,3 +308,20 @@ Result<int, ParseError> Conditional(bool valid, int value) {
     if (Positive(valid, value) ?) { return Result::Ok(9); }
     return Result::Ok(0);
 }
+Result<int, Item> RecordErrorForward(bool valid, int count) {
+    int value = RecordError(valid, count) ?;
+    return Result::Ok(value + 2);
+}
+Result<int, int<array>[3]> ArrayErrorForward(bool valid) {
+    int value = ArrayError(valid) ?;
+    return Result::Ok(value + 2);
+}
+Result<int, double> DoubleErrorForward(bool valid, double value) {
+    int number = DoubleError(valid, value) ?;
+    return Result::Ok(number + 2);
+}
+Result<void, Item> VoidRecordTwice(bool valid) {
+    VoidRecord(valid) ?;
+    VoidRecord(true) ?;
+    return Result::Ok;
+}

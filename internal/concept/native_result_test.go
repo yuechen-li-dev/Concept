@@ -69,7 +69,7 @@ func TestEVT2h5NativeResult(t *testing.T) {
 				t.Fatal("Normal/Verify bytes differ")
 			}
 			t.Logf("native=%d sha256=%x", len(code), sha256.Sum256(code))
-			if got := fmt.Sprintf("%x", sha256.Sum256(code)); got != "d556ccc3a47634f4697dfd5cf3c01572e46c00f50731445e9b8b2dad23ebfda2" {
+			if got := fmt.Sprintf("%x", sha256.Sum256(code)); got != "34c260bb98b31437371fcc19df53a8f192dd9da870bcd795dc27521ddbe5c464" {
 				t.Fatalf("exact Result native bytes changed: %s", got)
 			}
 			policy := ConservativeCompilationPolicy()
@@ -168,6 +168,8 @@ int main(int argc,char**argv){
   RItem item=FN(MakeItem,MakeItem)(valid,i);Item isolated=FN(ItemValue,ItemValue)(FN(RecordCopy,RecordCopy)(item));CHECK(isolated.count==(valid?i:-1));CHECK(FN(RecordErrorCode,RecordErrorCode)(FN(RecordError,RecordError)(valid,i))==(valid?i:i+1));
   CHECK(FN(ArrayValue,ArrayValue)(FN(MakeArray,MakeArray)(valid))==(valid?12:-1));CHECK(FN(MutateArrayBinding,ArrayValue)(FN(MakeArray,MakeArray)(valid))==(valid?15:-2));CHECK(FN(ArrayErrorCode,ArrayValue)(FN(ArrayError,ArrayError)(valid))==(valid?1:14));CHECK(FN(VoidRecordCode,VoidRecordCode)(FN(VoidRecord,VoidRecord)(valid))==(valid?8:7));
   CHECK(FN(ArrayValue,ArrayValue)(FN(ForwardArray,MakeArray)(valid))==(valid?12:-1));CHECK(FN(ItemValue,ItemValue)(FN(ForwardItem,MakeItem)(valid,i)).count==(valid?i:-1));
+  CHECK(FN(RecordErrorCode,RecordErrorCode)(FN(RecordErrorForward,RecordError)(valid,i))==(valid?i+2:i+1));CHECK(FN(ArrayErrorCode,ArrayValue)(FN(ArrayErrorForward,ArrayError)(valid))==(valid?3:14));CHECK(FN(VoidRecordCode,VoidRecordCode)(FN(VoidRecordTwice,VoidRecord)(valid))==(valid?8:7));
+  RDouble forwarded=FN(DoubleErrorForward,DoubleError)(valid,3.5);CHECK(forwarded.tag==(valid?0:1));if(valid)CHECK(forwarded.payload.error==7);else CHECK(FN(DoubleErrorValue,DoubleErrorValue)(forwarded)==3.5);
   CHECK(FN(LocalCopies,LocalCopies)(i)==2*i+8);CHECK(FN(Code,Code)(FN(Recursive,Recursive)(valid,3))==(valid?7:-2));CHECK(FN(PositiveValue,BoolValue)(FN(Positive,Positive)(valid,i))==(valid&&i>0));
   calls=0;CHECK(FN(Discard,Discard)(&calls)==1&&calls==1);CHECK(FN(Code,Code)(FN(Conditional,Parse)(valid,i))==(valid?(i?9:0):-2));
   int log=0;RInt ordered=FN(ExpressionOrder,Order)(&log,valid,i);CHECK(FN(Code,Code)(ordered)==(valid?i+4:-2)&&log==(valid?123:12));log=0;ordered=FN(ArgumentOrder,Order)(&log,valid,i);CHECK(FN(Code,Code)(ordered)==(valid?i+4:-2)&&log==(valid?123:12));log=0;ordered=FN(Remap,Order)(&log,valid,i);CHECK(FN(OtherCode,Code)(ordered)==(valid?i+1:-2)&&log==(valid?0:1));
@@ -176,6 +178,10 @@ int main(int argc,char**argv){
   CHECK(FN(DoubleValue,DoubleValue)(FN(FloatingPressure,Pressure)(1,2,3,4,5,6,7+i))==56.0+2*i);
   calls=0;RDouble fifth=FN(MakeDouble,MakeDouble)(valid,3.5);CHECK(FN(DoubleValue,DoubleValue)(FN(Mixed,Mixed)(a,100,2.0,&calls,fifth,1.25f,1))==(valid?5.5:-2)&&calls==valid);
 #ifndef RESULT_NATIVE_ONLY
+  if(valid)CHECK(concept_testing__results_double_error_forward(valid,3.5).payload.ok.value==7);
+  CHECK(FN(RecordErrorCode,RecordErrorCode)(FN(RecordErrorForward,RecordError)(valid,i))==concept_testing__results_record_error_code(concept_testing__results_record_error_forward(valid,i)));
+  CHECK(FN(ArrayErrorCode,ArrayValue)(FN(ArrayErrorForward,ArrayError)(valid))==concept_testing__results_array_error_code(concept_testing__results_array_error_forward(valid)));
+  CHECK(FN(VoidRecordCode,VoidRecordCode)(FN(VoidRecordTwice,VoidRecord)(valid))==concept_testing__results_void_record_code(concept_testing__results_void_record_twice(valid)));
   CHECK(FN(OtherCode,Code)(FN(Other,Parse)(valid,i))==concept_testing__results_other_code(concept_testing__results_other(valid,i)));
   CHECK(FN(FloatValue,FloatValue)(FN(MakeFloat,MakeFloat)(valid,1.25f))==concept_testing__results_float_value(concept_testing__results_make_float(valid,1.25f)));
   CHECK(FN(BoolErrorValue,BoolErrorValue)(FN(MakeBool,MakeBool)(valid,1))==concept_testing__results_bool_error_value(concept_testing__results_make_bool(valid,1)));
@@ -200,7 +206,9 @@ int main(int argc,char**argv){
  }
  uint64_t bits64[]={UINT64_C(0x8000000000000000),UINT64_C(0x3ff0000000000001),UINT64_C(0x7ff8000000001234),UINT64_C(1)};
  for(int i=0;i<4;i++){double value;uint64_t actual;memcpy(&value,&bits64[i],8);double found=FN(DoubleValue,DoubleValue)(FN(DoubleCopy,DoubleCopy)(FN(MakeDouble,MakeDouble)(1,value)));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);found=FN(DoubleErrorValue,DoubleErrorValue)(FN(DoubleError,DoubleError)(0,value));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);
+ found=FN(DoubleErrorValue,DoubleErrorValue)(FN(DoubleErrorForward,DoubleError)(0,value));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);
 #ifndef RESULT_NATIVE_ONLY
+ found=concept_testing__results_double_error_value(concept_testing__results_double_error_forward(0,value));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);
  found=concept_testing__results_double_value(concept_testing__results_double_copy(concept_testing__results_make_double(1,value)));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);found=concept_testing__results_double_error_value(concept_testing__results_double_error(0,value));memcpy(&actual,&found,8);CHECK(actual==bits64[i]);
 #endif
  }

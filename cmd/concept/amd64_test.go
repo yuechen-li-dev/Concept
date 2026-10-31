@@ -124,7 +124,7 @@ func TestAMD64CLIBatch(t *testing.T) {
 		{"ordinary-match", "../../tests/runtime/Testing/OrdinaryMatches.concept", "", []string{"functions=7", "frame size="}},
 		{"payload-match", "../../tests/runtime/Testing/TaggedMatches.concept", "", []string{"functions=35", "frame size=", "hidden-aggregate-return"}},
 		{"option", "../../tests/runtime/Testing/Options.concept", "", []string{"functions=34", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
-		{"result", "../../tests/runtime/Testing/Results.concept", "", []string{"functions=57", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
+		{"result", "../../tests/runtime/Testing/Results.concept", "", []string{"functions=61", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
 		{"calls", "../../internal/concept/testdata/evt2e_calls.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"floats", "../../language/evt2f/valid/scalars.concept", "", []string{"native image bytes=", "resolved=1"}},
 		{"zero", "", "int Target(){return 7;} int Caller(){return Target();}", []string{"call @Target|Target()", "shadow=32 stack-bytes=0", "return RAX ->"}},
