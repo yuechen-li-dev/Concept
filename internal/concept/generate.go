@@ -4151,6 +4151,14 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		if literal, ok := e.Right.(*FloatLiteral); ok && evt1IsFloating(leftType) {
 			right, rightType = evt1RenderFloatLiteral(literal, leftType), leftType
 		}
+		if resultQuestion(e.Left) || resultQuestion(e.Right) {
+			// A propagation prelude can return. Complete the earlier operand
+			// before entering it, rather than leaving its call in a C expression.
+			leftTemp, rightTemp := f.nextTemp("fallible_left"), f.nextTemp("fallible_right")
+			leftPrelude += ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(leftType), leftTemp, left)
+			rightPrelude += ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(rightType), rightTemp, right)
+			left, right = leftTemp, rightTemp
+		}
 		if (e.Op == "==" || e.Op == "!=") && leftType.Kind == TypeEnum && leftType.SameValueType(rightType) {
 			boolType, _ := evt1BuiltinType("bool", e.Span)
 			return leftPrelude + rightPrelude, fmt.Sprintf("((%s).tag %s (%s).tag)", left, e.Op, right), boolType
@@ -4568,6 +4576,17 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 		var rawArgs []string
 		var argTypes []Type
 		var contextualFn *FunctionDecl
+		if resultQuestions(e.Args) {
+			// Resolve from the already-checked signature before lowering any
+			// propagation prelude; do not re-type an argument out of its scope.
+			for _, candidate := range f.l.env.functions[e.Callee] {
+				if evt1FunctionParamSignature(candidate) == e.resolvedSignature {
+					copy := candidate
+					contextualFn = &copy
+					break
+				}
+			}
+		}
 		for _, arg := range e.Args {
 			if _, ok := arg.(*ArrayLiteralExpr); ok {
 				roughTypes := make([]Type, len(e.Args))
@@ -4591,6 +4610,19 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 				argPrelude, argExpr, argType = f.lowerExpr(arg, indent)
 			}
 			prelude.WriteString(argPrelude)
+			if resultQuestions(e.Args[i+1:]) && contextualFn != nil && (argType.isBorrowLike() || evt1TypeCopyable(f.l.env, argType)) && !evt1TypeHasDrop(f.l.env, argType) {
+				// The ordinary call path below already evaluates arguments into
+				// source-ordered temporaries. A later ? must not run before this
+				// argument's value. Keep implicit borrows on their original place.
+				param := contextualFn.Params[i].Type
+				if param.isBorrowLike() && !argType.isBorrowLike() {
+					argExpr = "&" + argExpr
+					argType = param
+				}
+				temp := f.nextTemp("fallible_arg")
+				prelude.WriteString(ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(argType), temp, argExpr))
+				argExpr = temp
+			}
 			argTypes = append(argTypes, argType)
 			rawArgs = append(rawArgs, argExpr)
 		}

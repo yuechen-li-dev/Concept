@@ -1,0 +1,39 @@
+module Testing.NativeResultFacts;
+profile Core;
+import Testing.Results;
+
+[[fact]] void ResultValuesAndPropagation() {
+    Assert.Equal(Code(Double(true, 7)), 14, "successful propagation");
+    Assert.Equal(Code(Double(false, 7)), - 2, "failed propagation");
+    Assert.Equal(LocalCopies(5), 18, "Ok/Error replacement and copy");
+    Assert.Equal(ItemValue(RecordCopy(MakeItem(true, 9))).count, 9, "record isolation");
+    Assert.Equal(MutateArrayBinding(MakeArray(true)), 15, "array binding isolation");
+    Assert.Equal(RecordErrorCode(RecordError(false, 9)), 10, "record error payload");
+    Assert.Equal(ArrayErrorCode(ArrayError(false)), 14, "array error payload");
+    Assert.Equal(Code(Recursive(true, 3)), 7, "recursive success");
+    Assert.Equal(Code(Recursive(false, 3)), - 2, "recursive error");
+    int calls = 0;
+    Assert.Equal(VoidCode(ValidateTwice(false, ref calls)), - 3, "void propagation");
+    Assert.Equal(calls, 1, "failure skips continuation");
+    calls = 0;
+    Assert.Equal(Code(Loop(5, 2, ref calls)), - 2, "loop early return");
+    Assert.Equal(calls, 3, "loop stops at first error");
+}
+[[fact]] void ResultEvaluationOrder() {
+    int log = 0;
+    Assert.Equal(Code(ExpressionOrder(ref log, true, 8)), 12, "binary propagation");
+    Assert.Equal(log, 123, "binary evaluation order");
+    log = 0;
+    Assert.Equal(Code(ArgumentOrder(ref log, false, 8)), - 2, "call argument propagation");
+    Assert.Equal(log, 12, "failure skips later arguments");
+    log = 0;
+    Assert.Equal(OtherCode(Remap(ref log, false, 8)), - 2, "explicit error remap");
+    Assert.Equal(log, 1, "remap runs once on failure");
+    log = 0;
+    Assert.Equal(OtherCode(Remap(ref log, true, 8)), 9, "success bypasses remap");
+    Assert.Equal(log, 0, "success does not evaluate remap");
+    int calls = 0;
+    Assert.Equal(DoubleValue(MixedCaller(true, true, ref calls)), 5.5, "mixed fallible calls");
+    Assert.Equal(calls, 1, "callee side effect");
+    Assert.Equal(DoubleValue(FloatingPressure(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)), 56.0, "live floating values across fallible call");
+}
