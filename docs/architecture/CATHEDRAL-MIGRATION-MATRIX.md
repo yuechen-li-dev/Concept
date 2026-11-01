@@ -10,6 +10,26 @@ Closed Option stage: [EVT2h4 native execution](#evt2h4-closed-native-option),
 with full qualification and measured throughput improvement.
 Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-result-and-fallible-control-flow).
 
+Native fallibility stage is [EVT2h7 milestone verification](#evt2h7-native-fallible-control-flow).
+
+## EVT2h7 native fallible control flow
+
+Baseline `e7d4f0e`; inventory `ef3bd4a`; contract `f5e30de`; native
+implementation/fixtures `ec8bc3a`. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h7--native-fallible-control-flow)
+and [focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+
+| Subsystem | Actual owner | Qualified boundary |
+| --- | --- | --- |
+| Option/Result legality, nominal E, lexical destination | Existing Go semantic checker | Plain Result ? nearest exact handler or compatible function; explicit remap and Option ? return through function |
+| Checked lowering and sequencing | Go target-independent LIR production; shared source sequencing predicate | One operand evaluation, scoped immutable handler bindings, ordinary checked CFG; C bootstrap is independent oracle |
+| Versioned transport | Concept BridgeSchema10, generated Go/Concept codecs | CMIRAMDA/version10, unchanged v9 base; try/handler/failure associations; v3–9 frozen |
+| Artifact-only admission | Concept BridgeValidate10 plus existing tagged/object/borrow/pattern validators | Active variants, nearest typed routes, all handler edges, internal input roles, initialization, guards and function failure returns |
+| Physical execution | Existing Concept Cathedral object/copy/ABI/allocator/frame/encoder/fixup modules | Explicit branches, active-field transfer and existing UD2; no new error runtime or physical fallibility algorithm |
+| Failure atomicity | Concept EmitModule preflight | Incomplete/unknown bridge identity rejects before legacy scratch-image reset; qualified object paths retain preflight sentinels |
+| Native verification | External Go/C hosts and isolated Windows child processes | Source-free execution, strict C11 differential values/order/bits, Normal/Verify parity, five exact traps, ten fresh samples; selected historical gates retain 100 |
+| Deferred | Existing explicit native unsupported boundaries | Owned/Drop/move-only cleanup, unqualified references/nested sums, general local arrays; no h8/h9 work |
+
 ## EVT2h6 comptime Verdict and native erasure
 
 Baseline `cb4201a`; inventory `0028e4f`; implementation `50d30c0`. Exact evidence/status are in

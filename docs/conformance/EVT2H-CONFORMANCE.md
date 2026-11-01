@@ -1,8 +1,148 @@
 # EVT2h — enum conformance
 
-Current EVT2h6 status: **MILESTONE VERIFIED — comptime Verdict and native erasure**.
+Current EVT2h7 status: **MILESTONE VERIFIED — native fallible control flow**.
 Historical sections retain the evidence and boundaries at their respective
 checkpoints. Ordinary milestone verification does not claim phase qualification.
+
+## EVT2h7 — native fallible control flow
+
+Starting checkout `e7d4f0ee57ea7cc8ba3e6f962a8587ab2d9d9489`, clean existing
+`codex/implement-native-ordinary-enums` worktree at
+`C:/Users/yuech/.codex/worktrees/evt2h4-profile-baseline/Concept`.
+Fetched `origin/main` (`065317d262c85ce159219561b0709526e7973c1f`) is an ancestor
+nine commits behind that baseline. No reset, remote branch manipulation or
+older checkpoint replay. Compiler `concept-evt1-stage0-go`, Windows AMD64,
+Microsoft x64 calling convention. Preimplementation inventory: `ef3bd4a`,
+[EVT2H7-FALLIBLE-CONTROL](../design/EVT2H7-FALLIBLE-CONTROL.md).
+The generated contract is `f5e30deac0b454681969ab81a67ddd86f4543c52`;
+native implementation, fixtures and harnesses are
+`ec8bc3a3ca5638c525971a0819ee39b66c6b6a6e`. The final closeout commit updates
+these evidence/authority records only.
+
+### Source contract and lowering
+
+The existing parser/checker/C bootstrap remain the source authority. Both
+Option<T> and Result<T,E> support postfix `!` and `?`; Result<void,E> success has
+no fabricated payload. `!` evaluates once, requires success, and escalates
+failure (C bootstrap panic/abort, native existing UD2 trap). It never invokes
+an except handler. Successful extraction uses the checked active field.
+
+Plain Result `?` chooses the nearest enclosing exact canonical E handler.
+An unmatched inner handler does not hide a matching outer one. Without a
+matching handler, propagation requires an enclosing Result return with exactly
+the same E. `? else expression` explicitly remaps into the enclosing function's
+error return and bypasses local handlers; only failure evaluates the remap.
+Option `?` always returns None through the enclosing Option-returning function,
+even within a try. It has no typed local error to catch.
+
+A normal try completion skips handlers and joins after the try. Failure skips
+remaining try statements and initializes only the selected immutable handler
+binding. Handler names exist only in their handler; try-body locals do not
+escape into handlers. Failures raised inside a handler can reach outer handlers
+or the function, not another arm of that same try. Loops, matches, branches,
+early returns and ordinary calls retain their existing meanings.
+
+Checked LIR uses ordinary snapshots, discriminant tests, branches, checked
+payload reads, logical slot initialization and return/jump instructions. A bang
+is a one-arm success guard, using the existing require_variant trap operation.
+Local failure edges transfer the active Error binding to an internal input slot
+in the surrounding scope, then initialize the user binding in its handler scope.
+No physical address substitutes for nominal identity or variant authority.
+
+The shared source-expression sequencing predicate now recognizes Option `?`
+and both bang forms, as well as Result `?`. Both checked LIR and independent C
+bootstrap preserve already-evaluated arguments across the inserted CFG. No new
+source spelling, evaluator, native copying algorithm or physical instruction is
+introduced.
+
+### Versioned contract and Cathedral authority
+
+Frozen CMIRAMD9 requires exhaustive pattern flows and cannot express a partial
+success guard or authorized exits from a pattern region into local handlers.
+**CMIRAMD10** uses eight-byte magic `CMIRAMDA` (A = hexadecimal ten), numeric
+version 10 and the established 44-byte identity header. Its Concept-owned schema
+hash is `ea57ae74f5ae54ece90ce429edbc4a41ce309d106582c84fdb5d70d15242941d`.
+The unchanged v9 pattern module is embedded without another header. Additional
+records associate try scopes/joins, typed handler inputs/bindings/entries/scopes,
+and source failure flows with require-success/propagate/remap destinations.
+Existing canonical records still own types, fields, operations, operands and CFG.
+
+BridgeSchema10 owns this contract; the established generator produces the Go
+codec, Concept derived codec and schema JSON. BridgeValidate10 independently
+admits source-free artifacts. It checks success tag zero, exact nominal error
+matching, nearest eligible scope, Error-only transfers, immutable scoped binding,
+all handler predecessors, input-slot role restrictions, function failure return
+construction, duplicate/missing authority, and capacity. Existing tagged,
+object, borrow, dominance, initialization and pattern validators remain in use.
+Region exits carry their lexical scope, so an outer match arm still owns a try
+nested within it. Legacy v9 invokes the same helper with no guard/exit grants.
+CMIRAMD3–9 schemas, codecs, identities and byte goldens remain unchanged.
+
+Cathedral's existing object slots, active-field copier, Win64 classifier, allocator,
+unified frame planner, scalar encoder, branch/call fixups and UD2 facility realize
+the admitted CFG. Go produces checked semantics, generated transport, independent
+consistency checks and test orchestration; it adds no physical fallibility engine.
+There is no heap allocation, runtime type registry, exception runtime or unwinding.
+
+Malformed testing also exposed the legacy scalar fallback resetting an image
+before rejecting a truncated/unknown identity. EmitModule now rejects incomplete
+headers immediately and validates the legacy bridge before initializing its
+scratch image. This strengthens failed-admission atomicity without changing any
+valid instruction encoding or ABI policy; affected old paths are regression-tested.
+
+### Evidence and measured boundary
+
+The authoritative `tests/runtime/Testing/FallibleControl.concept` has 43 functions,
+19 realized try regions, 21 handlers and 35 failure sites (9 require-success,
+25 propagation, one remap). Two grouped `.concept_test` facts exercise source/C
+behavior and keep the fast lane free of a Cathedral import. External harnesses
+execute the same specimen through Cathedral with and without domain C linked.
+
+Coverage includes two same-representation nominal errors, Option/Result/void
+success, failure and replacement paths inherited from h4/h5, handler selection,
+nesting and re-propagation, remap precedence, Option function propagation within
+try, loops, matches, conditional handlers, early returns, recursion, argument
+ordering, records, native structs, floats/doubles, exact floating bits, mixed
+calls including stack arguments, live aggregates and eight scalar spills.
+The eight-byte native Pair uses its checked hidden-return convention; the C
+oracle's own struct ABI is not substituted for it. Repr(C) Item uses the existing
+16-byte hidden return. This is no new foreign sum-type ABI claim.
+
+Five isolated native trap cases check Windows illegal-instruction status
+`0xC000001D`, a genuine UD2 inside the emitted image and precise operand effects.
+The vectored observer terminates the child with that same status only after
+checking the exception/instruction and writing evidence, avoiding WER delays.
+Later arguments, continuations and handlers must remain unexecuted. Each harness
+has a distinct completed executable path; running binaries are never overwritten.
+
+Ten fresh source/LIR/CFG/artifact/codec generations and ten fresh complete native
+plans/emissions per mode are the ordinary milestone sample. The phase environment
+marker retains 100, and selected historical tests retain their own full counts.
+Normal/Verify and the independent C11 host require identical image bytes and
+fixups; debug descriptions and plans are compared as well.
+
+Pinned fixture artifact: 247,623 bytes,
+`6c2bc22978e37d03a4561910f2fa1646ee4fc5980d2b677c75ef65ceaae94bf7`.
+Native image: 82,687 bytes, 43 symbols, 49 call fixups,
+`78407eeb465a416e7a406d05d3e382cb9c8c21049f8162c4e7d504196907c242`.
+Frames: 40–408 bytes, eight spills. Final executed results/timings and selected
+regressions are recorded in [convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+
+Capacity remains 128 functions/256 types, 128 blocks/scopes and 64 slots per
+qualified function, with at most 64 try/handler/failure records per function and
+8,192 of each globally. Existing value/instruction/domain/frame limits also apply.
+Unsupported boundaries remain owning/Drop/move-only payloads or locals, nested
+sum payloads, unqualified references and local address temporaries across failure
+expressions. Explicit local fixed-array declarations remain outside native LIR;
+array-containing qualified records and existing tagged array construction/copy
+contracts are not broadened here. Existing native `and`/`or` expression lowering
+remains unsupported (`EVT2_UNSUPPORTED_BINARY`). In a new v10 function, remap
+error arms must be straight-line (ordinary calls are allowed); conditional or
+nested-fallible remap CFG rejects with `EVT2H7_UNSUPPORTED_REMAP_CONTROL`. Older
+v9 remap admission is preserved. Four source-valid boundary specimens exercise
+these restrictions, local arrays and local reference temporaries. Direct fixed-array except types also encounter
+the existing checker CV4545 identity boundary. No ownership cleanup is omitted to
+admit these cases. No h8 integration or h9 phase qualification is begun.
 
 ## EVT2h6 — typed Verdict authority and checked native erasure
 

@@ -13,6 +13,38 @@ qualified through the existing tagged/pattern/aggregate mechanisms.
 Closed Result and `?` status is [EVT2h5 milestone verification](#evt2h5-closed-result-and-propagation-authority),
 with focused independent evidence rather than phase-level qualification.
 
+Native fallibility is [EVT2h7 milestone verified control flow](#evt2h7-native-fallible-authority).
+
+## EVT2h7 native fallible authority
+
+Baseline `e7d4f0e`; semantic inventory `ef3bd4a`; contract `f5e30de`;
+implementation and fixtures `ec8bc3a`:
+[fallibility contract](../design/EVT2H7-FALLIBLE-CONTROL.md).
+The existing Go checker still owns source legality, exact error identity and
+lexical destination selection. Checked LIR expresses bang, Option propagation
+and local handlers with ordinary CFG and scoped bindings. C bootstrap remains
+an independent source semantic oracle.
+
+Concept BridgeSchema10 owns CMIRAMD10 (`CMIRAMDA`, version 10); generated codecs
+carry the unchanged v9 base plus checked failure-flow/handler/try associations.
+Concept BridgeValidate10 independently verifies those associations, nearest
+exact-type routing, Error transfers, success guards, binding/input roles and
+function failure returns. It reuses tagged/object/borrow/pattern admission.
+Legacy v9 receives no new guard/region-exit authority. All v3–9 wire contracts
+and historical bytes remain frozen.
+
+Existing Concept object storage and active-field logical copy, Win64 ABI,
+allocation, frame planning, encoder and fixups own physical execution. UD2 owns
+native bang failure; no Go native algorithm, exception registry/runtime,
+heap/unwinding path or new physical TRY/EXCEPT/BANG opcode is added. The legacy
+fallback now rejects an invalid identity before touching the image sentinel.
+
+Focused native/C11, artifact-only, malformed/sentinel, deterministic bytes and
+adjacent native/ABI regressions are separate from the two source-bootstrap facts.
+See [h7 conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h7--native-fallible-control-flow)
+and [executed evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+No general cleanup/ownership or complete phase qualification is claimed.
+
 ## EVT2h6 typed Verdict authority
 
 Baseline `cb4201a`; preimplementation inventory `0028e4f`; implementation `50d30c0`:
