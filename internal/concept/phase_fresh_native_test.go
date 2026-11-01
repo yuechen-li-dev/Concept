@@ -47,15 +47,23 @@ func phaseFreshNativeHost(t *testing.T, host string, canonical []byte, family st
 	host = strings.ReplaceAll(host, "F(emit_module)(src,", "phase_emit_module(src,")
 	adapter := paths.String() + fmt.Sprintf(phaseFreshAdapter, codec, codec)
 	host = strings.Replace(host, "int main(", adapter+"\nint main(", 1)
+	// Guard-page/trap children deliberately emit one image and skip the parent's
+	// determinism loops. Only the parent owes the complete 100-input gate.
+	if strings.Contains(host, "int main(int argc,char**argv){") {
+		host = strings.Replace(host, "int main(int argc,char**argv){", "int main(int argc,char**argv){phase_require_complete=argc==1;", 1)
+	} else if !strings.Contains(host, "int main(void){") {
+		t.Fatal("phase hook did not recognize parent/child entry signature")
+	}
 	t.Log("phase gate: 100 freshly checked artifact files; each native emission independently reloads, Concept-roundtrips and admits its selected input")
 	return host
 }
 
 const phaseFreshAdapter = `
 static unsigned char phase_input[2000000],phase_roundtrip[2000000];
-static int phase_cursor,phase_count,phase_registered,phase_seen[100];
+static int phase_cursor,phase_count,phase_registered,phase_seen[100],phase_require_complete=1;
 static void phase_check_complete(void){
 #if defined(ENUM_NATIVE_ONLY)||defined(TAGGED_NATIVE_ONLY)||defined(MATCH_NATIVE_ONLY)||defined(OPTION_NATIVE_ONLY)||defined(RESULT_NATIVE_ONLY)||defined(FALLIBLE_NATIVE_ONLY)
+ if(!phase_require_complete)return;
  if(phase_count!=100){fprintf(stderr,"fresh native gate incomplete: %%d/100\n",phase_count);_Exit(74);}
  puts("100 distinct freshly generated artifacts roundtripped/admitted/emitted through Cathedral");
 #endif
