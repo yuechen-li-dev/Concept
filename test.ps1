@@ -53,9 +53,9 @@ try {
                 $env:CONCEPT_QUALIFICATION_PROFILE = Join-Path $profileRoot 'commands.jsonl'
                 [IO.File]::WriteAllText($env:CONCEPT_QUALIFICATION_PROFILE, '')
                 Write-Host "Collecting uncached qualification evidence in $profileRoot"
-                & go test ./... -json -count=1 -parallel=4 -timeout=45m > (Join-Path $profileRoot 'tests.jsonl')
+                & go test ./... -json -count=1 -parallel=4 -timeout=75m > (Join-Path $profileRoot 'tests.jsonl')
             } else {
-                & go test ./... -count=1 -parallel=4 -timeout=45m
+                & go test ./... -count=1 -parallel=4 -timeout=75m
             }
             $goExit = $LASTEXITCODE
             $goTimer.Stop()

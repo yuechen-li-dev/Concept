@@ -151,6 +151,7 @@ func TestEVT2h1NativeExecution(t *testing.T) {
 	dump := filepath.ToSlash(filepath.Join(t.TempDir(), "native.bin"))
 	host := strings.Replace(enumNativeHost, "/* ARTIFACT */", defs.String(), 1)
 	host = strings.Replace(host, "/* DUMP */", fmt.Sprintf("%q", dump), 1)
+	host = phaseFreshNativeHost(t, host, data, "enum", func() []byte { _, _, _, raw := enumFixture(t); return raw })
 	var first []byte
 	for _, verify := range []bool{false, true} {
 		name := "Normal"
@@ -159,7 +160,7 @@ func TestEVT2h1NativeExecution(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			outputs := backendTestOutputs(t, verify)
-			runFoundationNativeHarnessOutput(t, outputs, "enum_artifact.c", host, "-pedantic-errors", "-O2", "-DENUM_NATIVE_ONLY=1")
+			runFoundationNativeHarnessOutput(t, outputs, "enum_artifact.c", "#define ENUM_NATIVE_ONLY 1\n"+host, "-pedantic-errors", "-O2")
 			policy := ConservativeCompilationPolicy()
 			if verify {
 				policy = VerifyCompilationPolicy()

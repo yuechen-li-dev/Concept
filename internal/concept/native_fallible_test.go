@@ -61,6 +61,7 @@ func TestEVT2h7NativeFallible(t *testing.T) {
 	host := strings.Replace(fallibleNativeHost, "/* DEFINITIONS */", defs.String(), 1)
 	a, b := strings.Index(aggregateABIPlanningHost, "static unsigned long long digest;"), strings.Index(aggregateABIPlanningHost, "static int run_plan(")
 	host = strings.Replace(host, "/* PLAN DEBUG */", aggregateABIPlanningHost[a:b], 1)
+	host = phaseFreshNativeHost(t, host, data, "fallible", func() []byte { _, _, _, _, raw := fallibleFixture(t); return raw })
 	var first []byte
 	for _, verify := range []bool{false, true} {
 		mode := "Normal"

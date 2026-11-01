@@ -68,7 +68,12 @@ func TestEVT2h8NativeIntegration(t *testing.T) {
 		}
 		t.Run(mode, func(t *testing.T) {
 			outputs := backendTestOutputs(t, verify)
-			t.Log(runFoundationNativeHarnessOutput(t, outputs, "integration_native.c", "#define INTEGRATION_NATIVE_ONLY 1\n"+host, "-pedantic-errors", "-O2"))
+			nativeOutput := runFoundationNativeHarnessOutput(t, outputs, "integration_native.c", "#define INTEGRATION_NATIVE_ONLY 1\n"+host, "-pedantic-errors", "-O2")
+			t.Run("IncomingRegisterOverlapParserAddSevenReturnsNine", func(t *testing.T) {
+				if !strings.Contains(nativeOutput, "IncomingRegisterOverlapParserAddSevenReturnsNine: PASS") {
+					t.Fatal("named native parser regression missing")
+				}
+			})
 			var emitted [][]byte
 			want := map[string]string{
 				"Parser":     "a7b2383995d4d64d7b6ec1d33935865580806319f7743fda6657ec1e788bff35",
@@ -212,6 +217,11 @@ static const struct{NInput input;int total,commands,position,status,actual,reads
  {{{0,0,0,0,0,0,0,0},-1},0,0,0,-1,-1,0},
  {{{1,-3,0,9,9,9,9,9},8},-1,1,3,0,0,3}
 };
+static int regression_incoming_register_overlap_parser_add_seven_returns_nine(ParseRun parse){
+ int reads=0;NParseReport result=parse(vectors[1].input,2,&reads);
+ CHECK(result.status==0&&result.total==9&&result.commands==1&&result.position==3&&result.actual==0&&reads==3);
+ puts("IncomingRegisterOverlapParserAddSevenReturnsNine: PASS");return 0;
+}
 int main(int argc,char**argv){setvbuf(stdout,NULL,_IONBF,0);
  if(argc>1){CHECK(!prepare(1,0));trap_number=atoi(argv[1]);trap_start=(uintptr_t)memories[1];trap_end=trap_start+images[1].byteCount;SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);CHECK(AddVectoredExceptionHandler(1,observe_trap));RESOLVE(Gate,and_gate,1,ORD_Controller_GateAnd);RESOLVE(Gate,or_gate,1,ORD_Controller_GateOr);if(trap_number==0)(void)and_gate(1,0,&trap_trace);else (void)or_gate(0,0,&trap_trace);return 99;}
  for(int module=0;module<4;module++){
@@ -232,6 +242,7 @@ int main(int argc,char**argv){setvbuf(stdout,NULL,_IONBF,0);
   int ignoredTrace=0;for(int variant=0;variant<4;variant++){event.tag=variant;event.value=23;CHECK(unused_scalar(event,987)==oracle_logic(6,variant,23,987,&ignoredTrace));}
 #endif
  }
+ CHECK(!regression_incoming_register_overlap_parser_add_seven_returns_nine(parse));
  // Independent C callers exercise two simultaneous eight-byte sum carriers.
  {int reads=0;NDecodedResult word=decode_word(vectors[1].input,0,&reads);CHECK(!word.tag&&word.value.kind==1&&word.value.operand==7&&reads==2);NToken token=materialize(word.value),none={1,0},some={0,3};CHECK(token.tag==1&&token.value==7&&evaluate(token,none,2)==9);token.tag=3;CHECK(evaluate(token,some,2)==12);}
  for(int repeat=0;repeat<40;repeat++){
