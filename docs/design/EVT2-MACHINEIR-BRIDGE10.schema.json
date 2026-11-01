@@ -1,0 +1,194 @@
+{
+  "module": "Standard.Backend.BridgeSchema10",
+  "magic": "CMIRAMDA",
+  "version": 10,
+  "max_items": 1048576,
+  "representation": "little-endian;CMIRAMD9=77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c;qualified-success-guard;exact-lexical-handler-routing;active-error-transfer;checked-region-exits;no-physical-fallibility-opcodes",
+  "records": [
+    {
+      "name": "FallibleSiteKind",
+      "cases": [
+        {
+          "name": "RequireSuccess",
+          "tag": 0,
+          "go_value": "require_success"
+        },
+        {
+          "name": "Propagate",
+          "tag": 1,
+          "go_value": "propagate"
+        },
+        {
+          "name": "Remap",
+          "tag": 2,
+          "go_value": "remap"
+        }
+      ]
+    },
+    {
+      "name": "WireFallibleHeader",
+      "fields": [
+        {
+          "name": "magic",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 8
+          }
+        },
+        {
+          "name": "version",
+          "type": {
+            "name": "uint"
+          }
+        },
+        {
+          "name": "schemaHash",
+          "type": {
+            "name": "array",
+            "element": {
+              "name": "uint8"
+            },
+            "extent": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireFallibleTry",
+      "fields": [
+        {
+          "name": "Function",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scope",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Join",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireFallibleHandler",
+      "fields": [
+        {
+          "name": "Try",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Type",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "InputSlot",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "BindingSlot",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Entry",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Scope",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireFallibleSite",
+      "fields": [
+        {
+          "name": "Flow",
+          "type": {
+            "name": "int"
+          }
+        },
+        {
+          "name": "Kind",
+          "type": {
+            "name": "FallibleSiteKind"
+          }
+        },
+        {
+          "name": "Handler",
+          "type": {
+            "name": "int"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WireFallibleModule",
+      "fields": [
+        {
+          "name": "Base",
+          "type": {
+            "name": "WirePatternModule"
+          }
+        },
+        {
+          "name": "Tries",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireFallibleTry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Handlers",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireFallibleHandler"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Sites",
+          "type": {
+            "name": "BridgeSequence",
+            "module": "Standard.Backend.BridgeSchema",
+            "arguments": [
+              {
+                "name": "WireFallibleSite"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

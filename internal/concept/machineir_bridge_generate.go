@@ -97,7 +97,8 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	ordinary := module.Name == "Standard.Backend.BridgeSchema7"
 	tagged := module.Name == "Standard.Backend.BridgeSchema8"
 	pattern := module.Name == "Standard.Backend.BridgeSchema9"
-	modern := scalar || object || borrow || ordinary || tagged || pattern
+	fallible := module.Name == "Standard.Backend.BridgeSchema10"
+	modern := scalar || object || borrow || ordinary || tagged || pattern || fallible
 	prefix := "Scalar"
 	if object {
 		prefix = "Object"
@@ -113,6 +114,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	}
 	if pattern {
 		prefix = "Pattern"
+	}
+	if fallible {
+		prefix = "Fallible"
 	}
 	if module.Name != "Standard.Backend.BridgeSchema" && !modern {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_MODULE: %s", module.Name)
@@ -229,6 +233,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 	if pattern {
 		rootName, headerName = "WirePatternModule", "WirePatternHeader"
 	}
+	if fallible {
+		rootName, headerName = "WireFallibleModule", "WireFallibleHeader"
+	}
 	if !reflected[rootName] || !reflected[headerName] {
 		return out, fmt.Errorf("MIR_BRIDGE_SCHEMA_ROOT")
 	}
@@ -243,7 +250,7 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		emitter.records[r.Name] = r
 	}
 	// Explicit reuse of frozen v5 codecs, never a duplicated field definition.
-	if borrow || ordinary || tagged || pattern {
+	if borrow || ordinary || tagged || pattern || fallible {
 		emitter.sharedObject = true
 		for _, name := range []string{"WireObjectModule", "WireObjectSpan"} {
 			emitter.records[name] = bridgeSchemaRecord{Name: name}
@@ -258,6 +265,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		for _, name := range []string{"WireTaggedModule", "WireEnumDomain"} {
 			emitter.records[name] = bridgeSchemaRecord{Name: name}
 		}
+	}
+	if fallible {
+		emitter.records["WirePatternModule"] = bridgeSchemaRecord{Name: "WirePatternModule"}
 	}
 	headerSize := 0
 	for _, field := range emitter.records[headerName].Fields {
@@ -429,6 +439,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		if pattern {
 			suffix, lower = "9", "pattern"
 		}
+		if fallible {
+			suffix, lower = "10", "fallible"
+		}
 		goText := strings.ReplaceAll(string(goBytes), "MachineBridge", prefix+"MachineBridge")
 		goText = strings.ReplaceAll(goText, "checked Standard.Backend.BridgeSchema;", "checked Standard.Backend.BridgeSchema"+suffix+";")
 		goText = strings.ReplaceAll(goText, "bridgeTags", lower+"BridgeTags")
@@ -455,6 +468,9 @@ func GenerateMachineBridgeCodecs(module Module) (BridgeCodecGeneration, error) {
 		}
 		if pattern {
 			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec8;\nimport Standard.Backend.BridgeCodec7;")
+		}
+		if fallible {
+			conceptText = strings.ReplaceAll(conceptText, "import Standard.Backend.BridgeCodec;", "import Standard.Backend.BridgeCodec9;")
 		}
 		conceptSource.Reset()
 		conceptSource.WriteString(conceptText)
