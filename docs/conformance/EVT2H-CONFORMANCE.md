@@ -1,8 +1,69 @@
 # EVT2h — enum conformance
 
-Current EVT2h7 status: **MILESTONE VERIFIED — native fallible control flow**.
+Current EVT2h8 status: **MILESTONE VERIFIED — integrated native sum types and fallibility**.
 Historical sections retain the evidence and boundaries at their respective
 checkpoints. Ordinary milestone verification does not claim phase qualification.
+
+## EVT2h8 — sum-type and fallibility integration
+
+Status: **MILESTONE VERIFIED**, not full phase qualification. Baseline
+`b39088beb9631ea4a449c65797bbc76fde9a265a`; inventory `df3339f`; Concept entry
+liveness fix `1ff7c7b`; checked projection `8ca3d9b`; integration fixtures and
+native/C11 harnesses `928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`. See the
+[complete evidence, exact commands, hashes and limits](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md)
+and [preimplementation inventory](../design/EVT2H8-INTEGRATION.md).
+The worktree remains the existing `codex/implement-native-ordinary-enums` checkout;
+fetched origin/main was an ancestor 13 commits behind. No reset or remote change.
+
+| Composition | Executed evidence | Qualified boundary |
+| --- | --- | --- |
+| Protocol decoder/evaluator | 16 input vectors, 40 interleavings in native-only and strict-C11 differential hosts, Normal/Verify | Fixed eight-word input record; payload tokens/diagnostics, Result record/error-record calls, Option lookup, while/branches and typed local handling |
+| Typed controller | Five scenarios times eight values times 40 interleavings per host; state/report/counter/copy checks | Ordinary enum states, payload events, Option hints, Result<Session,ConfigError>, distinct same-sized ConfigError/DeviceError, local and propagated failures |
+| Semantic assertion plus runtime fallibility | Typed capacity 8 evidence/site/provenance, empty trusted authority, fresh assertion-free source, exact residual native bytes | Comptime proof stays in compiler tooling; no runtime Verdict storage or new trusted facts |
+| Short-circuit and/or | Nested truth tables, if/guard/while contexts, call effects, skipped failing bang, handled question and exact expected traps | Ordinary checked bool slots/CFG; left first, RHS only when needed; no physical logical opcode |
+| Record enum fields | Checked nominal geometry plus native record/call/match use | Internal checked field addresses in composites; public h1 reference/array restrictions remain |
+| Several aggregate parameters together | Native pipeline plus independent C callers, checked simultaneous carrier ranges/locations; g5/h4/h5 ABI regressions | Existing Win64 classifier and unified frame; Concept projection keeps entry values live until unpacking |
+
+Checked projection snapshots earlier operands before nested conditional/pattern
+CFG and retains existing local-reference witnesses across pure conditionals.
+Actual fallible exits retain the unqualified local-address fence. The existing
+pattern/borrow/failure verifiers enforce scope, dominance, initialized joins,
+active payloads and exact nominal handler destinations. A discovered native
+alias of two incoming aggregate registers is corrected in Concept's existing
+object projection, using liveness observations rather than an ABI/allocator
+replacement. The motivating add(7), seed2 case now returns9 instead of2.
+
+All four checked forms use unchanged **CMIRAMD10**, schema hash
+`ea57ae74f5ae54ece90ce429edbc4a41ce309d106582c84fdb5d70d15242941d`.
+CMIRAMD3–10 contract files and historical goldens remain unchanged. No new wire
+format, copier, sum layout, frame planner, optimizer, object output or Go native
+algorithm. Native-only execution admits artifacts without domain source and
+links no domain C oracle. Separate C11 hosts compare all report fields and
+observable effects, with each generated domain in its own translation unit.
+
+Three genuinely fresh source/check/LIR/artifact/admission/plan/emission pipelines
+per form per mode pass, including fixups/debug plans and Normal/Verify bytes.
+The retained phase marker selects 100 at h9. New malformed artifacts, LIR and
+source cases retain atomic roundtrip/code/image rejection; selected historical
+negative and 100-run gates remain intact. Exact sizes/hashes are in the evidence:
+Parser 61259 bytes, Controller 55330, assertion and assertion-free form 3381;
+frames 40..1128, zero spills in these programs. Five Concept facts join Quick;
+source-to-C fact execution is not counted as native evidence.
+
+The shared entry-projection correction triggered targeted regression escalation,
+including independent MSVC/clang-cl ABI observers, h3 conditional matching,
+h4/h5 native generic sums, h6 erasure and h7 typed handlers/traps. Quick, focused
+native/C11/Normal/Verify/artifact checks, race, vet, build, formatting/lint and
+all 20 CLI batch cases pass. Full project qualification and the new h8 100-trial
+gate remain h9 work. This milestone does not claim FULLY QUALIFIED.
+
+Deferred boundaries: local raw arrays (projection A); local addresses before
+actual failure CFG and nested v10 error remaps (checked authority/projection B/C);
+nested sums (separate qualification E); owning/reference-bearing/Drop payloads
+and cleanup (D). The parser deliberately uses a Result of checked records and
+materializes tagged commands/diagnostics outside that Result. No general nested
+sum capability, general foreign enum ABI or ownership semantics are implied.
 
 ## EVT2h7 — native fallible control flow
 

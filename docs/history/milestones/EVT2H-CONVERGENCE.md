@@ -1,7 +1,78 @@
 # EVT2h convergence
 
-Current EVT2h7 status: **MILESTONE VERIFIED — native fallible control flow**.
+Current EVT2h8 status: **MILESTONE VERIFIED — integrated native sum types and fallibility**.
 Earlier sections retain historical outcomes and boundaries.
+
+## EVT2h8 sum-type and fallibility integration
+
+**MILESTONE VERIFIED** under the revised ordinary-milestone policy. The
+[full evidence record](EVT2H8-INTEGRATION-EVIDENCE.md) gives exact executable
+commands, results, timing, canonical/native SHA-256 and deferred gates.
+
+Baseline `b39088beb9631ea4a449c65797bbc76fde9a265a`, initially clean existing
+`codex/implement-native-ordinary-enums` checkout at
+`C:/Users/yuech/.codex/worktrees/evt2h4-profile-baseline/Concept`.
+Fetched origin/main `065317d262c85ce159219561b0709526e7973c1f` was its ancestor
+13 commits behind; no reset, replay or remote mutation. Compiler
+`concept-evt1-stage0-go`, Windows AMD64/Microsoft x64. Inventory `df3339f`
+preceded implementation. Concept physical fix `1ff7c7b`; checked CFG/nominal
+field integration `8ca3d9b`; specimens and external evidence harness `928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`.
+The final evidence-only closeout commit contains these records.
+
+### Converged behavior
+
+Three real programs now compose the existing mechanisms: a bounded protocol
+parser/evaluator, a typed state/event controller and a checked semantic assertion
+with residual enum/Result execution. Authoritative `.concept` modules are shared
+by five language facts and external inspectors/oracles. Neither a second program
+embedded in Go nor source-to-C facts substitute for native execution.
+
+Integration exposed four narrow defects: missing and/or/while projection;
+earlier operands lost across nested expression CFG; ordinary enum record fields
+blocked by scalar/container verification; and two aggregate entry carriers
+coalesced before unpacking. The latter was reproduced with add(7), seed2 returning 2
+instead of 9. Checked decode/materialization retained 7 and disassembly isolated the
+shared R11. Concept now marks aggregate entry uses through a common live range;
+independent C calls and generated native calls both retain the payload. An
+unused scalar parameter also cannot clobber an aggregate before entry unpacking. Existing
+allocator, copier, ABI classifier, frame and encoder remain the owners.
+
+Native-only hosts independently admit source-free CMIRAMD10 and execute actual
+machine code with no domain C linked. Separate strict-C11 hosts compare all
+report fields, ordering/counters, copies and exact assertion erasure. Both modes
+pass; each code image and derived plan/fixup description is deterministic across
+three fresh complete source-to-native pipelines. No checked/artifact/physical
+result is reused as a fresh trial. New gates retain a 100-trial phase path.
+
+The asserted and freshly parsed assertion-free program have identical native
+bytes; typed evidence/site/provenance remain only in compiler tooling. The
+assertion-free source has no remaining proof obligation. Checked artifacts may
+differ in source-plan metadata; no production erasure metadata is stripped to
+force equality. False/forged assertions reject and trusted fact authority stays
+empty. No runtime Verdict or new semantic truth system.
+
+### Evidence scope and remaining work
+
+CMIRAMD3–10 schemas/codecs/validators remain unchanged. Parser/controller/asserted
+native images are 61259/55330/3381 bytes, frames 40..1128, no new-program spills.
+Initial decoder capacity failure was solved by reusable bounded reads and one
+shared evaluator call, preserving the 64-slot limit. The parser returns checked
+record values/errors through Result and separately materializes tagged commands
+and diagnostics; general nested sums remain outside the native domain.
+
+The shared physical projection fix escalated selected g5 native/ABI/malformed
+checks and h3–h7 dependencies. These, focused h8 source/LIR/artifact/native/C11,
+Normal/Verify, expected traps, targeted determinism, race/vet/build/format/lint
+and the 20-input real CLI batch pass. Quick measured 23.14 seconds process wall and 25.46 seconds in the final
+contended run. The native batch builds Cathedral once per mode for all four forms;
+new facts do not pull Cathedral into Quick. Detailed timings are in the evidence.
+
+h9 still needs the complete phase workflow and 100 fresh h8 trials. Full Go,
+full corpus/Golden, Standard/DragonGod, Vulkan and every historical independent
+ABI family were not rerun here. Local arrays, actual-failure address temporaries,
+nested v10 remaps, nested sums and ownership/reference cleanup retain explicit
+boundaries. No h9, Drop, self-hosting migration, COFF or optimization work begins.
 
 ## EVT2h7 native fallible control flow
 

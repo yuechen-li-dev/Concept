@@ -73,3 +73,34 @@ inspect proof payload/site/provenance/erasure. Preserve all frozen v3–10 files
 existing 100-run gates. Run Quick, focused native/malformed/adjacent checks and
 appropriate race/vet/build/format/lint. Measure added facts and native test cost.
 Do not automatically run the complete project lane, and do not begin h9.
+
+## Findings after implementation
+
+The baseline matrix above remains the preimplementation inventory. Execution
+also exposed category A gaps for source-valid while, ordinary enum fields in
+records, and values before nested conditional/match CFG. These now consume the
+existing checked branch/geometry/snapshot facilities. A genuine native payload
+loss was isolated to overlapping aggregate entry carrier allocation; the Concept
+object projection supplies the missing entry liveness observations for every aggregate parameter to
+the existing allocator. That shared-call correction triggered g5/h3–h7 native,
+malformed and independent ABI regression escalation. No wire version changed.
+
+Local arrays remain an unneeded category A projection gap. Pure conditional
+local-reference witnesses now work; local addresses before actual failure exits
+remain a separate checked failure-edge lifetime/projection boundary (B/C), rather
+than a claim that every such source expression requires ownership/Drop. Nested
+v10 remaps remain B/C, nested sums E, and actual ownership/cleanup D. None is
+silently admitted. Header type-name collisions between independent C oracle
+modules are handled by separate translation units and scalar observation
+adapters, not a source or physical representation change.
+
+The checked assertion-free comparison is parsed freshly from source after
+masking only the assertion statement, preserving residual locations. Its wire
+metadata may differ from the asserted source; native code must be identical.
+Actual evidence/status, exact commands/hashes and remaining h9 gates are in
+[the integration evidence](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md).
+
+Final entry-use review also covers one aggregate beside an unused scalar.
+`UnusedScalarAfterEvent` is a dedicated ABI regression beside the controller;
+the original controller prefix remains byte-pinned. It is exercised through
+both native C callers and the independently compiled C11 domain function.

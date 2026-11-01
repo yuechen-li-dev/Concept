@@ -15,6 +15,41 @@ with focused independent evidence rather than phase-level qualification.
 
 Native fallibility is [EVT2h7 milestone verified control flow](#evt2h7-native-fallible-authority).
 
+Integrated sum-type execution is [EVT2h8 milestone verified](#evt2h8-integrated-execution-authority).
+
+## EVT2h8 integrated execution authority
+
+Baseline `b39088b`; preimplementation inventory `df3339f`; Concept entry-liveness
+correction `1ff7c7b`; checked projection `8ca3d9b`; integration tests `928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`.
+Status: **MILESTONE VERIFIED**, not phase-wide qualification. See the
+[integration evidence](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md)
+and [capability matrix](../design/EVT2H8-INTEGRATION.md).
+
+The Go source checker still owns legality, closed/nominal identities, proof
+outcomes and handler selection. Checked LIR composes existing branch/slot/pattern/
+failure operations for and/or, while and snapshots across nested expression CFG.
+Record enum fields consume already-verified nominal geometry; no integer-width
+inference grants identity or authority. Existing borrow/active-payload checks
+remain in force. Pure conditional reference witnesses do not authorize general
+references across failure exits.
+
+Concept's object projection now retains all aggregate parameter carriers
+until unpacking through entry unpacking, including beside unused scalar arguments; their entry-only uses were missing from
+scalar liveness. The existing allocator then assigns distinct registers. This
+fixes a demonstrated native payload loss without a second allocator or ABI path.
+Concept still owns active-field logical copying, unified frame/Win64 realization,
+selection and encoding. Unchanged BridgeValidate10 independently admits all
+pattern/failure/type/initialization associations. CMIRAMD3–10 remain frozen.
+
+Typed assertion evidence and provenance remain in existing Go proof tooling;
+assertions erase before native LIR. The source-free native image equals the
+freshly parsed assertion-free image. No runtime Verdict, trusted-fact expansion
+or migration of the central evaluator is claimed. Separate strict-C11/native
+hosts and independent ABI observers provide execution evidence; bootstrap facts
+remain separately identified. Shared-call risk triggered targeted g5/h3–h7
+regression escalation, not the full h9 checkpoint.
+
 ## EVT2h7 native fallible authority
 
 Baseline `e7d4f0e`; semantic inventory `ef3bd4a`; contract `f5e30de`;

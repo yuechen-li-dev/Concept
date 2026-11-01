@@ -12,6 +12,27 @@ Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-res
 
 Native fallibility stage is [EVT2h7 milestone verification](#evt2h7-native-fallible-control-flow).
 
+Integrated execution stage is [EVT2h8 milestone verification](#evt2h8-integrated-sum-types-and-fallibility).
+
+## EVT2h8 integrated sum types and fallibility
+
+**MILESTONE VERIFIED** on baseline `b39088b`, with inventory `df3339f`, native
+projection correction `1ff7c7b`, checked projection `8ca3d9b` and fixtures/harnesses
+`928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`. See [measured evidence](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md).
+
+| Subsystem | Decision owner | Integrated boundary / evidence |
+| --- | --- | --- |
+| Source semantics/proof | Existing Go checker/evaluator/proof graph | Nominal sums, exact E, closed Option/Result, checked assertions; no new syntax/trusted authority |
+| Checked CFG projection | Go target-independent LIR producer | and/or/while, snapshots before nested CFG, checked enum record fields and existing pure-CFG reference witnesses |
+| Transport | Unchanged Concept schemas/generated codecs | CMIRAMD10 composition, no new contract; v3–10 frozen |
+| Artifact admission | Existing Concept tagged/pattern/failure/object/borrow validators | Nominal/active fields, typed handlers, scope/dominance/init/geometry and sentinel rejection |
+| Entry liveness | Concept AMD64.Objects using existing scalar liveness/allocation | All aggregate carriers survive entry, including beside unused scalars; real decoder/controller and independent C callers expose prior loss |
+| Physical execution | Existing Concept copier/Win64/frame/encoder/fixups | Parser, controller, residual assertion program; no alternate sum/ABI/error backend |
+| Independent verification | External Go/C/native hosts plus MSVC/clang-cl ABI observers | Native-only artifacts, separate strict-C11 differential code, Normal/Verify exact bytes, three fresh pipelines, typed negatives/traps; selected g5/h3–h7 escalation |
+| Language facts | Existing Concept framework | Five integration facts in Quick Normal/Verify; C bootstrap execution is not native evidence |
+| Deferred | Explicit native subset and h9 scheduling | Local raw arrays/failure address temporaries/nested remaps/sums; ownership/reference cleanup; complete phase qualification and 100 fresh h8 trials |
+
 ## EVT2h7 native fallible control flow
 
 Baseline `e7d4f0e`; inventory `ef3bd4a`; contract `f5e30de`; native
