@@ -82,6 +82,17 @@ func integrationBadArtifacts(t *testing.T) []patternBadArtifact {
 	add("wrong closed sum identity", func(m *FallibleModule) {
 		m.Base.Base.Base.Objects.Types[m.Base.Base.Domains[0].Type].Identity = "forged"
 	})
+	add("same-sized Option Result constructor swap", func(m *FallibleModule) {
+		for _, op := range m.Base.Base.Operations {
+			f := &m.Base.Base.Base.Objects.Functions[op.Function]
+			if f.Name == "Preferred" && op.Kind == "make_tagged" {
+				f.Blocks[op.Block].Instructions[op.Instruction].Type = owner(m, "Permission").ResultType
+				return
+			}
+		}
+		t.Fatal("Option constructor")
+	})
+
 	add("ineligible sum copy", func(m *FallibleModule) { m.Base.Base.Base.Objects.Types[m.Base.Base.Domains[0].Type].Copy = "none" })
 	add("payload geometry", func(m *FallibleModule) { m.Base.Base.Domains[0].Variants[0].Fields[0].Offset = 999 })
 	add("enum field geometry", func(m *FallibleModule) {
@@ -93,6 +104,20 @@ func integrationBadArtifacts(t *testing.T) []patternBadArtifact {
 			}
 		}
 		t.Fatal("Session")
+	})
+	add("same-sized nominal enum field swap", func(m *FallibleModule) {
+		for i := range m.Base.Base.Base.Objects.Types {
+			p := &m.Base.Base.Base.Objects.Types[i]
+			if p.Name == "Session" {
+				for _, domain := range m.Base.Enums {
+					if m.Base.Base.Base.Objects.Types[domain.Type].Name == "ConfigError" {
+						p.Fields[0].Type = domain.Type
+						return
+					}
+				}
+			}
+		}
+		t.Fatal("nominal enum field")
 	})
 	add("frame geometry", func(m *FallibleModule) { m.Base.Base.Base.Objects.Types[owner(m, "Run").Slots[0].Type].Align = 3 })
 	add("flow capacity", func(m *FallibleModule) {
