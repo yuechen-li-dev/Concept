@@ -1,5 +1,9 @@
 # Cathedral migration matrix (R9c)
 
+Current EVT2h phase status: **FULLY QUALIFIED for the bounded native domain**;
+see [h9 closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md). The introductory
+stage links below retain earlier qualification snapshots.
+
 Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
 Current payload enum stage: [EVT2h2 native tagged values](#evt2h2-native-tagged-values),
 with full qualification passed at `59788a4`.
@@ -13,6 +17,28 @@ Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-res
 Native fallibility stage is [EVT2h7 milestone verification](#evt2h7-native-fallible-control-flow).
 
 Integrated execution stage is [EVT2h8 milestone verification](#evt2h8-integrated-sum-types-and-fallibility).
+
+## EVT2h9 phase closeout
+
+Status: **FULLY QUALIFIED for the documented bounded domain**. Baseline `2c93386`; scope `3e2060c`;
+qualification `7024514`; parent/child test-gate correction `ee40b10`.
+The [authoritative phase matrix and evidence](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md)
+separates bounded native execution from source/C support and deferred work.
+Historical tables retain their original stage status.
+
+| Surface | Authority / realization | H9 closeout boundary |
+| --- | --- | --- |
+| Ordinary/payload enums, match, closed Option/Result, ?/!/local handlers and short-circuit CFG | Existing checked Go source/LIR, frozen generated Concept bridges, Concept admission and AMD64 execution | Existing bounded copyable scalar/record/fixed-array domain; no new physical representation or ABI |
+| Native entry materialization | Existing Concept object projection and scalar liveness/allocator | Named expected-9 integration regression, distinct direct/indirect/sret/mixed-stack native/C11 vectors, independent ABI observers |
+| Fresh pipeline evidence | Test-only source rechecking/file adapter and generated Concept roundtrip | 100 independent files per qualified form; fresh admission/plans/encoding/fixups, exact bytes and Normal/Verify |
+| Verdict and checked assertions | Existing Go comptime evaluator/proof provenance; native erasure | No runtime Verdict, trust migration or second lattice; residual native code equals assertion-free counterfactual |
+| Frozen transport | Concept schemas/codecs/validators CMIRAMD3–10 | Unchanged canonical Git bytes and schema hashes, artifact-only mutation/sentinel gates |
+| Ownership/Drop readiness | Deferred checked cleanup obligations | Needs explicit move/init/destruction authority on scope/branch/return/failure exits; no ownership implementation begins in h9 |
+
+No central evaluator, generic-closure engine, production Go native path,
+allocator, frame planner, copier, ABI classifier or encoder is replaced here.
+Reference/owning payloads, nested sums, general external/variadic/indirect calls,
+foreign enum/C++ ABI, unwind and COFF remain outside EVT2h qualification.
 
 ## EVT2h8 integrated sum types and fallibility
 

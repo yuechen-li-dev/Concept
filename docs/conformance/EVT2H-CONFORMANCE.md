@@ -1,8 +1,46 @@
 # EVT2h — enum conformance
 
-Current EVT2h8 status: **MILESTONE VERIFIED — integrated native sum types and fallibility**.
+Current EVT2h9 status: **FULLY QUALIFIED for the documented bounded domain**.
 Historical sections retain the evidence and boundaries at their respective
 checkpoints. Ordinary milestone verification does not claim phase qualification.
+
+## EVT2h9 — phase qualification closeout
+
+Baseline `2c93386f02d218c667ef2b78c026d9ed25f5ae9b`; scope freeze `3e2060c`;
+adversarial/fresh native qualification `7024514`; child-process gate correction
+`ee40b10`; scheduler test start gate `919d204`. H9 changes no production checker, LIR producer, Cathedral module,
+codec, layout, ABI classifier, allocator, frame planner or encoder.
+See the [phase report and final capability matrix](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md)
+for exact commands, counts, timings, frozen hashes, native/C11/ABI evidence,
+initial failures and final reruns. Historical sections below retain their
+original milestone status; the phase report is the current evidence authority.
+
+The admitted domain composes ordinary/tagged enums, closed Option/Result,
+checked match and active payload binding, function/local failure destinations,
+Result<void,E>, bang UD2 and short-circuit boolean CFG. The parser's original
+add(7), seed2 failure is permanently named
+`IncomingRegisterOverlapParserAddSevenReturnsNine` and checks native result 9.
+Distinct direct/indirect incoming aggregates, hidden returns and mixed stack/
+floating/reference arguments now have additional C11 differential vectors.
+All existing independent MSVC/clang-cl and assembly observers remain in place.
+The documented indirect-temporary alignment discrepancy remains unresolved;
+these observations do not establish general foreign sum-type interoperability.
+
+Major-checkpoint gates connect 100 independently checked artifact files to
+fresh Concept codec/admission/planning/emission in both modes. Parent native
+hosts must account for all inputs; guarded-read and expected-trap children
+retain their intentionally single-image tests. H6's Verdict remains comptime:
+typed proof/provenance survives tooling, assertions erase, residual native bytes
+equal the assertion-free program, and no new trusted fact authority exists.
+CMIRAMD3–10 and their historical byte expectations remain frozen.
+
+Final scope is bounded, not universal native coverage. Raw local arrays,
+local-address witnesses across actual failure exits, nested v10 remap CFG,
+nested sum representations and unqualified references remain explicitly fenced.
+General ownership/Drop, move-only/owning payloads, escaping references, foreign
+sum/C++ ABI, unwind, indirect/variadic calls, external linkage and COFF output
+are not delivered. Ownership handoff must first inventory checked cleanup
+obligations; no subsequent phase starts here.
 
 ## EVT2h8 — sum-type and fallibility integration
 

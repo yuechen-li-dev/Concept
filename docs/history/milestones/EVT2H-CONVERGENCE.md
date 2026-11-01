@@ -1,7 +1,35 @@
 # EVT2h convergence
 
-Current EVT2h8 status: **MILESTONE VERIFIED — integrated native sum types and fallibility**.
+Current EVT2h9 status: **FULLY QUALIFIED — bounded native sum types and fallibility**.
 Earlier sections retain historical outcomes and boundaries.
+
+## EVT2h9 phase qualification closeout
+
+Status: **FULLY QUALIFIED for the documented bounded domain** at baseline `2c93386`, with scope `3e2060c`,
+qualification tests `7024514` and parent/child harness correction `ee40b10`; scheduler start-gate correction `919d204`.
+The [complete closeout report](EVT2H9-PHASE-CLOSEOUT.md) owns the final suite
+results, current capability matrix, native hashes, profile counts and limits.
+Earlier records below remain historical evidence at their tested revisions.
+
+H9 adds a named expected-9 parser regression, distinct-valued incoming aggregate
+ABI vectors, and couples each older native determinism emission to an actual
+freshly checked file plus generated Concept roundtrip. Existing plan/debug,
+fixup, sentinel, floating-bit, independent C11 and MSVC/clang-cl gates remain.
+A qualification-only exit check initially applied the 100-input parent budget
+to a single-image guard-page child; `ee40b10` scopes that requirement correctly.
+The initial failure and exact full-sample reruns are recorded, not discarded.
+No production implementation or frozen CMIRAMD3–10 contract changed.
+
+The corrected incoming-materialization invariant is tested across multiple
+aggregates, scalar/floating mixtures, sret shifting, stack positions, nested
+calls and preservation observers. The prior indirect-temporary alignment
+observation remains a boundary. The three h8 programs retain their original
+vectors/interleavings and assertion-free runtime identity. Verdict remains
+comptime-only; Go still owns the evaluator and compiler trust decisions.
+
+The next phase is a separately reviewed ownership/Drop inventory over existing
+source cleanup rules and initialization/move/destruction obligations on every
+exit. H9 does not implement that phase or broaden native sums/references.
 
 ## EVT2h8 sum-type and fallibility integration
 

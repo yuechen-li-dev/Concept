@@ -1,5 +1,9 @@
 # Cathedral authority ledger (R9c)
 
+Current EVT2h phase status: **FULLY QUALIFIED for the bounded native domain**;
+see [h9 closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md). The introductory
+stage links below retain earlier qualification snapshots.
+
 Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
 Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
 Payload enum status is [EVT2h2 native tagged execution](#evt2h2-tagged-value-authority),
@@ -16,6 +20,31 @@ with focused independent evidence rather than phase-level qualification.
 Native fallibility is [EVT2h7 milestone verified control flow](#evt2h7-native-fallible-authority).
 
 Integrated sum-type execution is [EVT2h8 milestone verified](#evt2h8-integrated-execution-authority).
+
+## EVT2h9 phase authority qualification
+
+**FULLY QUALIFIED for the documented bounded domain**, baseline `2c93386`; scope `3e2060c`, test evidence
+`7024514`, test-only process-scope correction `ee40b10`. See the
+[phase closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md) for the final
+capability classification and actual independent gates. Historical stage
+statuses below do not supersede that current phase record.
+
+| Authority | Owner retained through closeout | Independent evidence |
+| --- | --- | --- |
+| Source legality, nominal/closed applications, active source operations, exact local/function failure destinations | Existing Go Stage-0 checker and target-independent MIR/LIR producer | Valid/invalid corpus, checked LIR mutations, C11 differential semantics |
+| Schema and artifact meaning | Ordinary Concept bridge schemas; generated Go/Concept transport | Frozen CMIRAMD3–10 hashes/bytes, independent source-free Concept admission and malformed/sentinel tests |
+| Active variant, fieldwise logical realization, physical entry materialization, storage and copying | Existing Concept validators and AMD64 object/tagged modules | 100 fresh native pipelines; named expected-9 parser and distinct incoming-argument regressions |
+| Allocation, unified frame, Win64 calls/returns, selection, encoding/fixups | Existing Concept AMD64 modules | Native-only execution, independent C11, MSVC/clang-cl plus assembly preservation observers and unchanged bytes |
+| Typed Verdict proof lattice, provenance and trusted facts | Existing Go evaluator/proof system; Concept-authored predicate bodies retain their narrower role | R9/h6 proof and malformed authority tests, semantic artifacts, assertion erasure and exact residual native identity |
+| Test scheduling/orchestration and external oracles | Go/PowerShell/C harnesses | Uncached complete regression plus companions; fresh-file completion applies to parent processes, not isolated trap/read children |
+
+H9 moves no semantic decision authority and introduces no runtime Verdict or
+new compiler-trusted facts. Equal sizes, spelling, numeric tags, or imported
+proof metadata cannot grant nominal identity, active-field access or trust.
+No second copier, union layout, frame planner, allocator or native Go algorithm
+was added. General ownership cleanup, nested sums/references, foreign sum ABI
+and unwind remain outside the qualified domain; the indirect-temporary
+alignment discrepancy remains documented.
 
 ## EVT2h8 integrated execution authority
 

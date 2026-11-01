@@ -3,9 +3,9 @@
 Scheduling update, effective 2026-10-31: follow the
 [revised EVT2 qualification policy](EVT2-QUALIFICATION-POLICY.md). Ordinary
 milestones use focused evidence; the full workflow is reserved for major
-checkpoints and warranted infrastructure-risk escalation. Next planned major
-checkpoint: EVT2h phase closeout, tentatively EVT2h9. Existing scripts, test
-logic, 100-run gates and the historical measurements below are unchanged.
+checkpoints and warranted infrastructure-risk escalation. EVT2h phase closeout has now run at EVT2h9; see its current update below.
+Existing test logic, 100-run gates and the historical measurements below
+remain preserved.
 
 EVT2h5 adds a ten-trial focused Result gate: fresh checked source/LIR/CFG,
 transport round trips, physical plans and native emissions. The Qualification
@@ -61,6 +61,18 @@ planning/emission gates. Qualification now permits 45 minutes per Go package;
 the larger native determinism host has its own eight-minute child deadline.
 Quick remains unchanged. This extends the execution budget, preserving every
 gate and repetition count; historical timings below describe their checkpoints.
+
+EVT2h9 closeout update: the major checkpoint is now [complete for the bounded
+EVT2h domain](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md). Its observed full
+window is 3656.93 s with expanded h5/h7/h8 phase-100 coverage and coupled fresh
+codec/admission/emission checks; this is different coverage from the historical
+h4 timing. Final Quick is 24.75 s under concurrent qualification. The full Go
+package budget is now 75 minutes. Parent hosts owe all 100 fresh inputs; isolated
+guard-page/trap children retain their intentionally single-image paths. Prepare
+the installed MSVC x64 environment and initialize the pinned TinyXML2 submodule
+before applicable native companion gates. Original failures/skips and complete
+affected-suite reruns remain separate in the evidence. Ordinary milestone and
+Quick scheduling remain unchanged; no result cache or reduced trial count.
 
 ## Scope and provenance
 

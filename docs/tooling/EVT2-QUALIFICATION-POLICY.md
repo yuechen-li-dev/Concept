@@ -13,8 +13,10 @@ Only scheduling changes; test cases, scripts and verification logic remain intac
 | Ordinary milestone completion | Focused native execution, independent C11 differential checks, Normal/Verify parity, malformed-input tests, selected adjacent regressions and a small justified fresh determinism sample |
 | Major checkpoint | All milestone checks plus complete qualification: 100 fresh determinism trials, all independent ABI oracles, full Go regression, required race checks and vet, corpus/Golden, Standard/DragonGod, GPU-free Vulkan, frozen artifacts, formatting/lint and policy checks |
 
-The next planned major qualification checkpoint is **EVT2h phase closeout,
-tentatively EVT2h9**. Ordinary feature completion does not depend on running the
+**EVT2h phase closeout was executed at EVT2h9**; see the
+[bounded phase qualification and exact evidence](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md).
+The next phase checkpoint must be explicitly scheduled in its reviewed scope.
+Ordinary feature completion does not depend on running the
 exhaustive project-wide workflow. A focused selection must still exercise the
 real changed path; C-bootstrap facts or internal verifier agreement alone do
 not establish native execution.
@@ -55,7 +57,11 @@ Preserve all existing cases, qualification scripts, independent oracles and full
 100-trial requirements. Do not delete coverage, change goldens to force a pass,
 disable checks, convert failures to warnings or replay cached results as fresh
 evidence. Existing documented frozen-Zig and prerequisite policies still apply;
-report skips explicitly.
+report skips explicitly. A complete run with a failure remains recorded as a
+failure. After a local fix, rerun the complete affected suites and document why
+any reused full-run results are unaffected; do not relabel the original exit or
+use cached test results. Distinguish cold source generation, C object compilation
+and native subprocess launches when reporting throughput.
 
 ## Evidence status and reporting
 
