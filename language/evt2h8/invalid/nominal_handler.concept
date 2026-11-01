@@ -1,0 +1,19 @@
+profile Core;
+enum ParseError {
+    Invalid
+}
+enum DeviceError {
+    Invalid
+}
+Result<int, ParseError> Parse() {
+    return Result::Error(ParseError::Invalid);
+}
+int Invalid() {
+    try {
+        int value = Parse() ?;
+        return value;
+    }
+    except(DeviceError error) {
+        return 0;
+    }
+}

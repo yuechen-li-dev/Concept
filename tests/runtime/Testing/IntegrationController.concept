@@ -1,0 +1,198 @@
+module Testing.IntegrationController;
+profile Core;
+
+enum ControllerState {
+    Idle, Running, Stopped, Faulted
+}
+enum ControllerEvent {
+    Start(int limit), Add(int amount), Stop, Snapshot
+}
+enum ConfigError {
+    InvalidLimit, NotReady
+}
+enum DeviceError {
+    Closed, Overflow
+}
+struct Session {
+    ControllerState state;
+    int total;
+    int sequence;
+    int denials;
+    int limit;
+}
+[[repr(C)]] record struct ControllerReport {
+    int state;
+    int total;
+    int sequence;
+    int denials;
+    int error;
+    int original;
+}
+
+Result<int, ConfigError> CheckedLimit(int limit) {
+    if (limit < 1 or limit > 32) { return Result::Error(ConfigError::InvalidLimit); }
+    return Result::Ok(limit);
+}
+Result<int, DeviceError> DeviceWrite(int total, int amount, int limit, ref int writes) {
+    writes++;
+    if (amount < 0) { return Result::Error(DeviceError::Closed); }
+    int next = total + amount;
+    if (next > limit) { return Result::Error(DeviceError::Overflow); }
+    return Result::Ok(next);
+}
+Result<int, DeviceError> CommitWrite(int total, int amount, int limit, ref int writes) {
+    int next = DeviceWrite(total, amount, limit, ref writes) ?;
+    return Result::Ok(next);
+}
+Option<int> Preferred(bool present, int value) {
+    return if (present) Option::Some(value) else Option::None;
+}
+Result<Session, ConfigError> FromIdle(Session source, ControllerEvent event) {
+    Session next = source;
+    match (event) {
+        ControllerEvent::Start(limit) => {
+            int checked = CheckedLimit(limit) ?;
+            next.state = ControllerState::Running;
+            next.limit = checked;
+            next.sequence = next.sequence + 1;
+        }
+        ControllerEvent::Add(amount) => { return Result::Error(ConfigError::NotReady); }
+        ControllerEvent::Stop => {
+            next.state = ControllerState::Stopped;
+        }
+        ControllerEvent::Snapshot => { }
+    }
+    return Result::Ok(next);
+}
+Result<Session, ConfigError> FromRunning(Session source, ControllerEvent event, Option<int> hint, ref int writes) {
+    Session next = source;
+    match (event) {
+        ControllerEvent::Start(limit) => { return Result::Error(ConfigError::NotReady); }
+        ControllerEvent::Add(amount) => {
+            int extra = match (hint) {
+                Option::Some(value) => value, Option::None => 0
+            };
+            try {
+                next.total = CommitWrite(source.total, amount + extra, source.limit, ref writes) ?;
+            }
+            except(DeviceError error) {
+                next.state = ControllerState::Faulted;
+                next.denials = next.denials + match (error) {
+                    DeviceError::Closed => 10, DeviceError::Overflow => 1
+                };
+            }
+            next.sequence = next.sequence + 1;
+        }
+        ControllerEvent::Stop => {
+            next.state = ControllerState::Stopped;
+            next.sequence = next.sequence + 1;
+        }
+        ControllerEvent::Snapshot => {
+            next.sequence = next.sequence + 1;
+        }
+    }
+    return Result::Ok(next);
+}
+Result<Session, ConfigError> Transition(Session source, ControllerEvent event, Option<int> hint, ref int writes) {
+    return match (source.state) {
+        ControllerState::Idle => FromIdle(source, event),
+        ControllerState::Running => FromRunning(source, event, hint, ref writes),
+        ControllerState::Stopped => Result::Error(ConfigError::NotReady),
+        ControllerState::Faulted => Result::Ok(source)
+    };
+}
+Result<Session, ConfigError> Forward(Session source, ControllerEvent event, Option<int> hint, ref int writes) {
+    Session next = Transition(source, event, hint, ref writes) ?;
+    return Result::Ok(next);
+}
+ControllerEvent SelectEvent(int scenario, int index, int value) {
+    if (index == 0) {
+        if (scenario == 1) { return ControllerEvent::Start(0); }
+        if (scenario == 2) { return ControllerEvent::Add(value); }
+        if (scenario == 3) { return ControllerEvent::Start(3); }
+        return ControllerEvent::Start(16);
+    }
+    if (index == 1) { return ControllerEvent::Add(value); }
+    return ControllerEvent::Stop;
+}
+int StateCode(ControllerState state) {
+    return match (state) {
+        ControllerState::Idle => 0, ControllerState::Running => 1, ControllerState::Stopped => 2, ControllerState::Faulted => 3
+    };
+}
+ControllerReport Run(int scenario, int value, ref int writes) {
+    Session original = Session{ControllerState::Idle, 0, 0, 0, 16};
+    Session current = original;
+    Option<int> hint = Preferred(scenario == 4, 2);
+    try {
+        for (index in 0 .. 3) {
+            ControllerEvent event = SelectEvent(scenario, index, value);
+            current = Forward(current, event, hint, ref writes) ?;
+        }
+        return ControllerReport {
+            StateCode(current.state), current.total, current.sequence, current.denials, 0, original.total
+        };
+    }
+    except(ConfigError error) {
+        int reason = match (error) {
+            ConfigError::InvalidLimit => 1, ConfigError::NotReady => 2
+        };
+        return ControllerReport {
+            StateCode(current.state), current.total, current.sequence, current.denials, reason, original.total
+        };
+    }
+}
+bool Mark(bool value, ref int trace, int digit) {
+    trace = trace * 10 + digit;
+    return value;
+}
+Result<bool, ConfigError> Permission(bool available, ref int trace) {
+    trace = trace * 10 + 2;
+    return if (available) Result::Ok(true) else Result::Error(ConfigError::NotReady);
+}
+bool GateAnd(bool left, bool available, ref int trace) {
+    return Mark(left, ref trace, 1) and Permission(available, ref trace)!;
+}
+bool GateOr(bool left, bool available, ref int trace) {
+    return Mark(left, ref trace, 1) or Permission(available, ref trace)!;
+}
+int GateHandled(bool left, bool available, ref int trace) {
+    try {
+        bool result = Mark(left, ref trace, 1) and Permission(available, ref trace) ?;
+        return if (result) 1 else 0;
+    }
+    except(ConfigError error) {
+        return - 1;
+    }
+}
+bool NestedGate(bool first, bool second, bool third, ref int trace) {
+    return Mark(first, ref trace, 1) and(Mark(second, ref trace, 2) or Mark(third, ref trace, 3));
+}
+int Guarded(bool first, bool second, ref int trace) {
+    return match {
+        when Mark(first, ref trace, 1) and Mark(second, ref trace, 2) => 7, otherwise => 9
+    };
+}
+int LogicalLoop(int count, ref int trace) {
+    int index = 0;
+    while (index < count and Mark(index < 3, ref trace, 1)) {
+        index++;
+    }
+    return index;
+}
+
+int StoreSelected(ref int target, int value) {
+    target = value;
+    return target;
+}
+int ReferenceSelection(bool select) {
+    int target = 0;
+    return StoreSelected(ref target, if (select) 4 else 9);
+}
+int Stamp(int digit, ref int trace) {
+    trace = trace * 10 + digit;
+    return trace;
+}
+int SequenceBeforeBranch(bool select, ref int trace) {
+    return Stamp(1, ref trace) + if (select) Stamp(2, ref trace) else Stamp(3, ref trace);
+}

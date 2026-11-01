@@ -1,0 +1,57 @@
+module Testing.IntegrationControllerFacts;
+profile Core;
+import Testing.IntegrationController;
+
+[[fact]] void ControllerTypedFailureAndCopyIsolation() {
+    int writes = 0;
+    ControllerReport normal = Run(0, 5, ref writes);
+    Assert.Equal(normal.state, 2, "stopped");
+    Assert.Equal(normal.total, 5, "committed value");
+    Assert.Equal(normal.sequence, 3, "state/event dispatch");
+    Assert.Equal(normal.original, 0, "session copy isolation");
+    Assert.Equal(writes, 1, "one device operation");
+    writes = 0;
+    ControllerReport config = Run(1, 5, ref writes);
+    Assert.Equal(config.error, 1, "configuration propagated");
+    Assert.Equal(writes, 0, "invalid configuration skips device");
+    ControllerReport inactive = Run(2, 5, ref writes);
+    Assert.Equal(inactive.error, 2, "state rejects event");
+    ControllerReport overflow = Run(3, 5, ref writes);
+    Assert.Equal(overflow.state, 3, "device error handled locally");
+    Assert.Equal(overflow.denials, 1, "nominal device error binding");
+    Assert.Equal(overflow.error, 0, "device error is not a configuration error");
+    ControllerReport hint = Run(4, 5, ref writes);
+    Assert.Equal(hint.total, 7, "optional hint");
+}
+
+[[fact]] void ShortCircuitSkipsFallibleWork() {
+    int trace = 0;
+    Assert.False(GateAnd(false, false, ref trace), "and skips failed assertion");
+    Assert.Equal(trace, 1, "RHS not evaluated");
+    trace = 0;
+    Assert.True(GateOr(true, false, ref trace), "or skips failed assertion");
+    Assert.Equal(trace, 1, "or RHS not evaluated");
+    trace = 0;
+    Assert.Equal(GateHandled(true, false, ref trace), - 1, "required RHS failure is handled");
+    Assert.Equal(trace, 12, "left then right once");
+    trace = 0;
+    Assert.True(NestedGate(true, false, true, ref trace), "nested logical expression");
+    Assert.Equal(trace, 123, "nested order");
+    trace = 0;
+    Assert.Equal(Guarded(false, true, ref trace), 9, "guard skips RHS");
+    Assert.Equal(trace, 1, "guard order");
+    trace = 0;
+    Assert.Equal(LogicalLoop(5, ref trace), 3, "while uses short circuit");
+    Assert.Equal(trace, 1111, "terminal RHS evaluated once");
+}
+
+[[fact]] void ValuesBeforeConditionalKeepOrderAndReferenceAuthority() {
+    Assert.Equal(ReferenceSelection(true), 4, "checked local reference before pure CFG");
+    Assert.Equal(ReferenceSelection(false), 9, "alternate CFG branch");
+    int trace = 0;
+    Assert.Equal(SequenceBeforeBranch(true, ref trace), 13, "left value survives branch");
+    Assert.Equal(trace, 12, "left then selected right exactly once");
+    trace = 0;
+    Assert.Equal(SequenceBeforeBranch(false, ref trace), 14, "alternate result");
+    Assert.Equal(trace, 13, "other arm not evaluated");
+}
