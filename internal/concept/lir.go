@@ -308,7 +308,7 @@ func VerifyLIR(m LIRModule) error {
 	if err := verifyLIREnums(m); err != nil {
 		return err
 	}
-	layouts, err := verifyLIRAggregateLayouts(m.Aggregates)
+	layouts, err := verifyLIRAggregateLayouts(m.Aggregates, m.Enums...)
 	if err != nil {
 		return err
 	}

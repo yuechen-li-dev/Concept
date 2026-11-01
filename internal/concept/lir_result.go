@@ -4,6 +4,17 @@ import "fmt"
 
 // Logical snapshots keep already-evaluated operands valid across the new CFG.
 // This does not allocate registers or physical stack storage.
+// Ordinary conditional CFG does not invalidate an already checked local
+// reference. Keep its existing dominance/lifetime witness. Actual failure exits
+// retain the explicitly unqualified local-address boundary from h5/h7.
+func (b *lirBuilder) saveBeforeExpression(value int, typ LIRType, span Span, later []Expr) (int, error) {
+	if lirAddressTarget(typ) != "" && !expressionsMayFail(later) {
+		if _, known := b.findReference(value); known {
+			return -1, nil
+		}
+	}
+	return b.saveBeforePropagation(value, typ, span)
+}
 func (b *lirBuilder) saveBeforePropagation(value int, typ LIRType, span Span) (int, error) {
 	for _, p := range b.fn.Params {
 		if p.ID == value {

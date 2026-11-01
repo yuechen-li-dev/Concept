@@ -314,6 +314,8 @@ func (b *lirBuilder) statement(stmt Statement) error {
 		return b.matchStatement(s)
 	case *TryStmt:
 		return b.tryStatement(s)
+	case *WhileStmt:
+		return b.whileStatement(s)
 	case *ExprStmt:
 		// Semantic analysis has already checked the proof and rejected Unknown
 		// or Disproven. Match C emission: this intrinsic has no runtime effect.
@@ -727,8 +729,8 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			}
 			args = append(args, v)
 			argTypes = append(argTypes, expected)
-			if resultQuestions(e.Args[i+1:]) {
-				saved[i], err = b.saveBeforePropagation(v, actual, e.Span)
+			if expressionsMayBranch(e.Args[i+1:]) {
+				saved[i], err = b.saveBeforeExpression(v, actual, e.Span, e.Args[i+1:])
 				if err != nil {
 					return 0, "", err
 				}
@@ -786,6 +788,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		return b.constant("bool", lit, e.Span), "bool", nil
 	case *BinaryExpr:
+		if e.Op == "and" || e.Op == "or" {
+			return b.logicalExpression(e)
+		}
 		if e.UnitScaleDenominator != 0 && e.UnitScaleNumerator != e.UnitScaleDenominator {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_QUANTITY_SCALE %d/%d at %d:%d", e.UnitScaleNumerator, e.UnitScaleDenominator, e.Span.Line, e.Span.Column)
 		}
@@ -794,8 +799,8 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			return 0, "", err
 		}
 		saved := -1
-		if resultQuestion(e.Right) {
-			saved, err = b.saveBeforePropagation(left, lt, e.Span)
+		if expressionMayBranch(e.Right) {
+			saved, err = b.saveBeforeExpression(left, lt, e.Span, []Expr{e.Right})
 			if err != nil {
 				return 0, "", err
 			}

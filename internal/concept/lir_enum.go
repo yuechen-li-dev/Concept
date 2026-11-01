@@ -93,6 +93,15 @@ func verifyLIREnums(m LIRModule) error {
 		}
 		for _, b := range f.Blocks {
 			for _, in := range b.Instructions {
+				// Composite v9/v10 already carries checked field geometry and
+				// location authority. Permit an internal address of a known enum
+				// field; public enum references/arrays retain the h1 restriction.
+				if in.Op == "field_address" && (patterns || len(m.TaggedEnums) > 0) && lirEnumType(lirAddressTarget(in.Type)) {
+					if _, ok := domains[lirAddressTarget(in.Type)]; !ok {
+						return fmt.Errorf("LIR_ENUM_UNKNOWN_TYPE")
+					}
+					continue
+				}
 				if err := check(in.Type); err != nil {
 					return err
 				}

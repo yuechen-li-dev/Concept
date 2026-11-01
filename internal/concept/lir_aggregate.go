@@ -200,8 +200,12 @@ func (a *lirAggregateTypes) lower(t Type) (LIRType, error) {
 	return layout.Type, nil
 }
 
-func verifyLIRAggregateLayouts(list []LIRAggregateLayout) (map[LIRType]LIRAggregateLayout, error) {
+func verifyLIRAggregateLayouts(list []LIRAggregateLayout, enums ...LIREnum) (map[LIRType]LIRAggregateLayout, error) {
 	layouts := map[LIRType]LIRAggregateLayout{}
+	aliases := map[LIRType]LIREnum{}
+	for _, domain := range enums {
+		aliases[domain.Type] = domain
+	}
 	identities := map[string]bool{}
 	depths := map[LIRType]int{}
 	if len(list) > lirAggregateMaxLayouts {
@@ -227,6 +231,11 @@ func verifyLIRAggregateLayouts(list []LIRAggregateLayout) (map[LIRType]LIRAggreg
 			// Nested descriptors must precede their consumers. This bounds graph
 			// traversal, rejects cycles and makes artifact ordering deterministic.
 			size, align, err := lirAggregateGeometry(field.Type, layouts, 0)
+			if domain, known := aliases[field.Type]; known {
+				// The caller has verified the nominal domain. Consume that
+				// checked geometry, not an integer-width guess or fake record.
+				size, align, err = domain.Size, domain.Alignment, nil
+			}
 			if err != nil || size != field.Size || align != field.Alignment {
 				return nil, fmt.Errorf("LIR_BAD_AGGREGATE_FIELD_TYPE %s.%s", layout.Name, field.Name)
 			}
@@ -328,8 +337,8 @@ func (b *lirBuilder) recordConstruction(e *StructConstructExpr) (int, LIRType, e
 		}
 		args[member] = value
 		types[member] = actual
-		if resultQuestions(e.Args[i+1:]) {
-			saved[member], err = b.saveBeforePropagation(value, actual, e.Span)
+		if expressionsMayBranch(e.Args[i+1:]) {
+			saved[member], err = b.saveBeforeExpression(value, actual, e.Span, e.Args[i+1:])
 			if err != nil {
 				return 0, "", err
 			}

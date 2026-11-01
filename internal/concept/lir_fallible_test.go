@@ -235,6 +235,11 @@ func TestEVT2h7NativeBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatalf("must remain source-valid: %v", err)
 			}
+			if filepath.Base(path) == "short_circuit.concept" {
+				assertEVT2h7Promotion(t, module)
+				t.Log("EVT2h8 promotes the historical native and/or boundary")
+				return
+			}
 			if _, err := GenerateMachineIR(module); err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("want %s, got %v", want, err)
 			} else {
