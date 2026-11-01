@@ -1,0 +1,8 @@
+// expect: EVT2_UNSUPPORTED_BINARY and
+profile Core;
+Result<bool, bool> Flag(bool value) {
+    return Result::Ok(value);
+}
+bool Need(bool guard) {
+    return guard and Flag(false)!;
+}

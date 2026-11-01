@@ -125,6 +125,7 @@ func TestAMD64CLIBatch(t *testing.T) {
 		{"payload-match", "../../tests/runtime/Testing/TaggedMatches.concept", "", []string{"functions=35", "frame size=", "hidden-aggregate-return"}},
 		{"option", "../../tests/runtime/Testing/Options.concept", "", []string{"functions=34", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
 		{"result", "../../tests/runtime/Testing/Results.concept", "", []string{"functions=61", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
+		{"fallible", "../../tests/runtime/Testing/FallibleControl.concept", "", []string{"functions=43", "frame size=", "hidden-aggregate-return", "direct-aggregate-return", "fn BangStopsArguments ["}},
 		{"typed-predicate-erasure", "../../language/evt1/semantic-vocabulary/valid/typed_predicate_protocol.concept", "", []string{"bytes=10 functions=1 calls=0 finalized=1", "fn Use [Use|Use()] offset=0 size=10", "41ba070000004489d0c3"}},
 		{"typed-verdict-values-erasure", "../../language/evt1/semantic-vocabulary/valid/typed_verdict_values.concept", "", []string{"bytes=10 functions=1 calls=0 finalized=1", "fn Use [Use|Use()] offset=0 size=10", "41ba070000004489d0c3"}},
 		{"calls", "../../internal/concept/testdata/evt2e_calls.concept", "", []string{"native image bytes=", "resolved=1"}},

@@ -71,8 +71,9 @@ type LIRBlock struct {
 	Term         LIRTerminator
 }
 type LIRFunction struct {
-	Patterns   []LIRPatternFlow   `json:",omitempty"`
-	Borrow     *LIRBorrowContract `json:",omitempty"`
+	Fallible   *LIRFallibleContract `json:",omitempty"`
+	Patterns   []LIRPatternFlow     `json:",omitempty"`
+	Borrow     *LIRBorrowContract   `json:",omitempty"`
 	Identity   string
 	Name       string
 	Params     []LIRValue
@@ -172,6 +173,9 @@ func (m LIRModule) String() string {
 			fmt.Fprintf(&out, "v%d: %s", p.ID, p.Type)
 		}
 		fmt.Fprintf(&out, ") -> %s\n", f.Result)
+		if f.Fallible != nil {
+			fmt.Fprintf(&out, "  fallible tries=%v handlers=%v sites=%v\n", f.Fallible.Tries, f.Fallible.Handlers, f.Fallible.Sites)
+		}
 		for _, p := range f.Patterns {
 			fmt.Fprintf(&out, "  pattern subject=s%d result=s%d join=b%d scope=%d arms=%v\n", p.SubjectSlot, p.ResultSlot, p.Join, p.Scope, p.Arms)
 		}
@@ -331,7 +335,7 @@ func VerifyLIR(m LIRModule) error {
 	}
 	for _, f := range m.Functions {
 		if err := verifyLIRPatternFlow(f, m); err != nil {
-			return err
+			return fmt.Errorf("%s: %w", f.Name, err)
 		}
 		if err := verifyLIRMachineFunction(f); err != nil {
 			return err

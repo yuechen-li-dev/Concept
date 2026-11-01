@@ -1,0 +1,62 @@
+module Testing.NativeFallibleFacts;
+profile Core;
+import Testing.FallibleControl;
+
+[[fact]] void FallibleSuccessAndLocalDestinations() {
+    int log = 0;
+    Assert.Equal(RequireResult(true, ref log), 14, "Result bang");
+    Assert.Equal(log, 15, "bang operand once");
+    log = 0;
+    Assert.Equal(RequireOption(true, ref log), 7, "Option bang");
+    Assert.Equal(log, 35, "Option continuation");
+    log = 0;
+    Assert.Equal(RequireVoid(true, ref log), 9, "void bang");
+    Assert.Equal(log, 45, "void continuation");
+    log = 0;
+    Assert.Equal(Local(true, true, ref log), 5, "local success");
+    Assert.Equal(log, 1258, "success skips handlers");
+    log = 0;
+    Assert.Equal(Local(false, true, ref log), 10, "first nominal error");
+    Assert.Equal(log, 168, "failure skips later operand");
+    log = 0;
+    Assert.Equal(Local(true, false, ref log), 20, "second nominal error");
+    Assert.Equal(log, 1278, "second handler");
+    log = 0;
+    Assert.Equal(Nested(false, true, ref log), 10, "unmatched inner handler bypassed");
+    log = 0;
+    Assert.Equal(Nearest(false, true, ref log), 34, "nearest exact handler");
+    log = 0;
+    Assert.Equal(HandlerFailure(false, false, ref log), 60, "handler failure reaches outer handler");
+    log = 0;
+    Assert.Equal(VoidLocal(false, ref log), 9, "void failure binding");
+}
+
+[[fact]] void FallibleOrderAndJoins() {
+    int log = 0;
+    Assert.Equal(OptionCode(ForwardOption(false, ref log)), - 1, "None returns from function");
+    Assert.Equal(log, 3, "None skips continuation");
+    log = 0;
+    Assert.Equal(OptionCode(OptionInsideTry(false, ref log)), - 1, "None bypasses a Result handler");
+    Assert.Equal(log, 13, "Option operand evaluated once inside try");
+    log = 0;
+    Assert.Equal(OptionCode(OptionOrder(false, ref log)), - 1, "argument propagation");
+    Assert.Equal(log, 23, "later argument skipped");
+    log = 0;
+    Assert.Equal(OptionCode(OptionOrder(true, ref log)), 13, "successful argument");
+    Assert.Equal(log, 234, "left to right order");
+    log = 0;
+    Assert.Equal(BangOrder(ref log), 12, "bang argument");
+    Assert.Equal(log, 213, "bang preserves argument evaluation order");
+    log = 0;
+    Assert.Equal(RemapCode(false, ref log), - 2, "explicit remap bypasses local handler");
+    log = 0;
+    Assert.Equal(Loop(5, 2, ref log), 18, "loop continues after handled error");
+    Assert.Equal(log, 11111, "one fallible call per iteration");
+    log = 0;
+    Assert.Equal(MatchTry(false, true, ref log), 10, "try within pattern arm");
+    Assert.Equal(PairLocal(false, 7), 16, "live aggregate across failure");
+    Assert.Equal(PairBang(true, 7).second, 8, "aggregate success extraction");
+    Assert.Equal(ItemLocal(false, 7).count, 8, "record error binding");
+    Assert.Equal(RealLocal(false, 3.5), 3.5, "floating error binding");
+    Assert.Equal(Pressure(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0), 56.0, "live floating values across calls");
+}

@@ -2,11 +2,12 @@ package concept
 
 // Typed source predicates shared by C bootstrap and checked LIR production.
 // Recognize their enclosing expressions before evaluating earlier operands.
+// The historical helper name also covers Option ? and both success assertions.
 func resultQuestion(expr Expr) bool {
 	var children []Expr
 	switch e := expr.(type) {
 	case *FailureExpr:
-		if evt1IsResultType(e.ResolvedType) && e.Op == "?" {
+		if evt1IsFailureType(e.ResolvedType) && (e.Op == "?" || e.Op == "!") {
 			return true
 		}
 		children = []Expr{e.Value, e.Else}

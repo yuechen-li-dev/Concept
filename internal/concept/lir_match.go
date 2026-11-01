@@ -16,6 +16,14 @@ type LIRPatternArm struct {
 func (b *lirBuilder) checkedExpressionType(expr Expr) (Type, error) {
 	scope := newEVT1Scope(nil)
 	scope.returnType = b.mir.ReturnType
+	for _, context := range b.tryStack {
+		if scope.tryHandlers == nil {
+			scope.tryHandlers = map[string]Type{}
+		}
+		for key, handler := range context.handlers {
+			scope.tryHandlers[key] = handler.arm.ErrorType
+		}
+	}
 	for name, binding := range b.names {
 		scope.declare(name, evt1ValueBinding{t: binding.typ, mutable: true, state: evt1StorageInitialized})
 	}

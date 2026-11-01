@@ -121,6 +121,18 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		if b.borrowErr != nil {
 			return LIRModule{}, b.borrowErr
 		}
+		if b.hasFallibleControl {
+			// V10 function destinations currently require a straight-line Error
+			// arm. Keep existing V9 remaps intact and diagnose this native subset
+			// boundary before the independent contract verifier.
+			for _, site := range b.failureSites {
+				if site.Kind == "remap" && b.fn.Blocks[b.fn.Patterns[site.Flow].Arms[1].Body].Term.Op != "return" {
+					return LIRModule{}, fmt.Errorf("%s: EVT2H7_UNSUPPORTED_REMAP_CONTROL", b.fn.Name)
+				}
+			}
+			b.failureControl.Sites = b.failureSites
+			b.fn.Fallible = &b.failureControl
+		}
 		if b.hasBorrow {
 			b.fn.Borrow = &LIRBorrowContract{Scopes: b.scopes, SlotScopes: b.slotScopes, References: b.references}
 		} else {
@@ -224,9 +236,13 @@ type lirBuilder struct {
 	machineFields map[string]int
 	machineStates map[string]int
 	// terminalStates marks states whose entry completes the machine.
-	terminalStates map[string]bool
-	activeState    int
-	activation     *activationStepContext
+	terminalStates     map[string]bool
+	activeState        int
+	activation         *activationStepContext
+	tryStack           []*lirTryContext
+	failureSites       []LIRFailureSite
+	failureControl     LIRFallibleContract
+	hasFallibleControl bool
 }
 
 func (b *lirBuilder) value() int { n := b.nextValue; b.nextValue++; return n }
@@ -297,7 +313,7 @@ func (b *lirBuilder) statement(stmt Statement) error {
 	case *MatchStmt:
 		return b.matchStatement(s)
 	case *TryStmt:
-		return fmt.Errorf("EVT2H5_UNSUPPORTED_LOCAL_ERROR_HANDLING")
+		return b.tryStatement(s)
 	case *ExprStmt:
 		// Semantic analysis has already checked the proof and rejected Unknown
 		// or Disproven. Match C emission: this intrinsic has no runtime effect.
@@ -829,11 +845,8 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		v, typ := b.loadMachineField(id, e.Span)
 		return v, typ, nil
 	case *FailureExpr:
-		if evt1IsResultType(e.ResolvedType) {
+		if evt1IsFailureType(e.ResolvedType) {
 			return b.resultPropagation(e)
-		}
-		if evt1IsOptionType(e.ResolvedType) {
-			return 0, "", fmt.Errorf("EVT2H4_UNSUPPORTED_OPTION_OPERATOR %s", e.Op)
 		}
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	case *StructConstructExpr:

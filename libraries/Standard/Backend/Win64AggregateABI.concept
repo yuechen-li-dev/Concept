@@ -1,11 +1,11 @@
 module Standard.Backend.Win64AggregateABI;
 profile Core;
 import Standard.Backend.Win64ABI;
-import Standard.Backend.BridgeValidate9;
+import Standard.Backend.BridgeValidate10;
 
 Result<WireTaggedModule, BackendError> NativeTaggedDocument(ref const BridgeReader reader) {
-    if (Len(reader.data) >= 8 and reader.data[7] == 57) {
-        WirePatternModule pattern = ReadPatternDocument(ref const reader) ?;
+    if (IsNativePatternBridge(reader.data)) {
+        WirePatternModule pattern = NativePatternDocument(ref const reader) ?;
         return Result::Ok(pattern.Base);
     }
     return ReadTaggedDocument(ref const reader);
@@ -86,7 +86,7 @@ WireObjectModule document, int typeID, int depth) {
     }
     bool[256] eligible =[false ...];
     bool[256] sums =[false ...];
-    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57 or reader.data[7] == 65)) {
         match (NativeTaggedDocument(ref const reader)) {
             Result::Ok(tagged) => {
                 if (tagged.Domains.count > 128) {

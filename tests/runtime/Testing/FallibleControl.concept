@@ -1,0 +1,335 @@
+module Testing.FallibleControl;
+profile Core;
+
+enum ConfigError {
+    Missing, Invalid
+}
+enum DeviceError {
+    Closed, Busy
+}
+struct Pair {
+    int first;
+    int second;
+}
+[[repr(C)]] record struct Item {
+    int count;
+    double amount;
+}
+
+Result<int, ConfigError> Load(bool valid, int value, ref int log) {
+    log = log * 10 + 1;
+    return if (valid) Result::Ok(value) else Result::Error(ConfigError::Missing);
+}
+Result<int, DeviceError> Open(bool valid, ref int log) {
+    log = log * 10 + 2;
+    return if (valid) Result::Ok(3) else Result::Error(DeviceError::Closed);
+}
+Option<int> Maybe(bool valid, ref int log) {
+    log = log * 10 + 3;
+    return if (valid) Option::Some(7) else Option::None;
+}
+Result<void, ConfigError> Validate(bool valid, ref int log) {
+    log = log * 10 + 4;
+    return if (valid) Result::Ok else Result::Error(ConfigError::Invalid);
+}
+int RequireResult(bool valid, ref int log) {
+    int value = Load(valid, 14, ref log)!;
+    log = log * 10 + 5;
+    return value;
+}
+int RequireOption(bool valid, ref int log) {
+    int value = Maybe(valid, ref log)!;
+    log = log * 10 + 5;
+    return value;
+}
+int RequireVoid(bool valid, ref int log) {
+    Validate(valid, ref log)!;
+    log = log * 10 + 5;
+    return 9;
+}
+int Local(bool config, bool device, ref int log) {
+    int answer = 0;
+    try {
+        int first = Load(config, 2, ref log) ?;
+        int second = Open(device, ref log) ?;
+        answer = first + second;
+        log = log * 10 + 5;
+    }
+    except(ConfigError error) {
+        answer = match (error) {
+            ConfigError::Missing => 10, ConfigError::Invalid => 11
+        };
+        log = log * 10 + 6;
+    }
+    except(DeviceError error) {
+        answer = match (error) {
+            DeviceError::Closed => 20, DeviceError::Busy => 21
+        };
+        log = log * 10 + 7;
+    }
+    log = log * 10 + 8;
+    return answer;
+}
+int Nested(bool first, bool second, ref int log) {
+    int answer = 0;
+    try {
+        try {
+            answer = Load(first, 2, ref log) ?;
+        }
+        except(DeviceError error) {
+            answer = 99;
+        }
+        answer += Open(second, ref log) ?;
+    }
+    except(ConfigError error) {
+        return 10;
+    }
+    except(DeviceError error) {
+        return 20;
+    }
+    return answer;
+}
+int Nearest(bool first, bool second, ref int log) {
+    int answer = 0;
+    try {
+        try {
+            answer = Load(first, 2, ref log) ?;
+        }
+        except(ConfigError error) {
+            answer = 30;
+        }
+        answer += Load(second, 4, ref log) ?;
+    }
+    except(ConfigError error) {
+        return 40;
+    }
+    return answer;
+}
+int HandlerFailure(bool first, bool second, ref int log) {
+    int answer = 0;
+    try {
+        try {
+            answer = Load(first, 2, ref log) ?;
+        }
+        except(ConfigError error) {
+            answer = Load(second, 9, ref log) ?;
+        }
+    }
+    except(ConfigError error) {
+        return 60;
+    }
+    return answer;
+}
+int Loop(int count, int fail, ref int log) {
+    int answer = 0;
+    for (index in 0 .. count) {
+        try {
+            int value = Load(index != fail, index, ref log) ?;
+            answer += value;
+        }
+        except(ConfigError error) {
+            answer += 10;
+        }
+    }
+    return answer;
+}
+int VoidLocal(bool valid, ref int log) {
+    try {
+        Validate(valid, ref log) ?;
+        return 7;
+    }
+    except(ConfigError error) {
+        return match (error) {
+            ConfigError::Missing => 8, ConfigError::Invalid => 9
+        };
+    }
+}
+Option<int> ForwardOption(bool valid, ref int log) {
+    int value = Maybe(valid, ref log) ?;
+    log = log * 10 + 5;
+    return Option::Some(value + 1);
+}
+int OptionCode(Option<int> value) {
+    return match (value) {
+        Option::Some(number) => number, Option::None => - 1
+    };
+}
+Result<int, DeviceError> Remap(bool valid, ref int log) {
+    try {
+        int value = Load(valid, 12, ref log) ? else DeviceError::Busy;
+        int extra = Load(true, 1, ref log) ?;
+        return Result::Ok(value + extra);
+    }
+    except(ConfigError error) {
+        return Result::Ok(99);
+    }
+}
+Result<int, ConfigError> Boundary(bool config, bool device, ref int log) {
+    try {
+        int first = Load(config, 2, ref log) ?;
+        int second = Open(device, ref log) ?;
+        return Result::Ok(first + second);
+    }
+    except(DeviceError error) {
+        return Result::Ok(20);
+    }
+}
+int BoundaryCode(bool config, bool device, ref int log) {
+    return match (Boundary(config, device, ref log)) {
+        Result::Ok(value) => value, Result::Error(error) => - 1
+    };
+}
+int Conditional(bool choose, bool valid, ref int log) {
+    int answer = 0;
+    if (choose) {
+        try {
+            answer = Load(valid, 7, ref log) ?;
+        }
+        except(ConfigError error) {
+            answer = 10;
+        }
+    } else {
+        answer = 20;
+    }
+    return answer;
+}
+Result<float, float> SmallRealResult(bool valid, float value) {
+    return if (valid) Result::Ok(value) else Result::Error(value);
+}
+float SmallRealLocal(bool valid, float value) {
+    try {
+        return SmallRealResult(valid, value) ?;
+    } except(float error) {
+        return error;
+    }
+}
+double Mixed(bool valid, int number, double value, ref int log, Item item, float small, int seventh) {
+    try {
+        int loaded = Load(valid, number, ref log) ?;
+        if (loaded + seventh > 0) { return RealResult(true, value)! + item.amount; }
+        return value;
+    }
+    except(ConfigError error) {
+        return item.amount;
+    }
+}
+double MixedCaller(bool valid, ref int log) {
+    return Mixed(valid, 2, 3.5, ref log, Item{7, 4.5}, 1.25, 8);
+}
+int RemapCode(bool valid, ref int log) {
+    return match (Remap(valid, ref log)) {
+        Result::Ok(value) => value, Result::Error(error) => match (error) {
+            DeviceError::Closed => - 1, DeviceError::Busy => - 2
+        }
+    };
+}
+int BangIgnoresHandler(bool valid, ref int log) {
+    try {
+        return Load(valid, 6, ref log)!;
+    }
+    except(ConfigError error) {
+        log = 99;
+        return 99;
+    }
+}
+int Mark(ref int log, int digit) {
+    log = log * 10 + digit;
+    return digit;
+}
+int Combine(int a, int b, int c) {
+    return a + b + c;
+}
+int BangOrder(ref int log) {
+    return Combine(Mark(ref log, 2), Load(true, 7, ref log)!, Mark(ref log, 3));
+}
+Option<int> OptionOrder(bool valid, ref int log) {
+    return Option::Some(Combine(Mark(ref log, 2), Maybe(valid, ref log) ?, Mark(ref log, 4)));
+}
+Result<Pair, ConfigError> PairResult(bool valid, int value) {
+    return if (valid) Result::Ok(Pair{value, value + 1}) else Result::Error(ConfigError::Missing);
+}
+Pair PairBang(bool valid, int value) {
+    return PairResult(valid, value)!;
+}
+int PairLocal(bool valid, int value) {
+    Pair saved = Pair{value, value + 2};
+    try {
+        Pair pair = PairResult(valid, value) ?;
+        pair.first = 99;
+        return pair.second + saved.first;
+    }
+    except(ConfigError error) {
+        return saved.first + saved.second;
+    }
+}
+Result<double, double> RealResult(bool valid, double value) {
+    return if (valid) Result::Ok(value) else Result::Error(value);
+}
+double RealBang(bool valid, double value) {
+    return RealResult(valid, value)!;
+}
+double RealLocal(bool valid, double value) {
+    try {
+        return RealResult(valid, value) ?;
+    } except(double error) {
+        return error;
+    }
+}
+Result<Item, Item> ItemResult(bool valid, int value) {
+    return if (valid) Result::Ok(Item{value, 3.5}) else Result::Error(Item{value + 1, 4.5});
+}
+Item ItemLocal(bool valid, int value) {
+    try {
+        return ItemResult(valid, value) ?;
+    } except(Item error) {
+        return error;
+    }
+}
+Result<int[3], ConfigError> ArrayResult(bool valid) {
+    return if (valid) Result::Ok([2, 3, 4]) else Result::Error(ConfigError::Missing);
+}
+double Pressure(double a, double b, double c, double d, double e, double f, double g) {
+    double saved = a + b + c + d + e + f + g;
+    try {
+        double value = RealResult(true, a) ?;
+        return saved + value + b + c + d + e + f + g;
+    }
+    except(double error) {
+        return saved + error;
+    }
+}
+int Recursive(int depth, bool valid, ref int log) {
+    if (depth == 0) { return Local(valid, true, ref log); }
+    return Recursive(depth - 1, valid, ref log) + 1;
+}
+int MatchTry(bool valid, bool choose, ref int log) {
+    int answer = 0;
+    Option<int> selection = if (choose) Option::Some(2) else Option::None;
+    match (selection) {
+        Option::Some(value) => {
+            try {
+                answer = Load(valid, value, ref log) ?;
+            } except(ConfigError error) {
+                answer = 10;
+            }
+        }
+        Option::None => {
+            answer = 20;
+        }
+    }
+    return answer;
+}
+
+Option<int> OptionInsideTry(bool valid, ref int log) {
+    try {
+        int first = Load(true, 2, ref log) ?;
+        int second = Maybe(valid, ref log) ?;
+        return Option::Some(first + second);
+    }
+    except(ConfigError error) {
+        return Option::Some(99);
+    }
+}
+int BangStopsArguments(ref int log) {
+    return Combine(Mark(ref log, 2), Load(false, 7, ref log) !, Mark(ref log, 3));
+}

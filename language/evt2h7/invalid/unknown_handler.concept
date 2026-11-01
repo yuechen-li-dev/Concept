@@ -1,0 +1,9 @@
+// expect: CV4550
+profile Core;
+int Need(Result<int, bool> value) {
+    try {
+        return value ?;
+    } except(Missing error) {
+        return 2;
+    }
+}

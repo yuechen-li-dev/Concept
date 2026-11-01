@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64.Objects;
 profile Core;
 import Standard.Backend.AMD64.Encoding;
+import Standard.Backend.BridgeValidate10;
 // Aggregate values are private typed frame objects, never scalar virtuals.
 // Scalar/location IDs alone enter the existing register allocator.
 struct ObjectPlacement {
@@ -21,8 +22,8 @@ ObjectPlacement EmptyObjectPlacement() {
 }
 Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
-    if (Len(artifact) >= 8 and artifact[7] == 57) {
-        WirePatternModule document = ReadPatternDocument(ref const reader) ?;
+    if (IsNativePatternBridge(artifact)) {
+        WirePatternModule document = NativePatternDocument(ref const reader) ?;
         return Result::Ok(document.Base.Base.Objects);
     }
     if (Len(artifact) >= 8 and artifact[7] == 56) {
@@ -401,7 +402,7 @@ Result<void, BackendError> ObjectStackAddress(ref ByteWriter writer, Register ta
 Result<void, BackendError> CopyObjectFields(ref ByteWriter writer, ref const BridgeReader reader,
 WireObjectModule document, int typeID, int offset, int depth) {
     BridgeSequence<WireTaggedDomain> domains = BridgeSequence<WireTaggedDomain>{0, 0};
-    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57 or reader.data[7] == 65)) {
         domains = NativeTaggedDocument(ref const reader) ?.Domains;
     }
     return CopyObjectFieldsWithDomains(ref writer, ref const reader, document, domains, typeID, offset,

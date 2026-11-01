@@ -1,0 +1,5 @@
+// expect: CV4541
+profile Core;
+int Need(int value) {
+    return value ?;
+}

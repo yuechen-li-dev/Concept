@@ -1,0 +1,13 @@
+// expect: EVT2H5_UNSUPPORTED_REFERENCE_ACROSS_PROPAGATION
+profile Core;
+Result<int, bool> Load(bool valid) {
+    return if (valid) Result::Ok(1) else Result::Error(true);
+}
+int Use(ref int target, int value) {
+    target = value;
+    return value;
+}
+int Need(bool valid) {
+    int local = 0;
+    return Use(ref local, Load(valid)!);
+}

@@ -1,0 +1,14 @@
+// expect: CV4547
+profile Core;
+enum A {
+    Missing
+}
+int Need(Result<int, A> value) {
+    try {
+        return value ?;
+    } except(A first) {
+        return 2;
+    } except(A second) {
+        return 3;
+    }
+}

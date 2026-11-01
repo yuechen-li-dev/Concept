@@ -101,6 +101,10 @@ func TestEVT2h5SourceBoundaries(t *testing.T) {
 					if err != nil {
 						t.Fatalf("must remain source-valid: %v", err)
 					}
+					if filepath.Base(path) == "bang.concept" || filepath.Base(path) == "try.concept" {
+						assertEVT2h7Promotion(t, module)
+						return
+					}
 					_, err = GenerateMachineIR(module)
 				}
 				if err == nil || code == "" || !strings.Contains(err.Error(), code) {

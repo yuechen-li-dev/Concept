@@ -1,0 +1,14 @@
+// expect: CV4024
+profile Core;
+enum Error {
+    Missing
+}
+int Need(Result<int, Error> value) {
+    try {
+        int number = value ?;
+        return number;
+    } except(Error error) { }
+    return match (error) {
+        Error::Missing => 1
+    };
+}

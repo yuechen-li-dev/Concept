@@ -1,0 +1,9 @@
+// expect: EVT2_UNSUPPORTED_LOCAL_ARRAY
+profile Core;
+Result<int[3], bool> Make() {
+    return Result::Ok([1, 2, 3]);
+}
+int Need() {
+    int[3] value = Make()!;
+    return value[0];
+}
