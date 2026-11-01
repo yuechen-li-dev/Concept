@@ -196,3 +196,11 @@ int Stamp(int digit, ref int trace) {
 int SequenceBeforeBranch(bool select, ref int trace) {
     return Stamp(1, ref trace) + if (select) Stamp(2, ref trace) else Stamp(3, ref trace);
 }
+
+// ABI regression: an unused scalar must not clobber the incoming event carrier.
+int UnusedScalarAfterEvent(ControllerEvent event, int ignored) {
+    return match (event) {
+        ControllerEvent::Start(limit) => limit, ControllerEvent::Add(amount) => amount,
+        ControllerEvent::Stop => 0, ControllerEvent::Snapshot => - 1
+    };
+}

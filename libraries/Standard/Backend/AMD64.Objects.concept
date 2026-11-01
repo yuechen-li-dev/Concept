@@ -248,32 +248,21 @@ WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement plac
         };
         AppendScalarInstruction(ref function, def, ScalarOpcode::Const) ?;
     }
-    // Aggregate parameters are unpacked together after scalar entry moves.
-    // Their private object values have no scalar uses in the source LIR. When
-    // several arrive together, retain their carriers through one common entry
-    // frontier so the existing allocator cannot assign them the same register.
-    // These are liveness observations, like the field uses below, not emitted
-    // loads or another calling convention.
-    int aggregateParameters = 0;
+    // Every aggregate parameter is unpacked after all scalar entry moves.
+    // Its private object value has no scalar use in source LIR. Retain each
+    // incoming carrier through this common entry point: another aggregate or
+    // even an unused scalar parameter must not overwrite it before unpacking.
+    // These are liveness observations, like field uses below, not emitted loads.
     for (i in 0 .. owner.Params.count) {
         WireObjectParameter parameter = NativeObjectAt<WireObjectParameter>(ref const reader, owner.Params,
         i) ?;
         if (placement.values[parameter.Value] >= 0) {
-            aggregateParameters += 1;
-        }
-    }
-    if (aggregateParameters > 1) {
-        for (i in 0 .. owner.Params.count) {
-            WireObjectParameter parameter = NativeObjectAt<WireObjectParameter>(ref const reader, owner.Params,
-            i) ?;
-            if (placement.values[parameter.Value] >= 0) {
-                MachineInstruction use = EmptyInstruction();
-                use = use with {
-                    source0 = ScalarVirtualOperand(placement.parameterCarriers[i], ref const function);
-                    sourceCount = 1;
-                };
-                AppendScalarInstruction(ref function, use, ScalarOpcode::Load) ?;
-            }
+            MachineInstruction use = EmptyInstruction();
+            use = use with {
+                source0 = ScalarVirtualOperand(placement.parameterCarriers[i], ref const function);
+                sourceCount = 1;
+            };
+            AppendScalarInstruction(ref function, use, ScalarOpcode::Load) ?;
         }
     }
     function.blockCount = owner.Blocks.count;

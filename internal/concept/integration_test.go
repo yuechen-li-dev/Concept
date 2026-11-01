@@ -110,7 +110,7 @@ func integrationChecked(t *testing.T, name, path string, m Module, source []byte
 func TestEVT2h8CheckedIntegration(t *testing.T) {
 	want := map[string]string{
 		"Parser":     "a22f7c6e20cd6c15210dd4929be40da9da1285d304aa4a91eed70e57f00a1951",
-		"Controller": "b76cd4cff852138c935eac6ca9066837bae2a6d80fb1aba56b2a3c7b9e3cce9b",
+		"Controller": "7100448fb789e1234041110111352374dd0550c97bd2cc57bdac1eb2fba9c73e",
 		"Assertions": "3be840ce69436a865e69c16d3fba81da5e73356904c2ef12fcb4301e457ca84f",
 		"Plain":      "2679883df393fa6f612b99aaa2d6cd0a8a0b9696519277de6ec8d7203ceb3dcb",
 	}

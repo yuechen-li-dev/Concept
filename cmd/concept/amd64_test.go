@@ -127,7 +127,7 @@ func TestAMD64CLIBatch(t *testing.T) {
 		{"result", "../../tests/runtime/Testing/Results.concept", "", []string{"functions=61", "frame size=", "hidden-aggregate-return", "direct-aggregate-return"}},
 		{"fallible", "../../tests/runtime/Testing/FallibleControl.concept", "", []string{"functions=43", "frame size=", "hidden-aggregate-return", "direct-aggregate-return", "fn BangStopsArguments ["}},
 		{"integration-parser", "../../tests/runtime/Testing/IntegrationParser.concept", "", []string{"functions=11", "frame size=", "fn ReadBounded [", "hidden-aggregate-return"}},
-		{"integration-controller", "../../tests/runtime/Testing/IntegrationController.concept", "", []string{"functions=23", "frame size=", "fn GateAnd [", "fn ReferenceSelection ["}},
+		{"integration-controller", "../../tests/runtime/Testing/IntegrationController.concept", "", []string{"functions=24", "frame size=", "fn GateAnd [", "fn ReferenceSelection ["}},
 		{"integration-assertions", "../../tests/runtime/Testing/IntegrationAssertions.concept", "", []string{"functions=2", "frame size=", "fn Run ["}},
 		{"typed-predicate-erasure", "../../language/evt1/semantic-vocabulary/valid/typed_predicate_protocol.concept", "", []string{"bytes=10 functions=1 calls=0 finalized=1", "fn Use [Use|Use()] offset=0 size=10", "41ba070000004489d0c3"}},
 		{"typed-verdict-values-erasure", "../../language/evt1/semantic-vocabulary/valid/typed_verdict_values.concept", "", []string{"bytes=10 functions=1 calls=0 finalized=1", "fn Use [Use|Use()] offset=0 size=10", "41ba070000004489d0c3"}},

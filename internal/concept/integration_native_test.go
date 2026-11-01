@@ -72,7 +72,7 @@ func TestEVT2h8NativeIntegration(t *testing.T) {
 			var emitted [][]byte
 			want := map[string]string{
 				"Parser":     "a7b2383995d4d64d7b6ec1d33935865580806319f7743fda6657ec1e788bff35",
-				"Controller": "045a90da6389f2881769582a3c109ba108556812de5d4d79964454168d4348bf",
+				"Controller": "e23ab5e5ffdb59bc3421f1e02c4184743816ad7746207450371c45d14aa23887",
 				"Assertions": "951e78d24abe10bc965982415e74f70b6bccabdcbba940c44a38d27c2978dbde",
 				"Plain":      "951e78d24abe10bc965982415e74f70b6bccabdcbba940c44a38d27c2978dbde",
 			}
@@ -80,6 +80,11 @@ func TestEVT2h8NativeIntegration(t *testing.T) {
 				code, err := os.ReadFile(filepath.Join(dir, s.name+".bin"))
 				if err != nil {
 					t.Fatal(err)
+				}
+				if s.name == "Controller" {
+					if len(code) <= 52892 || fmt.Sprintf("%x", sha256.Sum256(code[:52892])) != "045a90da6389f2881769582a3c109ba108556812de5d4d79964454168d4348bf" {
+						t.Fatal("qualified controller prefix changed")
+					}
 				}
 				if got := fmt.Sprintf("%x", sha256.Sum256(code)); got != want[s.name] {
 					t.Fatalf("%s native bytes changed: %s", s.name, got)
@@ -154,7 +159,7 @@ typedef struct{int status,total,commands,position,actual;} NParseReport;
 typedef struct{int kind,operand,next,optionalIndex;} NDecoded;typedef struct{int tag;NDecoded value;} NDecodedResult;typedef struct{int tag,value;} NToken;typedef NDecodedResult(*Decode)(NInput,int,int*);typedef NToken(*Materialize)(NDecoded);typedef int(*Evaluate)(NToken,NToken,int);
 typedef struct{int state,total,sequence,denials,error,original;} NControllerReport;
 typedef NParseReport(*ParseRun)(NInput,int,int*);typedef NControllerReport(*ControllerRun)(int,int,int*);
-typedef int(*AssertionRun)(_Bool,int);typedef _Bool(*Gate)(_Bool,_Bool,int*);typedef int(*Handled)(_Bool,_Bool,int*);typedef _Bool(*Nested)(_Bool,_Bool,_Bool,int*);typedef int(*LogicalLoop)(int,int*);typedef int(*ReferenceSelection)(_Bool);typedef int(*SequenceBeforeBranch)(_Bool,int*);
+typedef int(*AssertionRun)(_Bool,int);typedef _Bool(*Gate)(_Bool,_Bool,int*);typedef int(*Handled)(_Bool,_Bool,int*);typedef _Bool(*Nested)(_Bool,_Bool,_Bool,int*);typedef int(*LogicalLoop)(int,int*);typedef int(*ReferenceSelection)(_Bool);typedef int(*SequenceBeforeBranch)(_Bool,int*);typedef int(*UnusedScalar)(NToken,int);
 _Static_assert(sizeof(NInput)==36,"checked input geometry");_Static_assert(sizeof(NParseReport)==20,"checked report geometry");_Static_assert(sizeof(NControllerReport)==24,"checked controller geometry");
 #define RESOLVE(t,name,m,o) t name;{void*entry=memories[m]+images[m].symbols.data[o].offset;memcpy(&name,&entry,sizeof name);}
 static int trap_trace,trap_number;static uintptr_t trap_start,trap_end;
@@ -220,7 +225,13 @@ int main(int argc,char**argv){setvbuf(stdout,NULL,_IONBF,0);
  RESOLVE(Decode,decode_word,0,ORD_Parser_DecodeWord);RESOLVE(Materialize,materialize,0,ORD_Parser_Materialize);RESOLVE(Evaluate,evaluate,0,ORD_Parser_Evaluate);
  RESOLVE(ParseRun,parse,0,ORD_Parser_Run);RESOLVE(ControllerRun,control,1,ORD_Controller_Run);RESOLVE(AssertionRun,asserted,2,ORD_Assertions_Run);RESOLVE(AssertionRun,plain,3,ORD_Plain_Run);
  RESOLVE(Gate,and_gate,1,ORD_Controller_GateAnd);RESOLVE(Gate,or_gate,1,ORD_Controller_GateOr);RESOLVE(Handled,handled,1,ORD_Controller_GateHandled);RESOLVE(Nested,nested,1,ORD_Controller_NestedGate);RESOLVE(Handled,guarded,1,ORD_Controller_Guarded);RESOLVE(LogicalLoop,loop,1,ORD_Controller_LogicalLoop);
+ RESOLVE(UnusedScalar,unused_scalar,1,ORD_Controller_UnusedScalarAfterEvent);
  RESOLVE(ReferenceSelection,reference_selection,1,ORD_Controller_ReferenceSelection);RESOLVE(SequenceBeforeBranch,sequence_before_branch,1,ORD_Controller_SequenceBeforeBranch);
+ {NToken event={1,7};CHECK(unused_scalar(event,123)==7);event.tag=0;event.value=19;CHECK(unused_scalar(event,456)==19);event.tag=2;CHECK(unused_scalar(event,999)==0);
+#ifndef INTEGRATION_NATIVE_ONLY
+  int ignoredTrace=0;for(int variant=0;variant<4;variant++){event.tag=variant;event.value=23;CHECK(unused_scalar(event,987)==oracle_logic(6,variant,23,987,&ignoredTrace));}
+#endif
+ }
  // Independent C callers exercise two simultaneous eight-byte sum carriers.
  {int reads=0;NDecodedResult word=decode_word(vectors[1].input,0,&reads);CHECK(!word.tag&&word.value.kind==1&&word.value.operand==7&&reads==2);NToken token=materialize(word.value),none={1,0},some={0,3};CHECK(token.tag==1&&token.value==7&&evaluate(token,none,2)==9);token.tag=3;CHECK(evaluate(token,some,2)==12);}
  for(int repeat=0;repeat<40;repeat++){
@@ -301,6 +312,7 @@ int oracle_logic(int op,int a,int b,int c,int*trace){switch(op){
  case 3:return concept_testing__integration_controller_gate_handled(a,b,trace);
  case 4:return concept_testing__integration_controller_guarded(a,b,trace);
  case 5:return concept_testing__integration_controller_logical_loop(a,trace);
+ case 6:{concept_controller_event event={0};event.tag=(concept_controller_event_tag)a;if(a==0)event.payload.start.limit=b;if(a==1)event.payload.add.amount=b;return concept_testing__integration_controller_unused_scalar_after_event(event,c);}
  default:abort();
 }}
 `,
