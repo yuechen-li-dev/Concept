@@ -13,6 +13,10 @@ func patternSuccessors(b LIRBlock) []int {
 }
 func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 	bad := func(s string) error { return fmt.Errorf("LIR_PATTERN_%s", s) }
+	guards, cuts, err := verifyLIRFallible(f, m)
+	if err != nil {
+		return err
+	}
 	if len(f.Patterns) == 0 {
 		for _, b := range f.Blocks {
 			for _, in := range b.Instructions {
@@ -52,7 +56,7 @@ func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 	}
 	allowed := map[[2]int]bool{}
 	roles := map[int]bool{}
-	for _, flow := range f.Patterns {
+	for flowIndex, flow := range f.Patterns {
 		if flow.Join < -1 || flow.ResultSlot < -1 {
 			return bad("JOIN")
 		}
@@ -65,7 +69,10 @@ func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 		if !isEnum && !lirInteger(s.Type) {
 			return bad("SUBJECT")
 		}
-		if isEnum && len(flow.Arms) != d.count {
+		if guards[flowIndex] && (!isEnum || d.count != 2 || len(flow.Arms) != 1) {
+			return bad("SUCCESS_GUARD")
+		}
+		if isEnum && !guards[flowIndex] && len(flow.Arms) != d.count {
 			return bad("EXHAUSTIVENESS")
 		}
 		if flow.Join != -1 && !validBlock(flow.Join) {
@@ -162,6 +169,9 @@ func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 					return bad("DISPATCH")
 				}
 				variant = test.Member
+				if guards[flowIndex] && variant != 0 {
+					return bad("SUCCESS_GUARD")
+				}
 				seen[variant] = true
 				allowed[[2]int{arm.Dispatch, 1}] = true
 			} else if last {
@@ -212,7 +222,8 @@ func verifyLIRPatternFlow(f LIRFunction, m LIRModule) error {
 			for len(queue) > 0 {
 				bi := queue[0]
 				queue = queue[1:]
-				if bi == flow.Join || region[bi] {
+				cutScope, cut := cuts[bi]
+				if bi == flow.Join || (cut && !borrowScopeContains(scopes, arm.Scope, cutScope)) || region[bi] {
 					continue
 				}
 				if !validBlock(bi) {

@@ -1,0 +1,12 @@
+// expect: CV4543
+profile Core;
+enum First {
+    Missing
+}
+enum Second {
+    Missing
+}
+Result<int, Second> Bad(Result<int, First> value) {
+    int result = value ?;
+    return Result::Ok(result);
+}

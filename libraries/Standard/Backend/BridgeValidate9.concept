@@ -143,7 +143,8 @@ int ordinal, ref PatternFunctionContext context) {
     return Result::Ok();
 }
 Result<void, PatternError> ValidatePatternRegion(ref const BridgeReader reader, WireObjectFunction owner,
-WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm, ref const ObjectAuthorityContext authority) {
+WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm, ref const ObjectAuthorityContext authority,
+int[128] cuts) {
     bool[128] region =[false ...];
     region[arm.Body] = true;
     bool changed = true;
@@ -159,7 +160,8 @@ WireBorrowFunction meta, WirePatternFlow flow, WirePatternArm arm, ref const Obj
                 }
                 WireObjectBlock block = PatternAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
                 for (target in 0 .. owner.Blocks.count) {
-                    if (target != flow.Join and PatternEdge(block, target) and not region[target]) {
+                    if (target != flow.Join and(cuts[target] < 0 or BorrowScopeContains(ref const reader,
+                    meta, arm.Scope, cuts[target])) and PatternEdge(block, target) and not region[target]) {
                         region[target] = true;
                         changed = true;
                     }
@@ -254,7 +256,8 @@ int type, int variant, ref PatternFunctionContext context) {
     return Result::Ok();
 }
 Result<void, PatternError> ValidatePatternFlow(ref const BridgeReader reader, WirePatternModule document,
-WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref PatternFunctionContext context) {
+WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref PatternFunctionContext context,
+bool guard, int[128] cuts) {
     WireObjectSlot subject = PatternAt<WireObjectSlot>(ref const reader, owner.Slots, flow.SubjectSlot) ?;
     if (flow.SubjectSlot < 0 or flow.SubjectSlot >= 64 or context.slots[flow.SubjectSlot] or not subject.Readonly or flow.Scope < 0 or flow.Scope >= meta.Scopes.count or PatternAt<int>(ref const reader,
     meta.SlotScopes, flow.SubjectSlot) ? != flow.Scope or flow.Arms.count < 1 or flow.Arms.count > 256) {
@@ -267,7 +270,9 @@ WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref Pat
     if (count == 0 and not ScalarInteger(ObjectScalar(type.Kind))) {
         return Result::Error(PatternError::Domain);
     }
-    if (count > 0 and flow.Arms.count != count) { return Result::Error(PatternError::Flow); }
+    if ((guard and(count != 2 or flow.Arms.count != 1)) or(not guard and count > 0 and flow.Arms.count != count)) {
+        return Result::Error(PatternError::Flow);
+    }
     if (flow.Join < - 1 or flow.Join >= owner.Blocks.count or flow.ResultSlot < - 1) {
         return Result::Error(PatternError::Join);
     }
@@ -373,6 +378,7 @@ WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref Pat
             if (not last and dispatch.Term.Value != test.Result) {
                 return Result::Error(PatternError::Flow);
             }
+            if (guard and test.Member != 0) { return Result::Error(PatternError::Flow); }
             variant = test.Member;
             seen[variant] = true;
             if (last) {
@@ -415,12 +421,19 @@ WireObjectFunction owner, WireBorrowFunction meta, WirePatternFlow flow, ref Pat
         }
         ValidatePatternBindings(ref const reader, document, owner, meta, flow, arm, subject.Type, variant,
         ref context) ?;
-        ValidatePatternRegion(ref const reader, owner, meta, flow, arm, ref const context.authority) ?;
+        ValidatePatternRegion(ref const reader, owner, meta, flow, arm, ref const context.authority,
+        cuts) ?;
     }
     return Result::Ok();
 }
 Result<void, PatternError> ValidatePatternFunction(ref const BridgeReader reader, WirePatternModule document,
 int ordinal, bool[256] sums) {
+    bool[64] guards =[false ...];
+    int[128] cuts =[- 1 ...];
+    return ValidatePatternFunctionControl(ref const reader, document, ordinal, sums, guards, cuts);
+}
+Result<void, PatternError> ValidatePatternFunctionControl(ref const BridgeReader reader, WirePatternModule document,
+int ordinal, bool[256] sums, bool[64] guards, int[128] cuts) {
     WireObjectFunction owner = PatternAt<WireObjectFunction>(ref const reader, document.Base.Base.Objects.Functions,
     ordinal) ?;
     WireBorrowFunction meta = PatternAt<WireBorrowFunction>(ref const reader, document.Base.Base.Authority,
@@ -453,7 +466,11 @@ int ordinal, bool[256] sums) {
         if (flow.Function == ordinal) {
             flowCount += 1;
             if (flowCount > 64) { return Result::Error(PatternError::Capacity); }
-            ValidatePatternFlow(ref const reader, document, owner, meta, flow, ref context) ?;
+            if (flow.SubjectSlot < 0 or flow.SubjectSlot >= 64) {
+                return Result::Error(PatternError::Flow);
+            }
+            ValidatePatternFlow(ref const reader, document, owner, meta, flow, ref context, guards[flow.SubjectSlot],
+            cuts) ?;
         }
     }
     for (i in 0 .. 512) {
@@ -495,7 +512,7 @@ Result<void, PatternError> ValidatePatternMachineBridge(ReadOnlySpan<byte> artif
     }
     WirePatternModule document = ReadPattern<WirePatternModule>(ref reader) ?;
     WireObjectModule objects = document.Base.Base.Objects;
-    if (reader.offset != Len(artifact) or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or document.Base.Base.Authority.count != objects.Functions.count or document.Base.Domains.count > 128 or document.Enums.count > 128 or document.Flows.count < 1 or document.Flows.count > 8192 or document.Operations.count > 131072 or document.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
+    if (reader.offset != Len(artifact) or objects.Types.count < 1 or objects.Types.count > 256 or objects.Functions.count < 1 or objects.Functions.count > 128 or document.Base.Base.Authority.count != objects.Functions.count or document.Base.Domains.count > 128 or document.Enums.count > 128 or(document.Flows.count == 0 and(document.Operations.count != 0 or document.Enums.count == 0 or document.Base.Domains.count == 0)) or document.Flows.count > 8192 or document.Operations.count > 131072 or document.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
         return Result::Error(PatternError::Capacity);
     }
     EnumDomainContext aliases = EmptyEnumDomainContext();

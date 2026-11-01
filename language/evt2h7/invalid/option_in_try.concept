@@ -1,0 +1,12 @@
+// expect: CV4542
+profile Core;
+enum A {
+    Missing
+}
+int Need(Option<int> value) {
+    try {
+        return value ?;
+    } except(A error) {
+        return 2;
+    }
+}

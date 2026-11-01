@@ -1,0 +1,50 @@
+module Standard.Backend.BridgeSchema10;
+profile Core;
+import Standard.Backend.BridgeSchema9;
+
+// A is hexadecimal ten; preserve the established eight-byte identity header.
+comptime string FallibleBridgeMagic = "CMIRAMDA";
+comptime uint FallibleBridgeVersion = 10u;
+comptime uint FallibleBridgeMaxItems = 1048576u;
+comptime string FallibleBridgeRepresentation = "little-endian;CMIRAMD9=77ee5fc973f76bd7ae51e4d4f47ca0aaaeefa6354ebec88ac91bb6e0bff98a3c;qualified-success-guard;exact-lexical-handler-routing;active-error-transfer;checked-region-exits;no-physical-fallibility-opcodes";
+
+[[reflect]] enum FallibleSiteKind {
+    [[bridge_value("require_success")]] RequireSuccess,
+    [[bridge_value("propagate")]] Propagate,
+    [[bridge_value("remap")]] Remap,
+}
+[[reflect]] record struct WireFallibleHeader {
+    uint8[8] magic;
+    uint version;
+    uint8[32] schemaHash;
+}
+[[reflect]] record struct WireFallibleTry {
+    int Function;
+    int Scope;
+    int Join;
+}
+[[reflect]] record struct WireFallibleHandler {
+    int Try;
+    int Type;
+    int InputSlot;
+    int BindingSlot;
+    int Entry;
+    int Scope;
+}
+[[reflect]] record struct WireFallibleSite {
+    int Flow;
+    FallibleSiteKind Kind;
+    int Handler;
+}
+[[reflect]] record struct WireFallibleModule {
+    WirePatternModule Base;
+    BridgeSequence<WireFallibleTry> Tries;
+    BridgeSequence<WireFallibleHandler> Handlers;
+    BridgeSequence<WireFallibleSite> Sites;
+}
+reflect<FallibleSiteKind>;
+reflect<WireFallibleHeader>;
+reflect<WireFallibleTry>;
+reflect<WireFallibleHandler>;
+reflect<WireFallibleSite>;
+reflect<WireFallibleModule>;

@@ -19,6 +19,14 @@ reason. Both payload types must be supported closed comptime values, even when
 one branch is not selected. Runtime `Result<T,E>` retains computation success/error
 semantics; Verdict is erased from runtime types, C, and runtime template instances.
 
+EVT2h6 confirms this boundary for Cathedral: after ordinary semantic checking,
+LIR erases a checked Assert.Concept just as C emission does. Cathedral executes
+the residual runtime program; it does not evaluate Verdict. Predicate/renderer
+bodies are Concept-authored, while the bounded evaluator, closure/observation
+driver, projector, proof graph and semantic artifact reader remain Go-owned.
+See [the authority inventory](EVT2H6-VERDICT-AUTHORITY.md) for the dependency graph
+and self-hosting prerequisites. No runtime Verdict representation is implied.
+
 ## Ordinary source
 
 ```concept

@@ -1,0 +1,5 @@
+// expect: CV4542
+profile Core;
+int Bad(Result<int, bool> value) {
+    return value ?;
+}

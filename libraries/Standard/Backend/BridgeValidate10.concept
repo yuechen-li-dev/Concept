@@ -1,0 +1,401 @@
+module Standard.Backend.BridgeValidate10;
+profile Core;
+import Standard.Backend.BridgeCodec10;
+import Standard.Backend.BridgeValidate9;
+
+enum FallibleError {
+    Malformed, Identity, Capacity, Control, Pattern
+}
+string DescribeFallibleError(FallibleError error) {
+    return match (error) {
+        FallibleError::Malformed => "CMIRAMD10_MALFORMED",
+        FallibleError::Identity => "CMIRAMD10_IDENTITY",
+        FallibleError::Capacity => "CMIRAMD10_CAPACITY_EXCEEDED",
+        FallibleError::Control => "CMIRAMD10_FALLIBLE_CONTROL",
+        FallibleError::Pattern => "CMIRAMD10_PATTERN_CONTRACT",
+    };
+}
+bool IsNativePatternBridge(ReadOnlySpan<byte> data) {
+    return Len(data) >= 8 and(data[7] == 57 or data[7] == 65);
+}
+Result<WireFallibleModule, BackendError> ReadFallibleDocument(ref const BridgeReader source) {
+    BridgeReader reader = BridgeReader{source.data, 0};
+    ReadFallibleBridgeIdentity(ref reader) ?;
+    return ReadWire(ref reader, BridgeType<WireFallibleModule>{0});
+}
+Result<WirePatternModule, BackendError> NativePatternDocument(ref const BridgeReader reader) {
+    if (Len(reader.data) >= 8 and reader.data[7] == 65) {
+        return Result::Ok(ReadFallibleDocument(ref const reader) ?.Base);
+    }
+    return ReadPatternDocument(ref const reader);
+}
+template <typename T> requires BridgeReadable<T>
+Result<T, FallibleError> FallibleAt(ref const BridgeReader reader, BridgeSequence<T> values, int index) {
+    return match (ObjectAt<T>(ref const reader, values, index)) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(FallibleError::Malformed),
+    };
+}
+
+Result<void, FallibleError> ValidateFallibleFunction(ref const BridgeReader reader, WireFallibleModule document,
+int ordinal, bool[256] sums) {
+    WirePatternModule base = document.Base;
+    WireObjectModule objects = base.Base.Base.Objects;
+    WireObjectFunction owner = FallibleAt<WireObjectFunction>(ref const reader, objects.Functions, ordinal) ?;
+    WireBorrowFunction meta = FallibleAt<WireBorrowFunction>(ref const reader, base.Base.Base.Authority,
+    ordinal) ?;
+    if (owner.Slots.count > 64 or owner.Blocks.count < 1 or owner.Blocks.count > 128 or meta.Scopes.count < 1 or meta.Scopes.count > 128 or meta.SlotScopes.count != owner.Slots.count) {
+        return Result::Error(FallibleError::Capacity);
+    }
+    bool[64] guards =[false ...];
+    int[128] cuts =[- 1 ...];
+    bool[64] usedSlots =[false ...];
+    bool[128] entries =[false ...];
+    int tries = 0;
+    int handlers = 0;
+    int sites = 0;
+    int previousFunction = - 1;
+    for (ti in 0 .. document.Tries.count) {
+        WireFallibleTry region = FallibleAt<WireFallibleTry>(ref const reader, document.Tries, ti) ?;
+        if (region.Function < previousFunction or region.Function < 0 or region.Function >= objects.Functions.count) {
+            return Result::Error(FallibleError::Control);
+        }
+        previousFunction = region.Function;
+        if (region.Function == ordinal) {
+            tries += 1;
+            if (tries > 64 or region.Scope <= 0 or region.Scope >= meta.Scopes.count or region.Join < 0 or region.Join >= owner.Blocks.count) {
+                return Result::Error(FallibleError::Control);
+            }
+            for (j in 0 .. ti) {
+                WireFallibleTry prior = FallibleAt<WireFallibleTry>(ref const reader, document.Tries,
+                j) ?;
+                if (prior.Function == ordinal and prior.Scope == region.Scope) {
+                    return Result::Error(FallibleError::Control);
+                }
+            }
+            bool used = false;
+            for (hi in 0 .. document.Handlers.count) {
+                if (FallibleAt<WireFallibleHandler>(ref const reader, document.Handlers, hi) ?.Try == ti) {
+                    used = true;
+                }
+            }
+            if (not used) { return Result::Error(FallibleError::Control); }
+            cuts[region.Join] = FallibleAt<WireBorrowScope>(ref const reader, meta.Scopes, region.Scope) ?.Parent;
+        }
+    }
+    for (hi in 0 .. document.Handlers.count) {
+        WireFallibleHandler handler = FallibleAt<WireFallibleHandler>(ref const reader, document.Handlers,
+        hi) ?;
+        WireFallibleTry region = FallibleAt<WireFallibleTry>(ref const reader, document.Tries, handler.Try) ?;
+        if (region.Function == ordinal) {
+            handlers += 1;
+            if (handlers > 64 or handler.Type < 0 or handler.Type >= objects.Types.count or handler.InputSlot < 0 or handler.InputSlot >= owner.Slots.count or handler.BindingSlot < 0 or handler.BindingSlot >= owner.Slots.count or handler.InputSlot == handler.BindingSlot or handler.Entry < 0 or handler.Entry >= owner.Blocks.count or handler.Scope <= 0 or handler.Scope >= meta.Scopes.count) {
+                return Result::Error(FallibleError::Control);
+            }
+            if (usedSlots[handler.InputSlot] or usedSlots[handler.BindingSlot] or entries[handler.Entry]) {
+                return Result::Error(FallibleError::Control);
+            }
+            usedSlots[handler.InputSlot] = true;
+            usedSlots[handler.BindingSlot] = true;
+            entries[handler.Entry] = true;
+            cuts[handler.Entry] = handler.Scope;
+            WireBorrowScope declared = FallibleAt<WireBorrowScope>(ref const reader, meta.Scopes, region.Scope) ?;
+            WireBorrowScope scope = FallibleAt<WireBorrowScope>(ref const reader, meta.Scopes, handler.Scope) ?;
+            WireObjectSlot input = FallibleAt<WireObjectSlot>(ref const reader, owner.Slots, handler.InputSlot) ?;
+            WireObjectSlot binding = FallibleAt<WireObjectSlot>(ref const reader, owner.Slots, handler.BindingSlot) ?;
+            if (scope.Parent != declared.Parent or FallibleAt<int>(ref const reader, meta.SlotScopes,
+            handler.InputSlot) ? != declared.Parent or FallibleAt<int>(ref const reader, meta.SlotScopes,
+            handler.BindingSlot) ? != handler.Scope or input.Type != handler.Type or binding.Type != handler.Type or not binding.Readonly) {
+                return Result::Error(FallibleError::Control);
+            }
+            WireObjectBlock entry = FallibleAt<WireObjectBlock>(ref const reader, owner.Blocks, handler.Entry) ?;
+            if (entry.Instructions.count < 2) {
+                return Result::Error(FallibleError::Control);
+            }
+            WireObjectInstruction load = FallibleAt<WireObjectInstruction>(ref const reader, entry.Instructions,
+            0) ?;
+            WireObjectInstruction init = FallibleAt<WireObjectInstruction>(ref const reader, entry.Instructions,
+            1) ?;
+            if (load.Op != ObjectOpcode::LoadSlot or load.Slot != handler.InputSlot or init.Op != ObjectOpcode::InitializeSlot or init.Slot != handler.BindingSlot or init.Args.count != 1 or FallibleAt<WireObjectValueUse>(ref const reader,
+            init.Args, 0) ?.Value != load.Result) {
+                return Result::Error(FallibleError::Control);
+            }
+            if (FallibleScopeAt(ref const reader, owner, meta, handler.Entry, 0) ? != handler.Scope or FallibleScopeAt(ref const reader,
+            owner, meta, handler.Entry, 1) ? != handler.Scope) {
+                return Result::Error(FallibleError::Control);
+            }
+            for (j in 0 .. hi) {
+                WireFallibleHandler prior = FallibleAt<WireFallibleHandler>(ref const reader, document.Handlers,
+                j) ?;
+                if (prior.Try == handler.Try and prior.Type == handler.Type) {
+                    return Result::Error(FallibleError::Control);
+                }
+            }
+        }
+    }
+    // Each incoming handler edge is justified by one active Error arm below.
+    int[128] routes =[- 1 ...];
+    for (si in 0 .. document.Sites.count) {
+        WireFallibleSite site = FallibleAt<WireFallibleSite>(ref const reader, document.Sites, si) ?;
+        WirePatternFlow flow = FallibleAt<WirePatternFlow>(ref const reader, base.Flows, site.Flow) ?;
+        if (flow.Function == ordinal) {
+            sites += 1;
+            if (sites > 64 or flow.SubjectSlot < 0 or flow.SubjectSlot >= owner.Slots.count) {
+                return Result::Error(FallibleError::Control);
+            }
+            for (j in 0 .. si) {
+                if (FallibleAt<WireFallibleSite>(ref const reader, document.Sites, j) ?.Flow == site.Flow) {
+                    return Result::Error(FallibleError::Control);
+                }
+            }
+            WireObjectSlot subject = FallibleAt<WireObjectSlot>(ref const reader, owner.Slots, flow.SubjectSlot) ?;
+            int domain = - 1;
+            for (di in 0 .. base.Base.Domains.count) {
+                if (FallibleAt<WireTaggedDomain>(ref const reader, base.Base.Domains, di) ?.Type == subject.Type) {
+                    domain = di;
+                }
+            }
+            if (domain < 0) { return Result::Error(FallibleError::Control); }
+            WireTaggedDomain sum = FallibleAt<WireTaggedDomain>(ref const reader, base.Base.Domains,
+            domain) ?;
+            if (sum.Variants.count != 2) { return Result::Error(FallibleError::Control); }
+            if (site.Kind == FallibleSiteKind::RequireSuccess) {
+                if (site.Handler != - 1 or flow.Arms.count != 1) {
+                    return Result::Error(FallibleError::Control);
+                }
+                guards[flow.SubjectSlot] = true;
+            } else {
+                if (flow.Arms.count != 2) { return Result::Error(FallibleError::Control); }
+                WirePatternArm arm = FallibleAt<WirePatternArm>(ref const reader, flow.Arms, 1) ?;
+                WireObjectBlock error = FallibleAt<WireObjectBlock>(ref const reader, owner.Blocks, arm.Body) ?;
+                WireTaggedVariant alternative = FallibleAt<WireTaggedVariant>(ref const reader, sum.Variants,
+                1) ?;
+                if (site.Handler >= 0) {
+                    if (site.Kind != FallibleSiteKind::Propagate or alternative.Fields.count != 1 or arm.Bindings.count != 1 or error.Instructions.count != 5) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    WireFallibleHandler handler = FallibleAt<WireFallibleHandler>(ref const reader, document.Handlers,
+                    site.Handler) ?;
+                    WireFallibleTry region = FallibleAt<WireFallibleTry>(ref const reader, document.Tries,
+                    handler.Try) ?;
+                    WireObjectField field = FallibleAt<WireObjectField>(ref const reader, alternative.Fields,
+                    0) ?;
+                    if (region.Function != ordinal or handler.Type != field.Type or not BorrowScopeContains(ref const reader,
+                    meta, region.Scope, flow.Scope)) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    for (hj in 0 .. document.Handlers.count) {
+                        WireFallibleHandler other = FallibleAt<WireFallibleHandler>(ref const reader,
+                        document.Handlers, hj) ?;
+                        WireFallibleTry candidate = FallibleAt<WireFallibleTry>(ref const reader, document.Tries,
+                        other.Try) ?;
+                        if (candidate.Function == ordinal and other.Type == field.Type and other.Try != handler.Try and BorrowScopeContains(ref const reader,
+                        meta, candidate.Scope, flow.Scope) and BorrowScopeContains(ref const reader,
+                        meta, region.Scope, candidate.Scope)) {
+                            return Result::Error(FallibleError::Control);
+                        }
+                    }
+                    WireObjectInstruction load = FallibleAt<WireObjectInstruction>(ref const reader,
+                    error.Instructions, 3) ?;
+                    WireObjectInstruction init = FallibleAt<WireObjectInstruction>(ref const reader,
+                    error.Instructions, 4) ?;
+                    if (load.Op != ObjectOpcode::LoadSlot or load.Slot != FallibleAt<WirePatternBinding>(ref const reader,
+                    arm.Bindings, 0) ?.Slot or init.Op != ObjectOpcode::InitializeSlot or init.Slot != handler.InputSlot or init.Type != field.Type or init.Args.count != 1 or FallibleAt<WireObjectValueUse>(ref const reader,
+                    init.Args, 0) ?.Value != load.Result or error.Term.Op != ObjectTerminator::Jump or error.Term.True != handler.Entry) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    routes[arm.Body] = site.Handler;
+                } else {
+                    if (site.Handler != - 1 or error.Term.Op != ObjectTerminator::Return) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    int target = - 1;
+                    for (di in 0 .. base.Base.Domains.count) {
+                        if (FallibleAt<WireTaggedDomain>(ref const reader, base.Base.Domains, di) ?.Type == owner.ResultType) {
+                            target = di;
+                        }
+                    }
+                    if (target < 0) { return Result::Error(FallibleError::Control); }
+                    WireTaggedDomain result = FallibleAt<WireTaggedDomain>(ref const reader, base.Base.Domains,
+                    target) ?;
+                    if (result.Variants.count != 2) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    WireTaggedVariant failed = FallibleAt<WireTaggedVariant>(ref const reader, result.Variants,
+                    1) ?;
+                    if (failed.Fields.count != alternative.Fields.count) {
+                        return Result::Error(FallibleError::Control);
+                    }
+                    bool returned = false;
+                    for (ii in 0 .. error.Instructions.count) {
+                        WireObjectInstruction in = FallibleAt<WireObjectInstruction>(ref const reader,
+                        error.Instructions, ii) ?;
+                        if (in.Result == error.Term.Value) {
+                            if (in.Op != ObjectOpcode::MakeAggregate or in.Type != owner.ResultType or in.Member != 1 or in.Args.count != failed.Fields.count) {
+                                return Result::Error(FallibleError::Control);
+                            }
+                            returned = true;
+                            if (site.Kind == FallibleSiteKind::Propagate and in.Args.count == 1) {
+                                if (arm.Bindings.count != 1) {
+                                    return Result::Error(FallibleError::Control);
+                                }
+                                int value = FallibleAt<WireObjectValueUse>(ref const reader, in.Args,
+                                0) ?.Value;
+                                bool loaded = false;
+                                for (li in 0 .. error.Instructions.count) {
+                                    WireObjectInstruction load = FallibleAt<WireObjectInstruction>(ref const reader,
+                                    error.Instructions, li) ?;
+                                    if (load.Result == value and load.Op == ObjectOpcode::LoadSlot and load.Slot == FallibleAt<WirePatternBinding>(ref const reader,
+                                    arm.Bindings, 0) ?.Slot) {
+                                        loaded = true;
+                                    }
+                                }
+                                if (not loaded) {
+                                    return Result::Error(FallibleError::Control);
+                                }
+                            }
+                        }
+                    }
+                    if (not returned) { return Result::Error(FallibleError::Control); }
+                    if (site.Kind == FallibleSiteKind::Propagate) {
+                        for (fi in 0 .. alternative.Fields.count) {
+                            WireObjectField source = FallibleAt<WireObjectField>(ref const reader, alternative.Fields,
+                            fi) ?;
+                            if (source.Type != FallibleAt<WireObjectField>(ref const reader, failed.Fields,
+                            fi) ?.Type) { return Result::Error(FallibleError::Control); }
+                            for (hi in 0 .. document.Handlers.count) {
+                                WireFallibleHandler handler = FallibleAt<WireFallibleHandler>(ref const reader,
+                                document.Handlers, hi) ?;
+                                WireFallibleTry region = FallibleAt<WireFallibleTry>(ref const reader,
+                                document.Tries, handler.Try) ?;
+                                if (region.Function == ordinal and handler.Type == source.Type and BorrowScopeContains(ref const reader,
+                                meta, region.Scope, flow.Scope)) {
+                                    return Result::Error(FallibleError::Control);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (hi in 0 .. document.Handlers.count) {
+        WireFallibleHandler handler = FallibleAt<WireFallibleHandler>(ref const reader, document.Handlers,
+        hi) ?;
+        if (FallibleAt<WireFallibleTry>(ref const reader, document.Tries, handler.Try) ?.Function == ordinal) {
+            bool used = false;
+            for (bi in 0 .. owner.Blocks.count) {
+                WireObjectBlock block = FallibleAt<WireObjectBlock>(ref const reader, owner.Blocks, bi) ?;
+                if (PatternEdge(block, handler.Entry)) {
+                    if (routes[bi] != hi) { return Result::Error(FallibleError::Control); }
+                    used = true;
+                }
+                for (ii in 0 .. block.Instructions.count) {
+                    WireObjectInstruction in = FallibleAt<WireObjectInstruction>(ref const reader, block.Instructions,
+                    ii) ?;
+                    if (in.Slot == handler.InputSlot and(in.Op == ObjectOpcode::LoadSlot or in.Op == ObjectOpcode::InitializeSlot or in.Op == ObjectOpcode::StoreSlot or in.Op == ObjectOpcode::SlotAddress)) {
+                        if (not(bi == handler.Entry and ii == 0) and(routes[bi] != hi or ii != 4 or in.Op != ObjectOpcode::InitializeSlot)) {
+                            return Result::Error(FallibleError::Control);
+                        }
+                    }
+                }
+            }
+            if (not used) { return Result::Error(FallibleError::Control); }
+        }
+    }
+    if ((tries > 0 or handlers > 0) and sites == 0) {
+        return Result::Error(FallibleError::Control);
+    }
+    match (ValidatePatternFunctionControl(ref const reader, base, ordinal, sums, guards, cuts)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(FallibleError::Pattern); }
+    }
+    return Result::Ok;
+}
+
+Result<void, FallibleError> ValidateFallibleMachineBridge(ReadOnlySpan<byte> artifact) {
+    BridgeReader reader = BridgeReader{artifact, 0};
+    match (ReadFallibleBridgeIdentity(ref reader)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(FallibleError::Identity); }
+    }
+    WireFallibleModule document = ReadFallible<WireFallibleModule>(ref reader) ?;
+    WireObjectModule objects = document.Base.Base.Base.Objects;
+    if (reader.offset != Len(artifact)) { return Result::Error(FallibleError::Malformed); }
+    if (document.Sites.count < 1 or document.Sites.count > 8192 or document.Tries.count > 8192 or document.Handlers.count > 8192 or objects.Functions.count < 1 or objects.Functions.count > 128 or objects.Types.count < 1 or objects.Types.count > 256 or document.Base.Base.Base.Authority.count != objects.Functions.count or document.Base.Base.Domains.count > 128 or document.Base.Enums.count > 128 or document.Base.Flows.count > 8192 or document.Base.Operations.count > 131072 or document.Base.Base.Operations.count > 131072 or objects.Dependencies.count > 128) {
+        return Result::Error(FallibleError::Capacity);
+    }
+    EnumDomainContext aliases = EmptyEnumDomainContext();
+    match (ValidateEnumDomainRecords(ref const reader, objects, document.Base.Enums, ref aliases)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(FallibleError::Pattern); }
+    }
+    ObjectAuthorityContext types = EmptyObjectAuthority();
+    match (ValidateTaggedDomainsWithAliases(ref const reader, document.Base.Base, ref types, aliases.aliases)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(FallibleError::Pattern); }
+    }
+    for (i in 0 .. objects.Dependencies.count) {
+        WireObjectDependency d = FallibleAt<WireObjectDependency>(ref const reader, objects.Dependencies,
+        i) ?;
+        if (d.Identity.length == 0 or not ObjectDigest(ref const reader, d.Digest)) {
+            return Result::Error(FallibleError::Identity);
+        }
+        for (j in 0 .. i) {
+            if (ObjectSame(ref const reader, d.Identity, FallibleAt<WireObjectDependency>(ref const reader,
+            objects.Dependencies, j) ?.Identity)) {
+                return Result::Error(FallibleError::Identity);
+            }
+        }
+    }
+    for (fi in 0 .. objects.Functions.count) {
+        WireObjectFunction f = FallibleAt<WireObjectFunction>(ref const reader, objects.Functions, fi) ?;
+        for (j in 0 .. fi) {
+            if (ObjectSame(ref const reader, f.Identity, FallibleAt<WireObjectFunction>(ref const reader,
+            objects.Functions, j) ?.Identity)) {
+                return Result::Error(FallibleError::Identity);
+            }
+        }
+        ValidateFallibleFunction(ref const reader, document, fi, types.taggedTypes) ?;
+    }
+    return Result::Ok;
+}
+Result<void, PatternError> ValidateNativePatternBridge(ReadOnlySpan<byte> artifact) {
+    if (Len(artifact) >= 8 and artifact[7] == 65) {
+        return match (ValidateFallibleMachineBridge(artifact)) {
+            Result::Ok => Result::Ok, Result::Error(error) => Result::Error(PatternError::Flow)
+        };
+    }
+    return ValidatePatternMachineBridge(artifact);
+}
+Result<int, FallibleError> ValidatedFallibleBridgeRoundTrip(ReadOnlySpan<byte> artifact, Span<byte> output) {
+    ValidateFallibleMachineBridge(artifact) ?;
+    if (Len(output)<Len(artifact)) { return Result::Error(FallibleError::Capacity); }
+    BridgeReader reader = BridgeReader{artifact, 44};
+    WireFallibleModule document = ReadFallible<WireFallibleModule>(ref reader) ?;
+    for (i in 0 .. 44) {
+        output[i] = artifact[i];
+    }
+    BridgeWriter writer = BridgeWriter{output, 44};
+    match (WriteWire(ref const document, ref const reader, ref writer)) {
+        Result::Ok => { }
+        Result::Error(error) => { return Result::Error(FallibleError::Malformed); }
+    }
+    return Result::Ok(writer.offset);
+}
+
+template <typename T> requires BridgeReadable<T>
+Result<T, FallibleError> ReadFallible(ref BridgeReader reader) {
+    return match (ReadWire(ref reader, BridgeType<T>{0})) {
+        Result::Ok(value) => Result::Ok(move value),
+        Result::Error(error) => Result::Error(FallibleError::Malformed),
+    };
+}
+
+Result<int, FallibleError> FallibleScopeAt(ref const BridgeReader reader, WireObjectFunction owner, WireBorrowFunction meta,
+int block, int instruction) {
+    return match (PatternScopeAt(ref const reader, owner, meta, block, instruction)) {
+        Result::Ok(value) => Result::Ok(value),
+        Result::Error(error) => Result::Error(FallibleError::Control),
+    };
+}

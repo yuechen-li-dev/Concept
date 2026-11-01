@@ -1,0 +1,40 @@
+module Testing.IntegrationAssertions;
+profile Core;
+
+record struct WordEvidence {
+    int capacity;
+}
+enum WordRefutation {
+    Unsupported(typename subject)
+}
+comptime Verdict<WordEvidence, WordRefutation> WordJudge(typename subject) {
+    return match {
+        when compiler.TypeName(subject) == "int" => Verdict::Proven(WordEvidence{8}),
+        otherwise => Verdict::Disproven(WordRefutation::Unsupported(subject))
+    };
+}
+concept WireWord<T> {
+    requires WordJudge(T);
+}
+enum WordState {
+    Positive, NonPositive
+}
+enum WordError {
+    Invalid
+}
+Result<int, WordError> Read(bool valid, int value) {
+    return if (valid) Result::Ok(value) else Result::Error(WordError::Invalid);
+}
+int Run(bool valid, int value) {
+    Assert.Concept<WireWord>(int, "protocol word representation");
+    try {
+        int word = Read(valid, value) ?;
+        WordState state = if (word > 0) WordState::Positive else WordState::NonPositive;
+        return match (state) {
+            WordState::Positive => word + 1, WordState::NonPositive => 0
+        };
+    }
+    except(WordError error) {
+        return - 1;
+    }
+}

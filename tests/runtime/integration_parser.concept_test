@@ -1,0 +1,28 @@
+module Testing.IntegrationParserFacts;
+profile Core;
+import Testing.IntegrationParser;
+
+[[fact]] void ProtocolDecodeEvaluateAndDiagnostics() {
+    ProtocolInput input = ProtocolInput{[2, 3, 1, 4, 0, 99, 99, 99], 5};
+    int reads = 0;
+    ParseReport good = Run(input, 2, ref reads);
+    Assert.Equal(good.status, 0, "valid protocol");
+    Assert.Equal(good.total, 10, "scale then add");
+    Assert.Equal(good.commands, 2, "typed tokens");
+    Assert.Equal(reads, 5, "one read per consumed word");
+    reads = 0;
+    ParseReport optional = Run(ProtocolInput{[3, 4, 2, 0, 99, 99, 99, 99], 4}, 1, ref reads);
+    Assert.Equal(optional.total, 7, "optional correction");
+    ParseReport absent = Run(ProtocolInput{[3, 4, - 1, 0, 99, 99, 99, 99], 4}, 1, ref reads);
+    Assert.Equal(absent.total, 5, "None does not reuse Some payload");
+    ParseReport truncated = Run(ProtocolInput{[1, 99, 99, 99, 99, 99, 99, 99], 1}, 0, ref reads);
+    Assert.Equal(truncated.status, - 2, "typed truncated diagnostic");
+    Assert.Equal(truncated.position, 1, "error provenance position");
+    ParseReport opcode = Run(ProtocolInput{[9, 99, 99, 99, 99, 99, 99, 99], 1}, 0, ref reads);
+    Assert.Equal(opcode.status, - 3, "nominal payload error");
+    Assert.Equal(opcode.actual, 9, "error payload retained");
+    ParseReport operand = Run(ProtocolInput{[2, 0, 99, 99, 99, 99, 99, 99], 2}, 0, ref reads);
+    Assert.Equal(operand.status, - 4, "invalid scale");
+    ParseReport length = Run(ProtocolInput{[0, 0, 0, 0, 0, 0, 0, 0], 9}, 0, ref reads);
+    Assert.Equal(length.status, - 1, "invalid length before array access");
+}

@@ -1,0 +1,165 @@
+module Testing.IntegrationParser;
+profile Core;
+
+// Fixed-capacity word protocol: 0=end, 1=add(value), 2=scale(value),
+// 3=adjust(value, optional correction); -1 means no optional correction.
+[[repr(C)]] record struct ProtocolInput {
+    int[8] words;
+    int length;
+}
+enum WireOpcode {
+    End, Add, Scale, Adjust
+}
+enum FaultKind {
+    Length, Truncated, Opcode, Operand
+}
+record struct ParseFault {
+    FaultKind kind;
+    int position;
+    int actual;
+}
+record struct DecodedWord {
+    WireOpcode kind;
+    int operand;
+    int next;
+    int optionalIndex;
+}
+enum ParsedToken {
+    End, Add(int amount), Scale(int factor), Adjust(int amount)
+}
+enum ParseError {
+    InvalidLength(int actual), Truncated(int position),
+    InvalidOpcode(int position, int actual), InvalidOperand(int position, int actual)
+}
+record struct ParseSummary {
+    int total;
+    int commands;
+    int consumed;
+}
+[[repr(C)]] record struct ParseReport {
+    int status;
+    int total;
+    int commands;
+    int position;
+    int actual;
+}
+
+Result<int, ParseFault> ReadWord(ProtocolInput input, int position, ref int reads) {
+    if (position < 0 or position >= input.length) {
+        return Result::Error(ParseFault{FaultKind::Truncated, position, 0});
+    }
+    reads++;
+    return Result::Ok(input.words[position]);
+}
+Result<int, ParseFault> ReadBounded(ProtocolInput input, int position, int minimum, int maximum, bool nonzero,
+ref int reads) {
+    int value = ReadWord(input, position, ref reads) ?;
+    if (value < minimum or value > maximum or(nonzero and value == 0)) {
+        return Result::Error(ParseFault{FaultKind::Operand, position, value});
+    }
+    return Result::Ok(value);
+}
+Result<DecodedWord, ParseFault> DecodeWord(ProtocolInput input, int position, ref int reads) {
+    if (input.length < 0 or input.length > 8) {
+        return Result::Error(ParseFault{FaultKind::Length, 0, input.length});
+    }
+    int opcode = ReadWord(input, position, ref reads) ?;
+    if (opcode == 0) {
+        return Result::Ok(DecodedWord{WireOpcode::End, 0, position + 1, - 1});
+    }
+    if (opcode < 1 or opcode > 3) {
+        return Result::Error(ParseFault{FaultKind::Opcode, position, opcode});
+    }
+    int operand = ReadBounded(input, position + 1, - 16, 16, opcode == 2, ref reads) ?;
+    WireOpcode kind = if (opcode == 1) WireOpcode::Add else WireOpcode::Scale;
+    int next = position + 2;
+    int optionalIndex = - 1;
+    if (opcode == 3) {
+        int correction = ReadBounded(input, position + 2, - 1, 8, false, ref reads) ?;
+        kind = WireOpcode::Adjust;
+        next = position + 3;
+        optionalIndex = position + 2;
+    }
+    return Result::Ok(DecodedWord{kind, operand, next, optionalIndex});
+}
+Result<DecodedWord, ParseFault> ParseNext(ProtocolInput input, int position, ref int reads) {
+    DecodedWord word = DecodeWord(input, position, ref reads) ?;
+    return Result::Ok(word);
+}
+ParsedToken Materialize(DecodedWord word) {
+    return match (word.kind) {
+        WireOpcode::End => ParsedToken::End,
+        WireOpcode::Add => ParsedToken::Add(word.operand),
+        WireOpcode::Scale => ParsedToken::Scale(word.operand),
+        WireOpcode::Adjust => ParsedToken::Adjust(word.operand)
+    };
+}
+Option<int> OptionalCorrection(ProtocolInput input, DecodedWord word) {
+    if (word.optionalIndex >= 0 and word.optionalIndex < input.length) {
+        int value = input.words[word.optionalIndex];
+        if (value >= 0) { return Option::Some(value); }
+    }
+    return Option::None;
+}
+int Evaluate(ParsedToken token, Option<int> correction, int total) {
+    int extra = match (correction) {
+        Option::Some(value) => value, Option::None => 0
+    };
+    return match (token) {
+        ParsedToken::End => total,
+        ParsedToken::Add(amount) => total + amount,
+        ParsedToken::Scale(factor) => total * factor,
+        ParsedToken::Adjust(amount) => total + amount + extra
+    };
+}
+Result<ParseSummary, ParseFault> Execute(ProtocolInput input, int seed, ref int reads) {
+    if (input.length < 0 or input.length > 8) {
+        return Result::Error(ParseFault{FaultKind::Length, 0, input.length});
+    }
+    int position = 0;
+    int total = seed;
+    int commands = 0;
+    // An explicit terminator is required, even for an empty or full buffer.
+    while (position <= input.length and commands < 4) {
+        DecodedWord word = ParseNext(input, position, ref reads) ?;
+        ParsedToken token = Materialize(word);
+        bool finished = match (token) {
+            ParsedToken::End => true, ParsedToken::Add(amount) => false,
+            ParsedToken::Scale(factor) => false, ParsedToken::Adjust(amount) => false
+        };
+        if (finished) {
+            return Result::Ok(ParseSummary{total, commands, word.next});
+        }
+        total = Evaluate(token, OptionalCorrection(input, word), total);
+        position = word.next;
+        commands++;
+    }
+    return Result::Error(ParseFault{FaultKind::Truncated, position, 0});
+}
+ParseError DescribeFault(ParseFault fault) {
+    return match (fault.kind) {
+        FaultKind::Length => ParseError::InvalidLength(fault.actual),
+        FaultKind::Truncated => ParseError::Truncated(fault.position),
+        FaultKind::Opcode => ParseError::InvalidOpcode(fault.position, fault.actual),
+        FaultKind::Operand => ParseError::InvalidOperand(fault.position, fault.actual)
+    };
+}
+ParseReport Diagnostic(ParseError error) {
+    return match (error) {
+        ParseError::InvalidLength(actual) => ParseReport{- 1, 0, 0, 0, actual},
+        ParseError::Truncated(position) => ParseReport{- 2, 0, 0, position, 0},
+        ParseError::InvalidOpcode(position, actual) => ParseReport{- 3, 0, 0, position, actual},
+        ParseError::InvalidOperand(position, actual) => ParseReport {
+            - 4, 0, 0, position, actual
+        }
+    };
+}
+ParseReport Run(ProtocolInput input, int seed, ref int reads) {
+    try {
+        ParseSummary result = Execute(input, seed, ref reads) ?;
+        return ParseReport{0, result.total, result.commands, result.consumed, 0};
+    }
+    except(ParseFault fault) {
+        return Diagnostic(DescribeFault(fault));
+    }
+}

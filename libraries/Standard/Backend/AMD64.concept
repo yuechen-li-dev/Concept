@@ -481,8 +481,11 @@ Span<byte> bytes) {
 // Output is scratch until Ok and finalized. Bootstrap callers must never
 // publish an image after Error; all code/branch/call patches precede RX.
 Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> output, ref NativeImage image) {
-    if (Len(artifact) >= 8 and artifact[7] == 57) {
-        match (ValidatePatternMachineBridge(artifact)) {
+    // Every frozen/versioned bridge starts with the same 44-byte identity.
+    // Reject a truncated identity before the legacy scalar scratch path.
+    if (Len(artifact) < 44) { return Result::Error(NativeError::InvalidInput); }
+    if (IsNativePatternBridge(artifact)) {
+        match (ValidateNativePatternBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
         }
@@ -554,11 +557,11 @@ Result<int, NativeError> EmitModule(ReadOnlySpan<byte> artifact, Span<byte> outp
             }
         }
     }
-    image = EmptyNativeImage();
     match (ValidateMachineBridge(artifact)) {
         Result::Ok() => { }
         Result::Error(error) => { return Result::Error(NativeError::InvalidInput); }
     }
+    image = EmptyNativeImage();
     BridgeReader reader = BridgeReader{artifact, 0};
     match (ReadBridgeIdentity(ref reader)) {
         Result::Ok() => { }
@@ -1722,8 +1725,8 @@ Result<void, BackendError> ValidateObjectFrameSlots(ref const BackendFunction fu
 // Inspection uses the same production projection, allocator and finalizer.
 Result<void, BackendError> PlanObjectNativeFunction(ReadOnlySpan<byte> artifact, int ordinal,
 ref BackendFunction function, ref ObjectPlacement placement, ref Allocation allocation, ref FinalizedFrame frame) {
-    if (Len(artifact) >= 8 and artifact[7] == 57) {
-        match (ValidatePatternMachineBridge(artifact)) {
+    if (IsNativePatternBridge(artifact)) {
+        match (ValidateNativePatternBridge(artifact)) {
             Result::Ok => { }
             Result::Error(error) => { return Result::Error(BackendError::BridgeInvalid); }
         }
@@ -1790,14 +1793,14 @@ ref EncodingWorkspace workspace, bool aggregateABI, ref const AggregateFunctionP
     BridgeSequence<WireTaggedOperation> taggedOperations = BridgeSequence<WireTaggedOperation>{
         0, 0
     };
-    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57 or reader.data[7] == 65)) {
         taggedOperations = NativeTaggedDocument(ref const reader) ?.Operations;
     }
     BridgeSequence<WirePatternOperation> patternOperations = BridgeSequence<WirePatternOperation>{
         0, 0
     };
-    if (Len(reader.data) >= 8 and reader.data[7] == 57) {
-        patternOperations = ReadPatternDocument(ref const reader) ?.Operations;
+    if (IsNativePatternBridge(reader.data)) {
+        patternOperations = NativePatternDocument(ref const reader) ?.Operations;
     }
     int cursor = 0;
     for (bi in 0 .. owner.Blocks.count) {

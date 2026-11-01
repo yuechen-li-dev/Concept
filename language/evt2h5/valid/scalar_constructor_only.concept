@@ -1,0 +1,5 @@
+profile Core;
+Result<int, bool> Make(bool valid, int value) {
+    if (valid) { return Result::Ok(value); }
+    return Result::Error(true);
+}

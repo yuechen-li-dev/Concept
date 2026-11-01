@@ -1,9 +1,478 @@
 # EVT2h — enum conformance
 
-Current EVT2h4 status: **SUCCESS — bounded native Option and throughput
-qualification**. Implementation `10be4cb`, specimen formatting/LF `a5588b9`;
-the final closeout changes evidence records only. Historical sections retain
-the evidence and boundaries at their respective checkpoints.
+Current EVT2h9 status: **FULLY QUALIFIED for the documented bounded domain**.
+Historical sections retain the evidence and boundaries at their respective
+checkpoints. Ordinary milestone verification does not claim phase qualification.
+
+## EVT2h9 — phase qualification closeout
+
+Baseline `2c93386f02d218c667ef2b78c026d9ed25f5ae9b`; scope freeze `3e2060c`;
+adversarial/fresh native qualification `7024514`; child-process gate correction
+`ee40b10`; scheduler test start gate `919d204`. H9 changes no production checker, LIR producer, Cathedral module,
+codec, layout, ABI classifier, allocator, frame planner or encoder.
+See the [phase report and final capability matrix](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md)
+for exact commands, counts, timings, frozen hashes, native/C11/ABI evidence,
+initial failures and final reruns. Historical sections below retain their
+original milestone status; the phase report is the current evidence authority.
+
+The admitted domain composes ordinary/tagged enums, closed Option/Result,
+checked match and active payload binding, function/local failure destinations,
+Result<void,E>, bang UD2 and short-circuit boolean CFG. The parser's original
+add(7), seed2 failure is permanently named
+`IncomingRegisterOverlapParserAddSevenReturnsNine` and checks native result 9.
+Distinct direct/indirect incoming aggregates, hidden returns and mixed stack/
+floating/reference arguments now have additional C11 differential vectors.
+All existing independent MSVC/clang-cl and assembly observers remain in place.
+The documented indirect-temporary alignment discrepancy remains unresolved;
+these observations do not establish general foreign sum-type interoperability.
+
+Major-checkpoint gates connect 100 independently checked artifact files to
+fresh Concept codec/admission/planning/emission in both modes. Parent native
+hosts must account for all inputs; guarded-read and expected-trap children
+retain their intentionally single-image tests. H6's Verdict remains comptime:
+typed proof/provenance survives tooling, assertions erase, residual native bytes
+equal the assertion-free program, and no new trusted fact authority exists.
+CMIRAMD3–10 and their historical byte expectations remain frozen.
+
+Final scope is bounded, not universal native coverage. Raw local arrays,
+local-address witnesses across actual failure exits, nested v10 remap CFG,
+nested sum representations and unqualified references remain explicitly fenced.
+General ownership/Drop, move-only/owning payloads, escaping references, foreign
+sum/C++ ABI, unwind, indirect/variadic calls, external linkage and COFF output
+are not delivered. Ownership handoff must first inventory checked cleanup
+obligations; no subsequent phase starts here.
+
+## EVT2h8 — sum-type and fallibility integration
+
+Status: **MILESTONE VERIFIED**, not full phase qualification. Baseline
+`b39088beb9631ea4a449c65797bbc76fde9a265a`; inventory `df3339f`; Concept entry
+liveness fix `1ff7c7b`; checked projection `8ca3d9b`; integration fixtures and
+native/C11 harnesses `928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`. See the
+[complete evidence, exact commands, hashes and limits](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md)
+and [preimplementation inventory](../design/EVT2H8-INTEGRATION.md).
+The worktree remains the existing `codex/implement-native-ordinary-enums` checkout;
+fetched origin/main was an ancestor 13 commits behind. No reset or remote change.
+
+| Composition | Executed evidence | Qualified boundary |
+| --- | --- | --- |
+| Protocol decoder/evaluator | 16 input vectors, 40 interleavings in native-only and strict-C11 differential hosts, Normal/Verify | Fixed eight-word input record; payload tokens/diagnostics, Result record/error-record calls, Option lookup, while/branches and typed local handling |
+| Typed controller | Five scenarios times eight values times 40 interleavings per host; state/report/counter/copy checks | Ordinary enum states, payload events, Option hints, Result<Session,ConfigError>, distinct same-sized ConfigError/DeviceError, local and propagated failures |
+| Semantic assertion plus runtime fallibility | Typed capacity 8 evidence/site/provenance, empty trusted authority, fresh assertion-free source, exact residual native bytes | Comptime proof stays in compiler tooling; no runtime Verdict storage or new trusted facts |
+| Short-circuit and/or | Nested truth tables, if/guard/while contexts, call effects, skipped failing bang, handled question and exact expected traps | Ordinary checked bool slots/CFG; left first, RHS only when needed; no physical logical opcode |
+| Record enum fields | Checked nominal geometry plus native record/call/match use | Internal checked field addresses in composites; public h1 reference/array restrictions remain |
+| Several aggregate parameters together | Native pipeline plus independent C callers, checked simultaneous carrier ranges/locations; g5/h4/h5 ABI regressions | Existing Win64 classifier and unified frame; Concept projection keeps entry values live until unpacking |
+
+Checked projection snapshots earlier operands before nested conditional/pattern
+CFG and retains existing local-reference witnesses across pure conditionals.
+Actual fallible exits retain the unqualified local-address fence. The existing
+pattern/borrow/failure verifiers enforce scope, dominance, initialized joins,
+active payloads and exact nominal handler destinations. A discovered native
+alias of two incoming aggregate registers is corrected in Concept's existing
+object projection, using liveness observations rather than an ABI/allocator
+replacement. The motivating add(7), seed2 case now returns9 instead of2.
+
+All four checked forms use unchanged **CMIRAMD10**, schema hash
+`ea57ae74f5ae54ece90ce429edbc4a41ce309d106582c84fdb5d70d15242941d`.
+CMIRAMD3–10 contract files and historical goldens remain unchanged. No new wire
+format, copier, sum layout, frame planner, optimizer, object output or Go native
+algorithm. Native-only execution admits artifacts without domain source and
+links no domain C oracle. Separate C11 hosts compare all report fields and
+observable effects, with each generated domain in its own translation unit.
+
+Three genuinely fresh source/check/LIR/artifact/admission/plan/emission pipelines
+per form per mode pass, including fixups/debug plans and Normal/Verify bytes.
+The retained phase marker selects 100 at h9. New malformed artifacts, LIR and
+source cases retain atomic roundtrip/code/image rejection; selected historical
+negative and 100-run gates remain intact. Exact sizes/hashes are in the evidence:
+Parser 61259 bytes, Controller 55330, assertion and assertion-free form 3381;
+frames 40..1128, zero spills in these programs. Five Concept facts join Quick;
+source-to-C fact execution is not counted as native evidence.
+
+The shared entry-projection correction triggered targeted regression escalation,
+including independent MSVC/clang-cl ABI observers, h3 conditional matching,
+h4/h5 native generic sums, h6 erasure and h7 typed handlers/traps. Quick, focused
+native/C11/Normal/Verify/artifact checks, race, vet, build, formatting/lint and
+all 20 CLI batch cases pass. Full project qualification and the new h8 100-trial
+gate remain h9 work. This milestone does not claim FULLY QUALIFIED.
+
+Deferred boundaries: local raw arrays (projection A); local addresses before
+actual failure CFG and nested v10 error remaps (checked authority/projection B/C);
+nested sums (separate qualification E); owning/reference-bearing/Drop payloads
+and cleanup (D). The parser deliberately uses a Result of checked records and
+materializes tagged commands/diagnostics outside that Result. No general nested
+sum capability, general foreign enum ABI or ownership semantics are implied.
+
+## EVT2h7 — native fallible control flow
+
+Starting checkout `e7d4f0ee57ea7cc8ba3e6f962a8587ab2d9d9489`, clean existing
+`codex/implement-native-ordinary-enums` worktree at
+`C:/Users/yuech/.codex/worktrees/evt2h4-profile-baseline/Concept`.
+Fetched `origin/main` (`065317d262c85ce159219561b0709526e7973c1f`) is an ancestor
+nine commits behind that baseline. No reset, remote branch manipulation or
+older checkpoint replay. Compiler `concept-evt1-stage0-go`, Windows AMD64,
+Microsoft x64 calling convention. Preimplementation inventory: `ef3bd4a`,
+[EVT2H7-FALLIBLE-CONTROL](../design/EVT2H7-FALLIBLE-CONTROL.md).
+The generated contract is `f5e30deac0b454681969ab81a67ddd86f4543c52`;
+native implementation, fixtures and harnesses are
+`ec8bc3a3ca5638c525971a0819ee39b66c6b6a6e`. The final closeout commit updates
+these evidence/authority records only.
+
+### Source contract and lowering
+
+The existing parser/checker/C bootstrap remain the source authority. Both
+Option<T> and Result<T,E> support postfix `!` and `?`; Result<void,E> success has
+no fabricated payload. `!` evaluates once, requires success, and escalates
+failure (C bootstrap panic/abort, native existing UD2 trap). It never invokes
+an except handler. Successful extraction uses the checked active field.
+
+Plain Result `?` chooses the nearest enclosing exact canonical E handler.
+An unmatched inner handler does not hide a matching outer one. Without a
+matching handler, propagation requires an enclosing Result return with exactly
+the same E. `? else expression` explicitly remaps into the enclosing function's
+error return and bypasses local handlers; only failure evaluates the remap.
+Option `?` always returns None through the enclosing Option-returning function,
+even within a try. It has no typed local error to catch.
+
+A normal try completion skips handlers and joins after the try. Failure skips
+remaining try statements and initializes only the selected immutable handler
+binding. Handler names exist only in their handler; try-body locals do not
+escape into handlers. Failures raised inside a handler can reach outer handlers
+or the function, not another arm of that same try. Loops, matches, branches,
+early returns and ordinary calls retain their existing meanings.
+
+Checked LIR uses ordinary snapshots, discriminant tests, branches, checked
+payload reads, logical slot initialization and return/jump instructions. A bang
+is a one-arm success guard, using the existing require_variant trap operation.
+Local failure edges transfer the active Error binding to an internal input slot
+in the surrounding scope, then initialize the user binding in its handler scope.
+No physical address substitutes for nominal identity or variant authority.
+
+The shared source-expression sequencing predicate now recognizes Option `?`
+and both bang forms, as well as Result `?`. Both checked LIR and independent C
+bootstrap preserve already-evaluated arguments across the inserted CFG. No new
+source spelling, evaluator, native copying algorithm or physical instruction is
+introduced.
+
+### Versioned contract and Cathedral authority
+
+Frozen CMIRAMD9 requires exhaustive pattern flows and cannot express a partial
+success guard or authorized exits from a pattern region into local handlers.
+**CMIRAMD10** uses eight-byte magic `CMIRAMDA` (A = hexadecimal ten), numeric
+version 10 and the established 44-byte identity header. Its Concept-owned schema
+hash is `ea57ae74f5ae54ece90ce429edbc4a41ce309d106582c84fdb5d70d15242941d`.
+The unchanged v9 pattern module is embedded without another header. Additional
+records associate try scopes/joins, typed handler inputs/bindings/entries/scopes,
+and source failure flows with require-success/propagate/remap destinations.
+Existing canonical records still own types, fields, operations, operands and CFG.
+
+BridgeSchema10 owns this contract; the established generator produces the Go
+codec, Concept derived codec and schema JSON. BridgeValidate10 independently
+admits source-free artifacts. It checks success tag zero, exact nominal error
+matching, nearest eligible scope, Error-only transfers, immutable scoped binding,
+all handler predecessors, input-slot role restrictions, function failure return
+construction, duplicate/missing authority, and capacity. Existing tagged,
+object, borrow, dominance, initialization and pattern validators remain in use.
+Region exits carry their lexical scope, so an outer match arm still owns a try
+nested within it. Legacy v9 invokes the same helper with no guard/exit grants.
+CMIRAMD3–9 schemas, codecs, identities and byte goldens remain unchanged.
+
+Cathedral's existing object slots, active-field copier, Win64 classifier, allocator,
+unified frame planner, scalar encoder, branch/call fixups and UD2 facility realize
+the admitted CFG. Go produces checked semantics, generated transport, independent
+consistency checks and test orchestration; it adds no physical fallibility engine.
+There is no heap allocation, runtime type registry, exception runtime or unwinding.
+
+Malformed testing also exposed the legacy scalar fallback resetting an image
+before rejecting a truncated/unknown identity. EmitModule now rejects incomplete
+headers immediately and validates the legacy bridge before initializing its
+scratch image. This strengthens failed-admission atomicity without changing any
+valid instruction encoding or ABI policy; affected old paths are regression-tested.
+
+### Evidence and measured boundary
+
+The authoritative `tests/runtime/Testing/FallibleControl.concept` has 43 functions,
+19 realized try regions, 21 handlers and 35 failure sites (9 require-success,
+25 propagation, one remap). Two grouped `.concept_test` facts exercise source/C
+behavior and keep the fast lane free of a Cathedral import. External harnesses
+execute the same specimen through Cathedral with and without domain C linked.
+
+Coverage includes two same-representation nominal errors, Option/Result/void
+success, failure and replacement paths inherited from h4/h5, handler selection,
+nesting and re-propagation, remap precedence, Option function propagation within
+try, loops, matches, conditional handlers, early returns, recursion, argument
+ordering, records, native structs, floats/doubles, exact floating bits, mixed
+calls including stack arguments, live aggregates and eight scalar spills.
+The eight-byte native Pair uses its checked hidden-return convention; the C
+oracle's own struct ABI is not substituted for it. Repr(C) Item uses the existing
+16-byte hidden return. This is no new foreign sum-type ABI claim.
+
+Five isolated native trap cases check Windows illegal-instruction status
+`0xC000001D`, a genuine UD2 inside the emitted image and precise operand effects.
+The vectored observer terminates the child with that same status only after
+checking the exception/instruction and writing evidence, avoiding WER delays.
+Later arguments, continuations and handlers must remain unexecuted. Each harness
+has a distinct completed executable path; running binaries are never overwritten.
+
+Ten fresh source/LIR/CFG/artifact/codec generations and ten fresh complete native
+plans/emissions per mode are the ordinary milestone sample. The phase environment
+marker retains 100, and selected historical tests retain their own full counts.
+Normal/Verify and the independent C11 host require identical image bytes and
+fixups; debug descriptions and plans are compared as well.
+
+Pinned fixture artifact: 247,623 bytes,
+`6c2bc22978e37d03a4561910f2fa1646ee4fc5980d2b677c75ef65ceaae94bf7`.
+Native image: 82,687 bytes, 43 symbols, 49 call fixups,
+`78407eeb465a416e7a406d05d3e382cb9c8c21049f8162c4e7d504196907c242`.
+Frames: 40–408 bytes, eight spills. Final executed results/timings and selected
+regressions are recorded in [convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+
+Capacity remains 128 functions/256 types, 128 blocks/scopes and 64 slots per
+qualified function, with at most 64 try/handler/failure records per function and
+8,192 of each globally. Existing value/instruction/domain/frame limits also apply.
+Unsupported boundaries remain owning/Drop/move-only payloads or locals, nested
+sum payloads, unqualified references and local address temporaries across failure
+expressions. Explicit local fixed-array declarations remain outside native LIR;
+array-containing qualified records and existing tagged array construction/copy
+contracts are not broadened here. Existing native `and`/`or` expression lowering
+remains unsupported (`EVT2_UNSUPPORTED_BINARY`). In a new v10 function, remap
+error arms must be straight-line (ordinary calls are allowed); conditional or
+nested-fallible remap CFG rejects with `EVT2H7_UNSUPPORTED_REMAP_CONTROL`. Older
+v9 remap admission is preserved. Four source-valid boundary specimens exercise
+these restrictions, local arrays and local reference temporaries. Direct fixed-array except types also encounter
+the existing checker CV4545 identity boundary. No ownership cleanup is omitted to
+admit these cases. No h8 integration or h9 phase qualification is begun.
+
+## EVT2h6 — typed Verdict authority and checked native erasure
+
+Baseline `cb4201a9e277be8b0db3d16c9343ec6dd0926bc1`, clean existing task branch;
+fetched origin/main `065317d` is an ancestor six commits behind. No historical
+checkpoint replaces newer work. Compiler `concept-evt1-stage0-go`, Windows AMD64.
+Preimplementation inventory `0028e4f` records every dependency, authority owner,
+input/transport requirement, execution mode, testing opportunity and migration
+difficulty in [EVT2H6-VERDICT-AUTHORITY](../design/EVT2H6-VERDICT-AUTHORITY.md).
+Implementation/fixtures/harnesses are `50d30c0`; final closeout changes evidence
+records only.
+
+**Verdict requires no runtime representation.** Proven(E), Disproven(R) and
+payload-free Unknown remain comptime-only and normalize through the one existing
+projector into the existing lattice. Both closed payload types must be supported;
+Unknown carries no fabricated negative payload. Runtime typed Verdict arguments,
+locals and returns remain invalid. No Win64 Verdict classification or new
+MachineIR sum representation is introduced.
+
+The existing R9 evaluator already implements the bounded intended protocol.
+The chosen boundary is architectural closeout (approach A), plus a concrete
+runtime-lowering correction: the accepted R9 typed-predicate flagship previously
+failed LIR with `Use: EVT2_UNSUPPORTED_CALL Concept at 31:5`. LIR now erases a
+checked `concept_assert` statement with an actual ConceptGoal, as C emission
+already does. Semantic analysis still runs first; Disproven/Unknown fail before
+LIR or native output. An unrelated forged marker cannot silently erase a call.
+No semantic fact, proof authority or trusted provenance is created by erasure.
+
+The three source specimens (existing typed_predicate_protocol and
+typed_verdict_values, plus a distinct OtherEvidence/OtherRefutation application)
+retain only ordinary `int Use() { return 7; }` in LIR. Closed generic Box<uint8>,
+typed payload enums, all three value cases and exhaustive comptime matches are
+checked before that boundary. A source-free semantic artifact consumer rechecks
+the transported predicate/helper bodies and emits Main plus imported Use. Native
+execution is **of these residual runtime functions**, not of Verdict evaluation.
+
+Native/C11 Normal/Verify pass for all four specimens, first without any domain C
+linked, then against strict C11 `-pedantic-errors -O2`. Removing only the checked
+assertion from the same AST produces identical machine code. Single-function
+images are ten bytes, zero fixups:
+`41ba070000004489d0c3`, SHA256
+`43a5857c93722cd54cfc1cdd4b33a39c67d0c81036396703dc76d97a83ead5d7`.
+The two-function artifact consumer is twenty bytes, zero fixups, SHA256
+`4561bd362d67bd9cc489ab4a03c7ae7c30b0a6e1279e057a76fa7069da32cac6`.
+These are frame-free scalar leaves; a frame report is not expected. Both modes
+and every fresh emission agree with the pinned bytes.
+
+Ten fresh generations per semantic specimen compare proof JSON, selected
+metadata, concept-module.v2 artifacts, LIR, MachineIR and roundtrip admission.
+Ten fresh complete native emissions per specimen/host/mode compare image/code,
+plus the assertion-free counterfactual. The phase marker retains 100 trials for
+these new gates. Historical selected R9 100-run loops remain unchanged.
+Runtime artifacts use frozen CMIRAMD3; CMIRAMD3–9 schemas/codecs/hashes/fixtures
+and semantic-module schema are unchanged.
+
+Rehashed descriptive artifact verdicts with forged outcome, predicate, closed
+type, site, message and six fact-authority claims cannot change consumer proof
+JSON, selected payload, provenance or diagnostics. Real source bodies still
+produce Proven(int), Disproven(string) and Unknown(float). Bad content hashes,
+stale innate/generic identities and wrong schemas reject. Existing R9 negatives
+cover invalid payloads/open or missing bodies, recursion/fuel/depth/loop bounds,
+renderers, improper runtime use, invalid requirements and user fact forgery.
+Descriptive metadata being ignored after a valid rehash is distinct from
+structurally corrupt input being rejected.
+
+Concept owns the authored predicate/refutation-rendering algorithms and Cathedral
+runtime admission/encoding. **Go still owns** Value execution, compiler.*
+observations, canonical generic closure, the bounded evaluator, single Verdict
+projector, proof graph, semantic gob artifact loader and trusted fact owners.
+Calling a Concept predicate through that Go evaluator is not evaluator migration.
+The innate fact-authority registry remains empty. No new trusted fact projector
+is qualified. Native bridges are not semantic AST/proof transports.
+
+The useful prerequisite removed is admission of already checked proof-bearing
+runtime bodies. Further self-hosting needs a canonical checked semantic
+value/type/declaration/AST and observation contract before a source-free Concept
+consumer/evaluator can replace a bounded owner. It does not need a runtime
+Verdict object. No second evaluator, proof graph, type registry or truth lattice
+is introduced. Full focused commands, timings, failed CLI test assumption and
+deferred gates are in [convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+Work stops after h6; no h7 or ownership/Drop work begins.
+
+## EVT2h5 — closed native Result and propagation
+
+Actual baseline: `065317d262c85ce159219561b0709526e7973c1f`, fetched integration
+main, fast-forwarded from clean `7daab14` before edits. Their trees agree.
+Compiler `concept-evt1-stage0-go`; Windows AMD64 / Microsoft x64. Inventory
+`c78b310` records the inspected semantics before implementation; bootstrap
+sequencing correction `8b064a6` is independently reviewable. See the
+[checked inventory](../design/EVT2H5-CHECKED-RESULT.md) and
+[focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+Native semantic production, fixtures and external harnesses are `f283a0b`;
+phase-test scheduling is separately identifiable in `2ccaf3a`. Final closeout
+changes the evidence records only. Focused aggregate/exact-bit Error propagation
+coverage and its expanded fixture pins are `ac840ae`.
+
+### Existing source semantics and checked control flow
+
+Intrinsic Result has two ordered canonical type arguments. Ok(value: T) is tag
+0; Error(error: E) is tag 1. Result<void,E>::Ok has no field or argument.
+Constructors retain the contextually resolved closed type. The existing checker
+owns must_use/explicit discard, exact nominal error compatibility, exhaustiveness,
+copy eligibility, initialization and ownership restrictions. No new syntax,
+equality rule, inference system or implicit error conversion is introduced.
+
+Postfix `?` evaluates its operand once. Its checked LIR uses the existing
+immutable match snapshot, exhaustive Ok/Error CFG and arm-local bindings.
+Ok initializes the ordinary result slot and continues; Error constructs the
+containing function's checked Result::Error and terminates that path with a
+return. Void success needs no slot, fabricated value or payload read. The
+existing result-join/dominance and source-operation verifiers remain operative.
+Without `else`, E must match exactly, even if two enums have identical geometry.
+Existing `? else expression` evaluates a checked explicit error remap only on
+the Error path. Operand T and containing function T may differ.
+
+Already evaluated binary operands, ordinary call arguments and record constructor
+fields survive a later `?` through ordinary typed logical slots. Cathedral
+chooses their storage and lifetime. Parameters retain their existing global LIR
+identity. Computed references that would need a new cross-propagation lifetime
+contract reject explicitly. Native `!` panic and local try/except remain outside
+this milestone. Owned/Drop-bearing values reject rather than skip cleanup.
+
+The independent C11 run exposed a bootstrap ordering defect: a later `?` prelude
+could return before an earlier call argument or binary operand executed. C
+emission now materializes eligible earlier values before that prelude, preserving
+the existing source order; the operand is still evaluated once. Existing failure
+cleanup/panic/remap tests pass. The emitted C Result retains its legacy is_error
+and error compatibility fields used by Vulkan. It is deliberately not treated
+as the native physical shape.
+
+### Representation, transport and Cathedral ownership
+
+The producer reuses h4's structured GenericApplication identity with intrinsic
+declaration `(module="", name="Result")` and both ordered canonical arguments.
+Result<int,ParseError> and Result<int,OtherError> remain distinct types and call
+signatures. The same tagged layout, constructor, assignment, match, copy and
+return operations serve user enums, Option and Result.
+
+CMIRAMD8 suffices for scalar constructor-only Results. CMIRAMD9 carries matches,
+propagation and ordinary enum payload aliases. No new version, fields, schema,
+generated codec, hash or historical byte fixture is introduced. Frozen CMIRAMD3–9
+remain unchanged. Two bounded admission additions are needed: independently
+validated v9 ordinary enum aliases may be tagged fields, and a v9 constructor-only
+module with enum and tagged domains may have no pattern flows/operations. An
+artifact containing pattern operations still requires complete flow authority.
+V8 supplies no enum aliases and keeps its prior eligibility boundary.
+
+Cathedral's Concept validators independently check type/layout/variant identity,
+geometry, source correspondence, scopes, initialized joins and active payload
+authority. The existing logical copier dispatches on the active variant and
+recurses only through meaningful fields. Storage, direct/indirect arguments,
+hidden results, scalar encoding, allocator and unified frame planner are reused
+without policy changes. No production Go Result layout/copy/ABI/encoding engine
+or Result-specific physical implementation is added.
+
+| Executed closed applications | Size / alignment | Existing Win64 route |
+| --- | --- | --- |
+| Result<int,ParseError>, Result<int,OtherError>, Result<void,ParseError>, Result<bool,ParseError> | 8 / 4 | direct eight-byte aggregate |
+| Result<float,bool>, Result<bool,uint8> | 8 / 4 | direct eight-byte aggregate |
+| Result<Pair,uint16>, Pair = two-int copyable struct | 12 / 4 | indirect argument / hidden result |
+| Result<double,ParseError>, Result<int,double> | 16 / 8 | indirect argument / hidden result |
+| Result<int<array>[3],ParseError>, Result<int,int<array>[3]> | 16 / 4 | indirect argument / hidden result |
+| Result<Item,ParseError>, Result<int,Item>, Result<void,Item>; Item = { int; double; } record | 24 / 8 | indirect argument / hidden result |
+
+The ABI probes use explicitly agreed private shapes, not generated C Result
+structs. They establish the tested Win64 carrier paths; general foreign Result
+interoperability is not claimed. The existing eight physical argument positions
+include the hidden result pointer. Seven explicit mixed arguments exercise stack
+positions; eight explicit arguments plus a hidden result reject with
+`AMD64_AGGREGATE_ABI_CAPACITY_EXCEEDED` and intact code/image sentinels.
+
+### Focused execution and rejection evidence
+
+`tests/runtime/Testing/Results.concept` owns 61 functions and fourteen applications.
+Two `.concept_test` facts execute source semantics through C in Normal/Verify;
+they do not count as native proof. External hosts first execute the artifact
+without domain C linked, then compile the same source with strict C11
+`-pedantic-errors -O2` and compare values, effects and ordering.
+
+Native cases cover both variants, scalar/record/struct/array successes and errors,
+copies and isolated bindings, variant replacement, void propagation, explicit
+matches, loops, early-return ordering, conditional results, differing success
+types, explicit error remapping, recursion, mixed calls, stack arguments and six
+floating spills. Exact binary32/64 checks include negative zero, adjacent finite
+values, quiet NaN payloads and subnormals, including Error payloads rethrown by
+`?`. Record and fixed-array errors also propagate, including void success with
+a record error. MSVC and clang-cl DLLs call native
+constructors/propagation and mixed signatures, then relay direct and indirect
+values back to native consumers, twenty trials per shape per host.
+
+Protected-page probes put void Ok immediately before inaccessible Error storage;
+Ok executes without touching it. An invalid tag must raise the existing native
+UD2 inside the emitted image, rather than authorize a payload read. Trap children
+use their completed host executable and never overwrite a running Windows binary.
+Constructor-only v8/v9 artifacts also execute without domain source.
+
+Fourteen source-invalid specimens pin constructor/type/arity, nominal identity,
+must_use, void binding, exhaustiveness and propagation/remap diagnostics. Six
+source-valid native-unsupported specimens pin nested sums, ownership/Drop,
+references, `!`, try/except and computed-reference liveness. Seven malformed LIR
+mutations reject. Twenty-seven malformed artifacts reject independently in Go
+and Concept Normal/Verify, preserving round-trip, code and image sentinels.
+They cover identity/type swaps, invalid tags/arity, absent variant authority,
+incorrect early-return edges, uninitialized/nondominating bindings, fabricated
+void fields, scope/copy/geometry/CFG errors, capacity and corrupt wire records.
+Concept diagnostics include CMIRAMD9_PATTERN_DOMAIN, PAYLOAD_BINDING,
+VARIANT_OPERATION, OBJECT_CONTRACT, CAPACITY_EXCEEDED, VERSION_MISMATCH,
+SCHEMA_HASH_MISMATCH and MALFORMED under their existing CMIRAMD9 prefix.
+
+The pinned artifact is **261,777 bytes**, SHA256
+`df95976a73a53afc06d280ebc13b31d00aeb47086aa6dd9274947bb938fdad2d`.
+The identical Normal/Verify native image is **107,444 bytes**, 61 functions,
+39 call fixups, frames **40..488 bytes**, six spills; SHA256
+`34c260bb98b31437371fcc19df53a8f192dd9da870bcd795dc27521ddbe5c464`.
+Ten fresh source/LIR/CFG/transport/debug generations and ten complete native
+planning/emission samples per mode are the ordinary milestone gate. The phase
+Qualification lane promotes the new gate to 100; it was not run for h5. Earlier
+selected regression families keep their existing 100-run gates.
+
+### Remaining boundaries
+
+No Result-specific runtime exceptions, native `!`, local try/except, ownership,
+Drop, move-only or reference-bearing payloads, nested sums, fallible built-ins
+beyond Result/Option, public layout query, general foreign representation,
+new object output or optimization pass is introduced. Computed references across
+a later `?` reject explicitly. The qualified expression contexts are the tested
+ordinary calls, binary operands, record construction and existing match/if/loop
+paths; arbitrary record-with/index/short-circuit propagation is not claimed.
+Standalone fixed-array ABI limitations remain unchanged; arrays inside admitted
+Result payloads execute through the existing aggregate route. Verdict and EVT2h6
+remain unimplemented.
 
 ## EVT2h4 — closed native Option applications
 

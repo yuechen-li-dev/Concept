@@ -50,6 +50,7 @@ func TestEVT2h2NativeExecution(t *testing.T) {
 	debugStart := strings.Index(aggregateABIPlanningHost, "static unsigned long long digest;")
 	debugEnd := strings.Index(aggregateABIPlanningHost, "static int run_plan(")
 	host = strings.Replace(host, "/* PLAN DEBUG */", aggregateABIPlanningHost[debugStart:debugEnd], 1)
+	host = phaseFreshNativeHost(t, host, data, "tagged", func() []byte { _, _, _, _, raw := nativeTaggedFixture(t); return raw })
 	var first []byte
 	for _, verify := range []bool{false, true} {
 		name := "Normal"

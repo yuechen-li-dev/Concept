@@ -1,0 +1,8 @@
+profile Core;
+enum Error {
+    Missing, Invalid
+}
+Result<int, Error> Make(bool valid, int value) {
+    if (valid) { return Result::Ok(value); }
+    return Result::Error(Error::Missing);
+}

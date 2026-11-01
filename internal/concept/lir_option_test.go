@@ -122,6 +122,10 @@ func TestEVT2h4SourceBoundaries(t *testing.T) {
 					if err != nil {
 						t.Fatalf("must remain source-valid: %v", err)
 					}
+					if entry.Name() == "escalation.concept" || entry.Name() == "propagation.concept" {
+						assertEVT2h7Promotion(t, m)
+						return
+					}
 					_, err = GenerateMachineIR(m)
 				}
 				if err == nil || code == "" || !strings.Contains(err.Error(), code) {

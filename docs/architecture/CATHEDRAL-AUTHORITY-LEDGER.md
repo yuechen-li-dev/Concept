@@ -1,5 +1,9 @@
 # Cathedral authority ledger (R9c)
 
+Current EVT2h phase status: **FULLY QUALIFIED for the bounded native domain**;
+see [h9 closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md). The introductory
+stage links below retain earlier qualification snapshots.
+
 Current aggregate status is [EVT2g5 native execution](#evt2g5-aggregate-emission-authority).
 Ordinary enum status is [EVT2h1 native execution](#evt2h1-ordinary-enum-authority).
 Payload enum status is [EVT2h2 native tagged execution](#evt2h2-tagged-value-authority),
@@ -10,6 +14,168 @@ at `1058c86`; source-bootstrap facts are separately identified in the evidence.
 Earlier milestone tables below retain their historical qualification boundaries.
 Closed Option status is [EVT2h4 native execution](#evt2h4-closed-option-authority),
 qualified through the existing tagged/pattern/aggregate mechanisms.
+Closed Result and `?` status is [EVT2h5 milestone verification](#evt2h5-closed-result-and-propagation-authority),
+with focused independent evidence rather than phase-level qualification.
+
+Native fallibility is [EVT2h7 milestone verified control flow](#evt2h7-native-fallible-authority).
+
+Integrated sum-type execution is [EVT2h8 milestone verified](#evt2h8-integrated-execution-authority).
+
+## EVT2h9 phase authority qualification
+
+**FULLY QUALIFIED for the documented bounded domain**, baseline `2c93386`; scope `3e2060c`, test evidence
+`7024514`, test-only process-scope correction `ee40b10`. See the
+[phase closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md) for the final
+capability classification and actual independent gates. Historical stage
+statuses below do not supersede that current phase record.
+
+| Authority | Owner retained through closeout | Independent evidence |
+| --- | --- | --- |
+| Source legality, nominal/closed applications, active source operations, exact local/function failure destinations | Existing Go Stage-0 checker and target-independent MIR/LIR producer | Valid/invalid corpus, checked LIR mutations, C11 differential semantics |
+| Schema and artifact meaning | Ordinary Concept bridge schemas; generated Go/Concept transport | Frozen CMIRAMD3–10 hashes/bytes, independent source-free Concept admission and malformed/sentinel tests |
+| Active variant, fieldwise logical realization, physical entry materialization, storage and copying | Existing Concept validators and AMD64 object/tagged modules | 100 fresh native pipelines; named expected-9 parser and distinct incoming-argument regressions |
+| Allocation, unified frame, Win64 calls/returns, selection, encoding/fixups | Existing Concept AMD64 modules | Native-only execution, independent C11, MSVC/clang-cl plus assembly preservation observers and unchanged bytes |
+| Typed Verdict proof lattice, provenance and trusted facts | Existing Go evaluator/proof system; Concept-authored predicate bodies retain their narrower role | R9/h6 proof and malformed authority tests, semantic artifacts, assertion erasure and exact residual native identity |
+| Test scheduling/orchestration and external oracles | Go/PowerShell/C harnesses | Uncached complete regression plus companions; fresh-file completion applies to parent processes, not isolated trap/read children |
+
+H9 moves no semantic decision authority and introduces no runtime Verdict or
+new compiler-trusted facts. Equal sizes, spelling, numeric tags, or imported
+proof metadata cannot grant nominal identity, active-field access or trust.
+No second copier, union layout, frame planner, allocator or native Go algorithm
+was added. General ownership cleanup, nested sums/references, foreign sum ABI
+and unwind remain outside the qualified domain; the indirect-temporary
+alignment discrepancy remains documented.
+
+## EVT2h8 integrated execution authority
+
+Baseline `b39088b`; preimplementation inventory `df3339f`; Concept entry-liveness
+correction `1ff7c7b`; checked projection `8ca3d9b`; integration tests `928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`.
+Status: **MILESTONE VERIFIED**, not phase-wide qualification. See the
+[integration evidence](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md)
+and [capability matrix](../design/EVT2H8-INTEGRATION.md).
+
+The Go source checker still owns legality, closed/nominal identities, proof
+outcomes and handler selection. Checked LIR composes existing branch/slot/pattern/
+failure operations for and/or, while and snapshots across nested expression CFG.
+Record enum fields consume already-verified nominal geometry; no integer-width
+inference grants identity or authority. Existing borrow/active-payload checks
+remain in force. Pure conditional reference witnesses do not authorize general
+references across failure exits.
+
+Concept's object projection now retains all aggregate parameter carriers
+until unpacking through entry unpacking, including beside unused scalar arguments; their entry-only uses were missing from
+scalar liveness. The existing allocator then assigns distinct registers. This
+fixes a demonstrated native payload loss without a second allocator or ABI path.
+Concept still owns active-field logical copying, unified frame/Win64 realization,
+selection and encoding. Unchanged BridgeValidate10 independently admits all
+pattern/failure/type/initialization associations. CMIRAMD3–10 remain frozen.
+
+Typed assertion evidence and provenance remain in existing Go proof tooling;
+assertions erase before native LIR. The source-free native image equals the
+freshly parsed assertion-free image. No runtime Verdict, trusted-fact expansion
+or migration of the central evaluator is claimed. Separate strict-C11/native
+hosts and independent ABI observers provide execution evidence; bootstrap facts
+remain separately identified. Shared-call risk triggered targeted g5/h3–h7
+regression escalation, not the full h9 checkpoint.
+
+## EVT2h7 native fallible authority
+
+Baseline `e7d4f0e`; semantic inventory `ef3bd4a`; contract `f5e30de`;
+implementation and fixtures `ec8bc3a`:
+[fallibility contract](../design/EVT2H7-FALLIBLE-CONTROL.md).
+The existing Go checker still owns source legality, exact error identity and
+lexical destination selection. Checked LIR expresses bang, Option propagation
+and local handlers with ordinary CFG and scoped bindings. C bootstrap remains
+an independent source semantic oracle.
+
+Concept BridgeSchema10 owns CMIRAMD10 (`CMIRAMDA`, version 10); generated codecs
+carry the unchanged v9 base plus checked failure-flow/handler/try associations.
+Concept BridgeValidate10 independently verifies those associations, nearest
+exact-type routing, Error transfers, success guards, binding/input roles and
+function failure returns. It reuses tagged/object/borrow/pattern admission.
+Legacy v9 receives no new guard/region-exit authority. All v3–9 wire contracts
+and historical bytes remain frozen.
+
+Existing Concept object storage and active-field logical copy, Win64 ABI,
+allocation, frame planning, encoder and fixups own physical execution. UD2 owns
+native bang failure; no Go native algorithm, exception registry/runtime,
+heap/unwinding path or new physical TRY/EXCEPT/BANG opcode is added. The legacy
+fallback now rejects an invalid identity before touching the image sentinel.
+
+Focused native/C11, artifact-only, malformed/sentinel, deterministic bytes and
+adjacent native/ABI regressions are separate from the two source-bootstrap facts.
+See [h7 conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h7--native-fallible-control-flow)
+and [executed evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+No general cleanup/ownership or complete phase qualification is claimed.
+
+## EVT2h6 typed Verdict authority
+
+Baseline `cb4201a`; preimplementation inventory `0028e4f`; implementation `50d30c0`:
+[dependency/authority map](../design/EVT2H6-VERDICT-AUTHORITY.md).
+Verdict<E,R> remains comptime-only. Concept authors the predicate and refutation/
+Unknown-renderer bodies; Go still owns canonical closure, observation intrinsics,
+bounded execution, the sole lattice projector, proof graphs and semantic artifact
+loading. This milestone does not move those owners or claim a native evaluator.
+
+The useful native correction erases a checked Assert.Concept statement after
+normal semantic validation, matching C emission. Disproven/Unknown remain
+errors. A forged marker without a checked goal cannot silently remove an
+ordinary call. Cathedral then admits/emits only residual runtime instructions;
+no Verdict object, physical tag, payload layout, runtime registry or Win64
+Verdict ABI is introduced. Existing CMIRAMD3 is sufficient and all v3–9 frozen
+contracts remain unchanged.
+
+Go artifact-only consumers re-evaluate transported predicate/helper bodies.
+Rehashed descriptive verdict metadata cannot grant optimizer authority or change
+typed outcome, payload, sites/provenance or diagnostics. The innate fact registry
+remains empty; imported operation-summary authority and PredicateVerdict's
+FactAuthority are distinct seams. No positive trusted-fact projector is added.
+
+Normal/Verify execute the residual code through Concept Cathedral and compare
+with strict C11 and the same checked AST without assertions: ten-byte leaves,
+twenty-byte importing consumer, zero call fixups or frame. This is runtime erasure
+evidence, not native execution of comptime proofs. Native storage/allocation/
+frame/ABI/encoding remain the existing Concept owners. Later self-hosting needs
+a checked semantic-value/AST/observation contract before evaluator migration;
+the current Go-private gob artifact reader is a concrete dependency. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h6--typed-verdict-authority-and-checked-native-erasure)
+and [evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+
+## EVT2h5 closed Result and propagation authority
+
+Baseline `065317d`; preimplementation semantic inventory `c78b310`; independent
+bootstrap sequencing correction `8b064a6`; native implementation `f283a0b`;
+phase-test scheduling `2ccaf3a`; additional propagation coverage `ac840ae`. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h5--closed-native-result-and-propagation)
+and [focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+The existing checker owns Result<T,E>, Ok/Error, void success, must_use,
+copy/ownership rules, exact E compatibility and explicit `? else` remapping.
+Go projects checked closed generic identities and lowers `?` into the existing
+exhaustive match CFG, ordinary logical value slots and early return. It does not
+realize native Result storage or invent cleanup semantics.
+
+CMIRAMD8/9 schemas, generated codecs, hashes and historical byte fixtures remain
+unchanged. Concept admission extends existing v9 checked enum-alias eligibility
+for payload fields and admits constructor-only enum/tagged domains without
+fabricated pattern flows. Actual test/require/binding operations still need
+their complete checked scope, dominance, initialization and active-arm authority.
+Both Go and artifact-only Concept reject malformed propagation graphs. A raw
+discriminant never substitutes for active-variant proof.
+
+Cathedral's existing Concept tagged copier, object placement, allocation, frame,
+Win64 aggregate classifier and encoder own every physical decision. Ok and Error
+select only their meaningful fields; void Ok authorizes no payload access. There
+is no Result-specific copier, ABI planner, registry, union engine or production
+Go native algorithm. Independent strict C11 and MSVC/clang-cl probes distinguish
+the private native shape from the bootstrap's legacy Result compatibility ABI.
+The 61-function image is 107,444 bytes, frames 40..488 with six floating spills.
+The ordinary milestone uses ten fresh Result trials; existing selected 100-run
+regression gates remain intact and the phase lane retains 100 Result trials.
+This evidence does not claim project-wide phase qualification.
+
+Native `!`, local try/except, ownership/Drop cleanup, nested sums and unqualified
+reference-bearing alternatives remain deferred. Verdict is not implemented.
 
 ## EVT2h4 closed Option authority
 

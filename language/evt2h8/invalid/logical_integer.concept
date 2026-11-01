@@ -1,0 +1,4 @@
+profile Core;
+bool Invalid(int value) {
+    return value and true;
+}

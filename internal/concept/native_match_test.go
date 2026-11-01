@@ -176,6 +176,7 @@ func TestEVT2h3NativeExecution(t *testing.T) {
 				a := strings.Index(aggregateABIPlanningHost, "static unsigned long long digest;")
 				b := strings.Index(aggregateABIPlanningHost, "static int run_plan(")
 				host = strings.Replace(host, "/* PLAN DEBUG */", aggregateABIPlanningHost[a:b], 1)
+				host = phaseFreshNativeHost(t, host, data, "pattern", func() []byte { _, _, _, _, raw := patternFixture(t, ordinary); return raw })
 				outputs := backendTestOutputs(t, verify)
 				t.Log(runFoundationNativeHarnessOutput(t, outputs, "pattern_native.c", "#define MATCH_NATIVE_ONLY 1\n"+host, "-pedantic-errors", "-O2"))
 				nativeCode, err := os.ReadFile(dump)

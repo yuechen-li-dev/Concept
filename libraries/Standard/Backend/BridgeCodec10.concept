@@ -1,0 +1,70 @@
+// Code generated from checked BridgeSchema metadata; DO NOT EDIT.
+module Standard.Backend.BridgeCodec10;
+profile Core;
+import Standard.Backend.BridgeCodec9;
+import Standard.Backend.BridgeSchema10;
+string FallibleMachineBridgeSchemaHash() {
+    return "ea57ae74f5ae54ece90ce429edbc4a41ce309d106582c84fdb5d70d15242941d";
+}
+uint8[32] FallibleMachineBridgeSchemaHashBytes() {
+    uint8[32] value =[234u, 87u, 174u, 116u, 245u, 174u, 84u, 236u, 233u, 12u, 228u, 41u, 237u, 188u,
+    74u, 65u, 206u, 48u, 157u, 16u, 101u, 130u, 200u, 79u, 219u, 93u, 112u, 209u, 82u, 66u, 148u, 29u];
+    return value;
+}
+derive DeriveBridgeEnumRead reflect<FallibleSiteKind>;
+derive DeriveBridgeEnumWrite reflect<FallibleSiteKind>;
+derive DeriveBridgeRead reflect<WireFallibleTry>;
+derive DeriveBridgeWrite reflect<WireFallibleTry>;
+derive DeriveBridgeRead reflect<WireFallibleHandler>;
+derive DeriveBridgeWrite reflect<WireFallibleHandler>;
+derive DeriveBridgeRead reflect<WireFallibleSite>;
+derive DeriveBridgeWrite reflect<WireFallibleSite>;
+derive DeriveBridgeRead reflect<WireFallibleModule>;
+derive DeriveBridgeWrite reflect<WireFallibleModule>;
+Result<BridgeSequence<WireFallibleTry>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireFallibleTry>> type) {
+    return ReadBridgeSequence<WireFallibleTry>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireFallibleTry> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireFallibleTry>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireFallibleHandler>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireFallibleHandler>> type) {
+    return ReadBridgeSequence<WireFallibleHandler>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireFallibleHandler> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireFallibleHandler>(ref const value, ref const source, ref writer);
+}
+Result<BridgeSequence<WireFallibleSite>, BackendError> ReadWire(ref BridgeReader reader, BridgeType<BridgeSequence<WireFallibleSite>> type) {
+    return ReadBridgeSequence<WireFallibleSite>(ref reader, type);
+}
+Result<void, BackendError> WriteWire(ref const BridgeSequence<WireFallibleSite> value, ref const BridgeReader source,
+ref BridgeWriter writer) {
+    return WriteBridgeSequence<WireFallibleSite>(ref const value, ref const source, ref writer);
+}
+Result<int, BackendError> FallibleBridgeRoundTrip(ReadOnlySpan<byte> payload, Span<byte> output) {
+    BridgeReader reader = BridgeReader{payload, 0};
+    WireFallibleModule value = ReadWire(ref reader, BridgeType<WireFallibleModule>{0}) ?;
+    if (reader.offset != Len(payload)) { return Result::Error(BackendError::BridgeInvalid); }
+    BridgeWriter writer = BridgeWriter{output, 0};
+    WriteWire(ref const value, ref const reader, ref writer) ?;
+    return Result::Ok(writer.offset);
+}
+Result<void, BackendError> ReadFallibleBridgeIdentity(ref BridgeReader reader) {
+    WireHeader header = ReadWire(ref reader, BridgeType<WireHeader>{0}) ?;
+    for (i in 0 .. Len(header.magic)) {
+        if (header.magic[i] !=(FallibleBridgeMagic[i] as uint8)) {
+            return Result::Error(BackendError::BridgeVersion);
+        }
+    }
+    if (header.version != FallibleBridgeVersion) {
+        return Result::Error(BackendError::BridgeVersion);
+    }
+    uint8[32] expected = FallibleMachineBridgeSchemaHashBytes();
+    for (i in 0 .. Len(header.schemaHash)) {
+        if (header.schemaHash[i] != expected[i]) {
+            return Result::Error(BackendError::BridgeSchemaMismatch);
+        }
+    }
+    return Result::Ok();
+}

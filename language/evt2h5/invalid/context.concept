@@ -1,0 +1,6 @@
+// expect: CV4540
+profile Core;
+int Bad() {
+    Result::Ok(1);
+    return 0;
+}

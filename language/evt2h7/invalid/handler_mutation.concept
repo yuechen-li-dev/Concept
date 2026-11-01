@@ -1,0 +1,13 @@
+// expect: CV4128
+profile Core;
+enum A {
+    Missing
+}
+int Need(Result<int, A> value) {
+    try {
+        return value ?;
+    } except(A error) {
+        error = A::Missing;
+        return 2;
+    }
+}

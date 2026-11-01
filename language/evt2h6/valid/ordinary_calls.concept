@@ -1,0 +1,9 @@
+module Research.OrdinaryCall;
+profile Core;
+int Target() {
+    return 7;
+}
+int Caller() {
+    discard Target();
+    return 7;
+}

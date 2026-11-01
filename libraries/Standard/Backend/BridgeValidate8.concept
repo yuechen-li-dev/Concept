@@ -82,7 +82,9 @@ ref ObjectAuthorityContext context, bool[256] aliases) {
     bool[256] payload =[false ...];
     for (i in 0 .. objects.Types.count) {
         WireObjectType t = TaggedAt<WireObjectType>(ref const reader, objects.Types, i) ?;
-        bool allowed = not context.taggedTypes[i] and not aliases[i] and t.Kind != ObjectKind::Void and t.Copy == ObjectCopyKind::CheckedValue;
+        // V9 supplies independently validated ordinary enum aliases. They are
+        // typed scalar fields, not nested sums. V8 supplies no aliases.
+        bool allowed = not context.taggedTypes[i] and t.Kind != ObjectKind::Void and t.Copy == ObjectCopyKind::CheckedValue;
         if (t.Kind == ObjectKind::Array) {
             allowed = allowed and payload[t.Element];
         }

@@ -1,0 +1,8 @@
+module Research.VerdictConsumer;
+profile Core;
+import Research.Protocol;
+
+int Main() {
+    Assert.Concept<Supported>(int, "source-free predicate re-evaluation");
+    return 7;
+}

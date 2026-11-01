@@ -121,6 +121,18 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 		if b.borrowErr != nil {
 			return LIRModule{}, b.borrowErr
 		}
+		if b.hasFallibleControl {
+			// V10 function destinations currently require a straight-line Error
+			// arm. Keep existing V9 remaps intact and diagnose this native subset
+			// boundary before the independent contract verifier.
+			for _, site := range b.failureSites {
+				if site.Kind == "remap" && b.fn.Blocks[b.fn.Patterns[site.Flow].Arms[1].Body].Term.Op != "return" {
+					return LIRModule{}, fmt.Errorf("%s: EVT2H7_UNSUPPORTED_REMAP_CONTROL", b.fn.Name)
+				}
+			}
+			b.failureControl.Sites = b.failureSites
+			b.fn.Fallible = &b.failureControl
+		}
 		if b.hasBorrow {
 			b.fn.Borrow = &LIRBorrowContract{Scopes: b.scopes, SlotScopes: b.slotScopes, References: b.references}
 		} else {
@@ -224,9 +236,13 @@ type lirBuilder struct {
 	machineFields map[string]int
 	machineStates map[string]int
 	// terminalStates marks states whose entry completes the machine.
-	terminalStates map[string]bool
-	activeState    int
-	activation     *activationStepContext
+	terminalStates     map[string]bool
+	activeState        int
+	activation         *activationStepContext
+	tryStack           []*lirTryContext
+	failureSites       []LIRFailureSite
+	failureControl     LIRFallibleContract
+	hasFallibleControl bool
 }
 
 func (b *lirBuilder) value() int { n := b.nextValue; b.nextValue++; return n }
@@ -296,7 +312,16 @@ func (b *lirBuilder) statement(stmt Statement) error {
 	switch s := stmt.(type) {
 	case *MatchStmt:
 		return b.matchStatement(s)
+	case *TryStmt:
+		return b.tryStatement(s)
+	case *WhileStmt:
+		return b.whileStatement(s)
 	case *ExprStmt:
+		// Semantic analysis has already checked the proof and rejected Unknown
+		// or Disproven. Match C emission: this intrinsic has no runtime effect.
+		if call, ok := s.Value.(*CallExpr); ok && call.Intrinsic == "concept_assert" && call.ConceptGoal != "" {
+			return nil
+		}
 		if _, _, err := b.expr(s.Value); err != nil {
 			return err
 		}
@@ -597,8 +622,11 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 	case *IfExpr:
 		return b.ifExpression(e)
 	case *ConstructExpr:
-		if e.EnumName == evt1OptionName {
-			if !evt1IsOptionType(e.ResolvedType) {
+		if e.EnumName == evt1OptionName || e.EnumName == evt1ResultName {
+			if !evt1IsFailureType(e.ResolvedType) {
+				if e.EnumName == evt1ResultName {
+					return 0, "", fmt.Errorf("EVT2H5_RESULT_REQUIRES_CLOSED_TYPE")
+				}
 				return 0, "", fmt.Errorf("EVT2H4_OPTION_REQUIRES_CLOSED_TYPE")
 			}
 			decl, _ := evt1FailureEnumDecl(e.ResolvedType)
@@ -686,6 +714,10 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		args := make([]int, 0, len(e.Args))
 		argTypes := make([]LIRType, 0, len(e.Args))
+		saved := make([]int, len(e.Args))
+		for i := range saved {
+			saved[i] = -1
+		}
 		for i, arg := range e.Args {
 			v, actual, err := b.expr(arg)
 			if err != nil {
@@ -697,6 +729,15 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 			}
 			args = append(args, v)
 			argTypes = append(argTypes, expected)
+			if expressionsMayBranch(e.Args[i+1:]) {
+				saved[i], err = b.saveBeforeExpression(v, actual, e.Span, e.Args[i+1:])
+				if err != nil {
+					return 0, "", err
+				}
+			}
+		}
+		for i := range args {
+			args[i] = b.loadAfterPropagation(args[i], saved[i], argTypes[i], e.Span)
 		}
 		if resultType != "void" && !lirCallScalar(resultType) && !lirAggregateType(resultType) {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_CALL_RESULT %s: %s", e.Callee, resultType)
@@ -747,6 +788,9 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		}
 		return b.constant("bool", lit, e.Span), "bool", nil
 	case *BinaryExpr:
+		if e.Op == "and" || e.Op == "or" {
+			return b.logicalExpression(e)
+		}
 		if e.UnitScaleDenominator != 0 && e.UnitScaleNumerator != e.UnitScaleDenominator {
 			return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_QUANTITY_SCALE %d/%d at %d:%d", e.UnitScaleNumerator, e.UnitScaleDenominator, e.Span.Line, e.Span.Column)
 		}
@@ -754,10 +798,18 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		if err != nil {
 			return 0, "", err
 		}
+		saved := -1
+		if expressionMayBranch(e.Right) {
+			saved, err = b.saveBeforeExpression(left, lt, e.Span, []Expr{e.Right})
+			if err != nil {
+				return 0, "", err
+			}
+		}
 		right, rt, err := b.expr(e.Right)
 		if err != nil {
 			return 0, "", err
 		}
+		left = b.loadAfterPropagation(left, saved, lt, e.Span)
 		if lt != rt {
 			return 0, "", fmt.Errorf("EVT2_BINARY_TYPE_MISMATCH")
 		}
@@ -798,8 +850,8 @@ func (b *lirBuilder) expr(expr Expr) (int, LIRType, error) {
 		v, typ := b.loadMachineField(id, e.Span)
 		return v, typ, nil
 	case *FailureExpr:
-		if evt1IsOptionType(e.ResolvedType) {
-			return 0, "", fmt.Errorf("EVT2H4_UNSUPPORTED_OPTION_OPERATOR %s", e.Op)
+		if evt1IsFailureType(e.ResolvedType) {
+			return b.resultPropagation(e)
 		}
 		return 0, "", fmt.Errorf("EVT2_UNSUPPORTED_EXPR %T at %d:%d", expr, expr.exprSpan().Line, expr.exprSpan().Column)
 	case *StructConstructExpr:

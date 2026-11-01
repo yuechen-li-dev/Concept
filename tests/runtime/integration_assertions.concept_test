@@ -1,0 +1,9 @@
+module Testing.IntegrationAssertionFacts;
+profile Core;
+import Testing.IntegrationAssertions;
+
+[[fact]] void CheckedProofComposesWithRuntimeResults() {
+    Assert.Equal(Run(true, 7), 8, "proven word and runtime success");
+    Assert.Equal(Run(true, - 2), 0, "ordinary enum selection");
+    Assert.Equal(Run(false, 7), - 1, "local Result failure");
+}

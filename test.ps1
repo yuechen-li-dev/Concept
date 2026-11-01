@@ -16,6 +16,7 @@ if ($Lane -ne 'Runtime' -and ($Filter -or $Verify)) {
 }
 $timer = [Diagnostics.Stopwatch]::StartNew()
 $priorQualificationProfile = $env:CONCEPT_QUALIFICATION_PROFILE
+$priorEVT2hPhaseQualification = $env:CONCEPT_EVT2H_PHASE_QUALIFICATION
 Push-Location -LiteralPath $PSScriptRoot
 try {
     switch ($Lane) {
@@ -40,6 +41,9 @@ try {
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
         'Qualification' {
+            # New ordinary milestones sample by default; the phase checkpoint
+            # schedules their retained 100 fresh generation/emission trials.
+            $env:CONCEPT_EVT2H_PHASE_QUALIFICATION = '1'
             # Includes the fresh CMIRAMD9 CFG/native 100-run gates. Keep the
             # full lane bounded without truncating those qualification runs.
             $goTimer = [Diagnostics.Stopwatch]::StartNew()
@@ -49,9 +53,9 @@ try {
                 $env:CONCEPT_QUALIFICATION_PROFILE = Join-Path $profileRoot 'commands.jsonl'
                 [IO.File]::WriteAllText($env:CONCEPT_QUALIFICATION_PROFILE, '')
                 Write-Host "Collecting uncached qualification evidence in $profileRoot"
-                & go test ./... -json -count=1 -parallel=4 -timeout=45m > (Join-Path $profileRoot 'tests.jsonl')
+                & go test ./... -json -count=1 -parallel=4 -timeout=75m > (Join-Path $profileRoot 'tests.jsonl')
             } else {
-                & go test ./... -count=1 -parallel=4 -timeout=45m
+                & go test ./... -count=1 -parallel=4 -timeout=75m
             }
             $goExit = $LASTEXITCODE
             $goTimer.Stop()
@@ -73,6 +77,7 @@ try {
     $timer.Stop()
     Write-Host "$Lane passed in $([math]::Round($timer.Elapsed.TotalSeconds, 2)) seconds."
 } finally {
+    $env:CONCEPT_EVT2H_PHASE_QUALIFICATION = $priorEVT2hPhaseQualification
     $env:CONCEPT_QUALIFICATION_PROFILE = $priorQualificationProfile
     Pop-Location
 }

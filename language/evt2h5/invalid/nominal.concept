@@ -1,0 +1,11 @@
+// expect: CV4116
+profile Core;
+enum First {
+    Missing
+}
+enum Second {
+    Missing
+}
+Result<int, Second> Bad(Result<int, First> value) {
+    return value;
+}

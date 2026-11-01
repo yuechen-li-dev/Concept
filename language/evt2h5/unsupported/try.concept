@@ -1,0 +1,16 @@
+// expect: EVT2H5_UNSUPPORTED_LOCAL_ERROR_HANDLING
+profile Core;
+enum Error {
+    Missing
+}
+Result<int, Error> Load() {
+    return Result::Error(Error::Missing);
+}
+int Need() {
+    try {
+        int value = Load() ?;
+        return value;
+    } except(Error error) {
+        return 0;
+    }
+}

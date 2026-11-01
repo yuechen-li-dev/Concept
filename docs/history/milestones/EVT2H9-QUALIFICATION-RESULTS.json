@@ -1,0 +1,305 @@
+{
+  "schema": "concept-evt2h9-closeout-evidence-v1",
+  "status": "FULLY QUALIFIED within documented bounded scope",
+  "baseline": "2c93386f02d218c667ef2b78c026d9ed25f5ae9b",
+  "full_invocation_test_revision": "7024514",
+  "final_test_revision": "919d204",
+  "production_implementation_changes": false,
+  "compiler": "concept-evt1-stage0-go",
+  "target": "Windows AMD64 / Microsoft x64",
+  "initial_full_invocation": {
+    "command": "./test.ps1 -Lane Qualification -ProfileDirectory artifacts/evt2h9/full",
+    "run": {
+      "start": "2026-11-01T02:45:40.8483751Z",
+      "peak_sampled_tree_rss_bytes": 2423832576,
+      "wall_seconds": 3656.9298927,
+      "exit": 1,
+      "finish": "2026-11-01T03:46:37.7782409Z",
+      "sample_seconds": 5,
+      "samples": 707
+    },
+    "go": {
+      "go_seconds": 3652.6300366,
+      "go_exit": 1
+    },
+    "top_level_families": 975,
+    "passed": 958,
+    "failed": 3,
+    "skipped": 14,
+    "packages": [
+      {
+        "Package": "github.com/yuechen-li-dev/Concept/internal/concept/profile/vulkan",
+        "Action": "pass",
+        "Elapsed": 0.802
+      },
+      {
+        "Package": "github.com/yuechen-li-dev/Concept/cmd/concept",
+        "Action": "pass",
+        "Elapsed": 355.124
+      },
+      {
+        "Package": "github.com/yuechen-li-dev/Concept/internal/concept",
+        "Action": "fail",
+        "Elapsed": 3651.661
+      }
+    ],
+    "largest_families": [
+      {
+        "Test": "TestEVT2h5NativeResult",
+        "Action": "fail",
+        "Elapsed": 688.05
+      },
+      {
+        "Test": "TestEVT2h7NativeFallible",
+        "Action": "pass",
+        "Elapsed": 610.7
+      },
+      {
+        "Test": "TestEVT2h8NativeIntegration",
+        "Action": "pass",
+        "Elapsed": 486.56
+      },
+      {
+        "Test": "TestEVT2h3NativeExecution",
+        "Action": "pass",
+        "Elapsed": 432.13
+      },
+      {
+        "Test": "TestAMD64CLIBatch",
+        "Action": "pass",
+        "Elapsed": 307.18
+      },
+      {
+        "Test": "TestEVT2f5NativeMixedCalls",
+        "Action": "pass",
+        "Elapsed": 203.36
+      },
+      {
+        "Test": "TestEVT2h3ArtifactAdmission",
+        "Action": "pass",
+        "Elapsed": 177.35
+      },
+      {
+        "Test": "TestEVT2h5ArtifactAdmission",
+        "Action": "pass",
+        "Elapsed": 173.45
+      },
+      {
+        "Test": "TestR9aInnateLibraryScale",
+        "Action": "pass",
+        "Elapsed": 124.2
+      },
+      {
+        "Test": "TestEVT2h4NativeOption",
+        "Action": "fail",
+        "Elapsed": 122
+      },
+      {
+        "Test": "TestEVT2g5NativeExecution",
+        "Action": "pass",
+        "Elapsed": 108.61
+      },
+      {
+        "Test": "TestEVT2g4Boundaries",
+        "Action": "pass",
+        "Elapsed": 94.33
+      }
+    ]
+  },
+  "resolutions": {
+    "TestEVT2h5NativeResult": "result-rerun.log",
+    "TestEVT2h4NativeOption": "option-rerun.log",
+    "TestNativeSchedulerWorkers": "scheduler-final.log"
+  },
+  "prerequisite_skip_resolutions": {
+    "TestTinyXML2ArtifactABIChainAndIdentity": "tinyxml-rerun.log",
+    "TestNativeConceptArtifactsRepeatByteIdentically": "tinyxml-rerun.log",
+    "TestNativeABIProbeRejectsWrongLayout": "tinyxml-rerun.log",
+    "TestEVT1LanguageSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1VulkanSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1TemplateLanguageSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1TemplateVulkanSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1M1BCLanguageSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1M1BCVulkanSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1M1BDLanguageSpecimenNativeC11": "msvc-environment-rerun.log",
+    "TestEVT1M1BDVulkanSpecimenNativeC11": "msvc-environment-rerun.log"
+  },
+  "retained_optional_or_worker_skips": [
+    {
+      "test": "TestCollectorHundredRunDeterminism",
+      "reason": "Explicit opt-in R7fR burn-in; collection implementation unchanged, outside EVT2h determinism domain"
+    },
+    {
+      "test": "TestEVT2h3ArtifactProcessWorker",
+      "reason": "Parent skip is intentional; the artifact process determinism driver executes 100 worker processes"
+    },
+    {
+      "test": "TestGeneratedCodecsReadAndWriteSharedOctBytes",
+      "reason": "Adjacent external Oct fixture checkout unavailable at the worktree-relative path; no other repository was modified"
+    }
+  ],
+  "final_family_coverage": {
+    "total": 975,
+    "passed_after_complete_affected_suite_reruns": 972,
+    "failed": 0,
+    "skipped": 3,
+    "named_subtests": 1859,
+    "reused_results": "Only unaffected complete-run results; production code and frozen fixtures unchanged. See closeout for exact source/test scope."
+  },
+  "measurements": {
+    "cathedral_source_generation_cold": 2,
+    "cathedral_source_generation_reused": 113,
+    "full_backend_C_object_compiles": 10,
+    "full_backend_C_flag_sets_per_mode": 5,
+    "native_objects_cold_all_sources": 19,
+    "native_objects_reused": 139,
+    "observed_nativeCommand_launches": 2039,
+    "observed_nativeCommand_CPU_seconds": 3331.453125,
+    "CLI_cold_source_and_C_builds": 2,
+    "CLI_backend_processes": 21,
+    "corrected_option_result_source_builds_extra": 4,
+    "corrected_option_result_C_backend_builds_extra": 4,
+    "corrected_option_result_nativeCommand_launches_extra": 24,
+    "EVT2h_C11_oracle_host_compilations_including_residual_erasure": 24,
+    "EVT2h8_separate_domain_oracle_C_object_compilations": 4,
+    "peak_full_tree_sampled_RSS_bytes": 2423832576,
+    "RSS_sample_seconds": 5,
+    "caveat": "Command observations exclude uninstrumented descendants/CLI/other subprocesses; RSS is sampled, companions outside main tree excluded. Historical 1319.57s baseline has different coverage."
+  },
+  "rerun_timings": {
+    "result-rerun": {
+      "start": "2026-10-31T20:29:50.6340013-07:00",
+      "finish": "2026-10-31T20:46:02.7798573-07:00",
+      "seconds": 972.1459742,
+      "exit": 0,
+      "command": "go test ./internal/concept -run ^TestEVT2h5NativeResult$ -count=1 -v -timeout 20m",
+      "phase_trials": 100
+    },
+    "option-rerun": {
+      "start": "2026-10-31T20:31:40.9411369-07:00",
+      "finish": "2026-10-31T20:35:21.5119403-07:00",
+      "seconds": 220.5708953,
+      "exit": 0,
+      "command": "go test ./internal/concept -run ^TestEVT2h4NativeOption$ -count=1 -v -timeout 15m",
+      "phase_trials": 100,
+      "native_timeout": "8m"
+    },
+    "tinyxml-rerun": {
+      "start": "2026-10-31T20:34:19.9282479-07:00",
+      "finish": "2026-10-31T20:34:29.9141205-07:00",
+      "seconds": 9.9860561,
+      "exit": 0,
+      "submodule": "8224e427b655b83dae5e2298f1e6919523a78737",
+      "command": "go test ./internal/concept -run ^Test(TinyXML2ArtifactABIChainAndIdentity|NativeConceptArtifactsRepeatByteIdentically|NativeABIProbeRejectsWrongLayout)$ -count=1 -v -timeout 15m"
+    },
+    "msvc-environment": {
+      "seconds": 1.9129155,
+      "exit": 0
+    },
+    "scheduler-reproduce": {
+      "seconds": 65.4458922,
+      "exit": 0,
+      "count": 3
+    },
+    "scheduler-final": {
+      "start": "2026-10-31T20:36:23.1148504-07:00",
+      "finish": "2026-10-31T20:38:27.8345722-07:00",
+      "seconds": 124.7198803,
+      "exit": 0,
+      "count": 5,
+      "command": "go test ./internal/concept -run ^TestNativeSchedulerWorkers$ -count=5 -v -timeout 8m"
+    },
+    "scheduler-race": {
+      "seconds": 158.3301751,
+      "exit": 0,
+      "command": "go test -race ./internal/concept -run ^TestNativeSchedulerWorkers$ -count=1 -v -timeout 5m"
+    },
+    "race": {
+      "seconds": 429.1811632,
+      "exit": 0
+    },
+    "quick": {
+      "start": "2026-10-31T20:30:32.2603796-07:00",
+      "finish": "2026-10-31T20:30:57.5993532-07:00",
+      "seconds": 25.3390511,
+      "exit": 0,
+      "command": "./test.ps1"
+    }
+  },
+  "library_timings": [
+    {
+      "exit": 0,
+      "command": "concept test libraries/Standard --module-root libraries --verbose",
+      "seconds": 53.9141114
+    },
+    {
+      "exit": 0,
+      "command": "concept test libraries/Standard --module-root libraries --verbose --verify",
+      "seconds": 49.3149554
+    },
+    {
+      "exit": 0,
+      "command": "concept package build Standard",
+      "seconds": 16.8767299
+    },
+    {
+      "exit": 0,
+      "command": "concept test libraries/DragonGod --module-root libraries --verbose",
+      "seconds": 5.6131238
+    },
+    {
+      "exit": 0,
+      "command": "concept test libraries/DragonGod --module-root libraries --verbose --verify",
+      "seconds": 5.6698478
+    },
+    {
+      "exit": 0,
+      "command": "concept package build DragonGod",
+      "seconds": 16.7617761
+    }
+  ],
+  "final_tooling_timings": [
+    {
+      "seconds": 1.3863961,
+      "gate": "vet",
+      "exit": 0
+    },
+    {
+      "seconds": 1.2462783,
+      "gate": "build",
+      "exit": 0
+    },
+    {
+      "seconds": 24.7818805,
+      "gate": "quick",
+      "exit": 0
+    }
+  ],
+  "frozen_contract_files": 42,
+  "determinism_trials": 100,
+  "legacy_Zig_suites": "Skipped under unchanged legacy compiler/build-infrastructure policy; existing Go-hosted Zig tool probes still ran",
+  "local_log_root": "artifacts/evt2h9",
+  "log_sha256": {
+    "full/tests.jsonl": "6304d24ee9e38d7d8476602c3557f5410f97aaa01f79dd1097eab6452de8cc26",
+    "full/commands.jsonl": "71fe9729d3cbf3db69e63c95b384487fe8140febeb90f30a4b6ef3a09462f417",
+    "full/run.json": "31655044919ce8a22e1508ead9f5a4f336d38c8b2f216603db81f672d486aaca",
+    "full/summary.json": "a5a0605052cc23903d806ab29c0e156589c73cca3ce56b4a9ba0b21dba6940de",
+    "result-rerun.log": "22a4f87b3ceac1b07c550ef0567a6f6ad4e18db90b9892be52f374e469b8bd2f",
+    "option-rerun.log": "a12f0398672792209f31f89db824d243777622c93b36f54b0a22511607c9638d",
+    "tinyxml-rerun.log": "9e918e23d4230d3572a54f667b3106afd9112b50192045c387d341f95cbdaa76",
+    "msvc-environment-rerun.log": "df582d6ecfc5656267d6983502a9579ec941e5a755b8086fcc79fc3ee5ac2c03",
+    "scheduler-reproduce.log": "95767e63cac7bcf8c88fcf072c5f8cee1bd17b21cdfbc947ac615794f30b9d33",
+    "scheduler-final.log": "c2ae6ca37d8f8ebfa33a2cc8c59ab30a378ac4f09b7942a6b0d468bc9a74c065",
+    "scheduler-race.log": "55bc27b67a4b968393a56936e409fcb06697a1d3469a5d0327076bbcd362eae5",
+    "race.log": "ccc660355385a4bf7d7433cb252a972ae90e866e98cbfd85a4471cc609f20755",
+    "Standard-Normal.log": "b879b5001a4a77927a29673f0a204370e383c6c37627d09c744f12de2012c19d",
+    "Standard-Verify.log": "14e95b12b6605484a88b55340e465317db487c734ea28dd19e80d2bb2e2500f4",
+    "DragonGod-Normal.log": "adcbb9319173df4b90de72e94c123ddbacc136410469aedb1ef63d868743713f",
+    "DragonGod-Verify.log": "b086261c2905928f46b59417e6858a320f2ace40c7e870187d4e7280149e7caf",
+    "final-quick.log": "7f5b9c8cca05e463e6cb7cc5d7472114b66e0dfafbc6d4f559520818a1748cc5",
+    "final-vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "final-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frozen-contracts.json": "eaa22f9db2876c1b9b1654c70255f83bdaec540d06c0692910e5710b65882630",
+    "generated-codec10.json": "6d1a46d301aaaea8bb9106628db42df92544c5242c18fc473898e0848faac533"
+  }
+}

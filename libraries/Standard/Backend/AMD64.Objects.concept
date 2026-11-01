@@ -1,6 +1,7 @@
 module Standard.Backend.AMD64.Objects;
 profile Core;
 import Standard.Backend.AMD64.Encoding;
+import Standard.Backend.BridgeValidate10;
 // Aggregate values are private typed frame objects, never scalar virtuals.
 // Scalar/location IDs alone enter the existing register allocator.
 struct ObjectPlacement {
@@ -21,8 +22,8 @@ ObjectPlacement EmptyObjectPlacement() {
 }
 Result<WireObjectModule, BackendError> NativeObjectDocument(ReadOnlySpan<byte> artifact) {
     BridgeReader reader = BridgeReader{artifact, 0};
-    if (Len(artifact) >= 8 and artifact[7] == 57) {
-        WirePatternModule document = ReadPatternDocument(ref const reader) ?;
+    if (IsNativePatternBridge(artifact)) {
+        WirePatternModule document = NativePatternDocument(ref const reader) ?;
         return Result::Ok(document.Base.Base.Objects);
     }
     if (Len(artifact) >= 8 and artifact[7] == 56) {
@@ -247,6 +248,23 @@ WireObjectFunction owner, ref BackendFunction function, ref ObjectPlacement plac
         };
         AppendScalarInstruction(ref function, def, ScalarOpcode::Const) ?;
     }
+    // Every aggregate parameter is unpacked after all scalar entry moves.
+    // Its private object value has no scalar use in source LIR. Retain each
+    // incoming carrier through this common entry point: another aggregate or
+    // even an unused scalar parameter must not overwrite it before unpacking.
+    // These are liveness observations, like field uses below, not emitted loads.
+    for (i in 0 .. owner.Params.count) {
+        WireObjectParameter parameter = NativeObjectAt<WireObjectParameter>(ref const reader, owner.Params,
+        i) ?;
+        if (placement.values[parameter.Value] >= 0) {
+            MachineInstruction use = EmptyInstruction();
+            use = use with {
+                source0 = ScalarVirtualOperand(placement.parameterCarriers[i], ref const function);
+                sourceCount = 1;
+            };
+            AppendScalarInstruction(ref function, use, ScalarOpcode::Load) ?;
+        }
+    }
     function.blockCount = owner.Blocks.count;
     int cursor = 0;
     for (bi in 0 .. owner.Blocks.count) {
@@ -401,7 +419,7 @@ Result<void, BackendError> ObjectStackAddress(ref ByteWriter writer, Register ta
 Result<void, BackendError> CopyObjectFields(ref ByteWriter writer, ref const BridgeReader reader,
 WireObjectModule document, int typeID, int offset, int depth) {
     BridgeSequence<WireTaggedDomain> domains = BridgeSequence<WireTaggedDomain>{0, 0};
-    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57)) {
+    if (Len(reader.data) >= 8 and(reader.data[7] == 56 or reader.data[7] == 57 or reader.data[7] == 65)) {
         domains = NativeTaggedDocument(ref const reader) ?.Domains;
     }
     return CopyObjectFieldsWithDomains(ref writer, ref const reader, document, domains, typeID, offset,

@@ -1,0 +1,5 @@
+// expect: EVT2H2_NESTED_TAGGED_ENUM
+profile Core;
+Result<Option<int>, bool> Empty() {
+    return Result::Error(true);
+}

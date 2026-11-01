@@ -1,0 +1,9 @@
+// expect: MUST_USE_RESULT_IGNORED
+profile Core;
+Result<int, bool> Value() {
+    return Result::Ok(1);
+}
+int Bad() {
+    Value();
+    return 0;
+}

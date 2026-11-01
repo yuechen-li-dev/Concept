@@ -17,6 +17,9 @@ func verifyObjectContractEnums(m ObjectModule, authority []BorrowFunction, enums
 type taggedSite struct{ function, block, instruction int }
 
 func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enums []LIREnum, tagged []LIRTaggedEnum, operations map[taggedSite]string, patterns ...map[int][]LIRPatternFlow) error {
+	return verifyObjectContractTaggedControl(m, authority, enums, tagged, operations, nil, patterns...)
+}
+func verifyObjectContractTaggedControl(m ObjectModule, authority []BorrowFunction, enums []LIREnum, tagged []LIRTaggedEnum, operations map[taggedSite]string, controls map[int]*LIRFallibleContract, patterns ...map[int][]LIRPatternFlow) error {
 	bad := func(s string) error { return fmt.Errorf("MIR_CMIRAMD5_%s", s) }
 	if len(m.Types) == 0 || len(m.Types) > 256 || len(m.Functions) == 0 || len(m.Functions) > 128 || len(m.Dependencies) > 128 {
 		return bad("CAPACITY")
@@ -138,6 +141,7 @@ func verifyObjectContractTagged(m ObjectModule, authority []BorrowFunction, enum
 			return e
 		}
 		lf := LIRFunction{Identity: f.Identity, Name: f.Name, Result: result, Source: Span{Line: f.Source.Line, Column: f.Source.Column}, Facts: f.Facts, Decisions: f.Decisions}
+		lf.Fallible = controls[fi]
 		if len(patterns) > 0 {
 			lf.Patterns = patterns[0][fi]
 		}

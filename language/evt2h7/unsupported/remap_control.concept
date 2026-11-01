@@ -1,0 +1,16 @@
+// expect: EVT2H7_UNSUPPORTED_REMAP_CONTROL
+profile Core;
+enum FirstError {
+    Missing
+}
+enum SecondError {
+    Missing
+}
+Result<int, FirstError> Load(bool valid) {
+    return if (valid) Result::Ok(1) else Result::Error(FirstError::Missing);
+}
+Result<int, SecondError> Need(bool valid, bool choose) {
+    int first = Load(true)!;
+    int second = Load(valid) ? else if (choose) SecondError::Missing else SecondError::Missing;
+    return Result::Ok(first + second);
+}

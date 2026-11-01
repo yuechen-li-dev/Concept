@@ -1,5 +1,9 @@
 # Cathedral migration matrix (R9c)
 
+Current EVT2h phase status: **FULLY QUALIFIED for the bounded native domain**;
+see [h9 closeout](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md). The introductory
+stage links below retain earlier qualification snapshots.
+
 Current aggregate stage: [EVT2g5 native execution](#evt2g5-native-aggregate-calls).
 Current payload enum stage: [EVT2h2 native tagged values](#evt2h2-native-tagged-values),
 with full qualification passed at `59788a4`.
@@ -8,6 +12,114 @@ Full qualification passes at `1058c86`, including native/C11 and 100-run gates.
 Earlier stage tables retain their historical qualification boundaries.
 Closed Option stage: [EVT2h4 native execution](#evt2h4-closed-native-option),
 with full qualification and measured throughput improvement.
+Closed Result stage is [EVT2h5 milestone verification](#evt2h5-closed-native-result-and-fallible-control-flow).
+
+Native fallibility stage is [EVT2h7 milestone verification](#evt2h7-native-fallible-control-flow).
+
+Integrated execution stage is [EVT2h8 milestone verification](#evt2h8-integrated-sum-types-and-fallibility).
+
+## EVT2h9 phase closeout
+
+Status: **FULLY QUALIFIED for the documented bounded domain**. Baseline `2c93386`; scope `3e2060c`;
+qualification `7024514`; parent/child test-gate correction `ee40b10`.
+The [authoritative phase matrix and evidence](../history/milestones/EVT2H9-PHASE-CLOSEOUT.md)
+separates bounded native execution from source/C support and deferred work.
+Historical tables retain their original stage status.
+
+| Surface | Authority / realization | H9 closeout boundary |
+| --- | --- | --- |
+| Ordinary/payload enums, match, closed Option/Result, ?/!/local handlers and short-circuit CFG | Existing checked Go source/LIR, frozen generated Concept bridges, Concept admission and AMD64 execution | Existing bounded copyable scalar/record/fixed-array domain; no new physical representation or ABI |
+| Native entry materialization | Existing Concept object projection and scalar liveness/allocator | Named expected-9 integration regression, distinct direct/indirect/sret/mixed-stack native/C11 vectors, independent ABI observers |
+| Fresh pipeline evidence | Test-only source rechecking/file adapter and generated Concept roundtrip | 100 independent files per qualified form; fresh admission/plans/encoding/fixups, exact bytes and Normal/Verify |
+| Verdict and checked assertions | Existing Go comptime evaluator/proof provenance; native erasure | No runtime Verdict, trust migration or second lattice; residual native code equals assertion-free counterfactual |
+| Frozen transport | Concept schemas/codecs/validators CMIRAMD3–10 | Unchanged canonical Git bytes and schema hashes, artifact-only mutation/sentinel gates |
+| Ownership/Drop readiness | Deferred checked cleanup obligations | Needs explicit move/init/destruction authority on scope/branch/return/failure exits; no ownership implementation begins in h9 |
+
+No central evaluator, generic-closure engine, production Go native path,
+allocator, frame planner, copier, ABI classifier or encoder is replaced here.
+Reference/owning payloads, nested sums, general external/variadic/indirect calls,
+foreign enum/C++ ABI, unwind and COFF remain outside EVT2h qualification.
+
+## EVT2h8 integrated sum types and fallibility
+
+**MILESTONE VERIFIED** on baseline `b39088b`, with inventory `df3339f`, native
+projection correction `1ff7c7b`, checked projection `8ca3d9b` and fixtures/harnesses
+`928b4e0`; identity negatives `5ef60a6`; complete entry-use fix and unused-scalar
+regression `bfb2e3c`. See [measured evidence](../history/milestones/EVT2H8-INTEGRATION-EVIDENCE.md).
+
+| Subsystem | Decision owner | Integrated boundary / evidence |
+| --- | --- | --- |
+| Source semantics/proof | Existing Go checker/evaluator/proof graph | Nominal sums, exact E, closed Option/Result, checked assertions; no new syntax/trusted authority |
+| Checked CFG projection | Go target-independent LIR producer | and/or/while, snapshots before nested CFG, checked enum record fields and existing pure-CFG reference witnesses |
+| Transport | Unchanged Concept schemas/generated codecs | CMIRAMD10 composition, no new contract; v3–10 frozen |
+| Artifact admission | Existing Concept tagged/pattern/failure/object/borrow validators | Nominal/active fields, typed handlers, scope/dominance/init/geometry and sentinel rejection |
+| Entry liveness | Concept AMD64.Objects using existing scalar liveness/allocation | All aggregate carriers survive entry, including beside unused scalars; real decoder/controller and independent C callers expose prior loss |
+| Physical execution | Existing Concept copier/Win64/frame/encoder/fixups | Parser, controller, residual assertion program; no alternate sum/ABI/error backend |
+| Independent verification | External Go/C/native hosts plus MSVC/clang-cl ABI observers | Native-only artifacts, separate strict-C11 differential code, Normal/Verify exact bytes, three fresh pipelines, typed negatives/traps; selected g5/h3–h7 escalation |
+| Language facts | Existing Concept framework | Five integration facts in Quick Normal/Verify; C bootstrap execution is not native evidence |
+| Deferred | Explicit native subset and h9 scheduling | Local raw arrays/failure address temporaries/nested remaps/sums; ownership/reference cleanup; complete phase qualification and 100 fresh h8 trials |
+
+## EVT2h7 native fallible control flow
+
+Baseline `e7d4f0e`; inventory `ef3bd4a`; contract `f5e30de`; native
+implementation/fixtures `ec8bc3a`. See
+[conformance](../conformance/EVT2H-CONFORMANCE.md#evt2h7--native-fallible-control-flow)
+and [focused evidence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h7-native-fallible-control-flow).
+
+| Subsystem | Actual owner | Qualified boundary |
+| --- | --- | --- |
+| Option/Result legality, nominal E, lexical destination | Existing Go semantic checker | Plain Result ? nearest exact handler or compatible function; explicit remap and Option ? return through function |
+| Checked lowering and sequencing | Go target-independent LIR production; shared source sequencing predicate | One operand evaluation, scoped immutable handler bindings, ordinary checked CFG; C bootstrap is independent oracle |
+| Versioned transport | Concept BridgeSchema10, generated Go/Concept codecs | CMIRAMDA/version10, unchanged v9 base; try/handler/failure associations; v3–9 frozen |
+| Artifact-only admission | Concept BridgeValidate10 plus existing tagged/object/borrow/pattern validators | Active variants, nearest typed routes, all handler edges, internal input roles, initialization, guards and function failure returns |
+| Physical execution | Existing Concept Cathedral object/copy/ABI/allocator/frame/encoder/fixup modules | Explicit branches, active-field transfer and existing UD2; no new error runtime or physical fallibility algorithm |
+| Failure atomicity | Concept EmitModule preflight | Incomplete/unknown bridge identity rejects before legacy scratch-image reset; qualified object paths retain preflight sentinels |
+| Native verification | External Go/C hosts and isolated Windows child processes | Source-free execution, strict C11 differential values/order/bits, Normal/Verify parity, five exact traps, ten fresh samples; selected historical gates retain 100 |
+| Deferred | Existing explicit native unsupported boundaries | Owned/Drop/move-only cleanup, unqualified references/nested sums, general local arrays; no h8/h9 work |
+
+## EVT2h6 comptime Verdict and native erasure
+
+Baseline `cb4201a`; inventory `0028e4f`; implementation `50d30c0`. Exact evidence/status are in
+[convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h6-verdict-architecture-and-native-erasure).
+
+| Subsystem | Actual owner after h6 | Qualified boundary / remaining dependency |
+| --- | --- | --- |
+| Typed E/R bodies, selected cases, optional renderers | Ordinary Concept source, executed by Go | Existing R9 typed/generic/record/enum/value semantics; no runtime Verdict |
+| Canonical generic closure, compiler.* observations, bounded execution | Go Stage-0, unchanged | Fuel4096/depth32/loops256; no second interpreter or budget reset |
+| Truth projection and proof graph | Existing single Go projector/lattice/graph, unchanged | Proven/Disproven/Unknown, selected payload, predicate/site/provenance preserved |
+| Semantic artifacts | Existing Go concept-module.v2 loader and checked private gob AST | Source-free semantic re-evaluation; descriptive metadata cannot hydrate facts; future Concept consumer needs a checked semantic contract |
+| Trusted facts | Existing qualified compiler owners; innate authority registry empty | User Proven or rehashed metadata grants no extent/allocation/alias/lifetime/relocation/address authority |
+| Runtime admission correction | Go checked frontend LIR erasure | Checked Assert.Concept has no runtime effect; false/Unknown reject, unrelated forged marker cannot erase a call |
+| Physical execution | Existing Concept Cathedral scalar admission/encoder | Frozen CMIRAMD3 residual code; native/C11 Normal/Verify, ten fresh samples; no Verdict ABI or storage |
+| Further self-hosting | Not implemented | Canonical semantic values/types/handles/AST and observation requests before evaluator/consumer migration; trusted fact migration separate |
+
+No runtime Verdict, new transport/evaluator/proof engine, ownership/Drop or h7
+implementation is added. Architectural closeout does not mean complete Concept
+ownership of compiler-time evaluation.
+
+## EVT2h5 closed native Result and fallible control flow
+
+Baseline `065317d`, inventory `c78b310`, C bootstrap sequencing fix `8b064a6`.
+Native implementation `f283a0b`; phase scheduling `2ccaf3a`; aggregate/exact-bit
+error propagation coverage `ac840ae`.
+Evidence and exact status are in
+[convergence](../history/milestones/EVT2H-CONVERGENCE.md#evt2h5-native-result-milestone).
+Ordinary milestone scheduling applies; complete phase qualification is deferred.
+
+| Decision | Authority / reused mechanism | Tested boundary |
+| --- | --- | --- |
+| Result definition, closed T/E, constructors, must_use, exact E and explicit remap | Existing Stage-0 semantics/generic closure | Ok0/Error1; void Ok has no payload; no arbitrary error conversion |
+| `?` success continuation and Error return | Checked Go LIR projection through existing h3 exhaustive CFG, bindings and joins | Operand once; ordered binary/call/record operands; void, loops, conditional and recursive calls |
+| Canonical artifact contract | Existing Concept-owned CMIRAMD8/9 with generated codecs | Frozen v3–9 bytes/hashes/codecs unchanged; no successor |
+| Admission and payload proof | Existing Concept v9 pattern/tagged/object validators | Checked ordinary enum aliases; constructor-only alias domains; 27 malformed artifact cases and seven LIR cases |
+| Native storage, assignments, replacement and copy | Existing Concept active-field logical copier and slots | Fourteen applications; no inactive/padding semantic data or hidden allocation |
+| Native calls and returns | Existing Concept Win64 aggregate/frame/allocation/encoding | Direct 8-byte and indirect 12/16/24-byte Results, hidden return, stack positions, mixed references/floats, six spills |
+| Independent execution | External Go orchestration, strict C11, MSVC and clang-cl private-shape probes | Normal/Verify, artifact-only first, protected page/trap, ten fresh native trials and pinned bytes |
+| Source semantics regression | Two Concept facts plus existing external failure cleanup/panic/remap suites | C bootstrap sequencing repair; C Result compatibility fields retained |
+| Qualification scheduling | Existing Quick/focused/phase lanes | Ten new Result trials ordinarily, 100 in phase lane; old gates unchanged |
+
+Native panic `!`, local try/except, general ownership/Drop, reference-bearing
+payloads, nested sums, public foreign Result ABI, Verdict and EVT2h6 are not added.
 
 ## EVT2h4 closed native Option
 

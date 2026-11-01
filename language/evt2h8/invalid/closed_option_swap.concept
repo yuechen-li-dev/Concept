@@ -1,0 +1,4 @@
+profile Core;
+Option<int> Invalid(Option<double> value) {
+    return value;
+}

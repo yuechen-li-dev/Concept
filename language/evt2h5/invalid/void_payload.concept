@@ -1,0 +1,5 @@
+// expect: CV4106
+profile Core;
+Result<void, bool> Bad() {
+    return Result::Ok(1);
+}

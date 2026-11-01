@@ -52,11 +52,24 @@ func TestNativeSchedulerWorkers(t *testing.T) {
 	}
 	harness := nativeThreadShim + `#include "nativeworker.generated.h"
 #include <stdio.h>
+#include <stdatomic.h>
 
 typedef concept_parallel_scheduler_parallel_configuration__parallel_machine__4__4__64_ scheduler_t;
-typedef struct { scheduler_t* scheduler; int id; int decisions; } worker_args;
+typedef struct { atomic_int ready; atomic_int start; int workers; } start_gate;
+typedef struct { scheduler_t* scheduler; int id; int decisions; start_gate* gate; } worker_args;
+static int release_workers(start_gate* gate) {
+  double begin = cpt_seconds_now();
+  while (atomic_load_explicit(&gate->ready, memory_order_acquire) != gate->workers) {
+    if (cpt_seconds_now() - begin > 30.0) return -1;
+    cpt_thread_yield();
+  }
+  atomic_store_explicit(&gate->start, 1, memory_order_release);
+  return 0;
+}
 CPT_THREAD_FN(run_worker, raw) {
   worker_args* args = (worker_args*)raw;
+  atomic_fetch_add_explicit(&args->gate->ready, 1, memory_order_release);
+  while (!atomic_load_explicit(&args->gate->start, memory_order_acquire)) cpt_thread_yield();
   args->decisions = concept_workers__native_worker_run_native_worker(args->scheduler, args->id);
   return 0;
 }
@@ -68,10 +81,13 @@ int main(void) {
       scheduler_t scheduler = concept_workers__native_worker_make_native_workload(quantum);
       cpt_thread threads[4];
       worker_args args[4];
+      start_gate gate = {ATOMIC_VAR_INIT(0), ATOMIC_VAR_INIT(0), workers};
       for (int i = 0; i < workers; ++i) {
-        args[i] = (worker_args){&scheduler, i + 1, 0};
+        args[i] = (worker_args){&scheduler, i + 1, 0, &gate};
         if (cpt_thread_start(&threads[i], run_worker, &args[i]) != 0) return 2;
       }
+      /* All workers must exist before the participation assertion is meaningful. */
+      if (release_workers(&gate) != 0) return 10;
       { int join_failed = 0; for (int i = 0; i < workers; ++i) join_failed |= cpt_thread_join(threads[i], 30000); if (join_failed) return 3; }
       int active_workers = 0;
       int decisions = 0;
@@ -80,7 +96,11 @@ int main(void) {
         if (args[i].decisions > 0) ++active_workers;
       }
       if (decisions != 4000 / quantum) return 5;
-      if (workers > 1 && active_workers < 2) return 6;
+      if (workers > 1 && active_workers < 2) {
+        fprintf(stderr, "workers=%d quantum=%d trial=%d active=%d decisions=%d\n",
+                workers, quantum, trial, active_workers, decisions);
+        return 6;
+      }
       if (concept_workers__native_worker_native_final_steps(&scheduler) != 4000) return 4;
     }
     double seconds = cpt_seconds_now() - begin;
@@ -92,10 +112,12 @@ int main(void) {
     scheduler_t scheduler = concept_workers__native_worker_make_native_failure_workload();
     cpt_thread threads[4];
     worker_args args[4];
+    start_gate gate = {ATOMIC_VAR_INIT(0), ATOMIC_VAR_INIT(0), 4};
     for (int i = 0; i < 4; ++i) {
-      args[i] = (worker_args){&scheduler, i + 1, 0};
+      args[i] = (worker_args){&scheduler, i + 1, 0, &gate};
       if (cpt_thread_start(&threads[i], run_worker, &args[i]) != 0) return 7;
     }
+    if (release_workers(&gate) != 0) return 10;
     { int join_failed = 0; for (int i = 0; i < 4; ++i) join_failed |= cpt_thread_join(threads[i], 30000); if (join_failed) return 8; }
     if (concept_workers__native_worker_native_failure_final_state(&scheduler) != 3000) return 9;
   }

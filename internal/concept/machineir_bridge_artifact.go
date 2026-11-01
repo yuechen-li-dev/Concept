@@ -86,6 +86,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	if err := VerifyMachineIR(m); err != nil {
 		return nil, err
 	}
+	if m.Fallible != nil {
+		return encodeFallibleMachineBridge(*m.Fallible)
+	}
 	if m.Pattern != nil {
 		return encodePatternMachineBridge(*m.Pattern)
 	}
@@ -121,6 +124,9 @@ func EncodeMachineBridge(m MachineModule) ([]byte, error) {
 	return w.Bytes(), nil
 }
 func DecodeMachineBridge(data []byte) (MachineModule, error) {
+	if len(data) >= 8 && string(data[:8]) == FallibleMachineBridgeSchema {
+		return DecodeFallibleMachineBridge(data)
+	}
 	if len(data) >= 8 && string(data[:8]) == PatternMachineBridgeSchema {
 		return DecodePatternMachineBridge(data)
 	}
