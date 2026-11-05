@@ -74,6 +74,29 @@ ContextCreation ConceptVkCreateContext(void);
 void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool commands, VkPipelineCache cache);
 DeviceFacts ConceptVkDeviceFacts(VkPhysicalDevice physical);
 
+/* A borrowed device never transfers instance/device/queue destruction authority.
+ * enabledFeatures is the owner's declaration of enabled synchronization2 (1)
+ * and pushDescriptor (2), not a query of supported hardware features. */
+typedef struct DeviceBorrow {
+    VkPhysicalDevice physical;
+    VkDevice device;
+    VkQueue queue;
+    uint32_t queueFamily;
+    uint32_t enabledFeatures;
+} DeviceBorrow;
+typedef struct BorrowedCreation {
+    int32_t code;
+    VkCommandPool commands;
+    VkPipelineCache cache;
+} BorrowedCreation;
+BorrowedCreation ConceptVkBorrowDevice(DeviceBorrow device);
+void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCache cache);
+
+/* Native host integration only: Concept source does not acquire callback ABI.
+ * Install while the attachment is quiescent; the owner outlives its borrowers. */
+typedef int32_t (*ConceptVkQueueSubmit)(void* owner, VkQueue queue, VkCommandBuffer commands, VkFence fence);
+int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubmit submit);
+
 /* ---- Buffers ---------------------------------------------------------- */
 
 /* placement: 0 device-local, 1 upload (host-visible, coherent),
@@ -113,6 +136,9 @@ typedef struct PipelineCreation {
 } PipelineCreation;
 
 PipelineCreation ConceptVkCreatePipeline(VkDevice device, VkPipelineCache cache, const char* kernelPath, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes);
+/* Consumes shader on success and failure. The package loader retains source
+ * and artifact validation authority; this function owns Vulkan object creation. */
+PipelineCreation ConceptVkCreatePipelineFromModule(VkDevice device, VkPipelineCache cache, VkShaderModule shader, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes);
 void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline);
 
 /* ---- Recording -------------------------------------------------------- */
@@ -139,11 +165,11 @@ void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuf
 /* A global synchronization2 memory barrier. srcWrites says whether the
  * source operations wrote (memory dependency) or only read (execution
  * dependency). Destination access is every access of dstStages. */
-void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages);
-void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z);
+void ConceptVkCmdBarrier(VkDevice device, VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages);
+void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z);
 void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer from, VkBuffer to, uint64_t bytes);
 void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes, uint32_t word);
-void ConceptVkCmdTimestamp(VkCommandBuffer recording, VkQueryPool queries, uint32_t index);
+void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32_t index);
 
 typedef struct SubmissionRecord {
     int32_t code;
@@ -156,6 +182,8 @@ SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer
  * between the two, while the query pool is alive.
  */
 int32_t ConceptVkWait(VkDevice device, VkFence fence);
+/* VK_SUCCESS means complete, VK_NOT_READY means still pending. */
+int32_t ConceptVkPoll(VkDevice device, VkFence fence);
 void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording, VkFence fence, VkQueryPool queries);
 /* Nanoseconds between two written timestamps of a finished submission. */
 typedef struct Elapsed {

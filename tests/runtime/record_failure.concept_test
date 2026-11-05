@@ -1,0 +1,15 @@
+module Runtime.RecordFailure;
+profile Core;
+record struct Counter { uint64 value; };
+Counter Updated(double value) {
+    return Counter{0} with { value = TruncTo<uint64>(value)!; };
+}
+Result<Counter, NumericCastError> UpdatedChecked(double value) {
+    return Result::Ok(Counter{0} with { value = TruncTo<uint64>(value)?; });
+}
+[[fact]] void RecordUpdateCollectsNestedFailureTypes() {
+    Assert.Equal(Updated(9.75).value, 9 as uint64, "record update retains explicit truncation");
+    Counter value = UpdatedChecked(12.5)!;
+    Assert.Equal(value.value, 12 as uint64, "record update propagates successful conversion");
+    Assert.Error(UpdatedChecked(-1.0), "negative value cannot be represented unsigned");
+}

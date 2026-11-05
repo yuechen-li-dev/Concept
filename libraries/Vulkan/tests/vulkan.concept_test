@@ -56,6 +56,50 @@ Result<Pipeline, VulkanError> DoublePipeline(ref const Context context)
     return CreatePipeline(ref const context, "double.spv", "main", ReadOnlySpan(slots), 0);
 }
 
+[[fact]]
+void BorrowedAttachmentDropsOnlyItsOwnResources()
+{
+    owned Context owner = CreateContext()!;
+    int contexts = ConceptVkTestLiveContexts();
+    {
+        owned BorrowedContext borrowed = BorrowDevice(DeviceBorrow{
+            owner.physical, owner.device, owner.queue, owner.queueFamily, 3
+        })!;
+        owned Buffer<int> buffer = CreateBufferOn<int>(borrowed.view, 4, Placement::Shared)!;
+        int<array>[4] values = [1, 2, 3, 4];
+        UploadOn(borrowed.view, ref const buffer, ReadOnlySpan(values))!;
+        values = [0...];
+        DownloadOn(borrowed.view, ref const buffer, Span(values))!;
+        Assert.Equal(values[3], 4, "the borrowed device performs real buffer operations");
+        Assert.Equal(ConceptVkTestLiveContexts(), contexts + 1, "attachment has its own pool and cache lifetime");
+    }
+    Assert.Equal(ConceptVkTestLiveContexts(), contexts, "detachment retains the original context");
+    owned Buffer<int> after = CreateBuffer<int>(ref const owner, 1, Placement::Shared)!;
+    int<array>[1] value = [19];
+    Upload(ref const owner, ref const after, ReadOnlySpan(value))!;
+    value = [0];
+    Download(ref const owner, ref const after, Span(value))!;
+    Assert.Equal(value[0], 19, "the owner remains usable after borrower destruction");
+    Assert.Equal(ConceptVkTestHazards(), 0, "no foreign parent was destroyed");
+}
+
+[[fact]]
+void BorrowAdmissionRequiresActuallyEnabledCapabilities()
+{
+    owned Context owner = CreateContext()!;
+    int contexts = ConceptVkTestLiveContexts();
+    Result<BorrowedContext, VulkanError> attempt = BorrowDevice(DeviceBorrow{
+        owner.physical, owner.device, owner.queue, owner.queueFamily, 1
+    });
+    int code = match (move attempt)
+    {
+        Result::Ok(context) => 0,
+        Result::Error(error) => ErrorCode(error),
+    };
+    Assert.Equal(code, -8, "supported hardware does not replace enabled feature authority");
+    Assert.Equal(ConceptVkTestLiveContexts(), contexts, "failed attachment owns nothing");
+}
+
 // Records double.spv: output[i] = 2 * input[i].
 void RecordDouble(ref Recording recording, ref const Pipeline pipeline, ref const Buffer<int> input, ref const Buffer<int> output)
 {
@@ -245,4 +289,21 @@ void AbandonedAndUnwaitedWorkIsReleased()
         Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore + 1, "submitted");
     }
     Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore, "Drop waited for it");
+}
+
+Result<void, VulkanError> GrowBorrowedBuffer(DeviceView device, ref Buffer<uint32> buffer) {
+    owned Buffer<uint32> larger = CreateBufferOn<uint32>(device, 8, Placement::Shared)?;
+    buffer = move larger;
+    return Result::Ok();
+}
+[[fact]] void BorrowedBufferReplacementRetiresPreviousAllocation() {
+    int baseline = ConceptVkTestLiveBuffers();
+    {
+        owned Context context = CreateContext()!;
+        owned Buffer<uint32> buffer = CreateBuffer<uint32>(ref const context, 1, Placement::Shared)!;
+        GrowBorrowedBuffer(DeviceOf(ref const context), ref buffer)!;
+        Assert.Equal(ConceptVkTestLiveBuffers(), baseline + 1, "replacement releases previous buffer");
+        Assert.Equal(buffer.count, 8 as usize, "replacement retains incoming buffer");
+    }
+    Assert.Equal(ConceptVkTestLiveBuffers(), baseline, "replacement drops exactly once");
 }

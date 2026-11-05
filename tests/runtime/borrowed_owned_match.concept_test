@@ -1,0 +1,25 @@
+module Runtime.BorrowedOwnedMatch;
+profile Core;
+ref struct Tracked { ref int drops; int value; };
+void Drop(owned Tracked value) { value.drops = value.drops + 1; }
+ref struct Holder { owned Tracked resource; };
+bool Has(ref const Option<owned Holder> optional) {
+    return match (ref const optional) { Option::Some(value) => value.resource.value == 7, Option::None => false, };
+}
+void Mutate(ref Option<owned Holder> optional) {
+    match (ref optional) { Option::Some(value) => { value.resource.value = 9; } Option::None => { } }
+}
+[[fact]] void BorrowedMatchRetainsOwnerAndStructuralDrop() {
+    int drops = 0;
+    {
+        owned Tracked tracked = Tracked{ref drops, 7};
+        owned Holder holder = Holder{move tracked};
+        Option<owned Holder> optional = Option::Some(move holder);
+        Assert.True(Has(ref const optional), "borrowed expression observes active payload");
+        Assert.Equal(drops, 0, "borrowing never destroys payload");
+        Mutate(ref optional);
+        ref const Holder value = OptionValue(ref const optional);
+        Assert.Equal(value.resource.value, 9, "borrowed statement projects the original payload");
+    }
+    Assert.Equal(drops, 1, "structural payload drops once with its carrier");
+}

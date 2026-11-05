@@ -179,6 +179,41 @@ func BuildPackage(libraryRoot, outputRoot, target string) (PackageGraph, error) 
 	if err != nil {
 		return PackageGraph{}, err
 	}
+	return buildPackageGraph(manifests, outputRoot, target, []string{libraryRoot})
+}
+
+// BuildPackageDirectory applies the same package graph authority to a local
+// consumer instead of requiring it to live in the compiler's libraries folder.
+func BuildPackageDirectory(root, outputRoot, libraryRoot string) (PackageGraph, error) {
+	manifests := map[string]PackageManifestValue{}
+	if libraryRoot != "" {
+		var err error
+		manifests, err = DiscoverPackageManifests(libraryRoot)
+		if err != nil {
+			return PackageGraph{}, err
+		}
+	}
+	path := filepath.Join(root, "manifest.concept")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return PackageGraph{}, err
+	}
+	manifest, err := extractPackageManifest(path, body)
+	if err != nil {
+		return PackageGraph{}, err
+	}
+	if prior, exists := manifests[manifest.Name]; exists {
+		a, _ := filepath.Abs(prior.ManifestPath)
+		b, _ := filepath.Abs(path)
+		if a != b {
+			return PackageGraph{}, fmt.Errorf("PACKAGE_IDENTITY_DUPLICATE: %s", manifest.Name)
+		}
+	}
+	manifests[manifest.Name] = manifest
+	return buildPackageGraph(manifests, outputRoot, manifest.Name, []string{libraryRoot})
+}
+
+func buildPackageGraph(manifests map[string]PackageManifestValue, outputRoot, target string, manifestRoots []string) (PackageGraph, error) {
 	order, err := PackageBuildOrder(manifests, target)
 	if err != nil {
 		return PackageGraph{}, err
@@ -187,7 +222,7 @@ func BuildPackage(libraryRoot, outputRoot, target string) (PackageGraph, error) 
 	graph := PackageGraph{Schema: PackageGraphSchema, Compiler: CompilerID}
 	for _, name := range order {
 		manifest := manifests[name]
-		pkg, built, err := buildOnePackage(filepath.Dir(filepath.FromSlash(manifest.ManifestPath)), outputRoot, manifest, allArtifacts)
+		pkg, built, err := buildOnePackage(filepath.Dir(filepath.FromSlash(manifest.ManifestPath)), outputRoot, manifest, allArtifacts, manifestRoots)
 		if err != nil {
 			return PackageGraph{}, err
 		}
@@ -204,7 +239,7 @@ func BuildPackage(libraryRoot, outputRoot, target string) (PackageGraph, error) 
 	return graph, nil
 }
 
-func buildOnePackage(packageRoot, outputRoot string, manifest PackageManifestValue, available map[string][]byte) (PackageBuild, map[string][]byte, error) {
+func buildOnePackage(packageRoot, outputRoot string, manifest PackageManifestValue, available map[string][]byte, manifestRoots []string) (PackageBuild, map[string][]byte, error) {
 	sources := map[string]struct {
 		path   string
 		body   []byte
@@ -215,6 +250,9 @@ func buildOnePackage(packageRoot, outputRoot string, manifest PackageManifestVal
 			return walkErr
 		}
 		if entry.IsDir() {
+			if entry.Name() == ".native-build" || entry.Name() == ".concept" || entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		lower := strings.ToLower(entry.Name())
@@ -325,6 +363,14 @@ func buildOnePackage(packageRoot, outputRoot string, manifest PackageManifestVal
 	}
 	for name, body := range built {
 		manifestArtifacts[name] = body
+	}
+	imports, err := SemanticModuleImports(filepath.ToSlash(filepath.Join(packageRoot, "manifest.concept")), string(manifestBody))
+	if err != nil {
+		return PackageBuild{}, nil, err
+	}
+	manifestArtifacts, err = buildSemanticModuleArtifactsFromSources(manifestRoots, imports, manifestArtifacts, nil)
+	if err != nil {
+		return PackageBuild{}, nil, err
 	}
 	if _, err := ParseWithSemanticModules(filepath.ToSlash(filepath.Join(packageRoot, "manifest.concept")), string(manifestBody), manifestArtifacts); err != nil {
 		return PackageBuild{}, nil, fmt.Errorf("PACKAGE_MANIFEST_SEMANTIC_INVALID: %s: %w", manifest.Name, err)

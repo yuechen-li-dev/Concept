@@ -122,14 +122,10 @@ func evt1FailureDropFunction(l *lowering, t Type) string {
 	for _, variant := range decl.Variants {
 		var drops []string
 		for _, field := range variant.Payload {
-			if !evt1TypeHasDrop(l.env, field.Type) {
-				continue
-			}
 			value := fmt.Sprintf("value.payload.%s.%s", evt1PayloadFieldName(variant.Name), field.Name)
-			if evt1IsFailureType(field.Type) {
-				drops = append(drops, fmt.Sprintf("%s(%s);", evt1FailureDropName(field.Type), value))
-			} else if dropFn := evt1DropFunction(l.env, field.Type); dropFn != nil {
-				drops = append(drops, fmt.Sprintf("%s(%s);", evt1DropSymbol(l, *dropFn, field.Type), value))
+			lowerer := newEVT1FunctionLowerer(l, FunctionDecl{}, "", false)
+			if drop := lowerer.lowerDropValue(field.Type, value, 0); drop != "" {
+				drops = append(drops, strings.TrimSpace(drop))
 			}
 		}
 		b.WriteString(fmt.Sprintf("  case %d:\n", variant.Tag))
@@ -300,153 +296,51 @@ func evt1CanonicalFailureTypeKeys(module Module, env *semanticEnv) map[string]bo
 }
 
 func evt1VisitFailureTypesBlock(block Block, add func(Type)) {
-	for _, stmt := range block.Statements {
+	evt1WalkTypedBlockAndStatements(block, func(expr Expr) { evt1VisitFailureType(expr, add) }, func(stmt Statement) {
 		switch s := stmt.(type) {
 		case *VarDecl:
 			add(s.Type)
-			evt1VisitFailureTypesExpr(s.Value, add)
-		case *ReturnStmt:
-			if s.Value != nil {
-				evt1VisitFailureTypesExpr(s.Value, add)
-			}
-		case *AssignStmt:
-			evt1VisitFailureTypesExpr(s.Value, add)
-		case *ExprStmt:
-			evt1VisitFailureTypesExpr(s.Value, add)
-		case *AssertStmt:
-			evt1VisitFailureTypesExpr(s.Condition, add)
-		case *MatchStmt:
-			evt1VisitFailureTypesExpr(s.Subject, add)
-			for _, a := range s.Arms {
-				evt1VisitFailureTypesBlock(a.Block, add)
-			}
 		case *TryStmt:
-			evt1VisitFailureTypesBlock(s.Body, add)
-			for _, a := range s.Except {
-				add(a.ErrorType)
-				evt1VisitFailureTypesBlock(a.Body, add)
+			for _, arm := range s.Except {
+				add(arm.ErrorType)
 			}
-		case *IfStmt:
-			evt1VisitFailureTypesBlock(s.Then, add)
-			if s.Else != nil {
-				evt1VisitFailureTypesBlock(*s.Else, add)
-			}
-		case *Block:
-			evt1VisitFailureTypesBlock(*s, add)
-		case *OnStmt:
-			evt1VisitFailureTypesBlock(s.Body, add)
 		}
-	}
+	})
 }
 
 func evt1VisitFailureTypesExpr(expr Expr, add func(Type)) {
-	if expr == nil {
-		return
-	}
+	evt1WalkTypedExpr(expr, func(expr Expr) { evt1VisitFailureType(expr, add) })
+}
+
+func evt1VisitFailureType(expr Expr, add func(Type)) {
 	switch e := expr.(type) {
 	case *TemplateCallExpr:
 		add(e.ResolvedType)
-		for _, a := range e.Args {
-			evt1VisitFailureTypesExpr(a, add)
-		}
-	case *CastExpr:
-		evt1VisitFailureTypesExpr(e.Value, add)
-	case *InterpretExpr:
-		evt1VisitFailureTypesExpr(e.Value, add)
 	case *ConstructExpr:
 		add(e.ResolvedType)
-		for _, a := range e.Args {
-			evt1VisitFailureTypesExpr(a, add)
-		}
 	case *FailureExpr:
 		add(e.ResolvedType)
-		evt1VisitFailureTypesExpr(e.Value, add)
-		if e.Else != nil {
-			evt1VisitFailureTypesExpr(e.Else, add)
-		}
-	case *CallExpr:
-		for _, a := range e.Args {
-			evt1VisitFailureTypesExpr(a, add)
-		}
-	case *MatchExpr:
-		evt1VisitFailureTypesExpr(e.Subject, add)
-		for _, a := range e.Arms {
-			evt1VisitFailureTypesExpr(a.Value, add)
-		}
-	case *BinaryExpr:
-		evt1VisitFailureTypesExpr(e.Left, add)
-		evt1VisitFailureTypesExpr(e.Right, add)
-	case *IfExpr:
-		evt1VisitFailureTypesExpr(e.Condition, add)
-		evt1VisitFailureTypesExpr(e.Then, add)
-		evt1VisitFailureTypesExpr(e.Else, add)
-	case *ParenExpr:
-		evt1VisitFailureTypesExpr(e.Value, add)
 	}
 }
 
 func evt1ModuleUsesFailurePanic(module Module) bool {
-	var exprUses func(Expr) bool
-	exprUses = func(expr Expr) bool {
-		switch e := expr.(type) {
-		case *FailureExpr:
-			return e.Op == "!" || exprUses(e.Value) || (e.Else != nil && exprUses(e.Else))
-		case *CallExpr:
-			for _, a := range e.Args {
-				if exprUses(a) {
-					return true
-				}
-			}
-		case *BinaryExpr:
-			return exprUses(e.Left) || exprUses(e.Right)
-		case *ParenExpr:
-			return exprUses(e.Value)
+	uses := false
+	expression := func(expr Expr) {
+		if failure, ok := expr.(*FailureExpr); ok && failure.Op == "!" {
+			uses = true
 		}
-		return false
 	}
-	var blockUses func(Block) bool
-	blockUses = func(block Block) bool {
-		for _, stmt := range block.Statements {
-			switch s := stmt.(type) {
-			case *AssertStmt:
-				return true
-			case *VarDecl:
-				if exprUses(s.Value) {
-					return true
-				}
-			case *ReturnStmt:
-				if exprUses(s.Value) {
-					return true
-				}
-			case *ExprStmt:
-				if exprUses(s.Value) {
-					return true
-				}
-			case *TryStmt:
-				if blockUses(s.Body) {
-					return true
-				}
-				for _, a := range s.Except {
-					if blockUses(a.Body) {
-						return true
-					}
-				}
-			case *MatchStmt:
-				for _, a := range s.Arms {
-					if blockUses(a.Block) {
-						return true
-					}
-				}
-			}
+	statement := func(stmt Statement) {
+		if _, ok := stmt.(*AssertStmt); ok {
+			uses = true
 		}
-		return false
 	}
 	for _, fn := range module.Functions {
-		if fn.Body != nil && blockUses(*fn.Body) {
-			return true
+		if fn.Body != nil {
+			evt1WalkTypedBlockAndStatements(*fn.Body, expression, statement)
 		}
 	}
-	return false
+	return uses
 }
 
 func evt1ModuleUsesTransitionPanic(module Module) bool {

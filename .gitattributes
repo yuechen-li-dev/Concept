@@ -50,3 +50,6 @@ internal/concept/machineir_bridge10_codec_generated.go text eol=lf
 docs/design/EVT2-MACHINEIR-BRIDGE10.schema.json text eol=lf
 language/evt2h7/**/*.concept text eol=lf
 language/evt2h8/**/*.concept text eol=lf
+
+# Onboarding edits use LF instead of retaining historical CRLF blobs.
+README.md text eol=lf

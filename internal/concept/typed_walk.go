@@ -21,11 +21,15 @@ func evt1ModuleWithConcreteFunctions(module Module, env *semanticEnv) Module {
 // Walk the typed syntax, including nested closures and failure expressions.
 // Semantic collectors share this traversal rather than recognizing source text.
 func evt1WalkTypedExpr(expr Expr, visit func(Expr)) {
+	evt1WalkTypedExprAndStatements(expr, visit, nil)
+}
+
+func evt1WalkTypedExprAndStatements(expr Expr, visit func(Expr), statement func(Statement)) {
 	if expr == nil {
 		return
 	}
 	visit(expr)
-	walk := func(e Expr) { evt1WalkTypedExpr(e, visit) }
+	walk := func(e Expr) { evt1WalkTypedExprAndStatements(e, visit, statement) }
 	args := func(es []Expr) {
 		for _, e := range es {
 			walk(e)
@@ -91,7 +95,7 @@ func evt1WalkTypedExpr(expr Expr, visit func(Expr)) {
 		for _, capture := range e.Captures {
 			walk(capture.Source)
 		}
-		evt1WalkTypedBlock(e.Body, visit)
+		evt1WalkTypedBlockAndStatements(e.Body, visit, statement)
 	case *InferExpr:
 		for _, c := range e.Candidates {
 			walk(c.Guard)
@@ -105,9 +109,16 @@ func evt1WalkTypedExpr(expr Expr, visit func(Expr)) {
 	}
 }
 func evt1WalkTypedBlock(block Block, visit func(Expr)) {
-	walk := func(e Expr) { evt1WalkTypedExpr(e, visit) }
-	child := func(b Block) { evt1WalkTypedBlock(b, visit) }
+	evt1WalkTypedBlockAndStatements(block, visit, nil)
+}
+
+func evt1WalkTypedBlockAndStatements(block Block, visit func(Expr), statement func(Statement)) {
+	walk := func(e Expr) { evt1WalkTypedExprAndStatements(e, visit, statement) }
+	child := func(b Block) { evt1WalkTypedBlockAndStatements(b, visit, statement) }
 	for _, stmt := range block.Statements {
+		if statement != nil {
+			statement(stmt)
+		}
 		switch s := stmt.(type) {
 		case *VarDecl:
 			walk(s.Value)

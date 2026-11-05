@@ -35,6 +35,13 @@ func VulkanLibraryRoot(sourcePath string) string {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
+			root := CompilerLibraryRoot()
+			if root != "" {
+				candidate := filepath.Join(root, "Vulkan")
+				if _, err := os.Stat(filepath.Join(candidate, "native", "concept_vulkan.h")); err == nil {
+					return candidate
+				}
+			}
 			return ""
 		}
 	}
@@ -85,6 +92,9 @@ func evt1SelectVulkanRuntime(sourcePath string) (evt1VulkanRuntime, error) {
 			out.LDFlags = append(out.LDFlags, "-L"+libDir)
 		}
 		out.LDFlags = append(out.LDFlags, "-l"+library)
+		if runtime.GOOS != "windows" {
+			out.LDFlags = append(out.LDFlags, "-pthread")
+		}
 	default:
 		return evt1VulkanRuntime{}, fmt.Errorf("VULKAN_RUNTIME_UNKNOWN: CONCEPT_VULKAN_RUNTIME=%s; use test or device", mode)
 	}

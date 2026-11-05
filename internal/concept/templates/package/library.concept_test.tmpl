@@ -1,0 +1,9 @@
+module {{.Name}}Tests;
+profile Core;
+import {{.Name}};
+
+[[fact]]
+void PackageWorks()
+{
+    Assert.Equal(Answer(), 42, "the package's public function is available");
+}

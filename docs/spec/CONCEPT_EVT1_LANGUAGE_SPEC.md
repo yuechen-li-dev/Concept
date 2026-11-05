@@ -1541,6 +1541,13 @@ Result::Error(error)
 
 These qualified spellings are canonical; there is no competing unqualified
 built-in constructor surface. `match` is the fully explicit ground truth.
+Matching `ref carrier` or `ref const carrier` borrows its active payload with
+the corresponding mutability; a borrowed arm never acquires or destroys that
+payload's ownership. A consuming match requires `move` for a noncopyable carrier.
+Owned carrier cleanup follows the active variant and recursively retires owned
+aggregate fields in reverse order. Replacing an owned value through a mutable
+reference retires the previous value before installing the evaluated incoming
+value.
 
 Postfix `?` unwraps success or returns `None`/`Error(error)` from the current
 function. `Option<T>?` requires an `Option<U>` return channel.

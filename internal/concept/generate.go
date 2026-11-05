@@ -2082,6 +2082,14 @@ func (l *lowering) generateC() ([]byte, []byte, error) {
 		instanceDeclarations[instance.GeneratedSymbol] = declaration.String()
 	}
 	instanceDeclarationOffset := body.Len()
+	// Structural carrier payloads may themselves contain other carriers.
+	// Declare every cleanup helper before any structural cleanup body.
+	for _, failureType := range failureTypes {
+		_, legacy := evt1IsResultVoidErrorType(l.env, failureType)
+		if (!legacy || canonicalFailureTypes[evt1FailureTypeKey(failureType)]) && evt1FailureNeedsDrop(l.env, failureType) {
+			fmt.Fprintf(&body, "static void %s(%s value);\n", evt1FailureDropName(failureType), evt1FailureCName(failureType))
+		}
+	}
 	for _, failureType := range failureTypes {
 		_, legacy := evt1IsResultVoidErrorType(l.env, failureType)
 		if !legacy || canonicalFailureTypes[evt1FailureTypeKey(failureType)] {
@@ -3273,10 +3281,10 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 			}
 			return recvPrelude + valuePrelude + ind(indent) + fmt.Sprintf("(%s).witness->set_%s((%s).object, %s);\n", recv, field.Field, recv, value)
 		}
-		prelude, target, targetType, _ := f.lowerLValue(s.Target, indent)
+		prelude, target, targetType, localPlace := f.lowerLValue(s.Target, indent)
 		rhsPrelude, value, valueType := f.lowerExprExpected(s.Value, targetType, indent)
 		replacementDrop := ""
-		if name, ok := s.Target.(*NameExpr); ok {
+		if name, ok := s.Target.(*NameExpr); ok && localPlace {
 			if binding, found := scopeLookup(name.Name, f.scope); found && evt1TypeHasDrop(f.l.env, binding.t) {
 				if f.liveOwners[binding.cName] {
 					replacementDrop = f.lowerDropValue(binding.t, binding.cName, indent)
@@ -3284,7 +3292,8 @@ func (f *evt1FunctionLowerer) lowerStatement(stmt Statement, indent int) string 
 				f.liveOwners[binding.cName] = true
 			}
 		}
-		if _, local := s.Target.(*NameExpr); !local && !evt1TypeCopyable(f.l.env, targetType) && evt1TypeHasDrop(f.l.env, targetType) {
+		_, transferring := s.Value.(*MoveExpr)
+		if !localPlace && (transferring || !evt1TypeCopyable(f.l.env, targetType)) && evt1StorageElementHasDrop(f.l.env, targetType) {
 			// Evaluate the incoming authority before dropping the old place. The
 			// indexed lvalue prelude fixes the index once, including bounds checks.
 			temp := f.nextTemp("replacement")
@@ -3663,8 +3672,13 @@ func (f *evt1FunctionLowerer) lowerMatchStmt(stmt MatchStmt, indent int) string 
 		f.pushScope()
 		for i, binding := range arm.Pattern.Bindings {
 			field := variant.Payload[i]
-			cName := f.bindName(binding, field.Type)
-			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
+			bindingType := evt1MatchPayloadType(f.l.env, subjectType, field.Type)
+			cName := f.bindName(binding, bindingType)
+			payload := fmt.Sprintf("%s%spayload.%s.%s", subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name)
+			if subjectType.isReference() && !field.Type.isReference() {
+				payload = "&(" + payload + ")"
+			}
+			b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(bindingType), cName, payload))
 			b.WriteString(ind(indent+2) + fmt.Sprintf("(void)%s;\n", cName))
 		}
 		b.WriteString(f.lowerBlock(arm.Block, indent+2))
@@ -4911,8 +4925,13 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			f.pushScope()
 			for i, binding := range arm.Pattern.Bindings {
 				field := variant.Payload[i]
-				cName := f.bindName(binding, field.Type)
-				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s%spayload.%s.%s;\n", evt1CType(field.Type), cName, subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name))
+				bindingType := evt1MatchPayloadType(f.l.env, subjectType, field.Type)
+				cName := f.bindName(binding, bindingType)
+				payload := fmt.Sprintf("%s%spayload.%s.%s", subjectTemp, member, evt1PayloadFieldName(variant.Name), field.Name)
+				if subjectType.isReference() && !field.Type.isReference() {
+					payload = "&(" + payload + ")"
+				}
+				b.WriteString(ind(indent+2) + fmt.Sprintf("%s %s = %s;\n", evt1CType(bindingType), cName, payload))
 				b.WriteString(ind(indent+2) + fmt.Sprintf("(void)%s;\n", cName))
 			}
 			armPrelude, armExpr, _ := f.lowerExprExpected(arm.Value, resultType, indent+2)

@@ -1,29 +1,15 @@
 module Vulkan.Manifest;
 profile Core;
 
-// The package manifest types are spelled locally (matching
-// Standard.Build.Metadata) because the native project loader reads this file
-// without module imports.
-record struct Version { int major; int minor; int patch; };
-enum PackageKind { Library, Executable, Tool, }
-record struct Dependency { string name; };
-record struct PackageManifest
-{
-    string name;
-    string author;
-    Version version;
-    PackageKind kind;
-    Dependency<array>[1] dependencies;
-    int dependencyCount;
-};
+import Standard.Build.Metadata;
 
 comptime PackageManifest Manifest = PackageManifest{
     "Vulkan",
     "Concept",
     Version{0, 2, 0},
     PackageKind::Library,
-    [Dependency{""}],
-    0
+    [Dependency{"Standard"}],
+    1
 };
 
 record struct NativeTarget
@@ -66,7 +52,7 @@ record struct NativeProjectManifest
     NativeTarget<array>[1] targets;
     string<array>[1] companions;
     string<array>[1] tests;
-    NativeAbiClaim<array>[9] abi;
+    NativeAbiClaim<array>[11] abi;
 };
 
 // Package tests link the GPU-free test device. A real loader-backed
@@ -110,5 +96,11 @@ comptime NativeProjectManifest Native = NativeProjectManifest{
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "Elapsed", "concept/Vulkan.concept",
         16, 8, ["code", "reserved", "nanoseconds", "", "", "", "", ""], [0, 4, 8, 0, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "DeviceBorrow", "concept/Vulkan.concept",
+        32, 8, ["physical", "device", "queue", "queueFamily", "enabledFeatures", "", "", ""], [0, 8, 16, 24, 28, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "BorrowedCreation", "concept/Vulkan.concept",
+        24, 8, ["code", "commands", "cache", "", "", "", "", ""], [0, 8, 16, 0, 0, 0, 0, 0]
     }]
 };

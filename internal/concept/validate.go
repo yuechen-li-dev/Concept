@@ -6428,11 +6428,21 @@ func validatePattern(env *semanticEnv, scope *evt1Scope, subjectType Type, enumD
 			return nil, VariantDecl{}, evt1Diagnostic("CV4112", fmt.Sprintf("duplicate payload binding name %s", binding), pattern.Span)
 		}
 		seenBindings[binding] = true
-		payloadType := evt1CanonicalType(env, variant.Payload[i].Type)
+		payloadType := evt1MatchPayloadType(env, subjectType, variant.Payload[i].Type)
 		provenance := evt1LifetimeProvenance{Kind: evt1ProvenanceLocal, Depth: armScope.depth}
 		armScope.declare(binding, evt1ValueBinding{t: payloadType, mutable: true, state: evt1StorageInitialized, provenance: provenance})
 	}
 	return armScope, variant, nil
+}
+
+// A borrowed match projects the active payload; it never gains its ownership.
+func evt1MatchPayloadType(env *semanticEnv, subject, payload Type) Type {
+	t := evt1CanonicalType(env, payload)
+	if subject.isReference() {
+		t.Ownership = "ref"
+		t.Const = t.Const || subject.Const
+	}
+	return t
 }
 
 func validateWhileStmt(env *semanticEnv, scope *evt1Scope, stmt WhileStmt, returnType Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) error {
@@ -6784,6 +6794,9 @@ func evt1TypeHasDrop(env *semanticEnv, t Type) bool {
 }
 
 func evt1TypeHasDropVisiting(env *semanticEnv, t Type, visiting map[string]bool) bool {
+	if t.isReference() {
+		return false
+	}
 	if t.Kind == TypeCallable {
 		return t.CallableHasDrop
 	}

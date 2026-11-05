@@ -1,19 +1,19 @@
 # Concept
 
-Concept is a C-lineage systems language for auditable kernels, compiler, runtime, native, safety critical and bare-metal programming. 
+Concept is a C-lineage systems language for auditable kernels, compiler, runtime, native, safety critical and bare-metal programming.
 
 Concept was conceived to address the issues with current low level systems programming languages, primarily C/C++, as well Rust, Go, and Zig.
 
-It's designed to primarily fill the niche currently occupied by C++ and for which Rust and Zig are inadequate replacements for. 
+It's designed to primarily fill the niche currently occupied by C++ and for which Rust and Zig are inadequate replacements for.
 
-- Rust's borrow checker prevents certain class of memory bugs, but lifetime propagation makes refactoring existing codebases and compile time painful. 
-- Zig's `comptime` was one of the most revolutionary ideas in programming language history, yet Zig the language is needlessly verbose and frustrating to write due to its overreliance on `comptime`, in addition to questionable governance in recent years. 
+- Rust's borrow checker prevents certain class of memory bugs, but lifetime propagation makes refactoring existing codebases and compile time painful.
+- Zig's `comptime` was one of the most revolutionary ideas in programming language history, yet Zig the language is needlessly verbose and frustrating to write due to its overreliance on `comptime`, in addition to questionable governance in recent years.
 
 Concept was conceived, designed, and implemented by me and frontier LLMs as the "Programmer's programming language": It aims to be the fastest, most powerful, safest, and most readable programming language with all the lessons we've learned over the years, a greenfield low level systems programming language with zero unprincipled compromises.
 
 It's a lofty north star of a goal. I hope it is achievable, so I'm going to try. Crazier things have happened.
 
-Concept is probably too complex for most application code, you probably don't need to use Concept if you don't know exactly why you would want to use it. A GC'd language like Go/C#/TypeScript is probably a better fit for most applications. 
+Concept is probably too complex for most application code, you probably don't need to use Concept if you don't know exactly why you would want to use it. A GC'd language like Go/C#/TypeScript is probably a better fit for most applications.
 
 # Why is the language called Concept?
 
@@ -22,7 +22,7 @@ The language is called "Concept" for a few reasons:
 2. It takes the multitude of the best language concepts from Rust, Zig, and modern C++/low level C#, so it's a combination of their concepts.
 3. It's a very experimental language designed to explore the conceptual cutting edge of programming language design for the AI era.
 
-Design-wise, it's a very weird programming language based off a whole bunch of weird ideas, but with a boring, very readable syntax. 
+Design-wise, it's a very weird programming language based off a whole bunch of weird ideas, but with a boring, very readable syntax.
 
 ## Project status
 
@@ -54,6 +54,19 @@ go run ./cmd/concept package test DragonGod
 oct make Test --file Make.oct
 ./test.ps1
 ```
+
+Start a local library package with its own manifest, source module, and test:
+
+```console
+concept init MySimulation --author "Your name"
+concept package build MySimulation
+concept package test MySimulation --verify
+```
+
+The initializer never overwrites existing files. Native consumer packages also
+build through `concept package build <directory>` using an ordinary typed
+`manifest.concept`. See [packages and native builds](docs/tooling/PACKAGES.md)
+for library discovery, native inputs, and the C/C++ boundary.
 
 `./test.ps1` is the default edit/test loop: Concept-owned runtime and backend
 component facts in Normal and Verify, with lightweight workflow checks.
