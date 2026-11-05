@@ -2,7 +2,12 @@
 
 Concept is a C-lineage systems language for auditable kernels, compiler, runtime, native, safety critical and bare-metal programming. 
 
-Concept was conceived to address the issues with current low level systems programming languages, primarily C/C++, as well Rust, Go, and Zig. It's designed to primarily fill the niche currently occupied by C++ and for which Rust and Zig are inadequate replacements for. Rust's borrow checker prevents certain class of memory bugs, but lifetime propagation makes refactoring existing codebases and compile time painful. Zig's `comptime` was one of the most revolutionary ideas in programming language history, yet Zig the language is needlessly verbose and frustrating to write due to its overreliance on `comptime`, in addition to questionable governance in recent years. 
+Concept was conceived to address the issues with current low level systems programming languages, primarily C/C++, as well Rust, Go, and Zig.
+
+It's designed to primarily fill the niche currently occupied by C++ and for which Rust and Zig are inadequate replacements for. 
+
+- Rust's borrow checker prevents certain class of memory bugs, but lifetime propagation makes refactoring existing codebases and compile time painful. 
+- Zig's `comptime` was one of the most revolutionary ideas in programming language history, yet Zig the language is needlessly verbose and frustrating to write due to its overreliance on `comptime`, in addition to questionable governance in recent years. 
 
 Concept was conceived, designed, and implemented by me and frontier LLMs as the "Programmer's programming language": It aims to be the fastest, most powerful, safest, and most readable programming language with all the lessons we've learned over the years, a greenfield low level systems programming language with zero unprincipled compromises.
 
