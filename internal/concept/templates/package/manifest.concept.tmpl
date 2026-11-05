@@ -1,0 +1,8 @@
+module {{.Name}}.Manifest;
+profile Core;
+import Standard.Build.Metadata;
+
+comptime PackageManifest Manifest = PackageManifest{
+    {{.QuotedName}}, {{.QuotedAuthor}}, Version{0, 1, 0}, PackageKind::Library,
+    [Dependency{""}], 0
+};

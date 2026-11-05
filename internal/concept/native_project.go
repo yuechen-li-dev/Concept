@@ -178,7 +178,7 @@ func LoadNativeProject(root string) (NativeProject, error) {
 	if err != nil {
 		return NativeProject{}, err
 	}
-	module, err := Parse(filepath.ToSlash(path), string(body))
+	module, err := ParseWithBuiltSemanticModuleRoots(filepath.ToSlash(path), string(body), evt1TestModuleRoots(root, root))
 	if err != nil {
 		return NativeProject{}, fmt.Errorf("NATIVE_MANIFEST_SEMANTIC_INVALID: %w", err)
 	}
@@ -220,7 +220,7 @@ func LoadNativeProject(root string) (NativeProject, error) {
 	if err != nil {
 		return NativeProject{}, err
 	}
-	sourceRoots, err := nativeStrings(fields[4])
+	sourceRoots, err := nativePaddedStrings(fields[4])
 	if err != nil {
 		return NativeProject{}, err
 	}
@@ -228,11 +228,11 @@ func LoadNativeProject(root string) (NativeProject, error) {
 	if err != nil {
 		return NativeProject{}, err
 	}
-	companions, err := nativeStrings(fields[6])
+	companions, err := nativePaddedStrings(fields[6])
 	if err != nil {
 		return NativeProject{}, err
 	}
-	tests, err := nativeStrings(fields[7])
+	tests, err := nativePaddedStrings(fields[7])
 	if err != nil {
 		return NativeProject{}, err
 	}
@@ -244,7 +244,7 @@ func LoadNativeProject(root string) (NativeProject, error) {
 		return NativeProject{}, fmt.Errorf("NATIVE_TOOLCHAIN_UNSUPPORTED: %s", toolchain)
 	}
 	for _, sourceRoot := range sourceRoots {
-		if err := nativeValidatePath(root, sourceRoot); err != nil {
+		if err := nativeValidateInputPath(root, sourceRoot); err != nil {
 			return NativeProject{}, err
 		}
 	}
@@ -270,10 +270,10 @@ func LoadNativeProject(root string) (NativeProject, error) {
 		if t.Output, err = nativeString(f[4]); err != nil {
 			return NativeProject{}, err
 		}
-		if t.Sources, err = nativeStrings(f[5]); err != nil {
+		if t.Sources, err = nativePaddedStrings(f[5]); err != nil {
 			return NativeProject{}, err
 		}
-		if t.Includes, err = nativeStrings(f[6]); err != nil {
+		if t.Includes, err = nativePaddedStrings(f[6]); err != nil {
 			return NativeProject{}, err
 		}
 		defineItems, err := nativeArray(f[7])
@@ -302,7 +302,7 @@ func LoadNativeProject(root string) (NativeProject, error) {
 			}
 			t.Defines = append(t.Defines, NativeDefine{Name: name, Value: value, HasValue: hasValue.Value})
 		}
-		if t.LinkInputs, err = nativeStrings(f[8]); err != nil {
+		if t.LinkInputs, err = nativePaddedStrings(f[8]); err != nil {
 			return NativeProject{}, err
 		}
 		if len(t.LinkInputs) == 1 && t.LinkInputs[0] == "" {
@@ -340,14 +340,14 @@ func LoadNativeProject(root string) (NativeProject, error) {
 			return NativeProject{}, err
 		}
 		for _, p := range append(append(append([]string{}, t.Sources...), t.Includes...), t.LinkInputs...) {
-			if err := nativeValidatePath(root, p); err != nil {
+			if err := nativeValidateInputPath(root, p); err != nil {
 				return NativeProject{}, err
 			}
 		}
 		project.Targets = append(project.Targets, t)
 	}
 	for _, p := range append(append([]string{}, companions...), tests...) {
-		if err := nativeValidatePath(root, p); err != nil {
+		if err := nativeValidateInputPath(root, p); err != nil {
 			return NativeProject{}, err
 		}
 	}
@@ -448,6 +448,14 @@ func nativeStrings(expr Expr) ([]string, error) {
 	return result, nil
 }
 
+func nativePaddedStrings(expr Expr) ([]string, error) {
+	values, err := nativeStrings(expr)
+	for len(values) > 0 && values[len(values)-1] == "" {
+		values = values[:len(values)-1]
+	}
+	return values, err
+}
+
 func nativeInt(expr Expr) (int, error) {
 	v, ok := expr.(*IntLiteral)
 	if !ok {
@@ -477,7 +485,7 @@ func nativeInts(expr Expr) ([]int, error) {
 }
 
 func nativeValidatePath(root, relative string) error {
-	if relative == "" || filepath.IsAbs(relative) || filepath.VolumeName(relative) != "" {
+	if relative == "" || strings.HasPrefix(relative, "@") || filepath.IsAbs(relative) || filepath.VolumeName(relative) != "" {
 		return fmt.Errorf("NATIVE_PATH_INVALID: %q", relative)
 	}
 	clean := filepath.Clean(filepath.FromSlash(relative))
@@ -485,6 +493,63 @@ func nativeValidatePath(root, relative string) error {
 		return fmt.Errorf("NATIVE_PATH_OUTSIDE_ROOT: %q", relative)
 	}
 	return nil
+}
+
+// Native inputs can name an installed package without escaping the project's
+// output root. @VulkanSDK is an explicit SDK input, supplied by VULKAN_SDK.
+// Outputs remain project-local and never use dependency-qualified paths.
+func nativeInputPath(root, input string) (string, error) {
+	if !strings.HasPrefix(input, "@") {
+		return input, nativeValidatePath(root, input)
+	}
+	parts := strings.SplitN(input[1:], "/", 2)
+	if len(parts) != 2 || !nativeIdentifier(parts[0]) || parts[1] == "" {
+		return "", fmt.Errorf("NATIVE_DEPENDENCY_PATH_INVALID: %q", input)
+	}
+	if err := nativeValidatePath(root, parts[1]); err != nil {
+		return "", err
+	}
+	if filepath.ToSlash(filepath.Clean(filepath.FromSlash(parts[1]))) != parts[1] {
+		return "", fmt.Errorf("NATIVE_DEPENDENCY_PATH_INVALID: %q", input)
+	}
+	var base string
+	if parts[0] == "VulkanSDK" {
+		base = os.Getenv("VULKAN_SDK")
+		if base == "" && runtime.GOOS != "windows" {
+			if _, err := os.Stat("/usr/include/vulkan/vulkan.h"); err == nil {
+				base = "/usr"
+			}
+		}
+		if base == "" {
+			return "", fmt.Errorf("NATIVE_SDK_MISSING: %s requires VULKAN_SDK", input)
+		}
+	} else {
+		library := CompilerLibraryRoot()
+		if library == "" {
+			return "", fmt.Errorf("NATIVE_LIBRARY_ROOT_MISSING: %s requires CONCEPT_LIBRARY_ROOT", input)
+		}
+		base = filepath.Join(library, parts[0])
+		if _, err := os.Stat(filepath.Join(base, "manifest.concept")); err != nil {
+			return "", fmt.Errorf("NATIVE_DEPENDENCY_MISSING: %s: %w", parts[0], err)
+		}
+	}
+	return filepath.Abs(filepath.Join(base, filepath.FromSlash(parts[1])))
+}
+
+func nativeValidateInputPath(root, input string) error {
+	_, err := nativeInputPath(root, input)
+	return err
+}
+
+func nativeInputFile(root, input string) (string, error) {
+	path, err := nativeInputPath(root, input)
+	if err != nil {
+		return "", err
+	}
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	return filepath.Join(root, filepath.FromSlash(path)), nil
 }
 
 func nativeDigest(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
@@ -544,10 +609,21 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 		std := map[string]string{"C11": "c11", "C17": "c17", "Cpp17": "c++17", "Cpp20": "c++20", "Cpp23": "c++23"}[target.Standard]
 		objects := []string{}
 		for i, source := range target.Sources {
+			resolvedSource, err := nativeInputPath(project.Root, source)
+			if err != nil {
+				return NativePlan{}, err
+			}
 			object := filepath.ToSlash(filepath.Join(".native-build", target.Name, fmt.Sprintf("%03d.o", i)))
-			args := []string{"-std=" + std, "-c", source, "-o", object}
+			args := []string{"-std=" + std, "-c", resolvedSource, "-o", object}
+			if runtime.GOOS != "windows" && target.Kind == "StaticLibrary" {
+				args = append(args, "-fPIC")
+			}
 			for _, include := range target.Includes {
-				args = append(args, "-I", include)
+				resolved, err := nativeInputPath(project.Root, include)
+				if err != nil {
+					return NativePlan{}, err
+				}
+				args = append(args, "-I", resolved)
 			}
 			for _, define := range target.Defines {
 				argument := "-D" + define.Name
@@ -558,7 +634,11 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 			}
 			plan.Commands = append(plan.Commands, NativeCommand{Target: target.Name, Program: targetCompiler, Args: args})
 			objects = append(objects, object)
-			body, err := os.ReadFile(filepath.Join(project.Root, filepath.FromSlash(source)))
+			inputPath, err := nativeInputFile(project.Root, source)
+			if err != nil {
+				return NativePlan{}, err
+			}
+			body, err := os.ReadFile(inputPath)
 			if err != nil {
 				return NativePlan{}, err
 			}
@@ -576,7 +656,11 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 			if i > 0 && include == headerRoots[i-1] {
 				continue
 			}
-			err := filepath.WalkDir(filepath.Join(project.Root, filepath.FromSlash(include)), func(path string, entry os.DirEntry, walkErr error) error {
+			includePath, err := nativeInputFile(project.Root, include)
+			if err != nil {
+				return NativePlan{}, err
+			}
+			err = filepath.WalkDir(includePath, func(path string, entry os.DirEntry, walkErr error) error {
 				if walkErr != nil {
 					return walkErr
 				}
@@ -601,8 +685,16 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 		}
 		link := append([]string{}, objects...)
 		for _, dep := range target.LinkInputs {
-			link = append(link, dep)
-			body, err := os.ReadFile(filepath.Join(project.Root, filepath.FromSlash(dep)))
+			resolved, err := nativeInputPath(project.Root, dep)
+			if err != nil {
+				return NativePlan{}, err
+			}
+			link = append(link, resolved)
+			inputPath, err := nativeInputFile(project.Root, dep)
+			if err != nil {
+				return NativePlan{}, err
+			}
+			body, err := os.ReadFile(inputPath)
 			if err != nil {
 				return NativePlan{}, err
 			}
@@ -880,7 +972,11 @@ func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, exec
 		}
 		args := []string{"-std=" + standard, "-I", project.Root}
 		for _, include := range target.Includes {
-			args = append(args, "-I", filepath.Join(project.Root, filepath.FromSlash(include)))
+			resolved, err := nativeInputFile(project.Root, include)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, "-I", resolved)
 		}
 		for _, define := range target.Defines {
 			value := "-D" + define.Name

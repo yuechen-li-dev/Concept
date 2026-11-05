@@ -17,6 +17,7 @@ import (
 const usage = `Concept EVT1 Stage 0 / Go
 
 Usage:
+  concept init <directory> [--name Name] [--author Author]
   concept check <file> [--source-modules] [--module-root <dir>]
   concept lint <file-or-project> [--verify]
   concept format <file-or-project> [--check]
@@ -36,8 +37,8 @@ Usage:
   concept reflect <file>
   concept generated <file> [symbol]
   concept test [path-or-filter] [--filter text] [--list] [--verbose] [--verify] [--module-root <dir>]
-  concept package build <name>
-  concept package test <name>
+  concept package build <name-or-directory> [--library-root <dir>]
+  concept package test <name-or-directory> [--verify] [--library-root <dir>]
   concept package graph <name>
   concept build <native-project-dir>
   concept check <native-project-dir>
@@ -75,6 +76,10 @@ const testUsage = `Usage:
 `
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "init" {
+		runInitCommand(os.Args[2:])
+		return
+	}
 	if len(os.Args) > 3 && os.Args[1] == "amd64" && !strings.HasPrefix(os.Args[3], "-") {
 		if err := printConceptAMD64Batch(os.Args[2:]); err != nil {
 			fail(err)
@@ -353,32 +358,37 @@ func runNativeCommandWith(action, root string, verify, verbose bool) {
 	if identity.BuildInputHash != plan.BuildInputHash || identity.SemanticCompanionHash != plan.SemanticCompanionHash || identity.CompilerVersion != plan.ToolchainVersion {
 		fail(fmt.Errorf("NATIVE_ABI_EVIDENCE_STALE: native inputs changed after planning"))
 	}
-	for _, test := range project.Tests {
-		if _, err := os.Stat(filepath.Join(project.Root, filepath.FromSlash(test))); err != nil {
-			fail(fmt.Errorf("NATIVE_TEST_MISSING: %s: %w", test, err))
+	var testManifest concept.TestManifest
+	if len(project.Tests) > 0 {
+		for _, test := range project.Tests {
+			if _, err := os.Stat(filepath.Join(project.Root, filepath.FromSlash(test))); err != nil {
+				fail(fmt.Errorf("NATIVE_TEST_MISSING: %s: %w", test, err))
+			}
 		}
-	}
-	testManifest, err := concept.DiscoverTestsWithNativeABI(filepath.Join(project.Root, "tests"), artifacts, identity)
-	if err != nil {
-		fail(fmt.Errorf("NATIVE_TEST_INVALID: %w", err))
-	}
-	allowed := map[string]bool{}
-	for _, path := range project.Tests {
-		rel, err := filepath.Rel(filepath.Join(project.Root, "tests"), filepath.Join(project.Root, filepath.FromSlash(path)))
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			fail(fmt.Errorf("NATIVE_TEST_OUTSIDE_ROOT: %s", path))
+		testManifest, err = concept.DiscoverTestsWithNativeABI(filepath.Join(project.Root, "tests"), artifacts, identity)
+		if err != nil {
+			fail(fmt.Errorf("NATIVE_TEST_INVALID: %w", err))
 		}
-		allowed[filepath.ToSlash(rel)] = true
-	}
-	selected := testManifest.Tests[:0]
-	for _, item := range testManifest.Tests {
-		if allowed[item.Source] {
-			selected = append(selected, item)
+		allowed := map[string]bool{}
+		for _, path := range project.Tests {
+			rel, err := filepath.Rel(filepath.Join(project.Root, "tests"), filepath.Join(project.Root, filepath.FromSlash(path)))
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				fail(fmt.Errorf("NATIVE_TEST_OUTSIDE_ROOT: %s", path))
+			}
+			allowed[filepath.ToSlash(rel)] = true
 		}
-	}
-	testManifest.Tests = selected
-	if len(testManifest.Tests) == 0 {
-		fail(fmt.Errorf("NATIVE_TEST_EMPTY: manifest lists no discovered test functions"))
+		selected := testManifest.Tests[:0]
+		for _, item := range testManifest.Tests {
+			if allowed[item.Source] {
+				selected = append(selected, item)
+			}
+		}
+		testManifest.Tests = selected
+		if len(testManifest.Tests) == 0 {
+			fail(fmt.Errorf("NATIVE_TEST_EMPTY: manifest lists no discovered test functions"))
+		}
+	} else if action == "test" {
+		fail(fmt.Errorf("NATIVE_TEST_EMPTY: manifest lists no tests"))
 	}
 	if action == "check" {
 		fmt.Printf("%s: native project, companions, and tests ok\n", project.Name)
@@ -435,6 +445,9 @@ func runNativeCommandWith(action, root string, verify, verbose bool) {
 }
 
 func runPackageCommand(args []string) {
+	if len(args) >= 2 && runLocalPackageCommand(args) {
+		return
+	}
 	if len(args) != 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
@@ -478,6 +491,12 @@ func runPackageCommand(args []string) {
 
 func semanticModuleRoots(sourcePath string) []string {
 	roots := []string{filepath.Dir(sourcePath)}
+	if libraries := concept.CompilerLibraryRoot(); libraries != "" {
+		roots = append(roots, libraries)
+	}
+	if vulkan := concept.VulkanModuleRoot(sourcePath); vulkan != "" {
+		roots = append(roots, vulkan)
+	}
 	if root := nativeCompanionRoot(sourcePath); root != "" {
 		roots = append(roots, root)
 	}

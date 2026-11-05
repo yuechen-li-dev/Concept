@@ -295,6 +295,9 @@ func discoverTests(root string, nativeArtifacts map[string][]byte, nativeIdentit
 // nested package can import its siblings under the original module identity.
 func evt1TestModuleRoots(selectionRoot, sourceDir string) []string {
 	roots := []string{sourceDir, filepath.Dir(selectionRoot)}
+	if libraries := CompilerLibraryRoot(); libraries != "" {
+		roots = append(roots, libraries)
+	}
 	repoRoot := ""
 	for dir := selectionRoot; ; dir = filepath.Dir(dir) {
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {

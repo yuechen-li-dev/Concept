@@ -14,7 +14,7 @@
  *                              are what ConceptVkTestHazards counts
  *   CONCEPT_VULKAN_KERNELS     directory relative kernel paths resolve in
  *
- * One context per process: the loaded device entry points are global. */
+ * Device entry points belong to explicit owning or borrowed attachments. */
 #include <vulkan/vulkan.h>
 
 #include <ctype.h>
@@ -23,23 +23,109 @@
 #include <string.h>
 
 #include "concept_vulkan.h"
+#include <stdatomic.h>
 
 #define STAGE_COMPUTE 1u
 #define STAGE_TRANSFER 2u
 #define STAGE_HOST 4u
 
-static int live_buffers = 0;
-static int live_pipelines = 0;
-static int live_contexts = 0;
-static int pending_submissions = 0;
-static int barriers = 0;
+static _Atomic int live_buffers = 0;
+static _Atomic int live_pipelines = 0;
+static _Atomic int live_contexts = 0;
+static _Atomic int pending_submissions = 0;
+static _Atomic int barriers = 0;
 
-static PFN_vkCmdPipelineBarrier2 cmdPipelineBarrier2 = NULL;
-static PFN_vkCmdPushDescriptorSet cmdPushDescriptorSet = NULL;
-static PFN_vkCmdWriteTimestamp2 cmdWriteTimestamp2 = NULL;
+/* Registration is cold-path host mechanics; commands copy their own device's
+ * dispatch under this guard, then call the driver without holding the guard. */
+#ifdef _WIN32
+#include <windows.h>
+static SRWLOCK dispatchLock = SRWLOCK_INIT;
+static void lock_dispatch(void) { AcquireSRWLockExclusive(&dispatchLock); }
+static void unlock_dispatch(void) { ReleaseSRWLockExclusive(&dispatchLock); }
+#else
+#include <pthread.h>
+static pthread_mutex_t dispatchLock = PTHREAD_MUTEX_INITIALIZER;
+static void lock_dispatch(void) { pthread_mutex_lock(&dispatchLock); }
+static void unlock_dispatch(void) { pthread_mutex_unlock(&dispatchLock); }
+#endif
 
-static VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
-static int validation_findings = 0;
+typedef struct DeviceDispatch {
+    VkDevice device;
+    uint32_t references;
+    PFN_vkCmdPipelineBarrier2 barrier;
+    PFN_vkCmdPushDescriptorSet descriptors;
+    PFN_vkCmdWriteTimestamp2 timestamp;
+    void* submitOwner;
+    ConceptVkQueueSubmit submit;
+    struct DeviceDispatch* next;
+} DeviceDispatch;
+static DeviceDispatch* dispatches = NULL;
+
+static int32_t attach_dispatch(VkDevice device, uint32_t enabled) {
+    if (device == VK_NULL_HANDLE || (enabled & 3u) != 3u) return VK_ERROR_FEATURE_NOT_PRESENT;
+    lock_dispatch();
+    for (DeviceDispatch* d = dispatches; d; d = d->next) {
+        if (d->device == device) { d->references++; unlock_dispatch(); return VK_SUCCESS; }
+    }
+    DeviceDispatch* d = (DeviceDispatch*)calloc(1u, sizeof(*d));
+    if (!d) { unlock_dispatch(); return VK_ERROR_OUT_OF_HOST_MEMORY; }
+    d->device = device;
+    d->barrier = (PFN_vkCmdPipelineBarrier2)vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2");
+    d->descriptors = (PFN_vkCmdPushDescriptorSet)vkGetDeviceProcAddr(device, "vkCmdPushDescriptorSet");
+    d->timestamp = (PFN_vkCmdWriteTimestamp2)vkGetDeviceProcAddr(device, "vkCmdWriteTimestamp2");
+    if (!d->barrier || !d->descriptors || !d->timestamp) {
+        free(d); unlock_dispatch(); return VK_ERROR_INCOMPATIBLE_DRIVER;
+    }
+    d->references = 1u; d->next = dispatches; dispatches = d;
+    unlock_dispatch(); return VK_SUCCESS;
+}
+
+static void detach_dispatch(VkDevice device) {
+    lock_dispatch();
+    DeviceDispatch** link = &dispatches;
+    while (*link) {
+        DeviceDispatch* d = *link;
+        if (d->device == device) {
+            if (--d->references == 0u) { *link = d->next; free(d); }
+            break;
+        }
+        link = &d->next;
+    }
+    unlock_dispatch();
+}
+
+static DeviceDispatch device_dispatch(VkDevice device) {
+    DeviceDispatch out;
+    lock_dispatch();
+    for (DeviceDispatch* d = dispatches; d; d = d->next) {
+        if (d->device == device) { out = *d; unlock_dispatch(); return out; }
+    }
+    unlock_dispatch();
+    fputs("Concept Vulkan invariant: command used an unattached device\n", stderr);
+    abort();
+}
+
+int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubmit submit) {
+    lock_dispatch();
+    for (DeviceDispatch* d = dispatches; d; d = d->next) {
+        if (d->device == device) {
+            if (d->submit && (d->submit != submit || d->submitOwner != owner)) {
+                unlock_dispatch(); return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            d->submit = submit; d->submitOwner = owner;
+            unlock_dispatch(); return VK_SUCCESS;
+        }
+    }
+    unlock_dispatch(); return VK_ERROR_INITIALIZATION_FAILED;
+}
+
+typedef struct InstanceMessenger {
+    VkInstance instance;
+    VkDebugUtilsMessengerEXT messenger;
+    struct InstanceMessenger* next;
+} InstanceMessenger;
+static InstanceMessenger* messengers = NULL;
+static _Atomic int validation_findings = 0;
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL on_validation_message(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types,
@@ -59,11 +145,19 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL on_validation_message(
 }
 
 static void destroy_messenger(VkInstance instance) {
-    if (messenger == VK_NULL_HANDLE) return;
+    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+    lock_dispatch();
+    InstanceMessenger** link = &messengers;
+    while (*link) {
+        InstanceMessenger* entry = *link;
+        if (entry->instance == instance) { messenger = entry->messenger; *link = entry->next; free(entry); break; }
+        link = &entry->next;
+    }
+    unlock_dispatch();
+    if (!messenger) return;
     PFN_vkDestroyDebugUtilsMessengerEXT destroy =
         (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (destroy) destroy(instance, messenger, NULL);
-    messenger = VK_NULL_HANDLE;
 }
 
 /* ---- Context ---------------------------------------------------------- */
@@ -139,7 +233,7 @@ static VkPhysicalDevice choose_device(VkInstance instance, uint32_t* family) {
 
 static void destroy_partial(ContextCreation* out) {
     if (out->commands) vkDestroyCommandPool(out->device, out->commands, NULL);
-    if (out->device) vkDestroyDevice(out->device, NULL);
+    if (out->device) { detach_dispatch(out->device); vkDestroyDevice(out->device, NULL); }
     if (out->instance) {
         destroy_messenger(out->instance);
         vkDestroyInstance(out->instance, NULL);
@@ -187,13 +281,17 @@ static ContextCreation impl_CreateContext(void) {
     if (validate) {
         PFN_vkCreateDebugUtilsMessengerEXT create =
             (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(out.instance, "vkCreateDebugUtilsMessengerEXT");
-        out.code = create ? create(out.instance, &messengerInfo, NULL, &messenger) : VK_ERROR_EXTENSION_NOT_PRESENT;
+        InstanceMessenger* entry = (InstanceMessenger*)calloc(1u, sizeof(*entry));
+        if (!entry) { out.code = VK_ERROR_OUT_OF_HOST_MEMORY; destroy_partial(&out); return out; }
+        entry->instance = out.instance;
+        out.code = create ? create(out.instance, &messengerInfo, NULL, &entry->messenger) : VK_ERROR_EXTENSION_NOT_PRESENT;
         if (out.code != VK_SUCCESS) {
-            messenger = VK_NULL_HANDLE;
+            free(entry);
             destroy_partial(&out);
             return out;
         }
         fprintf(stderr, "vulkan: VK_LAYER_KHRONOS_validation enabled with synchronization validation\n");
+        lock_dispatch(); entry->next = messengers; messengers = entry; unlock_dispatch();
     }
 
     out.physical = choose_device(out.instance, &out.queueFamily);
@@ -232,14 +330,8 @@ static ContextCreation impl_CreateContext(void) {
         destroy_partial(&out);
         return out;
     }
-    cmdPipelineBarrier2 = (PFN_vkCmdPipelineBarrier2)vkGetDeviceProcAddr(out.device, "vkCmdPipelineBarrier2");
-    cmdPushDescriptorSet = (PFN_vkCmdPushDescriptorSet)vkGetDeviceProcAddr(out.device, "vkCmdPushDescriptorSet");
-    cmdWriteTimestamp2 = (PFN_vkCmdWriteTimestamp2)vkGetDeviceProcAddr(out.device, "vkCmdWriteTimestamp2");
-    if (!cmdPipelineBarrier2 || !cmdPushDescriptorSet || !cmdWriteTimestamp2) {
-        out.code = VK_ERROR_INCOMPATIBLE_DRIVER;
-        destroy_partial(&out);
-        return out;
-    }
+    out.code = attach_dispatch(out.device, 3u);
+    if (out.code != VK_SUCCESS) { destroy_partial(&out); return out; }
     vkGetDeviceQueue(out.device, out.queueFamily, 0, &out.queue);
 
     VkCommandPoolCreateInfo poolInfo = {.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -264,9 +356,40 @@ static void impl_DestroyContext(VkInstance instance, VkDevice device, VkCommandP
     vkDeviceWaitIdle(device);
     vkDestroyPipelineCache(device, cache, NULL);
     vkDestroyCommandPool(device, commands, NULL);
+    detach_dispatch(device);
     vkDestroyDevice(device, NULL);
     destroy_messenger(instance);
     vkDestroyInstance(instance, NULL);
+}
+
+BorrowedCreation ConceptVkBorrowDevice(DeviceBorrow borrowed) {
+    BorrowedCreation out;
+    memset(&out, 0, sizeof out);
+    if (!borrowed.physical || !borrowed.queue) { out.code = VK_ERROR_INITIALIZATION_FAILED; return out; }
+    out.code = attach_dispatch(borrowed.device, borrowed.enabledFeatures);
+    if (out.code != VK_SUCCESS) return out;
+    VkCommandPoolCreateInfo pool = {.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    pool.queueFamilyIndex = borrowed.queueFamily;
+    pool.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    out.code = vkCreateCommandPool(borrowed.device, &pool, NULL, &out.commands);
+    if (out.code == VK_SUCCESS) {
+        VkPipelineCacheCreateInfo cache = {.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+        out.code = vkCreatePipelineCache(borrowed.device, &cache, NULL, &out.cache);
+    }
+    if (out.code != VK_SUCCESS) {
+        if (out.commands) vkDestroyCommandPool(borrowed.device, out.commands, NULL);
+        detach_dispatch(borrowed.device);
+        out.commands = VK_NULL_HANDLE; out.cache = VK_NULL_HANDLE;
+    }
+    if (out.code == VK_SUCCESS) live_contexts++;
+    return out;
+}
+
+void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCache cache) {
+    vkDestroyPipelineCache(device, cache, NULL);
+    vkDestroyCommandPool(device, commands, NULL);
+    detach_dispatch(device);
+    live_contexts--;
 }
 
 DeviceFacts ConceptVkDeviceFacts(VkPhysicalDevice physical) {
@@ -427,31 +550,14 @@ static uint32_t* read_spirv(const char* path, size_t* bytes) {
     return words;
 }
 
-static PipelineCreation impl_CreatePipeline(VkDevice device, VkPipelineCache cache, const char* kernelPath, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes) {
+static PipelineCreation impl_CreatePipelineFromModule(VkDevice device, VkPipelineCache cache, VkShaderModule shader, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes) {
     PipelineCreation out;
     memset(&out, 0, sizeof out);
-    out.pushBytes = pushBytes;
-    if (bindings.length == 0 || bindings.length > 16 || pushBytes > 256 || pushBytes % 4 != 0) {
-        out.code = VK_ERROR_INITIALIZATION_FAILED;
-        return out;
+    out.shader = shader; out.pushBytes = pushBytes;
+    if (!shader || !entry || bindings.length == 0 || bindings.length > 16 || pushBytes > 256 || pushBytes % 4 != 0) {
+        if (shader) vkDestroyShaderModule(device, shader, NULL);
+        memset(&out, 0, sizeof out); out.code = VK_ERROR_INITIALIZATION_FAILED; return out;
     }
-    size_t bytes = 0;
-    uint32_t* words = read_spirv(kernelPath, &bytes);
-    if (!words) {
-        out.code = VK_ERROR_INITIALIZATION_FAILED;
-        return out;
-    }
-    VkShaderModuleCreateInfo shaderInfo = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    shaderInfo.codeSize = bytes;
-    shaderInfo.pCode = words;
-    out.code = vkCreateShaderModule(device, &shaderInfo, NULL, &out.shader);
-    free(words);
-    if (out.code != VK_SUCCESS) {
-        memset(&out, 0, sizeof out);
-        out.code = VK_ERROR_INITIALIZATION_FAILED;
-        return out;
-    }
-
     VkDescriptorSetLayoutBinding layoutBindings[16];
     for (size_t i = 0; i < bindings.length; i++) {
         memset(&layoutBindings[i], 0, sizeof layoutBindings[i]);
@@ -494,6 +600,20 @@ static PipelineCreation impl_CreatePipeline(VkDevice device, VkPipelineCache cac
         out.code = code;
     }
     return out;
+}
+
+static PipelineCreation impl_CreatePipeline(VkDevice device, VkPipelineCache cache, const char* kernelPath, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes) {
+    PipelineCreation out;
+    memset(&out, 0, sizeof out);
+    size_t bytes = 0;
+    uint32_t* words = read_spirv(kernelPath, &bytes);
+    if (!words) { out.code = VK_ERROR_INITIALIZATION_FAILED; return out; }
+    VkShaderModuleCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    info.codeSize = bytes; info.pCode = words;
+    out.code = vkCreateShaderModule(device, &info, NULL, &out.shader);
+    free(words);
+    if (out.code != VK_SUCCESS) return out;
+    return impl_CreatePipelineFromModule(device, cache, out.shader, entry, bindings, pushBytes);
 }
 
 static void impl_DestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline) {
@@ -572,7 +692,7 @@ static VkAccessFlags2 any_access(uint32_t stages) {
     return flags;
 }
 
-void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages) {
+void ConceptVkCmdBarrier(VkDevice device, VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages) {
     VkMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
     barrier.srcStageMask = stage_flags(srcStages);
     barrier.srcAccessMask = srcWrites ? write_access(srcStages) : 0;
@@ -581,11 +701,11 @@ void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32_t srcStages, uint32_t
     VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
     dependency.memoryBarrierCount = 1;
     dependency.pMemoryBarriers = &barrier;
-    cmdPipelineBarrier2(recording, &dependency);
+    device_dispatch(device).barrier(recording, &dependency);
     barriers++;
 }
 
-void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z) {
+void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z) {
     VkDescriptorBufferInfo infos[16];
     VkWriteDescriptorSet sets[16];
     size_t count = writes.length > 16 ? 16 : writes.length;
@@ -601,7 +721,7 @@ void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipe
         sets[i].pBufferInfo = &infos[i];
     }
     vkCmdBindPipeline(recording, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-    cmdPushDescriptorSet(recording, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, (uint32_t)count, sets);
+    device_dispatch(device).descriptors(recording, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, (uint32_t)count, sets);
     if (pushConstants.length > 0) vkCmdPushConstants(recording, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, (uint32_t)pushConstants.length, pushConstants.data);
     vkCmdDispatch(recording, x, y, z);
 }
@@ -615,8 +735,8 @@ void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes
     vkCmdFillBuffer(recording, buffer, 0, bytes & ~(uint64_t)3, word);
 }
 
-void ConceptVkCmdTimestamp(VkCommandBuffer recording, VkQueryPool queries, uint32_t index) {
-    cmdWriteTimestamp2(recording, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, queries, index);
+void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32_t index) {
+    device_dispatch(device).timestamp(recording, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, queries, index);
 }
 
 static SubmissionRecord impl_Submit(VkDevice device, VkQueue queue, VkCommandBuffer recording) {
@@ -633,7 +753,8 @@ static SubmissionRecord impl_Submit(VkDevice device, VkQueue queue, VkCommandBuf
     VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &recording;
-    out.code = vkQueueSubmit(queue, 1, &submit, out.fence);
+    DeviceDispatch dispatch = device_dispatch(device);
+    out.code = dispatch.submit ? dispatch.submit(dispatch.submitOwner, queue, recording, out.fence) : vkQueueSubmit(queue, 1, &submit, out.fence);
     if (out.code != VK_SUCCESS) {
         vkDestroyFence(device, out.fence, NULL);
         out.fence = VK_NULL_HANDLE;
@@ -694,6 +815,12 @@ PipelineCreation ConceptVkCreatePipeline(VkDevice device, VkPipelineCache cache,
     return out;
 }
 
+PipelineCreation ConceptVkCreatePipelineFromModule(VkDevice device, VkPipelineCache cache, VkShaderModule shader, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes) {
+    PipelineCreation out = impl_CreatePipelineFromModule(device, cache, shader, entry, bindings, pushBytes);
+    if (out.code == VK_SUCCESS) live_pipelines++;
+    return out;
+}
+
 void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline) {
     impl_DestroyPipeline(device, shader, setLayout, layout, pipeline);
     live_pipelines--;
@@ -707,9 +834,11 @@ SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer
 
 int32_t ConceptVkWait(VkDevice device, VkFence fence) {
     int32_t code = impl_Wait(device, fence);
-    if (pending_submissions > 0) pending_submissions--;
+    if (code == VK_SUCCESS && pending_submissions > 0) pending_submissions--;
     return code;
 }
+
+int32_t ConceptVkPoll(VkDevice device, VkFence fence) { return vkGetFenceStatus(device, fence); }
 
 int ConceptVkTestLiveBuffers(void) { return live_buffers; }
 int ConceptVkTestLivePipelines(void) { return live_pipelines; }

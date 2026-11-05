@@ -78,6 +78,24 @@ VulkanError ErrorFromCode(int code)
         _ => VulkanError::Unknown(code),
     };
 }
+int CodeFromError(VulkanError error)
+{
+    return match (error) {
+        VulkanError::OutOfHostMemory => -1,
+        VulkanError::OutOfDeviceMemory => -2,
+        VulkanError::InitializationFailed => -3,
+        VulkanError::DeviceLost => -4,
+        VulkanError::MemoryMapFailed => -5,
+        VulkanError::LayerNotPresent => -6,
+        VulkanError::ExtensionNotPresent => -7,
+        VulkanError::FeatureNotPresent => -8,
+        VulkanError::IncompatibleDriver => -9,
+        VulkanError::TooManyObjects => -10,
+        VulkanError::FormatNotSupported => -11,
+        VulkanError::FragmentedPool => -12,
+        VulkanError::Unknown(code) => code,
+    };
+}
 // ---- The C boundary (native/concept_vulkan.h) ---------------------------
 [[repr(C)]]
 record struct ContextCreation
@@ -158,6 +176,33 @@ record struct Elapsed
     uint32 reserved;
     double nanoseconds;
 };
+// Owner-supplied enabled capabilities cross the explicit foreign attachment.
+[[repr(C)]]
+record struct DeviceBorrow
+{
+    VkPhysicalDevice physical;
+    VkDevice device;
+    VkQueue queue;
+    uint32 queueFamily;
+    uint32 enabledFeatures;
+};
+[[repr(C)]]
+record struct BorrowedCreation
+{
+    int code;
+    VkCommandPool commands;
+    VkPipelineCache cache;
+};
+record struct DeviceView
+{
+    VkPhysicalDevice physical;
+    VkDevice device;
+    VkQueue queue;
+    VkCommandPool commands;
+    VkPipelineCache cache;
+};
+extern "C" BorrowedCreation ConceptVkBorrowDevice(DeviceBorrow device);
+extern "C" void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCache cache);
 extern "C" ContextCreation ConceptVkCreateContext();
 extern "C" void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool commands,
 VkPipelineCache cache);
@@ -174,19 +219,32 @@ VkPipelineLayout layout, VkPipeline pipeline);
 extern "C" RecordingBegin ConceptVkBeginRecording(VkDevice device, VkCommandPool commands, uint32 timestamps);
 extern "C" void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuffer recording,
 VkQueryPool queries);
-extern "C" void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32 sourceStages, uint32 sourceWrites,
+extern "C" void ConceptVkCmdBarrier(VkDevice device, VkCommandBuffer recording, uint32 sourceStages, uint32 sourceWrites,
 uint32 destinationStages);
-extern "C" void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout,
+extern "C" void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout,
 ReadOnlySpan<DescriptorWrite> writes, ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z);
 extern "C" void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer source, VkBuffer destination, uint64 bytes);
 extern "C" void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64 bytes, uint32 word);
-extern "C" void ConceptVkCmdTimestamp(VkCommandBuffer recording, VkQueryPool queries, uint32 index);
+extern "C" void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32 index);
 extern "C" SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer recording);
 extern "C" int ConceptVkWait(VkDevice device, VkFence fence);
+extern "C" int ConceptVkPoll(VkDevice device, VkFence fence);
 extern "C" void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording,
 VkFence fence, VkQueryPool queries);
 extern "C" Elapsed ConceptVkElapsed(VkDevice device, VkPhysicalDevice physical, VkQueryPool queries,
 uint32 from, uint32 to);
+foreign concept VulkanBorrowAllocation on ConceptVkBorrowDevice
+{
+    requires compiler.Allocates(ConceptVkBorrowDevice);
+}
+foreign concept VulkanBufferAllocation on ConceptVkCreateBuffer
+{
+    requires compiler.Allocates(ConceptVkCreateBuffer);
+}
+foreign concept VulkanPipelineAllocation on ConceptVkCreatePipeline
+{
+    requires compiler.Allocates(ConceptVkCreatePipeline);
+}
 // ---- Context ------------------------------------------------------------
 enum DeviceKind
 {
@@ -219,6 +277,7 @@ class Context
     VkQueue queue;
     VkCommandPool commands;
     VkPipelineCache cache;
+    uint32 queueFamily;
 };
 void Drop(owned Context context)
 {
@@ -229,13 +288,37 @@ Result<Context, VulkanError> CreateContext()
     ContextCreation created = ConceptVkCreateContext();
     Check(created.code) ?;
     owned Context context = Context {
-        created.instance, created.physical, created.device, created.queue, created.commands, created.cache
+        created.instance, created.physical, created.device, created.queue, created.commands, created.cache, created.queueFamily
     };
     return Result::Ok(move context);
 }
 DeviceFacts Facts(ref const Context context)
 {
     return ConceptVkDeviceFacts(context.physical);
+}
+DeviceView DeviceOf(ref const Context context)
+{
+    return DeviceView{context.physical, context.device, context.queue, context.commands, context.cache};
+}
+// Owns only attachment-local pool/cache. The foreign owner keeps the shared
+// physical/device/queue alive until every attachment and child has retired.
+class BorrowedContext
+{
+    public:
+    DeviceView view;
+};
+void Drop(owned BorrowedContext context)
+{
+    ConceptVkDetachDevice(context.view.device, context.view.commands, context.view.cache);
+}
+Result<BorrowedContext, VulkanError> BorrowDevice(DeviceBorrow device)
+{
+    BorrowedCreation created = ConceptVkBorrowDevice(device);
+    Check(created.code)?;
+    owned BorrowedContext context = BorrowedContext{DeviceView{
+        device.physical, device.device, device.queue, created.commands, created.cache
+    }};
+    return Result::Ok(move context);
 }
 // ---- Buffers ------------------------------------------------------------
 // Where a buffer's memory lives. Device is fastest for kernels; Upload and
@@ -275,7 +358,7 @@ void Drop(owned Buffer<T> buffer)
     ConceptVkDestroyBuffer(buffer.device, buffer.buffer, buffer.memory);
 }
 template <typename T>
-Result<Buffer<T>, VulkanError> CreateBuffer(ref const Context context, usize count, Placement placement)
+Result<Buffer<T>, VulkanError> CreateBufferOn(DeviceView context, usize count, Placement placement)
 {
     usize<byte> bytes = count * SizeOf<T>();
     BufferCreation created = ConceptVkCreateBuffer(context.physical, context.device, Magnitude(bytes) as uint64,
@@ -285,6 +368,11 @@ Result<Buffer<T>, VulkanError> CreateBuffer(ref const Context context, usize cou
         context.device, created.buffer, created.memory, count, created.hostVisible != 0
     };
     return Result::Ok(move buffer);
+}
+template <typename T>
+Result<Buffer<T>, VulkanError> CreateBuffer(ref const Context context, usize count, Placement placement)
+{
+    return CreateBufferOn<T>(DeviceOf(ref const context), count, placement);
 }
 template <typename T>
 usize<byte> ByteSize(ref const Buffer<T> buffer)
@@ -297,14 +385,19 @@ usize<byte> ByteSize(ref const Buffer<T> buffer)
 template <typename T> requires PlainData<T>
 Result<void, VulkanError> Upload(ref const Context context, ref const Buffer<T> target, ReadOnlySpan<T> data)
 {
+    return UploadOn(DeviceOf(ref const context), ref const target, data);
+}
+template <typename T> requires PlainData<T>
+Result<void, VulkanError> UploadOn(DeviceView context, ref const Buffer<T> target, ReadOnlySpan<T> data)
+{
     assert((Len(data) as usize) <= target.count, "Upload: more data than the buffer holds");
     if (target.hostVisible)
     {
         return Check(ConceptVkWriteBytes(target.device, target.memory, 0, AsBytes(data)));
     }
-    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(data) as usize, Placement::Upload) ?;
+    owned Buffer<T> staging = CreateBufferOn<T>(context, Len(data) as usize, Placement::Upload) ?;
     Check(ConceptVkWriteBytes(staging.device, staging.memory, 0, AsBytes(data))) ?;
-    owned Recording recording = BeginRecording(ref const context, 0) ?;
+    owned Recording recording = BeginRecordingOn(context, 0) ?;
     Copy(ref recording, ref const staging, ref const target);
     owned Submission work = Submit(move recording) ?;
     return Wait(ref work);
@@ -315,13 +408,18 @@ Result<void, VulkanError> Upload(ref const Context context, ref const Buffer<T> 
 template <typename T> requires PlainData<T>
 Result<void, VulkanError> Download(ref const Context context, ref const Buffer<T> source, Span<T> destination)
 {
+    return DownloadOn(DeviceOf(ref const context), ref const source, destination);
+}
+template <typename T> requires PlainData<T>
+Result<void, VulkanError> DownloadOn(DeviceView context, ref const Buffer<T> source, Span<T> destination)
+{
     assert((Len(destination) as usize) <= source.count, "Download: destination is larger than the buffer");
     if (source.hostVisible)
     {
         return Check(ConceptVkReadBytes(source.device, source.memory, 0, AsBytes(destination)));
     }
-    owned Buffer<T> staging = CreateBuffer<T>(ref const context, Len(destination) as usize, Placement::Readback) ?;
-    owned Recording recording = BeginRecording(ref const context, 0) ?;
+    owned Buffer<T> staging = CreateBufferOn<T>(context, Len(destination) as usize, Placement::Readback) ?;
+    owned Recording recording = BeginRecordingOn(context, 0) ?;
     Copy(ref recording, ref const source, ref const staging);
     owned Submission work = Submit(move recording) ?;
     Wait(ref work) ?;
@@ -360,7 +458,7 @@ void Drop(owned Pipeline pipeline)
 // kernel is a SPIR-V path; relative paths resolve against
 // CONCEPT_VULKAN_KERNELS when set (`concept test` sets it to the test's
 // directory). entry is the entry point name ("main" for GLSL).
-Result<Pipeline, VulkanError> CreatePipeline(ref const Context context, string kernel, string entry,
+Result<Pipeline, VulkanError> CreatePipelineOn(DeviceView context, string kernel, string entry,
 ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes)
 {
     PipelineCreation created = ConceptVkCreatePipeline(context.device, context.cache, kernel, entry,
@@ -370,6 +468,11 @@ ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes)
         context.device, created.shader, created.setLayout, created.layout, created.pipeline, pushBytes
     };
     return Result::Ok(move pipeline);
+}
+Result<Pipeline, VulkanError> CreatePipeline(ref const Context context, string kernel, string entry,
+ReadOnlySpan<BindingSlot> bindings, uint32 pushBytes)
+{
+    return CreatePipelineOn(DeviceOf(ref const context), kernel, entry, bindings, pushBytes);
 }
 // ---- Recording ----------------------------------------------------------
 // Pipeline stages a command runs in, as far as synchronization is concerned.
@@ -473,7 +576,7 @@ void Drop(owned Recording recording)
     }
 }
 // timestamps is how many timestamp queries the recording may write.
-Result<Recording, VulkanError> BeginRecording(ref const Context context, uint32 timestamps)
+Result<Recording, VulkanError> BeginRecordingOn(DeviceView context, uint32 timestamps)
 {
     RecordingBegin begun = ConceptVkBeginRecording(context.device, context.commands, timestamps);
     Check(begun.code) ?;
@@ -483,6 +586,10 @@ Result<Recording, VulkanError> BeginRecording(ref const Context context, uint32 
         timestamps, 0,[empty ...], 0, 0, false
     };
     return Result::Ok(move recording);
+}
+Result<Recording, VulkanError> BeginRecording(ref const Context context, uint32 timestamps)
+{
+    return BeginRecordingOn(DeviceOf(ref const context), timestamps);
 }
 bool Tracks(ref const Tracked entry, VkBuffer buffer)
 {
@@ -551,7 +658,7 @@ void Touch(ref Recording recording, ReadOnlySpan<Use> uses)
         {
             memoryDependency = 1;
         }
-        ConceptVkCmdBarrier(recording.commands, sourceStages.raw, memoryDependency, destinationStages.raw);
+        ConceptVkCmdBarrier(recording.device, recording.commands, sourceStages.raw, memoryDependency, destinationStages.raw);
         recording.barriers = recording.barriers + 1;
         // Everything the barrier waited on is now ordered before this command.
         for (i in 0 .. recording.trackedCount)
@@ -611,7 +718,7 @@ ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z)
         };
     }
     Touch(ref recording, Subspan(ReadOnlySpan(uses), 0, Len(bindings)));
-    ConceptVkCmdDispatch(recording.commands, pipeline.pipeline, pipeline.layout, Subspan(ReadOnlySpan(writes),
+    ConceptVkCmdDispatch(recording.device, recording.commands, pipeline.pipeline, pipeline.layout, Subspan(ReadOnlySpan(writes),
     0, Len(bindings)), pushConstants, x, y, z);
 }
 void Dispatch(ref Recording recording, ref const Pipeline pipeline, ReadOnlySpan<Binding> bindings, uint32 x,
@@ -651,7 +758,7 @@ uint32 Timestamp(ref Recording recording)
 {
     assert(recording.timestampsUsed < recording.timestamps, "no timestamp queries left in this recording");
     uint32 index = recording.timestampsUsed;
-    ConceptVkCmdTimestamp(recording.commands, recording.queries, index);
+    ConceptVkCmdTimestamp(recording.device, recording.commands, recording.queries, index);
     recording.timestampsUsed = index + 1;
     return index;
 }
@@ -672,7 +779,8 @@ void Drop(owned Submission submission)
 {
     if (not submission.waited)
     {
-        discard ConceptVkWait(submission.device, submission.fence);
+        int code = ConceptVkWait(submission.device, submission.fence);
+        assert(code == 0 or code == -4, "submission resources require completion or terminal device loss");
     }
     ConceptVkRelease(submission.device, submission.pool, submission.commands, submission.fence, submission.queries);
 }
@@ -687,7 +795,7 @@ Result<Submission, VulkanError> Submit(owned Recording recording)
     }
     if (Any(written))
     {
-        ConceptVkCmdBarrier(recording.commands, written.raw, 1, HostStage().raw);
+        ConceptVkCmdBarrier(recording.device, recording.commands, written.raw, 1, HostStage().raw);
         recording.barriers = recording.barriers + 1;
     }
     recording.submitted = true;
@@ -707,8 +815,10 @@ Result<void, VulkanError> Wait(ref Submission submission)
 {
     if (submission.waited)
     { return Result::Ok(); }
-    submission.waited = true;
-    return Check(ConceptVkWait(submission.device, submission.fence));
+    int code = ConceptVkWait(submission.device, submission.fence);
+    if (code == 0 or code == -4) { submission.waited = true; }
+    Check(code)?;
+    return Result::Ok();
 }
 // Nanoseconds between two timestamps of a finished submission.
 Result<double, VulkanError> ElapsedNanoseconds(ref const Submission submission, uint32 from, uint32 to)

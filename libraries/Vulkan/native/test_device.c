@@ -145,6 +145,23 @@ void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool
     live_contexts--;
 }
 
+BorrowedCreation ConceptVkBorrowDevice(DeviceBorrow borrowed) {
+    BorrowedCreation out = {0};
+    if (!borrowed.device || !borrowed.queue || !borrowed.physical) { out.code = -3; return out; }
+    if ((borrowed.enabledFeatures & 3u) != 3u) { out.code = -8; return out; }
+    out.commands = (VkCommandPool)token(518);
+    out.cache = (VkPipelineCache)token(519);
+    live_contexts++;
+    return out;
+}
+void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCache cache) {
+    (void)device; (void)commands; (void)cache;
+    live_contexts--;
+}
+int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubmit submit) {
+    (void)device; (void)owner; (void)submit; return 0;
+}
+
 DeviceFacts ConceptVkDeviceFacts(VkPhysicalDevice physical) {
     DeviceFacts facts;
     (void)physical;
@@ -268,6 +285,11 @@ PipelineCreation ConceptVkCreatePipeline(VkDevice device, VkPipelineCache cache,
     return out;
 }
 
+PipelineCreation ConceptVkCreatePipelineFromModule(VkDevice device, VkPipelineCache cache, VkShaderModule shader, const char* entry, ConceptVkBindingSlots bindings, uint32_t pushBytes) {
+    (void)shader;
+    return ConceptVkCreatePipeline(device, cache, "package.spv", entry, bindings, pushBytes);
+}
+
 void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescriptorSetLayout setLayout, VkPipelineLayout layout, VkPipeline pipeline) {
     (void)device;
     (void)shader;
@@ -314,7 +336,8 @@ void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuf
     if (r >= 0) recordings[r].live = 0;
 }
 
-void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages) {
+void ConceptVkCmdBarrier(VkDevice device, VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages) {
+    (void)device;
     Command* command = append(recording);
     if (!command) return;
     command->kind = CMD_BARRIER;
@@ -324,7 +347,8 @@ void ConceptVkCmdBarrier(VkCommandBuffer recording, uint32_t srcStages, uint32_t
     barriers++;
 }
 
-void ConceptVkCmdDispatch(VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z) {
+void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z) {
+    (void)device;
     (void)layout;
     Command* command = append(recording);
     if (!command) return;
@@ -360,7 +384,8 @@ void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes
     command->a = word;
 }
 
-void ConceptVkCmdTimestamp(VkCommandBuffer recording, VkQueryPool queries, uint32_t index) {
+void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32_t index) {
+    (void)device;
     (void)queries;
     Command* command = append(recording);
     if (!command) return;
@@ -494,6 +519,8 @@ int32_t ConceptVkWait(VkDevice device, VkFence fence) {
     }
     return 0;
 }
+
+int32_t ConceptVkPoll(VkDevice device, VkFence fence) { (void)device; (void)fence; return 0; }
 
 void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording, VkFence fence, VkQueryPool queries) {
     (void)device;

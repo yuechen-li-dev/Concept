@@ -1,21 +1,39 @@
 # Vulkan
 
-Vulkan in ordinary Concept (`profile Core`), with no compiler support beyond
-`extern "C" handle`.
+Vulkan 1.4 compute in ordinary Concept. `concept/Vulkan.concept` owns resource
+lifetime, typed failures, descriptors, and derived synchronization. Its flat
+native boundary is measured through `manifest.concept`.
 
-- `concept/Vulkan.concept` (`module Vulkan`): handles, `VulkanError` and
-  `Check(VkResult)`, `BufferUsage`/`MemoryProperty` flag words as `bits`,
-  and an owned `Buffer` whose `Drop` destroys it exactly once.
-- `native/concept_vulkan.h`: the flat C boundary. Everything crossing it is
-  a handle, an integer, or a `[[repr(C)]]` record whose layout is measured
-  by `concept check` (see `manifest.concept`).
-- `native/test_device.c`: a GPU-free implementation for package tests.
+- `Context` owns its instance, device, queue resources, and cache.
+- `BorrowDevice(DeviceBorrow)` attaches to an existing device. `BorrowedContext`
+  owns a separate command pool and cache; dropping it leaves the owner's device,
+  instance, and queue alive. The caller supplies the queue family and records
+  actually enabled synchronization2 (bit 1) and pushDescriptor (bit 2) features.
+  Missing enabled capabilities are rejected before resource creation.
+- `DeviceOf(ref const Context)` and a borrowed context's `view` provide a
+  nonowning `DeviceView`. `CreateBufferOn`, `UploadOn`, `DownloadOn`,
+  `CreatePipelineOn`, and `BeginRecordingOn` share that view. Their resources and
+  submissions must retire before the device owner.
+- Device entry points are registered per device and reference-counted across
+  attachments. Independent owners do not overwrite one another's dispatch.
+- Native integrations can install `ConceptVkSetQueueSubmit` while quiescent to
+  join their owner's queue synchronization. Its borrowed callback owner must
+  outlive every attachment using that registration. This is a native adapter
+  seam, not a general Concept callback ABI.
+- `ConceptVkCreatePipelineFromModule` consumes a package-created shader module
+  on success and failure, retaining the package loader's content authority.
 
-```text
-go run ./cmd/concept check libraries/Vulkan
-go run ./cmd/concept test libraries/Vulkan --verify
+`native/test_device.c` supplies deterministic GPU-free package tests.
+`native/device_runtime.c` supplies the loader-backed implementation.
+
+```console
+concept check libraries/Vulkan
+concept test libraries/Vulkan
+concept test libraries/Vulkan --verify
 ```
 
-A loader-backed implementation of `concept_vulkan.h` and the compute
-dispatch vertical are VK8 of
-`docs/design/CONCEPT-VULKAN-RECONCILIATION-LADDER.md`.
+For Vulkan-profile programs, select `CONCEPT_VULKAN_RUNTIME=device` and supply
+`VULKAN_SDK` to execute against the real loader. GPU-free package tests and real
+GPU execution are separate evidence. `Wait` only marks completion after success
+or terminal device loss. Other wait errors cannot authorize resource release;
+recovery must retain pending work until completion is established.
