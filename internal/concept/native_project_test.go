@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -169,6 +170,82 @@ func TestNativePlanExecutesStructuredCArgumentsWithSpaces(t *testing.T) {
 	}
 	if changed.BuildInputHash == first.BuildInputHash {
 		t.Fatal("header change did not alter build input identity")
+	}
+}
+
+func TestNativeTargetOptimizationIsExplicitAndBuildIdentityBound(t *testing.T) {
+	if _, err := exec.LookPath("clang++"); err != nil {
+		t.Skip("clang++ unavailable")
+	}
+	project, err := LoadNativeProject(filepath.Join("..", "..", "tests", "native_projects", "optimized"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NativeBuildPlan(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range plan.Commands {
+		if slices.Contains(command.Args, "-c") && !slices.Contains(command.Args, "-O2") {
+			t.Fatalf("optimized compile lost its setting: %+v", command)
+		}
+	}
+	if err := CheckNativeABI(project); err != nil {
+		t.Fatalf("ABI probe must use the target's optimization mode: %v", err)
+	}
+	baseline, err := MarshalNativePlan(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for sample := 0; sample < 2; sample++ {
+		fresh, err := NativeBuildPlan(project)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := MarshalNativePlan(fresh)
+		if err != nil || !bytes.Equal(baseline, encoded) {
+			t.Fatalf("optimized plan changed on fresh sample %d: %v", sample+2, err)
+		}
+	}
+	if _, err := RunNativeBuild(project, plan); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range project.Targets {
+		if !target.Optimize {
+			t.Fatal("manifest optimization was not loaded")
+		}
+		if output, err := nativeCommand(t, filepath.Join(project.Root, target.Output)).CombinedOutput(); err != nil {
+			t.Fatalf("optimized %s consumer: %v\n%s", target.Language, err, output)
+		}
+	}
+	project.Targets[0].Optimize = false
+	unoptimized, err := NativeBuildPlan(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unoptimized.BuildInputHash == plan.BuildInputHash {
+		t.Fatal("optimization change did not invalidate native build identity")
+	}
+	if slices.Contains(unoptimized.Commands[0].Args, "-O2") {
+		t.Fatal("optimization leaked into an unoptimized target")
+	}
+}
+
+func TestNativeTargetOptimizationRejectsNonBoolean(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "tests", "native_projects", "optimized", "manifest.concept"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid := strings.Replace(string(source), "[], [], [], true}", "[], [], [], 1}", 1)
+	if invalid == string(source) {
+		t.Fatal("optimization fixture mutation missed its target")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "manifest.concept"), []byte(invalid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadNativeProject(root); err == nil {
+		t.Fatal("accepted a non-boolean optimization setting")
 	}
 }
 
