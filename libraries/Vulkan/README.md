@@ -30,6 +30,22 @@ native boundary is measured through `manifest.concept`.
   Distinct handles must refer to disjoint memory, and the allocation owner must
   outlive the recording and its submission.
 
+- `CreateBufferSharedOn<T>(view, count, placement, first, second)` creates a
+  buffer for two queue families. Equal families use exclusive sharing; distinct
+  families use concurrent sharing. The native boundary rejects unknown families.
+  Sharing removes ownership transfers, not the need for memory dependencies.
+- `SignalHandoff(move recording)` submits a producer and returns an owned
+  `QueueHandoff`. `ReceiveHandoff(ref handoff, move consumer)` submits exactly
+  one consumer on the same device, waiting on the binary semaphore at all commands.
+  `WaitTransfer` observes only the producer; `WaitHandoff` observes both sides.
+  Dropping the handoff joins consumer and producer before releasing its semaphore,
+  including a canceled signal with no consumer. Buffer owners must outlive these
+  submissions, and a borrowed device owner must outlive the handoff.
+- Integrations using the native queue callback must also install
+  `ConceptVkSetQueueSubmitSync` for semaphore submissions. A legacy callback is
+  never bypassed to issue an unsynchronized raw queue call. Both registrations
+  must use the same owner and remain quiescent while being configured.
+
 `native/test_device.c` supplies deterministic GPU-free package tests.
 `native/device_runtime.c` supplies the loader-backed implementation.
 

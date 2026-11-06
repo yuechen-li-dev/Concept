@@ -27,6 +27,7 @@ typedef struct VkQueue_T* VkQueue;
 typedef struct VkCommandPool_T* VkCommandPool;
 typedef struct VkCommandBuffer_T* VkCommandBuffer;
 typedef struct VkFence_T* VkFence;
+typedef struct VkSemaphore_T *VkSemaphore;
 typedef struct VkBuffer_T* VkBuffer;
 typedef struct VkDeviceMemory_T* VkDeviceMemory;
 typedef struct VkShaderModule_T* VkShaderModule;
@@ -97,6 +98,11 @@ void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCa
  * Install while the attachment is quiescent; the owner outlives its borrowers. */
 typedef int32_t (*ConceptVkQueueSubmit)(void* owner, VkQueue queue, VkCommandBuffer commands, VkFence fence);
 int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubmit submit);
+/* Optional synchronized submission authority. A configured legacy callback
+   cannot be bypassed: semaphore submission requires this callback too. */
+typedef int32_t (*ConceptVkQueueSubmitSync)(void *, VkQueue, VkCommandBuffer, VkFence, VkSemaphore,
+                                            VkSemaphore);
+int32_t ConceptVkSetQueueSubmitSync(VkDevice, void *, ConceptVkQueueSubmitSync);
 
 /* ---- Buffers ---------------------------------------------------------- */
 
@@ -184,6 +190,16 @@ SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer
 /* Waits for a submission. Release frees what it owned; timestamps are read
  * between the two, while the query pool is alive.
  */
+typedef struct SemaphoreCreation {
+    int32_t code;
+    VkSemaphore semaphore;
+} SemaphoreCreation;
+SemaphoreCreation ConceptVkCreateSemaphore(VkDevice);
+void ConceptVkDestroySemaphore(VkDevice, VkSemaphore);
+SubmissionRecord ConceptVkSubmitSignal(VkDevice, VkQueue, VkCommandBuffer, VkSemaphore);
+SubmissionRecord ConceptVkSubmitAwait(VkDevice, VkQueue, VkCommandBuffer, VkSemaphore);
+BufferCreation ConceptVkCreateBufferShared(VkPhysicalDevice, VkDevice, uint64_t, uint32_t, uint32_t,
+                                           uint32_t);
 int32_t ConceptVkWait(VkDevice device, VkFence fence);
 /* VK_SUCCESS means complete, VK_NOT_READY means still pending. */
 int32_t ConceptVkPoll(VkDevice device, VkFence fence);

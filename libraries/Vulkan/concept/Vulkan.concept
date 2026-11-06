@@ -27,6 +27,7 @@ extern "C" handle VkQueue;
 extern "C" handle VkCommandPool;
 extern "C" handle VkCommandBuffer;
 extern "C" handle VkFence;
+extern "C" handle VkSemaphore;
 extern "C" handle VkBuffer;
 extern "C" handle VkDeviceMemory;
 extern "C" handle VkShaderModule;
@@ -201,6 +202,13 @@ record struct DeviceView
     VkCommandPool commands;
     VkPipelineCache cache;
 };
+[[repr(C)]]
+record struct SemaphoreCreation { int code; VkSemaphore semaphore; };
+extern "C" SemaphoreCreation ConceptVkCreateSemaphore(VkDevice device);
+extern "C" void ConceptVkDestroySemaphore(VkDevice device,VkSemaphore semaphore);
+extern "C" SubmissionRecord ConceptVkSubmitSignal(VkDevice device,VkQueue queue,VkCommandBuffer commands,VkSemaphore signal);
+extern "C" SubmissionRecord ConceptVkSubmitAwait(VkDevice device,VkQueue queue,VkCommandBuffer commands,VkSemaphore wait);
+extern "C" BufferCreation ConceptVkCreateBufferShared(VkPhysicalDevice physical,VkDevice device,uint64 bytes,uint32 placement,uint32 first,uint32 second);
 extern "C" BorrowedCreation ConceptVkBorrowDevice(DeviceBorrow device);
 extern "C" void ConceptVkDetachDevice(VkDevice device, VkCommandPool commands, VkPipelineCache cache);
 extern "C" ContextCreation ConceptVkCreateContext();
@@ -369,6 +377,17 @@ Result<Buffer<T>, VulkanError> CreateBufferOn(DeviceView context, usize count, P
     owned Buffer<T> buffer = Buffer<T>{
         context.device, created.buffer, created.memory, count, created.hostVisible != 0
     };
+    return Result::Ok(move buffer);
+}
+// Both queue families may access the allocation; synchronization is still
+// required. Equal families deliberately use exclusive sharing.
+template <typename T>
+Result<Buffer<T>,VulkanError> CreateBufferSharedOn(DeviceView context,usize count,Placement placement,uint32 first,uint32 second)
+{
+    usize<byte> bytes = count * SizeOf<T>();
+    BufferCreation created = ConceptVkCreateBufferShared(context.physical,context.device,Magnitude(bytes) as uint64,PlacementCode(placement),first,second);
+    Check(created.code)?;
+    owned Buffer<T> buffer = Buffer<T>{context.device,created.buffer,created.memory,count,created.hostVisible != 0};
     return Result::Ok(move buffer);
 }
 template <typename T>
@@ -820,8 +839,11 @@ void Drop(owned Submission submission)
 }
 // Ends the recording and submits it. Any buffer written on the device gets a
 // final barrier to the host, so host reads after Wait see the results.
-Result<Submission, VulkanError> Submit(owned Recording recording)
+Result<Submission, VulkanError> SubmitUsing(owned Recording recording,Option<VkSemaphore> signal,Option<VkSemaphore> wait)
 {
+    bool hasSignal = match (signal) { Option::Some(value) => true, Option::None => false, };
+    bool hasWait = match (wait) { Option::Some(value) => true, Option::None => false, };
+    if (hasSignal and hasWait) { return Result::Error(ErrorFromCode(-3)); }
     Stages written = NoStages();
     for (i in 0 .. recording.trackedCount)
     {
@@ -833,7 +855,13 @@ Result<Submission, VulkanError> Submit(owned Recording recording)
         recording.barriers = recording.barriers + 1;
     }
     recording.submitted = true;
-    SubmissionRecord submitted = ConceptVkSubmit(recording.device, recording.queue, recording.commands);
+    SubmissionRecord submitted = match (signal) {
+        Option::Some(semaphore) => ConceptVkSubmitSignal(recording.device,recording.queue,recording.commands,semaphore),
+        Option::None => match (wait) {
+            Option::Some(semaphore) => ConceptVkSubmitAwait(recording.device,recording.queue,recording.commands,semaphore),
+            Option::None => ConceptVkSubmit(recording.device,recording.queue,recording.commands),
+        },
+    };
     if (submitted.code < 0)
     {
         ConceptVkEndAbandoned(recording.device, recording.pool, recording.commands, recording.queries);
@@ -862,4 +890,41 @@ Result<double, VulkanError> ElapsedNanoseconds(ref const Submission submission, 
     to);
     Check(elapsed.code) ?;
     return Result::Ok(elapsed.nanoseconds);
+}
+
+Result<Submission,VulkanError> Submit(owned Recording recording)
+{ return SubmitUsing(move recording,Option::None,Option::None); }
+class QueueSignal { public: VkDevice device; VkSemaphore semaphore; };
+void Drop(owned QueueSignal signal) { ConceptVkDestroySemaphore(signal.device,signal.semaphore); }
+// Reverse field destruction joins consumer, then producer, before destroying
+// the binary semaphore. A canceled, signaled handoff is safe to drop too.
+class QueueHandoff {
+public:
+    owned QueueSignal signal;
+    owned Submission producer;
+    Option<owned Submission> consumer;
+};
+Result<QueueHandoff,VulkanError> SignalHandoff(owned Recording recording)
+{
+    SemaphoreCreation created = ConceptVkCreateSemaphore(recording.device);
+    Check(created.code)?;
+    owned QueueSignal signal = QueueSignal{recording.device,created.semaphore};
+    owned Submission producer = SubmitUsing(move recording,Option::Some(signal.semaphore),Option::None)?;
+    Option<owned Submission> consumer = Option::None;
+    return Result::Ok(QueueHandoff{move signal,move producer,move consumer});
+}
+Result<void,VulkanError> ReceiveHandoff(ref QueueHandoff handoff,owned Recording recording)
+{
+    bool received = match (ref const handoff.consumer) { Option::Some(work) => true, Option::None => false, };
+    if (received or recording.device != handoff.signal.device) { return Result::Error(ErrorFromCode(-3)); }
+    owned Submission consumer = SubmitUsing(move recording,Option::None,Option::Some(handoff.signal.semaphore))?;
+    Option<owned Submission> pending = Option::Some(move consumer);
+    handoff.consumer = move pending;
+    return Result::Ok();
+}
+Result<void,VulkanError> WaitTransfer(ref QueueHandoff handoff) { return Wait(ref handoff.producer); }
+Result<void,VulkanError> WaitHandoff(ref QueueHandoff handoff)
+{
+    match (ref handoff.consumer) { Option::Some(work) => { Wait(ref work)?; } Option::None => { } }
+    return Wait(ref handoff.producer);
 }

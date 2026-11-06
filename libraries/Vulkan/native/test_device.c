@@ -513,7 +513,9 @@ SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer
     return out;
 }
 
+static void handoff_waited(VkFence fence);
 int32_t ConceptVkWait(VkDevice device, VkFence fence) {
+    handoff_waited(fence);
     (void)device;
     (void)fence;
     if (pending_submissions > 0) pending_submissions--;
@@ -573,3 +575,80 @@ int ConceptVkTestPendingSubmissions(void) { return pending_submissions; }
 int ConceptVkTestDoubleDestroys(void) { return destroyed_twice; }
 int ConceptVkTestBarriers(void) { return barriers; }
 int ConceptVkTestHazards(void) { return hazards; }
+
+/* Binary handoff model: each signal has exactly one consumer, and its lifetime
+   covers both submissions. GPU ordering itself is qualified by the real driver. */
+static struct {
+    int live, signaled, producer, consumer, producerDone, consumerDone;
+} semaphores[16];
+SemaphoreCreation ConceptVkCreateSemaphore(VkDevice device) {
+    (void)device;
+    SemaphoreCreation out = {0};
+    for (int i = 0; i < 16; ++i)
+        if (!semaphores[i].live) {
+            memset(&semaphores[i], 0, sizeof(semaphores[i]));
+            semaphores[i].live = 1;
+            semaphores[i].consumer = -1;
+            out.semaphore = (VkSemaphore)token(600 + i);
+            return out;
+        }
+    out.code = -10;
+    return out;
+}
+void ConceptVkDestroySemaphore(VkDevice device, VkSemaphore semaphore) {
+    (void)device;
+    int i = (int)((unsigned char *)semaphore - &tokens[600]);
+    if (i < 0 || i >= 16 || !semaphores[i].live) {
+        destroyed_twice++;
+        return;
+    }
+    if (semaphores[i].signaled &&
+        (!semaphores[i].producerDone || (semaphores[i].consumer >= 0 && !semaphores[i].consumerDone)))
+        hazards++;
+    semaphores[i].live = 0;
+}
+SubmissionRecord ConceptVkSubmitSignal(VkDevice device, VkQueue queue, VkCommandBuffer commands,
+                                       VkSemaphore signal) {
+    int i = (int)((unsigned char *)signal - &tokens[600]);
+    SubmissionRecord bad = {0};
+    bad.code = -3;
+    if (i < 0 || i >= 16 || !semaphores[i].live || semaphores[i].signaled)
+        return bad;
+    SubmissionRecord out = ConceptVkSubmit(device, queue, commands);
+    if (!out.code) {
+        semaphores[i].signaled = 1;
+        semaphores[i].producer = recording_slot(commands);
+    }
+    return out;
+}
+SubmissionRecord ConceptVkSubmitAwait(VkDevice device, VkQueue queue, VkCommandBuffer commands,
+                                      VkSemaphore wait) {
+    int i = (int)((unsigned char *)wait - &tokens[600]);
+    SubmissionRecord bad = {0};
+    bad.code = -3;
+    if (i < 0 || i >= 16 || !semaphores[i].live || !semaphores[i].signaled || semaphores[i].consumer >= 0)
+        return bad;
+    SubmissionRecord out = ConceptVkSubmit(device, queue, commands);
+    if (!out.code)
+        semaphores[i].consumer = recording_slot(commands);
+    return out;
+}
+static void handoff_waited(VkFence fence) {
+    int r = (int)((unsigned char *)fence - &tokens[288]);
+    for (int i = 0; i < 16; ++i)
+        if (semaphores[i].live && semaphores[i].signaled) {
+            if (semaphores[i].producer == r)
+                semaphores[i].producerDone = 1;
+            if (semaphores[i].consumer == r)
+                semaphores[i].consumerDone = 1;
+        }
+}
+BufferCreation ConceptVkCreateBufferShared(VkPhysicalDevice physical, VkDevice device, uint64_t bytes,
+                                           uint32_t placement, uint32_t first, uint32_t second) {
+    if (first == UINT32_MAX || second == UINT32_MAX) {
+        BufferCreation bad = {0};
+        bad.code = -3;
+        return bad;
+    }
+    return ConceptVkCreateBuffer(physical, device, bytes, placement);
+}
