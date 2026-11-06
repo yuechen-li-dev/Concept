@@ -57,6 +57,7 @@ typedef struct DeviceDispatch {
     PFN_vkCmdWriteTimestamp2 timestamp;
     void* submitOwner;
     ConceptVkQueueSubmit submit;
+    ConceptVkQueueSubmitSync submitSync;
     struct DeviceDispatch* next;
 } DeviceDispatch;
 static DeviceDispatch* dispatches = NULL;
@@ -109,7 +110,8 @@ int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubm
     lock_dispatch();
     for (DeviceDispatch* d = dispatches; d; d = d->next) {
         if (d->device == device) {
-            if (d->submit && (d->submit != submit || d->submitOwner != owner)) {
+            if ((d->submit && (d->submit != submit || d->submitOwner != owner)) ||
+                (d->submitSync && d->submitOwner != owner)) {
                 unlock_dispatch(); return VK_ERROR_INITIALIZATION_FAILED;
             }
             d->submit = submit; d->submitOwner = owner;
@@ -117,6 +119,24 @@ int32_t ConceptVkSetQueueSubmit(VkDevice device, void* owner, ConceptVkQueueSubm
         }
     }
     unlock_dispatch(); return VK_ERROR_INITIALIZATION_FAILED;
+}
+
+int32_t ConceptVkSetQueueSubmitSync(VkDevice device, void *owner, ConceptVkQueueSubmitSync submit) {
+    lock_dispatch();
+    for (DeviceDispatch *d = dispatches; d; d = d->next)
+        if (d->device == device) {
+            if ((d->submit && d->submitOwner != owner) ||
+                (d->submitSync && (d->submitSync != submit || d->submitOwner != owner))) {
+                unlock_dispatch();
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            d->submitOwner = owner;
+            d->submitSync = submit;
+            unlock_dispatch();
+            return VK_SUCCESS;
+        }
+    unlock_dispatch();
+    return VK_ERROR_INITIALIZATION_FAILED;
 }
 
 typedef struct InstanceMessenger {
@@ -452,7 +472,8 @@ static uint32_t choose_memory(VkPhysicalDevice physical, uint32_t allowed, uint3
     return UINT32_MAX;
 }
 
-static BufferCreation impl_CreateBuffer(VkPhysicalDevice physical, VkDevice device, uint64_t bytes, uint32_t placement) {
+static BufferCreation impl_CreateBuffer(VkPhysicalDevice physical, VkDevice device, uint64_t bytes,
+                                        uint32_t placement, uint32_t first, uint32_t second) {
     BufferCreation out;
     memset(&out, 0, sizeof out);
     if (bytes == 0 || placement > 3) {
@@ -462,7 +483,12 @@ static BufferCreation impl_CreateBuffer(VkPhysicalDevice physical, VkDevice devi
     VkBufferCreateInfo bufferInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bufferInfo.size = bytes;
     bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    uint32_t families[2] = {first, second};
+    bufferInfo.sharingMode = first == second ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
+    if (first != second) {
+        bufferInfo.queueFamilyIndexCount = 2;
+        bufferInfo.pQueueFamilyIndices = families;
+    }
     out.code = vkCreateBuffer(device, &bufferInfo, NULL, &out.buffer);
     if (out.code != VK_SUCCESS) {
         out.buffer = VK_NULL_HANDLE;
@@ -745,7 +771,8 @@ void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPo
     device_dispatch(device).timestamp(recording, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, queries, index);
 }
 
-static SubmissionRecord impl_Submit(VkDevice device, VkQueue queue, VkCommandBuffer recording) {
+static SubmissionRecord impl_Submit(VkDevice device, VkQueue queue, VkCommandBuffer recording,
+                                    VkSemaphore wait, VkSemaphore signal) {
     SubmissionRecord out;
     memset(&out, 0, sizeof out);
     out.code = vkEndCommandBuffer(recording);
@@ -760,7 +787,24 @@ static SubmissionRecord impl_Submit(VkDevice device, VkQueue queue, VkCommandBuf
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &recording;
     DeviceDispatch dispatch = device_dispatch(device);
-    out.code = dispatch.submit ? dispatch.submit(dispatch.submitOwner, queue, recording, out.fence) : vkQueueSubmit(queue, 1, &submit, out.fence);
+    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    if (wait) {
+        submit.waitSemaphoreCount = 1;
+        submit.pWaitSemaphores = &wait;
+        submit.pWaitDstStageMask = &stage;
+    }
+    if (signal) {
+        submit.signalSemaphoreCount = 1;
+        submit.pSignalSemaphores = &signal;
+    }
+    if (wait || signal) {
+        out.code = dispatch.submitSync
+                       ? dispatch.submitSync(dispatch.submitOwner, queue, recording, out.fence, wait, signal)
+                   : dispatch.submit ? VK_ERROR_FEATURE_NOT_PRESENT
+                                     : vkQueueSubmit(queue, 1, &submit, out.fence);
+    } else
+        out.code = dispatch.submit ? dispatch.submit(dispatch.submitOwner, queue, recording, out.fence)
+                                   : vkQueueSubmit(queue, 1, &submit, out.fence);
     if (out.code != VK_SUCCESS) {
         vkDestroyFence(device, out.fence, NULL);
         out.fence = VK_NULL_HANDLE;
@@ -805,9 +849,33 @@ void ConceptVkDestroyContext(VkInstance instance, VkDevice device, VkCommandPool
 }
 
 BufferCreation ConceptVkCreateBuffer(VkPhysicalDevice physical, VkDevice device, uint64_t bytes, uint32_t placement) {
-    BufferCreation out = impl_CreateBuffer(physical, device, bytes, placement);
+    BufferCreation out = impl_CreateBuffer(physical, device, bytes, placement, 0, 0);
     if (out.code == VK_SUCCESS) live_buffers++;
     return out;
+}
+
+BufferCreation ConceptVkCreateBufferShared(VkPhysicalDevice physical, VkDevice device, uint64_t bytes,
+                                           uint32_t placement, uint32_t first, uint32_t second) {
+    uint32_t count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical, &count, NULL);
+    if (first >= count || second >= count) {
+        BufferCreation bad = {0};
+        bad.code = VK_ERROR_INITIALIZATION_FAILED;
+        return bad;
+    }
+    BufferCreation out = impl_CreateBuffer(physical, device, bytes, placement, first, second);
+    if (out.code == VK_SUCCESS)
+        live_buffers++;
+    return out;
+}
+SemaphoreCreation ConceptVkCreateSemaphore(VkDevice device) {
+    SemaphoreCreation out = {0};
+    VkSemaphoreCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    out.code = vkCreateSemaphore(device, &info, NULL, &out.semaphore);
+    return out;
+}
+void ConceptVkDestroySemaphore(VkDevice device, VkSemaphore semaphore) {
+    vkDestroySemaphore(device, semaphore, NULL);
 }
 
 void ConceptVkDestroyBuffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory) {
@@ -833,11 +901,25 @@ void ConceptVkDestroyPipeline(VkDevice device, VkShaderModule shader, VkDescript
 }
 
 SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer recording) {
-    SubmissionRecord out = impl_Submit(device, queue, recording);
+    SubmissionRecord out = impl_Submit(device, queue, recording, VK_NULL_HANDLE, VK_NULL_HANDLE);
     if (out.code == VK_SUCCESS) pending_submissions++;
     return out;
 }
 
+SubmissionRecord ConceptVkSubmitSignal(VkDevice device, VkQueue queue, VkCommandBuffer commands,
+                                       VkSemaphore signal) {
+    SubmissionRecord out = impl_Submit(device, queue, commands, VK_NULL_HANDLE, signal);
+    if (out.code == VK_SUCCESS)
+        pending_submissions++;
+    return out;
+}
+SubmissionRecord ConceptVkSubmitAwait(VkDevice device, VkQueue queue, VkCommandBuffer commands,
+                                      VkSemaphore wait) {
+    SubmissionRecord out = impl_Submit(device, queue, commands, wait, VK_NULL_HANDLE);
+    if (out.code == VK_SUCCESS)
+        pending_submissions++;
+    return out;
+}
 int32_t ConceptVkWait(VkDevice device, VkFence fence) {
     int32_t code = impl_Wait(device, fence);
     if (code == VK_SUCCESS && pending_submissions > 0) pending_submissions--;

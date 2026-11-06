@@ -52,7 +52,7 @@ record struct NativeProjectManifest
     NativeTarget<array>[1] targets;
     string<array>[1] companions;
     string<array>[1] tests;
-    NativeAbiClaim<array>[12] abi;
+    NativeAbiClaim<array>[13] abi;
 };
 
 // Package tests link the GPU-free test device. A real loader-backed
@@ -96,6 +96,9 @@ comptime NativeProjectManifest Native = NativeProjectManifest{
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "SubmissionRecord", "concept/Vulkan.concept",
         16, 8, ["code", "reserved", "fence", "", "", "", "", ""], [0, 4, 8, 0, 0, 0, 0, 0]
+    }, NativeAbiClaim{
+        "native/concept_vulkan.h", "SemaphoreCreation", "concept/Vulkan.concept",
+        16, 8, ["code", "semaphore", "", "", "", "", "", ""], [0, 8, 0, 0, 0, 0, 0, 0]
     }, NativeAbiClaim{
         "native/concept_vulkan.h", "Elapsed", "concept/Vulkan.concept",
         16, 8, ["code", "reserved", "nanoseconds", "", "", "", "", ""], [0, 4, 8, 0, 0, 0, 0, 0]

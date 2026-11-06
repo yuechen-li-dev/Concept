@@ -338,3 +338,40 @@ Result<void, VulkanError> GrowBorrowedBuffer(DeviceView device, ref Buffer<uint3
     }
     Assert.Equal(ConceptVkTestLiveBuffers(), baseline, "replacement drops exactly once");
 }
+
+[[fact]]
+void HandoffRetiresBothSubmissionsAndAllowsCanceledSignals()
+{
+    int pending = ConceptVkTestPendingSubmissions();
+    int hazards = ConceptVkTestHazards();
+    {
+        owned Context context = CreateContext()!;
+        owned Buffer<int> source = CreateBufferSharedOn<int>(DeviceOf(ref const context),4,Placement::Shared,0,1)!;
+        owned Buffer<int> target = CreateBufferSharedOn<int>(DeviceOf(ref const context),4,Placement::Shared,0,1)!;
+        owned Recording producer = BeginRecording(ref const context,0)!;
+        Copy(ref producer,ref const source,ref const target);
+        owned QueueHandoff handoff = SignalHandoff(move producer)!;
+        owned Recording consumer = BeginRecording(ref const context,0)!;
+        ReceiveHandoff(ref handoff,move consumer)!;
+        owned Recording duplicate = BeginRecording(ref const context,0)!;
+        assert(FailureCode(ReceiveHandoff(ref handoff,move duplicate)) == -3,"one consumer per binary signal");
+    }
+    assert(ConceptVkTestPendingSubmissions() == pending,"drop joins both submissions");
+    assert(ConceptVkTestHazards() == hazards,"semaphore outlives both uses");
+    {
+        owned Context context = CreateContext()!;
+        owned Recording producer = BeginRecording(ref const context,0)!;
+        owned QueueHandoff canceled = SignalHandoff(move producer)!;
+    }
+    assert(ConceptVkTestPendingSubmissions() == pending,"cancel joins producer");
+    assert(ConceptVkTestHazards() == hazards,"unconsumed signal can retire");
+}
+
+[[fact]]
+void SharedBuffersRejectInvalidFamiliesWithoutAcquisition()
+{
+    owned Context context = CreateContext()!;
+    int buffers = ConceptVkTestLiveBuffers();
+    assert(FailureCode(Discarded(CreateBufferSharedOn<int>(DeviceOf(ref const context),4,Placement::Shared,4294967295u,0))) == -3,"invalid family rejected before allocation");
+    assert(ConceptVkTestLiveBuffers() == buffers,"invalid sharing acquires no resource");
+}
