@@ -49,11 +49,12 @@ vector and matrix aliases follow the same law.
 
 ## R4d storage law
 
-The canonical source spellings are `T<array>[extent]` and
+The canonical source spellings are `T[N]` (equivalently `T<array>[N]`) and
 `T<ndarray>[extent0, extent1, ...]`. The former has rank exactly one. The latter
-has rank at least one and is the canonical multidimensional family. The legacy
-`T[N]` spelling remains a rank-1 compatibility form. Repeated legacy suffixes
-remain nested arrays and are not equivalent to ndarray.
+has rank at least one and is the canonical multidimensional family. The
+2026-11-05 ergonomics thaw promotes the existing concise spelling to first-class
+status; prefer it for ordinary fixed arrays and preserve either spelling in
+formatting. Repeated suffixes remain nested arrays and are not equivalent to ndarray.
 
 Rank, ordered shape dimensions, fixed/runtime extent status, contiguity, and
 row-major layout survive semantic analysis into MIR. Array and ndarray are

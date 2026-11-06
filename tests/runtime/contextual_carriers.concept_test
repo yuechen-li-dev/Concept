@@ -1,0 +1,75 @@
+module Ergonomics.Carriers;
+profile Core;
+
+enum SampleError { Failed, }
+int Consume(Result<void, SampleError> result)
+{
+    return match (result) { Result::Ok => 1, Result::Error(error) => 2, };
+}
+int ByteValue(Option<uint8> value)
+{
+    return match (value) { Option::Some(byteValue) => byteValue as int, Option::None => 0, };
+}
+int Nested(Result<Option<uint8>, SampleError> value)
+{
+    return match (value) { Result::Ok(option) => ByteValue(option), Result::Error(error) => -1, };
+}
+int Choose(Result<void, SampleError> value, int discriminator) { return Consume(value) + discriminator; }
+int Choose(Option<uint8> value, bool discriminator) { return ByteValue(value); }
+int Shared(Result<void, SampleError> value, int discriminator) { return Consume(value); }
+int Shared(Result<void, SampleError> value, bool discriminator) { return Consume(value); }
+template <typename T> int InTemplate(T value) { return Consume(Result::Error(SampleError::Failed)); }
+template <typename T> T Identity(T value) { return value; }
+
+[[fact]] void CarrierArgumentsUseParameterContext()
+{
+    Assert.Equal(Consume(Result::Error(SampleError::Failed)), 2, "callee supplies the Result type");
+    Assert.Equal(Consume(Result::Ok()), 1, "void success constructor uses parameter context");
+    Assert.Equal(ByteValue(Option::Some(255)), 255, "payload literal keeps uint8 context");
+    Assert.Equal(ByteValue(Option::None), 0, "empty Option uses parameter context");
+    Assert.Equal(Nested(Result::Ok(Option::Some(7))), 7, "nested carriers inherit payload context");
+    Assert.Equal(Consume((Result::Ok())), 1, "parentheses preserve constructor context");
+    Assert.Equal(Consume(match (SampleError::Failed) { SampleError::Failed => Result::Ok(), }), 1, "match arms inherit context");
+    Assert.Equal(Consume(if (true) Result::Ok() else Result::Error(SampleError::Failed)), 1, "conditional arms inherit context");
+    Assert.Equal(Choose(Result::Ok(), 3), 4, "ordinary arguments narrow overloads before contextualization");
+    Assert.Equal(Choose(Option::Some(4), true), 4, "the selected overload supplies Option context");
+    Assert.Equal(Shared(Result::Ok(), true), 1, "overloads can agree on a contextual argument");
+    Assert.Equal(InTemplate<int>(9), 2, "template bodies retain ordinary callee context");
+    Assert.Equal(Consume(Identity<Result<void, SampleError>>(Result::Ok())), 1, "explicit generic calls retain context");
+}
+
+ref struct Resource { ref int drops; };
+void Drop(owned Resource resource) { resource.drops = resource.drops + 1; }
+void ConsumeOwner(owned Option<owned Resource> resource) { }
+[[fact]] void CarrierArgumentMovesAndDropsExactlyOnce()
+{
+    int drops = 0;
+    {
+        owned Resource resource = Resource{ref drops};
+        ConsumeOwner(Option::Some(move resource));
+        Assert.Equal(drops, 1, "the argument carrier releases its moved payload at the callee boundary");
+    }
+    Assert.Equal(drops, 1, "the moved-from caller does not release the payload twice");
+}
+
+class Item { public: int number; };
+[[fact]] void OptionValueFieldProjectionKeepsReferencePrecedence()
+{
+    owned Item item = Item{7};
+    owned Option<owned Item> value = Option::Some(move item);
+    Assert.Equal(OptionValue(ref const value).number, 7, "const field access projects from the payload pointer");
+    ref Item borrowed = OptionValue(ref value);
+    borrowed.number = 9;
+    Assert.Equal(OptionValue(ref const value).number, 9, "the projected field observes mutation of the original payload");
+}
+
+template <typename T> struct Box { T value; };
+int Concise(Box<int>[3] values) { return values[0].value + values[2].value; }
+[[fact]] void FixedArraySpellingsShareStorage()
+{
+    Box<int><array>[3] explicitValues = [Box<int>{5} ...];
+    Box<int>[3] conciseValues = explicitValues;
+    Option<Box<int>>[2] slots = [Option::None ...];
+    Assert.Equal(Concise(conciseValues), 10, "both array spellings have identical storage and call types");
+    Assert.Equal(Len(slots), 2, "concise suffix composes with nested applied types");
+}

@@ -5,3 +5,10 @@ R7j completes a bounded C-compatible aggregate call path. It does not attempt ar
 Admission is semantic: a by-value aggregate must be a nonempty `[[repr(C)]] record struct` with recursively eligible fields and no Drop authority. Missing representation, unsupported fields, and nontrivial ownership receive field-specific `EXTERN_C_ABI_TYPE_INVALID` or `C_ABI_REPR_INVALID` diagnostics. A source-declared `CAbiValue<T>` concept can reuse the compiler's `CAbiLayout<T>` fact without a separate marker subsystem.
 
 The TinyXML2 bridge keeps its XMLDocument handle opaque while returning and round-tripping a two-field `ConceptXmlStats` by value. This exercises real C++ library code through an `extern "C"` C-compatible bridge. C++ exceptions and object-model types do not cross it.
+
+The [2026-11-05 ergonomics thaw](EVT1-ERGONOMICS-THAW.md) adds `export "C"`
+function bodies and a separate hashed `.exports.h` interface. The initial subset
+exports scalars/handles and borrowed opaque references to concrete non-view
+objects. Allocation and owner lifecycle remain explicit; `.generated.h` is private.
+This does not broaden the existing by-value foreign aggregate rules or qualify
+Cathedral export linkage.

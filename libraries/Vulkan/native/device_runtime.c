@@ -731,6 +731,12 @@ void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer from, VkBuffer to, uin
     vkCmdCopyBuffer(recording, from, to, 1, &region);
 }
 
+void ConceptVkCmdCopyRegion(VkCommandBuffer recording, VkBuffer from, uint64_t sourceOffset,
+    VkBuffer to, uint64_t destinationOffset, uint64_t bytes) {
+    VkBufferCopy region = {sourceOffset, destinationOffset, bytes};
+    vkCmdCopyBuffer(recording, from, to, 1, &region);
+}
+
 void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes, uint32_t word) {
     vkCmdFillBuffer(recording, buffer, 0, bytes & ~(uint64_t)3, word);
 }

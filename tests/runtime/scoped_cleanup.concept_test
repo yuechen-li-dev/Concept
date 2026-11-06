@@ -1,0 +1,46 @@
+module Runtime.ScopedCleanup;
+profile Core;
+
+ref struct First { ref int drops; };
+ref struct Second { ref int drops; };
+void Drop(owned First value) { value.drops = value.drops + 1; }
+void Drop(owned Second value) { value.drops = value.drops + 10; }
+
+int Independent(bool first, bool second)
+{
+    int drops = 0;
+    if (first) { owned First value = First{ref drops}; }
+    if (second) { owned Second value = Second{ref drops}; }
+    return drops;
+}
+
+int Nested()
+{
+    int drops = 0;
+    {
+        owned First value = First{ref drops};
+        { owned Second value = Second{ref drops}; }
+    }
+    return drops;
+}
+
+int MovedAndLive()
+{
+    int drops = 0;
+    {
+        owned First value = First{ref drops};
+        owned First moved = move value;
+    }
+    { owned Second value = Second{ref drops}; }
+    return drops;
+}
+
+[[fact]] void CleanupUsesLexicalBindingIdentity()
+{
+    Assert.Equal(Independent(false, false), 0, "neither scope enters");
+    Assert.Equal(Independent(true, false), 1, "first type retains its drop");
+    Assert.Equal(Independent(false, true), 10, "second type retains its drop");
+    Assert.Equal(Independent(true, true), 11, "separate scopes may reuse a name");
+    Assert.Equal(Nested(), 11, "inner owner does not replace outer owner");
+    Assert.Equal(MovedAndLive(), 11, "a move does not suppress another binding's drop");
+}

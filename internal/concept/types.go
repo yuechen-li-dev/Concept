@@ -1844,6 +1844,7 @@ type MIRResultProvenanceSummary struct {
 
 type MIRCleanup struct {
 	Owner        string `json:"owner"`
+	SourceName   string `json:"source_name,omitempty"`
 	Type         string `json:"type"`
 	DropFunction string `json:"drop_function"`
 	State        string `json:"state"`

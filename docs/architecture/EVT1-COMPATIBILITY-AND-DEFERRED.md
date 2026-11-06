@@ -16,6 +16,7 @@
 | `asynchronous` | Compatibility | `async` | rewrite when alias canonicalization is enabled |
 | `awaitchronous` | Joke-but-permanent exact alias | `awaitchronous` | do not rewrite by default |
 | unqualified scalar `byte` | Compatibility | `uint8` for values, `usize<byte>` for extents | retain while legacy fixtures are classified; never infer quantity meaning |
+| `T[N]` and `T<array>[N]` | Canonical fixed-array spellings (2026-11-05 ergonomics thaw) | prefer concise `T[N]` in authored ordinary arrays | preserve either spelling; no automatic rewrite |
 
 `asynchronous` and `async` share one AST and lowering path;
 `awaitchronous` and `await` do likewise. The joke creates no semantic branch.
@@ -59,9 +60,15 @@ inline compiler tests.
 | partial specialization, variadic templates, template-template parameters, generic metaprogramming | later language, if ever | Deferred | R6d is ordinary monomorphized library generics only |
 | stable module ABI, package manager, generalized effect algebra, `NoHeapAllocation` | later library/tooling | Deferred | R6e provides only internal `concept-module.v1` and the bounded allocation-effect lattice |
 | full C++ ABI, header parser/importer, automatic contract generation, VerifiedForeign analysis, foreign callbacks, shared ownership, fresh-region guarantees | later interop | Deferred | R6j is C exports plus hand-authored bounded semantic companion declarations only |
+| contextual carrier call arguments and explicit C11 exports | 2026-11-05 user-approved EVT1 ergonomics thaw | Implemented; qualification recorded separately | selected parameter context, standalone opaque-reference export header; no implicit owner allocation or Cathedral export ABI |
 
 R6 may fix bugs, diagnostics, contradictions, or specification errors. Any new
 language feature requires an explicit post-freeze proposal.
+
+The bounded [2026-11-05 ergonomics thaw](../design/EVT1-ERGONOMICS-THAW.md)
+records the explicit exception for call context and public C entry points. It
+also promotes the already implemented concise fixed-array spelling without a
+new storage representation. Unrelated freeze/deferred boundaries remain in force.
 
 ## R6a test tooling
 

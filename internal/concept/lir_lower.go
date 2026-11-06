@@ -49,6 +49,13 @@ func LowerMirToLir(mir *MIR, plan *LoweringPlan, env *semanticEnv) (LIRModule, e
 	if err := ValidateLoweringPlan(mir, &facts, plan); err != nil {
 		return LIRModule{}, err
 	}
+	for _, fn := range mir.Functions {
+		for _, declaration := range env.functions[fn.Name] {
+			if evt1IsCExport(declaration) {
+				return LIRModule{}, evt1Diagnostic("EVT2_C_EXPORT_UNSUPPORTED", "C exports are qualified through the EVT1 C11 backend; Cathedral export linkage is not yet qualified", declaration.Span)
+			}
+		}
+	}
 	out := LIRModule{PlanID: plan.PlanID, SemanticFacts: append([]MIRSemanticFact(nil), mir.SemanticFacts...)}
 	aggregates := &lirAggregateTypes{env: env, known: map[string]LIRType{}, visiting: map[string]bool{}}
 	sort.Slice(out.SemanticFacts, func(i, j int) bool { return out.SemanticFacts[i].ID < out.SemanticFacts[j].ID })

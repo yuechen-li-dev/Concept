@@ -593,15 +593,18 @@ part of the current canonical subset.
 
 **Canonical EVT1 array storage semantics.** `array` is rank-1 contiguous storage. `ndarray` is
 rank-N contiguous storage and is not recursively nested array. The canonical
-explicit spellings are:
+storage spellings include:
 
 ```concept
-int<array>[4] values = [1, 2, 3, 4];
+int[4] values = [1, 2, 3, 4];
 int<ndarray>[2, 3] grid = [[1, 2, 3], [4, 5, 6]];
 ```
 
-The earlier `T[N]` spelling remains accepted as a rank-1 compatibility form;
-nested compatibility arrays remain semantically distinct from one ndarray.
+`T[N]` and the explicit `T<array>[N]` are first-class rank-1 spellings with
+identical types, storage, and lowering. Prefer the concise form for ordinary
+fixed arrays, including `Option<owned Buffer<byte>>[128]`; the explicit form
+remains supported without deprecation or automatic rewriting. Repeated suffixes
+describe nested arrays, which remain semantically distinct from one ndarray.
 An `array` shape contains exactly one dimension. An `ndarray` shape contains
 one or more dimensions. Shape is semantic information retained in the typed
 model and MIR; it is not merely parser syntax. Both families are contiguous by
@@ -1028,9 +1031,48 @@ may call admitted mechanisms without making those calls core allocation law.
 **Legacy PoC3.** PoC3 implements `extern`, export, and `repr(C)` pressure with
 fixtures.
 
-**Deferred reconciliation.** The current C11 generator is a bootstrap backend,
-not a finalized Concept C ABI. Export naming, layout guarantees, header
-contracts, and FFI-safe type derivation require explicit EVT1 decisions.
+**Bounded EVT1 C11 exports (2026-11-05 thaw).** `export "C"` defines a
+synchronous Concept function with an exact, unambiguous C symbol:
+
+```concept
+class Counter { public: int value; };
+export "C" int CounterAdd(ref Counter counter, int amount)
+{
+    counter.value = counter.value + amount;
+    return counter.value;
+}
+```
+
+Emission adds `<source>.exports.h` to the hashed generation manifest. This
+standalone C11/C++23 header contains only exported signatures, foreign handle
+declarations, and incomplete declarations for referenced objects. It hides
+private layouts, helpers, carrier tags, and cleanup functions. Parameters admit
+the ordinary C scalar subset, foreign handles, and explicit `ref T`/`ref const T`
+to concrete non-generic structs/classes that are not ref-struct views or tables.
+Returns admit scalars and foreign handles. Owning parameters, borrowed returns,
+spans, arrays, by-value aggregates, quantities, async functions, templates, and
+erased values are outside this initial export subset. Export names must be valid
+in C11 and C++23 and cannot be overloaded.
+
+An opaque parameter borrows an already live Concept object for the call. The caller
+must supply a non-null correctly typed pointer, keep the owner live, obey const
+and aliasing requirements, and serialize conflicting access. Keeping a pointer
+across calls requires separate owner-lifetime authority; a reference parameter
+transfers none. Never free or copy an object's representation through a borrowed
+view; use its explicit owner lifecycle. Exporting performs no implicit allocation, boxing,
+construction, or destruction. A private storage/lifecycle adapter may still be
+needed; `.generated.h` remains a compiler-private implementation header. Exports
+do not catch panic or translate ownership/failure carriers automatically. A body
+may explicitly translate `Result` into its chosen scalar status.
+
+`extern "C"` remains a bodyless import. Existing foreign aggregate admission is
+unchanged. This public-header contract is qualified through the EVT1 C11 backend;
+Cathedral rejects exports with `EVT2_C_EXPORT_UNSUPPORTED` until its export linkage
+is qualified. It is not a general C++ object ABI or cross-target layout guarantee.
+Semantic-module composition is not a separately linked module ABI: each exact C
+symbol still needs one owning definition in the native link.
+Native build targets control shared-library visibility and export lists; this
+surface supplies C linkage, rather than an automatic dynamic-library loader API.
 
 **Opaque foreign handles.** `extern "C" handle Name;` declares a
 pointer-sized opaque type for a foreign object, such as a Vulkan `VkBuffer`.
@@ -1541,6 +1583,17 @@ Result::Error(error)
 
 These qualified spellings are canonical; there is no competing unqualified
 built-in constructor surface. `match` is the fully explicit ground truth.
+An ordinary callee supplies its parameter type to a directly nested constructor,
+including constructors in parentheses, conditional arms, and match arms. Thus
+`Consume(Result::Error(error))` needs no intermediate typed local. Nested payloads
+retain their destination types and integer range checks. Other arguments narrow
+overloads using the existing exact-signature scores first; remaining candidates
+must agree on the constructor's expected type. Constructor payloads never guess
+between conflicting overload contexts (`CV4182`); use a typed local or explicit
+generic arguments in that case. Explicit generic calls and ordinary callees
+inside template bodies retain the same context. A contextless inferred binding
+still needs an explicit carrier type. Ownership remains explicit, including
+`owned Option<owned T>` for an owning by-value parameter and `move` for its payload.
 Matching `ref carrier` or `ref const carrier` borrows its active payload with
 the corresponding mutability; a borrowed arm never acquires or destroys that
 payload's ownership. A consuming match requires `move` for a noncopyable carrier.
