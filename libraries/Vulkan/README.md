@@ -60,3 +60,9 @@ For Vulkan-profile programs, select `CONCEPT_VULKAN_RUNTIME=device` and supply
 GPU execution are separate evidence. `Wait` only marks completion after success
 or terminal device loss. Other wait errors cannot authorize resource release;
 recovery must retain pending work until completion is established.
+
+`Poll(ref submission)` returns `Result<bool,VulkanError>`: `false` is still
+pending, `true` confirms completion, and a driver error remains an error without
+authorizing resource release. On a signaled fence it uses the immediate `Wait`
+path to retire native submission accounting. Repeated `Poll`/`Wait` calls are
+idempotent and cannot retire another submission's bookkeeping.
