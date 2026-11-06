@@ -8,7 +8,7 @@ func evt1ValidateAttributePlacement(module Module) error {
 		for _, attribute := range attributes {
 			reserved := evt1TestKinds[attribute.Name] || evt1SemanticAccessAttribute(attribute.Name)
 			switch attribute.Name {
-			case "must_use", "repr", "reflect", "machine", "diagnostic", "verify_foreign", "artifact", "foretold":
+			case "must_use", "repr", "reflect", "machine", "diagnostic", "verify_foreign", "artifact", "foretold", evt1CExportAttribute:
 				reserved = true
 			}
 			if reserved {

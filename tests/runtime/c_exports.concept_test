@@ -1,0 +1,22 @@
+module Ergonomics.Exports;
+profile Core;
+
+class Counter { public: int value; };
+Counter MakeCounter(int value) { return Counter{value}; }
+void DisposeCounter(owned Counter counter) { }
+export "C" int ConceptCounterAdd(ref Counter counter, int amount)
+{
+    counter.value = counter.value + amount;
+    return counter.value;
+}
+[[must_use]] export "C" int ConceptCounterRead(ref const Counter counter) { return counter.value; }
+namespace Public.Api {
+    export "C" int ConceptAnswer() { return 42; }
+}
+[[fact]] void ExportBodiesUseOrdinaryOwnership()
+{
+    owned Counter counter = Counter{7};
+    Assert.Equal(ConceptCounterAdd(ref counter, 5), 12, "export bodies mutate the original owner");
+    Assert.Equal(ConceptCounterRead(ref const counter), 12, "const exports observe the live owner");
+    Assert.Equal(ConceptAnswer(), 42, "namespace exports retain an explicit global C symbol");
+}

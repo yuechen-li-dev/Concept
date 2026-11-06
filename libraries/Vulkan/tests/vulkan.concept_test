@@ -171,6 +171,37 @@ void UploadAndDownloadStageDeviceLocalBuffers()
 }
 
 [[fact]]
+void ByteRangeCopiesCheckBoundsAndPreserveOffsets()
+{
+    owned Context context = CreateContext()!;
+    owned Buffer<int> source = CreateBuffer<int>(ref const context, 8, Placement::Shared)!;
+    owned Buffer<int> target = CreateBuffer<int>(ref const context, 8, Placement::Shared)!;
+    int<array>[8] values = [1, 2, 3, 4, 5, 6, 7, 8];
+    int<array>[8] zeros = [0 ...];
+    Upload(ref const context, ref const source, ReadOnlySpan(values))!;
+    Upload(ref const context, ref const target, ReadOnlySpan(zeros))!;
+    BufferRange from = BufferRange{source.buffer, 32};
+    BufferRange to = BufferRange{target.buffer, 32};
+    Assert.False(ValidCopyRange(from, 28, to, 0, 8), "source end is checked");
+    Assert.False(ValidCopyRange(from, 0, to, 28, 8), "destination end is checked");
+    Assert.False(ValidCopyRange(from, 18446744073709551612u, to, 0, 8), "offset overflow cannot wrap into bounds");
+    Assert.False(ValidCopyRange(from, 0, to, 0, 18446744073709551612u), "length overflow cannot wrap into bounds");
+    Assert.True(ValidCopyRange(from, 2, to, 1, 3), "byte regions do not inherit update-buffer alignment restrictions");
+    Assert.False(ValidCopyRange(from, 0, from, 4, 8), "overlapping copies in one buffer are rejected");
+    Assert.True(ValidCopyRange(from, 32, to, 32, 0), "empty end ranges are admitted without a command");
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    Assert.Equal(FailureCode(CopyBytes(ref recording, from, 28, to, 0, 8)), -7601, "invalid copy rejects before recording with a distinct admission error");
+    CopyBytes(ref recording, from, 8, to, 12, 12)!;
+    owned Submission work = Submit(move recording)!;
+    Wait(ref work)!;
+    Download(ref const context, ref const target, Span(zeros))!;
+    Assert.Equal(zeros[2], 0, "prefix sentinel remains untouched");
+    Assert.Equal(zeros[3], 3, "source and destination offsets differ");
+    Assert.Equal(zeros[5], 5, "last selected element copies exactly");
+    Assert.Equal(zeros[6], 0, "suffix sentinel remains untouched");
+}
+
+[[fact]]
 void HostVisibleBuffersAreWrittenDirectly()
 {
     owned Context context = CreateContext()!;

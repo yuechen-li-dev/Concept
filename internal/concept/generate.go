@@ -85,6 +85,7 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 	if err != nil {
 		return nil, err
 	}
+	exportHeader := l.cExportHeader()
 	mirJSON, err := json.MarshalIndent(l.mir, "", "  ")
 	if err != nil {
 		return nil, err
@@ -138,6 +139,9 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 			{"path": l.outputBase + ".map.json", "sha256": digest(mapJSON)},
 		},
 	}
+	if len(exportHeader) != 0 {
+		manifest["files"] = append(manifest["files"].([]map[string]string), map[string]string{"path": l.outputBase + ".exports.h", "sha256": digest(exportHeader)})
+	}
 	if len(machineHelper) != 0 {
 		manifest["files"] = append(manifest["files"].([]map[string]string), map[string]string{"path": l.outputBase + ".machine.S", "sha256": digest(machineHelper)})
 	}
@@ -152,6 +156,9 @@ func GenerateForTargetWithPolicy(module Module, source []byte, target TargetCapa
 		l.outputBase + ".mir.json":      mirJSON,
 		l.outputBase + ".map.json":      mapJSON,
 		l.outputBase + ".manifest.json": manifestJSON,
+	}
+	if len(exportHeader) != 0 {
+		outputs[l.outputBase+".exports.h"] = exportHeader
 	}
 	if len(machineHelper) != 0 {
 		outputs[l.outputBase+".machine.S"] = machineHelper
@@ -1001,13 +1008,35 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 	types := map[string]Type{}
 	var declarationOrder []string
 	state := map[string]string{}
+	// Source names can repeat in independent or nested lexical scopes. Track
+	// declaration identities so one owner's type/move state cannot overwrite
+	// another's. Non-owning declarations also mask an outer owner of that name.
+	scopes := []map[string]string{{}}
+	sourceNames := map[string]string{}
+	nameCounts := map[string]int{}
+	declare := func(name string, typ Type) {
+		identity := ""
+		if evt1TypeHasDrop(env, typ) {
+			identity = fmt.Sprintf("%s#%d", name, len(declarationOrder)+1)
+			types[identity] = typ
+			declarationOrder = append(declarationOrder, identity)
+			sourceNames[identity] = name
+			nameCounts[name]++
+			state[identity] = "live"
+		}
+		scopes[len(scopes)-1][name] = identity
+	}
+	resolve := func(name string) string {
+		for i := len(scopes) - 1; i >= 0; i-- {
+			if identity, ok := scopes[i][name]; ok {
+				return identity
+			}
+		}
+		return ""
+	}
 	if fn.Name != "Drop" {
 		for _, param := range fn.Params {
-			if evt1TypeHasDrop(env, param.Type) {
-				types[param.Name] = param.Type
-				declarationOrder = append(declarationOrder, param.Name)
-				state[param.Name] = "live"
-			}
+			declare(param.Name, param.Type)
 		}
 	}
 	var visitExpr func(Expr)
@@ -1015,7 +1044,9 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 		switch e := expr.(type) {
 		case *MoveExpr:
 			if name, ok := e.Value.(*NameExpr); ok {
-				state[name.Name] = "transferred"
+				if identity := resolve(name.Name); identity != "" {
+					state[identity] = "transferred"
+				}
 			}
 		case *CallExpr:
 			for _, arg := range e.Args {
@@ -1025,19 +1056,19 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 	}
 	var visitBlock func(Block)
 	visitBlock = func(block Block) {
+		scopes = append(scopes, map[string]string{})
+		defer func() { scopes = scopes[:len(scopes)-1] }()
 		for _, stmt := range block.Statements {
 			switch s := stmt.(type) {
 			case *VarDecl:
 				visitExpr(s.Value)
-				if evt1TypeHasDrop(env, s.Type) {
-					types[s.Name] = s.Type
-					declarationOrder = append(declarationOrder, s.Name)
-					state[s.Name] = "live"
-				}
+				declare(s.Name, s.Type)
 			case *AssignStmt:
 				visitExpr(s.Value)
-				if name, ok := s.Target.(*NameExpr); ok && types[name.Name].Name != "" {
-					state[name.Name] = "live"
+				if name, ok := s.Target.(*NameExpr); ok {
+					if identity := resolve(name.Name); identity != "" {
+						state[identity] = "live"
+					}
 				}
 			case *ReturnStmt:
 				if s.Value != nil {
@@ -1088,7 +1119,11 @@ func evt1MIRCleanups(env *semanticEnv, fn FunctionDecl) []MIRCleanup {
 		} else if decl, ok := env.structs[types[name].Name]; ok && evt1StructFieldsNeedDrop(env, decl) {
 			dropName = "DropFieldsReverse"
 		}
-		cleanups = append(cleanups, MIRCleanup{Owner: name, Type: types[name].String(), DropFunction: dropName, State: state[name], Order: len(cleanups) + 1})
+		owner, sourceName := sourceNames[name], ""
+		if nameCounts[owner] > 1 {
+			sourceName, owner = owner, name
+		}
+		cleanups = append(cleanups, MIRCleanup{Owner: owner, SourceName: sourceName, Type: types[name].String(), DropFunction: dropName, State: state[name], Order: len(cleanups) + 1})
 	}
 	return cleanups
 }
@@ -1838,7 +1873,7 @@ func evt1FunctionSymbol(base, name string) string {
 }
 
 func evt1FunctionSymbolForDecl(base string, env *semanticEnv, fn FunctionDecl) string {
-	if fn.ExternABI == "C" {
+	if fn.ExternABI == "C" || evt1IsCExport(fn) {
 		return fn.Name
 	}
 	name := evt1FunctionSymbol(base, fn.Name)
@@ -3968,7 +4003,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 	}
 	_, integerLiteral := expr.(*IntLiteral)
 	_, floatLiteral := expr.(*FloatLiteral)
-	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !integerLiteral && !floatLiteral && !failureConstruct && !freshNoncopyableConstruct && !evt1NeedsContextualArrayLowering(expr) && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
+	if value, ok := evt1TryEvalRuntimeExpr(f.l.env, f.evalScope(), expr); !integerLiteral && !floatLiteral && !failureConstruct && !evt1NeedsCarrierContext(expr) && !freshNoncopyableConstruct && !evt1NeedsContextualArrayLowering(expr) && ok && evt1RuntimeTypeSafe(f.l.env, value.Type) {
 		return "", evt1RenderCValue(f.l.env, value), value.Type
 	}
 	switch e := expr.(type) {
@@ -4381,7 +4416,7 @@ func (f *evt1FunctionLowerer) lowerExpr(expr Expr, indent int) (string, string, 
 			result := optionType.TypeArgs[0].valueType()
 			result.Ownership = "ref"
 			result.Const = optionType.Const
-			return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(optionType), pointer, value) + ind(indent) + fmt.Sprintf("if (%s->tag != 0) { concept_panic(%q, %d, %d); }\n", pointer, "OptionValue requires Some", e.Span.Line, e.Span.Column), "&" + pointer + "->payload.some.value", result
+			return prelude + ind(indent) + fmt.Sprintf("%s %s = %s;\n", evt1CType(optionType), pointer, value) + ind(indent) + fmt.Sprintf("if (%s->tag != 0) { concept_panic(%q, %d, %d); }\n", pointer, "OptionValue requires Some", e.Span.Line, e.Span.Column), "(&" + pointer + "->payload.some.value)", result
 		}
 		if strings.HasPrefix(e.Intrinsic, "atomic_") {
 			return f.lowerAtomicIntrinsic(e, indent)
@@ -4992,6 +5027,10 @@ func evt1NeedsContextualArrayLowering(expr Expr) bool {
 }
 
 func (f *evt1FunctionLowerer) lowerExprExpected(expr Expr, expected Type, indent int) (string, string, Type) {
+	if paren, ok := expr.(*ParenExpr); ok && evt1NeedsCarrierContext(paren.Value) {
+		prelude, value, t := f.lowerExprExpected(paren.Value, expected, indent)
+		return prelude, "(" + value + ")", t
+	}
 	if literal, ok := expr.(*FloatLiteral); ok && evt1IsFloating(expected) {
 		return "", evt1RenderFloatLiteral(literal, expected), expected.valueType()
 	}
@@ -5128,6 +5167,20 @@ func (f *evt1FunctionLowerer) bindName(name string, t Type) string {
 		cName := name
 		if evt1CKeyword(name) {
 			cName = f.nextTemp("user_" + name)
+		}
+		// C permits lexical shadowing, but ownership state is indexed by C
+		// storage identity. Give a shadow a distinct identity so retiring it
+		// cannot erase or change the outer binding's drop responsibility.
+		shadowed := false
+		for _, outer := range f.scope[:len(f.scope)-1] {
+			for _, binding := range outer {
+				if binding.cName == cName {
+					shadowed = true
+				}
+			}
+		}
+		if shadowed {
+			cName = f.nextTemp("shadow_" + name)
 		}
 		scope[name] = evt1Binding{cName: cName, t: t}
 		f.registerOwner(cName, t)

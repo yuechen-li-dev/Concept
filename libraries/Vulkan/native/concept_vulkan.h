@@ -41,6 +41,7 @@ typedef struct VkQueryPool_T* VkQueryPool;
  * These are layout-identical to the generated concept_[readonly_]span_* types. */
 typedef struct ConceptVkBytes { const uint8_t* data; size_t length; } ConceptVkBytes;
 typedef struct ConceptVkMutableBytes { uint8_t* data; size_t length; } ConceptVkMutableBytes;
+typedef struct BufferRange { VkBuffer buffer; uint64_t bytes; } BufferRange;
 
 /* ---- Context ---------------------------------------------------------- */
 
@@ -168,6 +169,8 @@ void ConceptVkEndAbandoned(VkDevice device, VkCommandPool commands, VkCommandBuf
 void ConceptVkCmdBarrier(VkDevice device, VkCommandBuffer recording, uint32_t srcStages, uint32_t srcWrites, uint32_t dstStages);
 void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout, ConceptVkDescriptorWrites writes, ConceptVkBytes pushConstants, uint32_t x, uint32_t y, uint32_t z);
 void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer from, VkBuffer to, uint64_t bytes);
+void ConceptVkCmdCopyRegion(VkCommandBuffer recording, VkBuffer from, uint64_t sourceOffset,
+    VkBuffer to, uint64_t destinationOffset, uint64_t bytes);
 void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes, uint32_t word);
 void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32_t index);
 

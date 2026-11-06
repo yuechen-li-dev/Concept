@@ -92,6 +92,7 @@ typedef struct Command {
     uint32_t bindings[16];
     uint32_t count;
     uint64_t bytes;
+    uint64_t sourceOffset, destinationOffset;
     uint8_t push[128];
     uint32_t pushBytes;
 } Command;
@@ -367,12 +368,19 @@ void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline
 }
 
 void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer from, VkBuffer to, uint64_t bytes) {
+    ConceptVkCmdCopyRegion(recording, from, 0, to, 0, bytes);
+}
+
+void ConceptVkCmdCopyRegion(VkCommandBuffer recording, VkBuffer from, uint64_t sourceOffset,
+    VkBuffer to, uint64_t destinationOffset, uint64_t bytes) {
     Command* command = append(recording);
     if (!command) return;
     command->kind = CMD_COPY;
     command->buffers[0] = buffer_slot(from);
     command->buffers[1] = buffer_slot(to);
     command->bytes = bytes;
+    command->sourceOffset = sourceOffset;
+    command->destinationOffset = destinationOffset;
 }
 
 void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64_t bytes, uint32_t word) {
@@ -468,9 +476,9 @@ static void execute(FakeRecording* recording) {
             access(to, STAGE_TRANSFER, 1);
             if (from >= 0 && to >= 0 && buffers[from].live && buffers[to].live) {
                 uint64_t n = command->bytes;
-                if (n > buffers[from].size) n = buffers[from].size;
-                if (n > buffers[to].size) n = buffers[to].size;
-                memmove(buffers[to].data, buffers[from].data, (size_t)n);
+                if (command->sourceOffset > buffers[from].size || command->destinationOffset > buffers[to].size) abort();
+                if (n > buffers[from].size - command->sourceOffset || n > buffers[to].size - command->destinationOffset) abort();
+                memmove(buffers[to].data + command->destinationOffset, buffers[from].data + command->sourceOffset, (size_t)n);
             }
             break;
         }

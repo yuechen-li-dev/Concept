@@ -224,6 +224,8 @@ uint32 destinationStages);
 extern "C" void ConceptVkCmdDispatch(VkDevice device, VkCommandBuffer recording, VkPipeline pipeline, VkPipelineLayout layout,
 ReadOnlySpan<DescriptorWrite> writes, ReadOnlySpan<byte> pushConstants, uint32 x, uint32 y, uint32 z);
 extern "C" void ConceptVkCmdCopy(VkCommandBuffer recording, VkBuffer source, VkBuffer destination, uint64 bytes);
+extern "C" void ConceptVkCmdCopyRegion(VkCommandBuffer recording, VkBuffer source, uint64 sourceOffset,
+    VkBuffer destination, uint64 destinationOffset, uint64 bytes);
 extern "C" void ConceptVkCmdFill(VkCommandBuffer recording, VkBuffer buffer, uint64 bytes, uint32 word);
 extern "C" void ConceptVkCmdTimestamp(VkDevice device, VkCommandBuffer recording, VkQueryPool queries, uint32 index);
 extern "C" SubmissionRecord ConceptVkSubmit(VkDevice device, VkQueue queue, VkCommandBuffer recording);
@@ -744,6 +746,38 @@ void Copy(ref Recording recording, ref const Buffer<T> source, ref const Buffer<
     Touch(ref recording, ReadOnlySpan(uses));
     ConceptVkCmdCopy(recording.commands, source.buffer, destination.buffer, Magnitude(bytes) as uint64);
 }
+// Borrowed byte extents retain no allocation authority. The owner must outlive
+// the recording and its submission. Distinct handles must refer to disjoint
+// memory. Ordinary buffer copies admit byte offsets and byte counts.
+[[repr(C)]]
+record struct BufferRange { VkBuffer buffer; uint64 bytes; };
+// Library admission failure; this is distinct from a driver allocation error.
+comptime int InvalidCopyRange = -7601;
+
+bool ValidCopyRange(BufferRange source, uint64 sourceOffset, BufferRange destination,
+    uint64 destinationOffset, uint64 bytes)
+{
+    if (sourceOffset > source.bytes or destinationOffset > destination.bytes) { return false; }
+    if (bytes > source.bytes - sourceOffset or bytes > destination.bytes - destinationOffset) { return false; }
+    if (source.buffer == destination.buffer and bytes != 0) {
+        if (sourceOffset < destinationOffset + bytes and destinationOffset < sourceOffset + bytes) { return false; }
+    }
+    return true;
+}
+
+Result<void, VulkanError> CopyBytes(ref Recording recording, BufferRange source, uint64 sourceOffset,
+    BufferRange destination, uint64 destinationOffset, uint64 bytes)
+{
+    if (not ValidCopyRange(source, sourceOffset, destination, destinationOffset, bytes)) {
+        return Result::Error(ErrorFromCode(InvalidCopyRange));
+    }
+    if (bytes == 0) { return Result::Ok(); }
+    Use<array>[2] uses = [Use{source.buffer, TransferStage(), false}, Use{destination.buffer, TransferStage(), true}];
+    Touch(ref recording, ReadOnlySpan(uses));
+    ConceptVkCmdCopyRegion(recording.commands, source.buffer, sourceOffset, destination.buffer, destinationOffset, bytes);
+    return Result::Ok();
+}
+
 // Sets every 32-bit word of buffer to word.
 template <typename T>
 void Fill(ref Recording recording, ref const Buffer<T> buffer, uint32 word)

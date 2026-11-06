@@ -1127,6 +1127,9 @@ func evt1AnalyzeModule(module Module, options evt1AnalysisOptions) (*semanticEnv
 		if err := evt1ValidateExternCSignature(env, fn); err != nil {
 			return nil, evt1WithGeneratedContext(err, fn)
 		}
+		if err := evt1ValidateCExport(env, fn); err != nil {
+			return nil, evt1WithGeneratedContext(err, fn)
+		}
 		if err := evt1ValidateAsyncShape(fn); err != nil {
 			return nil, evt1WithGeneratedContext(err, fn)
 		}
@@ -2723,6 +2726,9 @@ func evt1EvalScopeFromValidation(scope *evt1Scope, env *semanticEnv) *evt1EvalSc
 }
 
 func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, expected Type, templateInfo *evt1TemplateInfo, inComptimeFn bool) (Type, error) {
+	if paren, ok := expr.(*ParenExpr); ok && evt1NeedsCarrierContext(paren.Value) {
+		return validateExprAgainstExpected(env, scope, paren.Value, expected, templateInfo, inComptimeFn)
+	}
 	restore := evt1EnterValidationContext(scope, templateInfo, inComptimeFn)
 	defer restore()
 	if err := evt1ContextualFloatTree(expr, expected); err != nil {
@@ -2811,11 +2817,14 @@ func validateExprAgainstExpected(env *semanticEnv, scope *evt1Scope, expr Expr, 
 		if conditionType.Name != "bool" {
 			return Type{}, evt1Diagnostic("CV4186", "if expression condition must be bool", conditional.Condition.exprSpan())
 		}
-		if _, err := validateExprAgainstExpected(env, scope, conditional.Then, expected, templateInfo, inComptimeFn); err != nil {
-			return Type{}, err
-		}
-		if _, err := validateExprAgainstExpected(env, scope, conditional.Else, expected, templateInfo, inComptimeFn); err != nil {
-			return Type{}, err
+		for _, arm := range []Expr{conditional.Then, conditional.Else} {
+			actual, err := validateExprAgainstExpected(env, scope, arm, expected, templateInfo, inComptimeFn)
+			if err != nil {
+				return Type{}, err
+			}
+			if !evt1TypesCompatible(env, expected, actual, "") {
+				return Type{}, evt1Diagnostic("CV4116", fmt.Sprintf("if expression arm expected %s but got %s", expected.String(), actual.String()), arm.exprSpan())
+			}
 		}
 		return expected, nil
 	}
@@ -4381,19 +4390,25 @@ func validateExpr(env *semanticEnv, scope *evt1Scope, expr Expr, templateInfo *e
 				}
 			}
 		}
-		argTypes := make([]Type, 0, len(e.Args))
-		for _, arg := range e.Args {
+		argTypes := make([]Type, len(e.Args))
+		for i, arg := range e.Args {
+			if evt1NeedsCarrierContext(arg) {
+				continue
+			}
 			if literal, ok := arg.(*IntLiteral); ok {
 				// Integer literals remain target-neutral until overload candidates
 				// provide an expected parameter type.
-				argTypes = append(argTypes, Type{Name: "int", Kind: TypeBuiltin, Span: literal.Span})
+				argTypes[i] = Type{Name: "int", Kind: TypeBuiltin, Span: literal.Span}
 				continue
 			}
 			argType, err := validateExpr(env, scope, arg, templateInfo, inComptimeFn)
 			if err != nil {
 				return Type{}, err
 			}
-			argTypes = append(argTypes, argType)
+			argTypes[i] = argType
+		}
+		if err := evt1ContextualizeCarrierArguments(env, scope, e.Callee, e.Args, argTypes, templateInfo, inComptimeFn); err != nil {
+			return Type{}, err
 		}
 		if inComptimeFn {
 			if comptimeFn, ok := env.comptimeFunctions[e.Callee]; ok {
@@ -8050,9 +8065,12 @@ func evt1ValidateOpenNestedTemplateCall(env *semanticEnv, scope *evt1Scope, call
 }
 
 func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call *CallExpr, templateInfo *evt1TemplateInfo) (Type, error) {
-	argTypes := make([]Type, 0, len(call.Args))
+	argTypes := make([]Type, len(call.Args))
 	dependent := false
-	for _, arg := range call.Args {
+	for i, arg := range call.Args {
+		if evt1NeedsCarrierContext(arg) {
+			continue
+		}
 		argType, err := validateExpr(env, scope, arg, templateInfo, evt1ValidationIsComptime(scope))
 		if err != nil {
 			return Type{}, err
@@ -8060,7 +8078,13 @@ func validateTemplateCallExpr(env *semanticEnv, scope *evt1Scope, call *CallExpr
 		if evt1TypeDependsOnAnyParameter(argType, templateInfo.Decl.Parameters) {
 			dependent = true
 		}
-		argTypes = append(argTypes, argType)
+		argTypes[i] = argType
+	}
+	if err := evt1ContextualizeCarrierArguments(env, scope, call.Callee, call.Args, argTypes, templateInfo, evt1ValidationIsComptime(scope)); err != nil {
+		return Type{}, err
+	}
+	for _, argType := range argTypes {
+		dependent = dependent || evt1TypeDependsOnAnyParameter(argType, templateInfo.Decl.Parameters)
 	}
 	// A descriptive predicate does not erase ordinary named operations from a
 	// template's lexical environment. Only operations on an otherwise unknown

@@ -22,6 +22,13 @@ native boundary is measured through `manifest.concept`.
   seam, not a general Concept callback ABI.
 - `ConceptVkCreatePipelineFromModule` consumes a package-created shader module
   on success and failure, retaining the package loader's content authority.
+- `BufferRange` borrows a byte extent without owning its allocation. `CopyBytes`
+  checks source/destination bounds and same-buffer overlap before recording,
+  derives transfer dependencies, and admits byte offsets/counts. An empty range
+  records nothing. Invalid ranges return the library admission code `-7601`
+  through `VulkanError::Unknown`; they do not masquerade as allocation failures.
+  Distinct handles must refer to disjoint memory, and the allocation owner must
+  outlive the recording and its submission.
 
 `native/test_device.c` supplies deterministic GPU-free package tests.
 `native/device_runtime.c` supplies the loader-backed implementation.

@@ -977,7 +977,7 @@ func planAggregates(mir *MIR) []AggregatePlan {
 
 func cleanupOwner(cleanups []MIRCleanup, owner string) bool {
 	for _, cleanup := range cleanups {
-		if cleanup.Owner == owner {
+		if cleanup.Owner == owner || cleanup.SourceName == owner {
 			return true
 		}
 	}

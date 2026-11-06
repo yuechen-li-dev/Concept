@@ -23,7 +23,7 @@ func evt1ValidateTestMetadata(module Module) error {
 					return evt1Diagnostic("MUST_USE_ATTRIBUTE_INVALID", "[[must_use]] requires a value-returning function and no arguments", attribute.Span)
 				}
 				continue
-			case evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine":
+			case evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" || attribute.Name == evt1CExportAttribute:
 				// Compiler-owned access metadata is validated by the access-summary
 				// pass and is independent of test metadata.
 				continue
@@ -64,7 +64,7 @@ func evt1ValidateTestMetadata(module Module) error {
 		if primary == "" {
 			semanticOnly := true
 			for _, attribute := range fn.Attributes {
-				semanticOnly = semanticOnly && (evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" || attribute.Name == "must_use")
+				semanticOnly = semanticOnly && (evt1SemanticAccessAttribute(attribute.Name) || attribute.Name == "machine" || attribute.Name == "must_use" || attribute.Name == evt1CExportAttribute)
 			}
 			if semanticOnly {
 				continue

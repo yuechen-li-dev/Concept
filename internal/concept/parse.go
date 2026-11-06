@@ -394,6 +394,15 @@ func (p *parser) parseModule() (Module, error) {
 				module.GenericTypes = append(module.GenericTypes, decl)
 				continue
 			}
+			if p.peekLexeme() == "export" {
+				fn, err := p.parseCExport()
+				if err != nil {
+					return module, err
+				}
+				fn.Attributes = append(attributes, fn.Attributes...)
+				module.Functions = append(module.Functions, fn)
+				continue
+			}
 			if p.peekLexeme() == "extern" {
 				p.next()
 				abi := p.current()
@@ -641,6 +650,12 @@ func (p *parser) parseModule() (Module, error) {
 				return module, err
 			}
 			module.Assertions = append(module.Assertions, assertion)
+		case "export":
+			fn, err := p.parseCExport()
+			if err != nil {
+				return module, err
+			}
+			module.Functions = append(module.Functions, fn)
 		case "extern":
 			p.next()
 			abi := p.current()
@@ -715,6 +730,13 @@ func (p *parser) parseNamespaceBlock(module *Module) error {
 	}
 	for !p.done() && p.peekLexeme() != "}" {
 		switch p.peekLexeme() {
+		case "export":
+			fn, err := p.parseCExport()
+			if err != nil {
+				return err
+			}
+			module.Functions = append(module.Functions, fn)
+			module.NamespaceSymbols = append(module.NamespaceSymbols, NamespaceSymbol{Namespace: name, Module: module.Name, Name: fn.Name, Kind: "function", Span: fn.Span})
 		case "record":
 			decl, err := p.parseStructDecl(false, true, false)
 			if err != nil {
@@ -765,6 +787,24 @@ func (p *parser) parseNamespaceBlock(module *Module) error {
 	}
 	_ = start
 	return nil
+}
+
+func (p *parser) parseCExport() (FunctionDecl, error) {
+	p.next() // export
+	abi := p.current()
+	if abi.Lexeme != `"C"` {
+		return FunctionDecl{}, evt1Diagnostic("EXPORT_ABI_INVALID", "export requires the supported ABI string \"C\"", abi.Span)
+	}
+	p.next()
+	fn, err := p.parseFunctionDecl("", false)
+	if err != nil {
+		return FunctionDecl{}, err
+	}
+	if fn.Body == nil {
+		return FunctionDecl{}, evt1Diagnostic("EXPORT_BODY_REQUIRED", "export C requires a Concept function body; use extern C for an import", fn.Span)
+	}
+	fn.Attributes = append(fn.Attributes, Attribute{Name: evt1CExportAttribute, Span: fn.Span})
+	return fn, nil
 }
 
 func addDefaultNamespaceSymbols(module *Module) {
@@ -1030,6 +1070,9 @@ func (p *parser) parseAttributes() ([]Attribute, error) {
 		name, err := p.expectIdentifier("TEST_ATTRIBUTE_INVALID", "expected test attribute name")
 		if err != nil {
 			return nil, err
+		}
+		if name.Lexeme == evt1CExportAttribute {
+			return nil, evt1Diagnostic("EXPORT_ATTRIBUTE_RESERVED", "C export metadata is compiler-owned; write export \"C\"", name.Span)
 		}
 		attribute := Attribute{Name: name.Lexeme, Span: start}
 		if p.peekLexeme() == "(" {
