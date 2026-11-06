@@ -1,0 +1,3 @@
+module Optimized;
+profile Core;
+[[repr(C)]] record struct OptimizedLayout { int value; };

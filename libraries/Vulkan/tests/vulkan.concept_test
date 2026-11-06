@@ -10,6 +10,7 @@ extern "C" int ConceptVkTestPendingSubmissions();
 extern "C" int ConceptVkTestDoubleDestroys();
 extern "C" int ConceptVkTestBarriers();
 extern "C" int ConceptVkTestHazards();
+extern "C" void ConceptVkTestNextPoll(int code);
 
 int ErrorCode(VulkanError error)
 {
@@ -320,6 +321,36 @@ void AbandonedAndUnwaitedWorkIsReleased()
         Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore + 1, "submitted");
     }
     Assert.Equal(ConceptVkTestPendingSubmissions(), pendingBefore, "Drop waited for it");
+}
+
+[[fact]]
+void PollRetiresOneSubmissionAndPreservesPendingAndFailedObservations()
+{
+    int baseline = ConceptVkTestPendingSubmissions();
+    owned Context context = CreateContext()!;
+    owned Recording recording = BeginRecording(ref const context, 0)!;
+    owned Submission work = Submit(move recording)!;
+    ConceptVkTestNextPoll(1);
+    Assert.False(Poll(ref work)!, "not-ready observation never waits");
+    Assert.False(work.waited, "pending work retains completion authority");
+    Assert.Equal(ConceptVkTestPendingSubmissions(), baseline + 1, "pending work is retained");
+    ConceptVkTestNextPoll(-13);
+    Result<bool,VulkanError> failed = Poll(ref work);
+    match (failed) {
+        Result::Ok(value) => { Assert.True(false, "observation failure stays explicit"); }
+        Result::Error(error) => { Assert.Equal(ErrorCode(error), -13, "original error survives"); }
+    }
+    Assert.False(work.waited, "failed observation cannot authorize release");
+    Assert.Equal(ConceptVkTestPendingSubmissions(), baseline + 1, "failure retains pending work");
+    Assert.True(Poll(ref work)!, "a later successful observation retires the work");
+    Assert.Equal(ConceptVkTestPendingSubmissions(), baseline, "completed work is accounted once");
+    owned Recording otherRecording = BeginRecording(ref const context, 0)!;
+    owned Submission other = Submit(move otherRecording)!;
+    Assert.True(Poll(ref work)!, "repeated poll is idempotent");
+    Wait(ref work)!;
+    Assert.Equal(ConceptVkTestPendingSubmissions(), baseline + 1, "repeated completion does not retire another submission");
+    Assert.True(Poll(ref other)!, "independent work completes");
+    Assert.Equal(ConceptVkTestPendingSubmissions(), baseline, "both submissions retired");
 }
 
 Result<void, VulkanError> GrowBorrowedBuffer(DeviceView device, ref Buffer<uint32> buffer) {

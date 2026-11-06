@@ -530,7 +530,14 @@ int32_t ConceptVkWait(VkDevice device, VkFence fence) {
     return 0;
 }
 
-int32_t ConceptVkPoll(VkDevice device, VkFence fence) { (void)device; (void)fence; return 0; }
+static int next_poll_code = 0;
+void ConceptVkTestNextPoll(int code) { next_poll_code = code; }
+int32_t ConceptVkPoll(VkDevice device, VkFence fence) {
+    (void)device; (void)fence;
+    int code = next_poll_code;
+    next_poll_code = 0;
+    return code;
+}
 
 void ConceptVkRelease(VkDevice device, VkCommandPool commands, VkCommandBuffer recording, VkFence fence, VkQueryPool queries) {
     (void)device;

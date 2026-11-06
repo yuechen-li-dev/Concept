@@ -104,6 +104,7 @@ type NativeTarget struct {
 	Includes   []string       `json:"includes"`
 	Defines    []NativeDefine `json:"defines"`
 	LinkInputs []string       `json:"link_inputs"`
+	Optimize   bool           `json:"optimize,omitempty"`
 }
 
 type NativeDefine struct {
@@ -250,11 +251,19 @@ func LoadNativeProject(root string) (NativeProject, error) {
 	}
 	seen := map[string]bool{}
 	for _, item := range targets {
-		f, err := nativeFields(item, "NativeTarget", 9)
-		if err != nil {
-			return NativeProject{}, err
+		constructor, ok := item.(*StructConstructExpr)
+		if !ok || constructor.StructName != "NativeTarget" || (len(constructor.Args) != 9 && len(constructor.Args) != 10) {
+			return NativeProject{}, fmt.Errorf("NATIVE_MANIFEST_INVALID: expected NativeTarget with 9 fields or 10 including optimize")
 		}
+		f := constructor.Args
 		var t NativeTarget
+		if len(f) == 10 {
+			optimize, ok := f[9].(*BoolLiteral)
+			if !ok {
+				return NativeProject{}, fmt.Errorf("NATIVE_MANIFEST_INVALID: NativeTarget optimize must be a boolean")
+			}
+			t.Optimize = optimize.Value
+		}
 		if t.Name, err = nativeString(f[0]); err != nil {
 			return NativeProject{}, err
 		}
@@ -615,6 +624,9 @@ func NativeBuildPlan(project NativeProject) (NativePlan, error) {
 			}
 			object := filepath.ToSlash(filepath.Join(".native-build", target.Name, fmt.Sprintf("%03d.o", i)))
 			args := []string{"-std=" + std, "-c", resolvedSource, "-o", object}
+			if target.Optimize {
+				args = append(args, "-O2")
+			}
 			if runtime.GOOS != "windows" && target.Kind == "StaticLibrary" {
 				args = append(args, "-fPIC")
 			}
@@ -971,6 +983,9 @@ func nativeABIProbeArgs(project NativeProject, claim NativeABIClaim, probe, exec
 			return nil, fmt.Errorf("NATIVE_ABI_PROBE_FLAGS_UNKNOWN: %s target %s has unsupported C++ standard %s", claim.TypeName, target.Name, target.Standard)
 		}
 		args := []string{"-std=" + standard, "-I", project.Root}
+		if target.Optimize {
+			args = append(args, "-O2")
+		}
 		for _, include := range target.Includes {
 			resolved, err := nativeInputFile(project.Root, include)
 			if err != nil {
