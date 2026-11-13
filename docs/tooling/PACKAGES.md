@@ -40,6 +40,14 @@ static libraries or executables, measured ABI claims, and input/output hashes.
 Clang and GCC toolchains are supported. The native compiler and C++ standard
 library remain authoritative for language and library support.
 
+`NativeTarget` may append a tenth field, `bool optimize`. `true` selects `-O2`
+for the declared Clang/GCC C or C++ compilation; `false` preserves an
+unoptimized build. Existing nine-field targets retain their previous behavior.
+The setting belongs to the structured plan and build-input identity, so changing
+it invalidates native artifacts and their ABI evidence. It does not enable
+fast-math or change the selected language standard. See the executable
+[C11/C++23 fixture](../../tests/native_projects/optimized/manifest.concept).
+
 Native input paths are relative to the package. An explicit installed-package
 input such as `@Vulkan/native/device_runtime.c` resolves through
 `CONCEPT_LIBRARY_ROOT`; `@Vulkan/native` is an include/source root.

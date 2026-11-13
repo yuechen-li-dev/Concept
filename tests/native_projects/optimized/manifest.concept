@@ -1,0 +1,35 @@
+module Optimized.Manifest;
+profile Core;
+
+enum NativeLanguage { C, Cpp, }
+enum NativeStandard { C11, C17, Cpp17, Cpp20, Cpp23, }
+enum NativeOutputKind { Executable, StaticLibrary, }
+enum NativeToolchain { Clang, ClangCL, MSVC, GCC, }
+record struct NativeDefine { string name; string value; bool hasValue; };
+record struct NativeTarget {
+    string name; NativeLanguage language; NativeStandard standard;
+    NativeOutputKind kind; string output;
+    string<array>[1] sources; string<array>[0] includes;
+    NativeDefine<array>[0] defines; string<array>[0] linkInputs;
+    bool optimize;
+};
+record struct NativeAbiClaim {
+    string header; string typeName; string companion; int size; int alignment;
+    string<array>[1] fields; int<array>[1] offsets;
+};
+record struct NativeVersion { int major; int minor; int patch; };
+record struct NativeProjectManifest {
+    string name; string author; NativeVersion version; NativeToolchain toolchain;
+    string<array>[2] sourceRoots; NativeTarget<array>[2] targets;
+    string<array>[1] companions; string<array>[0] tests; NativeAbiClaim<array>[1] abi;
+};
+comptime NativeProjectManifest Native = NativeProjectManifest{
+    "Optimized", "Concept fixture", NativeVersion{1,0,0}, NativeToolchain::Clang,
+    ["native", "concept"],
+    [NativeTarget{"c", NativeLanguage::C, NativeStandard::C11, NativeOutputKind::Executable,
+        ".native-build/c.exe", ["native/check.c"], [], [], [], true},
+     NativeTarget{"cpp", NativeLanguage::Cpp, NativeStandard::Cpp23, NativeOutputKind::Executable,
+        ".native-build/cpp.exe", ["native/check.cpp"], [], [], [], true}],
+    ["concept/Optimized.concept"], [],
+    [NativeAbiClaim{"native/layout.h", "OptimizedLayout", "concept/Optimized.concept", 4, 4, ["value"], [0]}]
+};

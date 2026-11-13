@@ -882,6 +882,18 @@ Result<void, VulkanError> Wait(ref Submission submission)
     Check(code)?;
     return Result::Ok();
 }
+// Observe without waiting for GPU work. A signaled fence cannot become
+// unsignaled while owned here, so Wait is immediate and retires the same native
+// bookkeeping as the blocking path. Repeated observations retire exactly once.
+Result<bool, VulkanError> Poll(ref Submission submission)
+{
+    if (submission.waited) { return Result::Ok(true); }
+    int code = ConceptVkPoll(submission.device, submission.fence);
+    if (code == 1) { return Result::Ok(false); }
+    Check(code)?;
+    Wait(ref submission)?;
+    return Result::Ok(true);
+}
 // Nanoseconds between two timestamps of a finished submission.
 Result<double, VulkanError> ElapsedNanoseconds(ref const Submission submission, uint32 from, uint32 to)
 {
